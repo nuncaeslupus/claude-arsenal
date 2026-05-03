@@ -18,7 +18,9 @@ from pathlib import Path
 def run_cmd(cmd: list[str]) -> str:
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
-        raise RuntimeError(f"Command failed: {' '.join(cmd)}\n{result.stderr}")
+        raise subprocess.CalledProcessError(
+            result.returncode, result.args, output=result.stdout, stderr=result.stderr
+        )
     return result.stdout
 
 
@@ -150,6 +152,14 @@ def parse_id(mutant_id: str) -> tuple[str, str, str]:
 
 
 def main() -> None:
+    try:
+        _main()
+    except subprocess.CalledProcessError as e:
+        print(f"Error running {e.cmd}: {e.stderr}", file=sys.stderr)
+        sys.exit(1)
+
+
+def _main() -> None:
     parser = argparse.ArgumentParser(description="Analyze mutmut survivors")
     parser.add_argument("--venv", help="Path to virtualenv (auto-detected if omitted)")
     parser.add_argument("--module", help="Only report on modules matching this substring")
