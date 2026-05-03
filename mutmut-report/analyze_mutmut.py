@@ -18,8 +18,7 @@ from pathlib import Path
 def run_cmd(cmd: list[str]) -> str:
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
-        print(f"Error running {' '.join(cmd)}: {result.stderr}", file=sys.stderr)
-        sys.exit(1)
+        raise RuntimeError(f"Command failed: {' '.join(cmd)}\n{result.stderr}")
     return result.stdout
 
 
