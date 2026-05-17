@@ -100,7 +100,7 @@ references/foo.md is not aligned with the guidelines:
   must   line 42   Cited path .claude/skills/old-name/scripts/x.py does not exist (R-REFLOC-1)
   should line 88   Section over 100 lines without a Table of Contents (R-BOUNDARY-9)
 
-plugins/core/skills/discovery/scripts/audit_repo.py is not aligned with the guidelines:
+plugins/<plugin>/skills/<skill>/scripts/audit_repo.py is not aligned with the guidelines:
   should line 10   Argparse arg --env conflates two concepts (R-SR-4)
 
 (other files in this skill are aligned)

@@ -119,7 +119,7 @@ should land if it ever needs to be promoted.
 
 | Family | Why deferred | If you need it: where it lands |
 |---|---|---|
-| LLM-judge | The library does not run an LLM-judge to keep the validator fast and dependency-free. Semantic review happens conversationally inside this skill ("review this skill") and via scripted Claude Code probes in the smoke-test runner. | Live-session probes as a future extension of this skill's `tests/skills_smoke.sh`, or a dedicated reviewer skill. |
+| LLM-judge | The library does not run an LLM-judge to keep the validator fast and dependency-free. Semantic review happens conversationally inside this skill ("review this skill") and via scripted Claude Code probes in the smoke-test runner. | Live-session probes as a future extension of `plugins/skill-creator/skills/skill-creator/tests/skills_smoke.sh`, or a dedicated reviewer skill. |
 | Retrospective hooks (Stop / SessionEnd) | Hook plumbing for the meta-skill is a separate concern; the validator stays decoupled from session lifecycle. | A retrospective skill or a dedicated hook layer in `.claude/settings.json`. |
 | Rollback / semver-bump | Pre-retro git tags + semver-bump linting depend on a retrospective surface that does not exist yet. | Same surface as retrospective hooks. |
 | Drift / extract counters | Pattern-detection across session transcripts requires session-scoped state under the plugin data dir. | Plugin-data-aware tooling, separate from the per-skill validator. |
