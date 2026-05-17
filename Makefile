@@ -1,6 +1,15 @@
 .PHONY: help sync smoke validate audit audit-rule-drift sync-dupes lint format dev new-skill update-skills clean
 
 PLUGIN_DIRS := $(wildcard plugins/*)
+PLUGIN_SKILL_LIBS := $(wildcard plugins/*/skills)
+PLUGIN_SKILLS := $(wildcard plugins/*/skills/*)
+
+SC_SCRIPTS := plugins/skill-creator/skills/skill-creator/scripts
+VALIDATE := $(SC_SCRIPTS)/validate.py
+AUDIT_LIB := $(SC_SCRIPTS)/audit_library.py
+AUDIT_DRIFT := $(SC_SCRIPTS)/audit_rule_drift.py
+SYNC_DUPES := $(SC_SCRIPTS)/sync_duplicates.py
+SMOKE_SH := plugins/skill-creator/skills/skill-creator/tests/skills_smoke.sh
 
 help:  ## list available targets
 	@awk 'BEGIN {FS = ":.*##"} /^[a-zA-Z_-]+:.*##/ {printf "  %-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -8,35 +17,33 @@ help:  ## list available targets
 sync:  ## uv sync — install/refresh dependencies
 	uv sync
 
-smoke:  ## validate every plugin's skills, audit library, run skills_smoke.sh
-ifeq ($(PLUGIN_DIRS),)
-	@echo "make smoke: no plugins yet (waiting on S2 — see docs/migration-baseline.md)." >&2
-	@exit 1
-else
-	@echo "make smoke: target unstubbed — implementation lands at S2." >&2
-	@exit 2
-endif
+smoke: validate audit  ## run validate + audit on every plugin's skills, then skills_smoke.sh
+	@bash $(SMOKE_SH)
 
 validate:  ## validate every plugin's skills, fail-fast
-ifeq ($(PLUGIN_DIRS),)
-	@echo "make validate: no plugins yet (waiting on S2)." >&2
+ifeq ($(PLUGIN_SKILLS),)
+	@echo "make validate: no plugin skills discovered." >&2
 	@exit 1
 else
-	@echo "make validate: target unstubbed — implementation lands at S2." >&2
-	@exit 2
+	@set -e; for skill in $(PLUGIN_SKILLS); do \
+		echo "=== validate: $$skill ==="; \
+		uv run python $(VALIDATE) $$skill; \
+	done
 endif
 
 audit:  ## audit_library.py plugins/*/skills --by-plugin
-	@echo "make audit: target unstubbed — implementation lands at S2." >&2
-	@exit 2
+ifeq ($(PLUGIN_SKILL_LIBS),)
+	@echo "make audit: no plugin skill libraries discovered." >&2
+	@exit 1
+else
+	uv run python $(AUDIT_LIB) $(PLUGIN_SKILL_LIBS) --by-plugin
+endif
 
 audit-rule-drift:  ## diff rule IDs in references/skill-rules.md vs docs/research/claude-skill-system_v1.17.md
-	@echo "make audit-rule-drift: target unstubbed — implementation lands at S2." >&2
-	@exit 2
+	uv run python $(AUDIT_DRIFT)
 
 sync-dupes:  ## sync_duplicates.py --check across plugins/*/scripts/_shared/
-	@echo "make sync-dupes: target unstubbed — implementation lands at S2." >&2
-	@exit 2
+	uv run python $(SYNC_DUPES) --check
 
 lint:  ## ruff + mypy on plugins/*/scripts
 ifeq ($(PLUGIN_DIRS),)

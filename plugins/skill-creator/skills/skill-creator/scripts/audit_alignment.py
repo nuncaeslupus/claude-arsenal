@@ -31,8 +31,8 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import sys
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable, List, Optional
 
 _HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(_HERE))
@@ -70,9 +70,9 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def find_skills(library_dirs: Iterable[Path]) -> List[Path]:
+def find_skills(library_dirs: Iterable[Path]) -> list[Path]:
     """Return every <skill>/ directory containing a SKILL.md, sorted by path."""
-    skills: List[Path] = []
+    skills: list[Path] = []
     seen: set[Path] = set()
     for library in library_dirs:
         if not library.is_dir():
@@ -87,7 +87,7 @@ def find_skills(library_dirs: Iterable[Path]) -> List[Path]:
     return skills
 
 
-def collect_files(skill_dir: Path) -> List[Path]:
+def collect_files(skill_dir: Path) -> list[Path]:
     """Return every file in the skill folder worth inlining, sorted by path.
 
     Filters by extension. Skips __pycache__ and findings.md (the
@@ -95,7 +95,7 @@ def collect_files(skill_dir: Path) -> List[Path]:
     confuse the reviewer about which findings are current).
     """
     suffixes = TEXT_SUFFIXES | SCRIPT_SUFFIXES
-    files: List[Path] = []
+    files: list[Path] = []
     for path in sorted(skill_dir.rglob("*")):
         if not path.is_file():
             continue
@@ -123,13 +123,13 @@ def fence_for(path: Path) -> str:
     return ""
 
 
-def render_prompt(skill_dir: Path, repo_root: Path, rules_text: str, files: List[Path]) -> str:
+def render_prompt(skill_dir: Path, repo_root: Path, rules_text: str, files: list[Path]) -> str:
     try:
         rel_skill = skill_dir.relative_to(repo_root)
     except ValueError:
         rel_skill = skill_dir
     today = dt.date.today().isoformat()
-    lines: List[str] = []
+    lines: list[str] = []
     lines.append(f"# Semantic review prompt — {skill_dir.name}")
     lines.append("")
     lines.append(f"- Skill: `{rel_skill}/`")
@@ -210,7 +210,7 @@ def _prompt_filename(skill_dir: Path, namespaced: bool) -> str:
     return f"local--{skill_dir.name}.prompt.md"
 
 
-def repo_root_from(skill_dirs: List[Path]) -> Path:
+def repo_root_from(skill_dirs: list[Path]) -> Path:
     """Best-effort repo root: walk up until we see a `.git/` or hit filesystem root."""
     if not skill_dirs:
         return Path.cwd()
@@ -236,7 +236,7 @@ def main() -> int:
         return 1
 
     repo_root = repo_root_from(skills)
-    output_dir: Optional[Path] = args.output_dir
+    output_dir: Path | None = args.output_dir
     if output_dir is not None:
         output_dir.mkdir(parents=True, exist_ok=True)
 

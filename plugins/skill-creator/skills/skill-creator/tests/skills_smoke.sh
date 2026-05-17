@@ -34,6 +34,15 @@ if [[ ! -f "$AUDIT" ]]; then
     exit 2
 fi
 
+# Prefer `uv run python` so the script sees the locked dependency set
+# (pyyaml is required by audit_library / validate). Fall back to bare
+# python3 for environments without uv.
+if command -v uv >/dev/null 2>&1; then
+    PY_RUN=("uv" "run" "python")
+else
+    PY_RUN=("python3")
+fi
+
 LIBRARIES=()
 shopt -s nullglob
 for plugin_skills in "$REPO_ROOT"/plugins/*/skills; do
@@ -49,7 +58,7 @@ fi
 overall=0
 for lib in "${LIBRARIES[@]}"; do
     echo "=== audit: ${lib#$REPO_ROOT/} ==="
-    python3 "$AUDIT" "$lib" "$@" || overall=1
+    "${PY_RUN[@]}" "$AUDIT" "$lib" "$@" || overall=1
 done
 
 if [[ "$overall" -eq 0 ]]; then

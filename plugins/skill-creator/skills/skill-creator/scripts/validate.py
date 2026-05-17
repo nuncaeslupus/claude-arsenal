@@ -16,19 +16,16 @@ from __future__ import annotations
 import argparse
 import ast
 import json
-import os
 import re
 import sys
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Iterable, List, Optional
 
 import yaml
 
 _HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(_HERE))
 import _console as console  # noqa: E402
-
 
 FRONTMATTER_KEYS = {
     "skills-api": {"name", "description", "license", "allowed-tools", "metadata"},
@@ -60,12 +57,25 @@ TRIGGER_REGEX = re.compile(
     re.IGNORECASE,
 )
 NEGATIVE_TRIGGERS = ("Do NOT", "do not", "Avoid", "avoid ", "not for", "except for")
-SECOND_PERSON_REGEX = re.compile(r"(?<![\w'])(you|your|yours|you're|you've|you'll)\b", re.IGNORECASE)
+SECOND_PERSON_REGEX = re.compile(
+    r"(?<![\w'])(you|your|yours|you're|you've|you'll)\b", re.IGNORECASE
+)
 WINDOWS_BACKSLASH_REGEX = re.compile(r"[\\][^\s\\]{1,80}\.(md|py|sh|json|yaml|yml)\b")
-HOME_PATH_REGEX = re.compile(r"(~/\.claude/|/home/\w+/\.claude/|/Users/\w+/\.claude/|/root/\.claude/)")
+HOME_PATH_REGEX = re.compile(
+    r"(~/\.claude/|/home/\w+/\.claude/|/Users/\w+/\.claude/|/root/\.claude/)"
+)
 SCRIPT_PATH_REGEX = re.compile(r"(?<![\w/.\-])([\w][\w./-]+\.(?:py|sh))(?!\w)")
 CONTAINER_PATH_PREFIXES = (
-    "/app/", "/tmp/", "/usr/", "/bin/", "/var/", "/etc/", "/root/", "/srv/", "/opt/", "/proc/",
+    "/app/",
+    "/tmp/",
+    "/usr/",
+    "/bin/",
+    "/var/",
+    "/etc/",
+    "/root/",
+    "/srv/",
+    "/opt/",
+    "/proc/",
 )
 SCRIPT_PATH_PLACEHOLDER_CHARS = set("<>${}*?…")
 SECRET_REGEXES = [
@@ -92,6 +102,8 @@ _DOTDOT_SLASH = chr(46) + chr(46) + chr(47)
 def _string_has_double_parent_traversal(value: str) -> bool:
     """True when a string literal contains two consecutive ../ traversals."""
     return (_DOTDOT_SLASH + _DOTDOT_SLASH) in value
+
+
 KEBAB_CASE_REGEX = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 FORBIDDEN_BASENAMES = {"README.md", "Readme.md", "readme.md", "AGENTS.md"}
 REFERENCE_FM_WHITELIST = {"title", "summary", "load_when"}
@@ -100,24 +112,61 @@ PARENT_TRAVERSAL_IN_CODE_REGEX = re.compile(r"(?<!\.)\.\./[\w]")
 
 CANONICAL_ARGS = {
     # Core I/O
-    "--output", "--output-dir", "--input", "--input-dir",
+    "--output",
+    "--output-dir",
+    "--input",
+    "--input-dir",
     # Generic identifiers
-    "--name", "--id", "--tag", "--label",
+    "--name",
+    "--id",
+    "--tag",
+    "--label",
     # Iteration / limits
-    "--all", "--all-pages", "--limit", "--page",
+    "--all",
+    "--all-pages",
+    "--limit",
+    "--page",
     # Time windows (relative + absolute)
-    "--since", "--days", "--date",
-    "--date-from", "--date-to",
-    "--start", "--end",
+    "--since",
+    "--days",
+    "--date",
+    "--date-from",
+    "--date-to",
+    "--start",
+    "--end",
     # Action gating
-    "--list-only", "--dry-run", "--force",
+    "--list-only",
+    "--dry-run",
+    "--force",
     # Output / verbosity
-    "--json", "--format", "--summary", "--verbose", "--quiet", "--debug", "--help",
+    "--json",
+    "--format",
+    "--summary",
+    "--verbose",
+    "--quiet",
+    "--debug",
+    "--help",
     # Selectors
-    "--include-pending", "--filter", "--query", "--search", "--field", "--contains",
+    "--include-pending",
+    "--filter",
+    "--query",
+    "--search",
+    "--field",
+    "--contains",
     # Meta-skill self-flags
-    "--profile", "--severity", "--check", "--apply",
-    "--canonical", "--library", "--root", "--by-plugin",
+    "--profile",
+    "--severity",
+    "--check",
+    "--apply",
+    "--canonical",
+    "--library",
+    "--root",
+    "--by-plugin",
+    # audit_rule_drift flags
+    "--rubric",
+    "--research",
+    "--deferred",
+    "--strict",
     # init_skill consumer flag
     "--plugin",
 }
@@ -130,10 +179,17 @@ FORBIDDEN_ARG_SYNONYMS = {
     "--in-path": "--input",
     "--input-folder": "--input-dir",
 }
-SAFE_DESCRIPTION_LEAD_VERBS = {"is", "provides", "contains", "manages", "use", "triggers"}
 ALLOWED_SCRIPT_VERBS = {
-    "fetch", "query", "analyze", "create", "validate", "compare",
-    "sync", "init", "audit", "run",
+    "fetch",
+    "query",
+    "analyze",
+    "create",
+    "validate",
+    "compare",
+    "sync",
+    "init",
+    "audit",
+    "run",
 }
 
 
@@ -142,18 +198,18 @@ class Issue:
     severity: str  # "fail" | "warn"
     check: str
     message: str
-    path: Optional[str] = None
+    path: str | None = None
 
 
 @dataclass
 class Result:
     skill: str
-    issues: List[Issue] = field(default_factory=list)
+    issues: list[Issue] = field(default_factory=list)
 
-    def fail(self, check: str, message: str, path: Optional[Path] = None) -> None:
+    def fail(self, check: str, message: str, path: Path | None = None) -> None:
         self.issues.append(Issue("fail", check, message, str(path) if path else None))
 
-    def warn(self, check: str, message: str, path: Optional[Path] = None) -> None:
+    def warn(self, check: str, message: str, path: Path | None = None) -> None:
         self.issues.append(Issue("warn", check, message, str(path) if path else None))
 
 
@@ -184,14 +240,14 @@ def _strip_all_code(text: str) -> str:
     return _strip_inline_code(_strip_fences(text))
 
 
-def _split_frontmatter(text: str) -> tuple[Optional[dict], str]:
+def _split_frontmatter(text: str) -> tuple[dict | None, str]:
     if not text.startswith("---\n"):
         return None, text
     end = text.find("\n---\n", 4)
     if end == -1:
         return None, text
     fm_block = text[4:end]
-    body = text[end + 5:]
+    body = text[end + 5 :]
     try:
         data = yaml.safe_load(fm_block)
     except yaml.YAMLError:
@@ -199,7 +255,7 @@ def _split_frontmatter(text: str) -> tuple[Optional[dict], str]:
     return data if isinstance(data, dict) else None, body
 
 
-def _find_repo_root(start: Path) -> Optional[Path]:
+def _find_repo_root(start: Path) -> Path | None:
     for d in (start, *start.parents):
         if (d / ".git").exists():
             return d
@@ -209,7 +265,7 @@ def _find_repo_root(start: Path) -> Optional[Path]:
 def _check_script_paths(
     text: str,
     source: Path,
-    repo_root: Optional[Path],
+    repo_root: Path | None,
     result: Result,
     check_prefix: str,
 ) -> None:
@@ -232,7 +288,7 @@ def _check_script_paths(
             continue
         if candidate.startswith(CONTAINER_PATH_PREFIXES):
             continue
-        candidates_to_try: List[Path]
+        candidates_to_try: list[Path]
         if candidate.startswith("/"):
             candidates_to_try = [Path(candidate)]
         else:
@@ -251,7 +307,7 @@ HEADER_REGEX = re.compile(r"^#{1,6}\s+(.+?)\s*$", re.MULTILINE)
 
 
 def _normalise_header(text: str) -> str:
-    """Lowercase + drop backticks, underscores, and runs of whitespace.
+    r"""Lowercase + drop backticks, underscores, and runs of whitespace.
 
     Lets a citation `§ between alpha and beta` match a header
     `## Between \`alpha\` and \`beta\``.
@@ -261,10 +317,10 @@ def _normalise_header(text: str) -> str:
 
 
 def _resolve_section_target(
-    cited: str, source: Path, skill_dir: Path, repo_root: Optional[Path]
-) -> List[Path]:
+    cited: str, source: Path, skill_dir: Path, repo_root: Path | None
+) -> list[Path]:
     """Return candidate .md files where `cited` should resolve, in priority order."""
-    candidates: List[Path] = []
+    candidates: list[Path] = []
     # Plugin-namespaced skill: `<plugin>:<skill>` → plugins/<plugin>/skills/<skill>/
     if ":" in cited and "/" not in cited and repo_root is not None:
         plugin_name, _, skill_name = cited.partition(":")
@@ -291,7 +347,7 @@ def _check_section_anchors(
     text: str,
     source: Path,
     skill_dir: Path,
-    repo_root: Optional[Path],
+    repo_root: Path | None,
     result: Result,
     check_prefix: str,
 ) -> None:
@@ -336,12 +392,15 @@ def _check_section_anchors(
         if not matched:
             result.fail(
                 f"{check_prefix}.section-anchor",
-                f"cites `{cited}` § '{section_text}' but no matching header found in the cited file(s)",
+                (
+                    f"cites `{cited}` § '{section_text}' but no matching "
+                    "header found in the cited file(s)"
+                ),
                 source,
             )
 
 
-def check_frontmatter(skill_dir: Path, profile: str, result: Result) -> Optional[dict]:
+def check_frontmatter(skill_dir: Path, profile: str, result: Result) -> dict | None:
     skill_md = skill_dir / "SKILL.md"
     if not skill_md.exists():
         result.fail("file.skill-md", "SKILL.md not found in skill folder", skill_md)
@@ -359,7 +418,12 @@ def check_frontmatter(skill_dir: Path, profile: str, result: Result) -> Optional
     description = fm.get("description", "")
     if not isinstance(name, str) or not name.strip():
         result.fail("frontmatter.name", "frontmatter.name missing or empty", skill_md)
-    elif not NAME_REGEX.match(name) or len(name) > 64 or "anthropic" in name.lower() or "claude" in name.lower():
+    elif (
+        not NAME_REGEX.match(name)
+        or len(name) > 64
+        or "anthropic" in name.lower()
+        or "claude" in name.lower()
+    ):
         result.fail(
             "frontmatter.name",
             f"frontmatter.name must match {NAME_REGEX.pattern}, ≤64 chars, "
@@ -406,24 +470,23 @@ def check_frontmatter(skill_dir: Path, profile: str, result: Result) -> Optional
             "description has no trigger phrase ('When the user', 'Triggered by', 'whenever')",
             skill_md,
         )
-    if isinstance(description, str) and not any(p.lower() in description.lower() for p in NEGATIVE_TRIGGERS):
+    if isinstance(description, str) and not any(
+        p.lower() in description.lower() for p in NEGATIVE_TRIGGERS
+    ):
         result.warn(
             "description.negative-trigger",
             "description has no negative trigger ('Do NOT', 'Avoid', 'not for', 'except for')",
             skill_md,
         )
-    if isinstance(description, str):
-        first_word = description.strip().split()[0].lower() if description.strip() else ""
-        if first_word and first_word not in SAFE_DESCRIPTION_LEAD_VERBS:
-            if first_word.isalpha() and first_word.endswith("e"):
-                pass  # imperatives ending in e (e.g. "Use") covered by safe-listed lemma
     return fm
 
 
 def check_file_layout(skill_dir: Path, fm: dict, result: Result) -> None:
     folder_name = skill_dir.name
     if not KEBAB_CASE_REGEX.match(folder_name):
-        result.fail("folder.kebab-case", f"folder name {folder_name!r} is not kebab-case", skill_dir)
+        result.fail(
+            "folder.kebab-case", f"folder name {folder_name!r} is not kebab-case", skill_dir
+        )
     fm_name = fm.get("name", "") if fm else ""
     if fm_name and fm_name != folder_name:
         result.fail(
@@ -432,9 +495,8 @@ def check_file_layout(skill_dir: Path, fm: dict, result: Result) -> None:
             skill_dir,
         )
     skill_md = skill_dir / "SKILL.md"
-    if skill_md.exists():
-        if not (skill_dir / "SKILL.md").is_file():
-            result.fail("file.skill-md", "SKILL.md is not a regular file", skill_md)
+    if skill_md.exists() and not (skill_dir / "SKILL.md").is_file():
+        result.fail("file.skill-md", "SKILL.md is not a regular file", skill_md)
     for entry in skill_dir.iterdir():
         if entry.name in FORBIDDEN_BASENAMES:
             result.fail(
@@ -469,7 +531,15 @@ def check_body(skill_dir: Path, result: Result) -> tuple[str, str]:
     if WINDOWS_BACKSLASH_REGEX.search(body_no_code):
         result.fail("body.windows-paths", "body contains Windows-style backslash path", skill_md)
     if HOME_PATH_REGEX.search(body_no_code):
-        result.fail("body.home-path", "body contains machine-specific home `.claude` path (/home/X/.claude/, /Users/X/.claude/, ~/.claude/) — use a repo-relative path or a $(git rev-parse --show-toplevel) snippet", skill_md)
+        result.fail(
+            "body.home-path",
+            (
+                "body contains machine-specific home `.claude` path "
+                "(/home/X/.claude/, /Users/X/.claude/, ~/.claude/) — use a "
+                "repo-relative path or a $(git rev-parse --show-toplevel) snippet"
+            ),
+            skill_md,
+        )
     for rx in SECRET_REGEXES:
         if rx.search(body):
             result.fail("body.secrets", f"body matches secret regex {rx.pattern!r}", skill_md)
@@ -564,7 +634,9 @@ def check_content_quality(skill_dir: Path, body: str, result: Result) -> None:
         _scan_content_quality(_strip_all_code(ref_body), ref, result)
 
 
-def _check_inline_parent_traversal(text: str, source: Path, result: Result, check_prefix: str) -> None:
+def _check_inline_parent_traversal(
+    text: str, source: Path, result: Result, check_prefix: str
+) -> None:
     """R-REFLOC-1 (mechanical surrogate): warn on `..` paths inside inline-code spans.
 
     Demoted to warn: the mechanical check cannot distinguish a skill-internal
@@ -604,21 +676,19 @@ def _check_skill_dir_var(skill_dir: Path, body: str, result: Result) -> None:
 
 
 REFERENCE_MENTION_REGEX = re.compile(r"references/([\w./-]+\.md)")
-CROSS_SKILL_REF_CITE_REGEX = re.compile(
-    r"`[^`\n]*§\s*(references/[\w./-]+\.md)[^`\n]*`"
-)
+CROSS_SKILL_REF_CITE_REGEX = re.compile(r"`[^`\n]*§\s*(references/[\w./-]+\.md)[^`\n]*`")
 
 
 def check_references(skill_dir: Path, body: str, result: Result) -> None:
     skill_md = skill_dir / "SKILL.md"
     refs_dir = skill_dir / "references"
-    cross_skill_ranges = [
-        (m.start(1), m.end(1)) for m in CROSS_SKILL_REF_CITE_REGEX.finditer(body)
-    ]
+    cross_skill_ranges = [(m.start(1), m.end(1)) for m in CROSS_SKILL_REF_CITE_REGEX.finditer(body)]
     reported: set[str] = set()
     for match in REFERENCE_MENTION_REGEX.finditer(body):
-        if any(cs_start <= match.start() and match.end() <= cs_end
-               for cs_start, cs_end in cross_skill_ranges):
+        if any(
+            cs_start <= match.start() and match.end() <= cs_end
+            for cs_start, cs_end in cross_skill_ranges
+        ):
             continue
         rel = match.group(1)
         if rel in reported:
@@ -642,29 +712,47 @@ def check_references(skill_dir: Path, body: str, result: Result) -> None:
             if extra_keys:
                 result.warn(
                     "references.frontmatter",
-                    f"reference frontmatter keys outside whitelist {sorted(REFERENCE_FM_WHITELIST)}: {sorted(extra_keys)}",
+                    (
+                        "reference frontmatter keys outside whitelist "
+                        f"{sorted(REFERENCE_FM_WHITELIST)}: {sorted(extra_keys)}"
+                    ),
                     ref,
                 )
         nonblank = [ln for ln in body_text.splitlines() if ln.strip()]
         if len(nonblank) > 100:
             head = "\n".join(body_text.splitlines()[:50])
-            if not re.search(r"^##\s+(Contents|Table of Contents)\s*$", head, re.MULTILINE | re.IGNORECASE):
+            if not re.search(
+                r"^##\s+(Contents|Table of Contents)\s*$", head, re.MULTILINE | re.IGNORECASE
+            ):
                 result.fail(
                     "references.toc",
                     "reference >100 lines without '## Contents' in first 50 lines",
                     ref,
                 )
-        fence_count = sum(1 for ln in body_text.splitlines() if ln.strip().startswith(("```", "~~~")))
+        fence_count = sum(
+            1 for ln in body_text.splitlines() if ln.strip().startswith(("```", "~~~"))
+        )
         if fence_count % 2 != 0:
             result.fail("references.fences", "unbalanced fenced code blocks", ref)
         text_no_code = _strip_all_code(body_text)
         if WINDOWS_BACKSLASH_REGEX.search(text_no_code):
-            result.fail("references.windows-paths", "reference contains Windows-style backslash path", ref)
+            result.fail(
+                "references.windows-paths", "reference contains Windows-style backslash path", ref
+            )
         if HOME_PATH_REGEX.search(text_no_code):
-            result.fail("references.home-path", "reference contains machine-specific home `.claude` path (/home/X/.claude/, /Users/X/.claude/, ~/.claude/)", ref)
+            result.fail(
+                "references.home-path",
+                (
+                    "reference contains machine-specific home `.claude` path "
+                    "(/home/X/.claude/, /Users/X/.claude/, ~/.claude/)"
+                ),
+                ref,
+            )
         for rx in SECRET_REGEXES:
             if rx.search(text):
-                result.fail("references.secrets", f"reference matches secret regex {rx.pattern!r}", ref)
+                result.fail(
+                    "references.secrets", f"reference matches secret regex {rx.pattern!r}", ref
+                )
         if AT_IMPORT_REGEX.search(text_no_code):
             result.warn(
                 "references.at-import",
@@ -721,7 +809,9 @@ def _check_link_safety(skill_dir: Path, body: str, result: Result) -> None:
                 if target.startswith(("http://", "https://", "mailto:")):
                     continue
                 if ".." in target.split("/"):
-                    result.fail("links.parent-traversal", f"reference link uses '..': {target!r}", ref)
+                    result.fail(
+                        "links.parent-traversal", f"reference link uses '..': {target!r}", ref
+                    )
                 if target.startswith(".claude/skills/"):
                     parts = target.split("/")
                     if len(parts) >= 3 and parts[2] != skill_dir.name:
@@ -776,25 +866,40 @@ def check_scripts(skill_dir: Path, result: Result) -> None:
             tree = None
         if tree is not None:
             for node in ast.walk(tree):
-                if isinstance(node, ast.Constant) and isinstance(node.value, str):
-                    if _string_has_double_parent_traversal(node.value):
-                        result.warn(
-                            "scripts.parent-traversal",
-                            "string literal contains 2+ consecutive parent traversals",
-                            script,
-                        )
-                        break
+                if (
+                    isinstance(node, ast.Constant)
+                    and isinstance(node.value, str)
+                    and _string_has_double_parent_traversal(node.value)
+                ):
+                    result.warn(
+                        "scripts.parent-traversal",
+                        "string literal contains 2+ consecutive parent traversals",
+                        script,
+                    )
+                    break
         for rx in SECRET_REGEXES:
             if rx.search(text):
-                result.fail("scripts.secrets", f"script matches secret regex {rx.pattern!r}", script)
+                result.fail(
+                    "scripts.secrets", f"script matches secret regex {rx.pattern!r}", script
+                )
         for syn, canon in FORBIDDEN_ARG_SYNONYMS.items():
-            if re.search(rf'add_argument\(\s*[\"\']({re.escape(syn)})[\"\']', text):
+            if re.search(
+                rf"add_argument\(\s*"
+                rf"(?:[\"\']-[a-zA-Z][\"\']\s*,\s*)?"
+                rf"[\"\']({re.escape(syn)})[\"\']",
+                text,
+            ):
                 result.warn(
                     "scripts.arg-synonym",
                     f"argparse uses {syn!r}; canonical is {canon!r}",
                     script,
                 )
-        for m in re.finditer(r'add_argument\(\s*[\"\'](--[a-z][a-z0-9-]*)[\"\']', text):
+        for m in re.finditer(
+            r"add_argument\(\s*"
+            r"(?:[\"\']-[a-zA-Z][\"\']\s*,\s*)?"
+            r"[\"\'](--[a-z][a-z0-9-]*)[\"\']",
+            text,
+        ):
             arg = m.group(1)
             if arg not in CANONICAL_ARGS and arg not in FORBIDDEN_ARG_SYNONYMS:
                 result.warn(
@@ -816,7 +921,7 @@ def check_symlinks(skill_dir: Path, result: Result) -> None:
     skill_root = skill_dir.resolve()
     for entry in skill_dir.rglob("*"):
         if entry.is_symlink():
-            target = (entry.parent / os.readlink(entry)).resolve()
+            target = (entry.parent / entry.readlink()).resolve()
             try:
                 target.relative_to(skill_root)
             except ValueError:
@@ -840,14 +945,20 @@ def check_evals(skill_dir: Path, result: Result) -> None:
     try:
         data = json.loads(_read_text(canary_file))
     except json.JSONDecodeError as exc:
-        result.fail("evals.loading-verification", f"loading_verification.json invalid JSON: {exc}", canary_file)
+        result.fail(
+            "evals.loading-verification",
+            f"loading_verification.json invalid JSON: {exc}",
+            canary_file,
+        )
         return
     canary = data.get("canary", "")
     negative = data.get("negative_control", "")
     if not isinstance(canary, str) or not canary.strip():
         result.fail("evals.canary", "evals.canary missing or empty", canary_file)
     if not isinstance(negative, str) or not negative.strip():
-        result.fail("evals.negative-control", "evals.negative_control missing or empty", canary_file)
+        result.fail(
+            "evals.negative-control", "evals.negative_control missing or empty", canary_file
+        )
     skill_md = skill_dir / "SKILL.md"
     if isinstance(canary, str) and canary.strip() and skill_md.exists():
         body = _read_text(skill_md)
@@ -867,9 +978,30 @@ def check_taxonomy(skill_dir: Path, fm: dict, result: Result) -> None:
     if declared_type in ("workflow", "capability"):
         return
     description = (fm.get("description") or "").lower()
-    has_scripts = any((skill_dir / "scripts").rglob("*.py")) if (skill_dir / "scripts").is_dir() else False
-    capability_verbs = ("fetch", "query", "extract", "run", "validate", "analyze", "compare", "create", "audit")
-    workflow_verbs = ("triage", "investigate", "solve", "fix", "onboard", "review", "implement", "scaffold")
+    has_scripts = (
+        any((skill_dir / "scripts").rglob("*.py")) if (skill_dir / "scripts").is_dir() else False
+    )
+    capability_verbs = (
+        "fetch",
+        "query",
+        "extract",
+        "run",
+        "validate",
+        "analyze",
+        "compare",
+        "create",
+        "audit",
+    )
+    workflow_verbs = (
+        "triage",
+        "investigate",
+        "solve",
+        "fix",
+        "onboard",
+        "review",
+        "implement",
+        "scaffold",
+    )
     is_capability = any(v in description for v in capability_verbs)
     is_workflow = any(v in description for v in workflow_verbs)
     if is_capability and not has_scripts and not is_workflow:
