@@ -44,7 +44,10 @@ def _resolve_repo_root(start: Path) -> Path:
     for parent in (cur, *cur.parents):
         if (parent / ".claude-plugin" / "marketplace.json").is_file():
             return parent
-    return cur
+    raise RuntimeError(
+        f"could not locate repo root above {start} "
+        "(expected .claude-plugin/marketplace.json in an ancestor)"
+    )
 
 
 def main() -> int:

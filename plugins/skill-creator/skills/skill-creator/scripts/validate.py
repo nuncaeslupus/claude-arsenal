@@ -179,7 +179,6 @@ FORBIDDEN_ARG_SYNONYMS = {
     "--in-path": "--input",
     "--input-folder": "--input-dir",
 }
-SAFE_DESCRIPTION_LEAD_VERBS = {"is", "provides", "contains", "manages", "use", "triggers"}
 ALLOWED_SCRIPT_VERBS = {
     "fetch",
     "query",
@@ -479,15 +478,6 @@ def check_frontmatter(skill_dir: Path, profile: str, result: Result) -> dict | N
             "description has no negative trigger ('Do NOT', 'Avoid', 'not for', 'except for')",
             skill_md,
         )
-    if isinstance(description, str):
-        first_word = description.strip().split()[0].lower() if description.strip() else ""
-        if (
-            first_word
-            and first_word not in SAFE_DESCRIPTION_LEAD_VERBS
-            and first_word.isalpha()
-            and first_word.endswith("e")
-        ):
-            pass  # imperatives ending in e (e.g. "Use") covered by safe-listed lemma
     return fm
 
 
@@ -893,13 +883,23 @@ def check_scripts(skill_dir: Path, result: Result) -> None:
                     "scripts.secrets", f"script matches secret regex {rx.pattern!r}", script
                 )
         for syn, canon in FORBIDDEN_ARG_SYNONYMS.items():
-            if re.search(rf"add_argument\(\s*[\"\']({re.escape(syn)})[\"\']", text):
+            if re.search(
+                rf"add_argument\(\s*"
+                rf"(?:[\"\']-[a-zA-Z][\"\']\s*,\s*)?"
+                rf"[\"\']({re.escape(syn)})[\"\']",
+                text,
+            ):
                 result.warn(
                     "scripts.arg-synonym",
                     f"argparse uses {syn!r}; canonical is {canon!r}",
                     script,
                 )
-        for m in re.finditer(r"add_argument\(\s*[\"\'](--[a-z][a-z0-9-]*)[\"\']", text):
+        for m in re.finditer(
+            r"add_argument\(\s*"
+            r"(?:[\"\']-[a-zA-Z][\"\']\s*,\s*)?"
+            r"[\"\'](--[a-z][a-z0-9-]*)[\"\']",
+            text,
+        ):
             arg = m.group(1)
             if arg not in CANONICAL_ARGS and arg not in FORBIDDEN_ARG_SYNONYMS:
                 result.warn(
