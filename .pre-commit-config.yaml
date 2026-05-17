@@ -1,0 +1,20 @@
+repos:
+  - repo: local
+    hooks:
+      - id: skill-validate
+        name: skill-validate (skill-creator)
+        description: Validate every skill root touched in the commit
+        entry: bash plugins/skill-creator/skills/skill-creator/tests/precommit_validate.sh
+        language: system
+        pass_filenames: true
+        files: ^plugins/[^/]+/skills/[^/]+/.*$
+        require_serial: true
+
+      - id: sync-duplicates-check
+        name: sync-duplicates --check
+        description: Fail if any duplicate-script group has drifted
+        entry: uv run python plugins/skill-creator/skills/skill-creator/scripts/sync_duplicates.py --check
+        language: system
+        pass_filenames: false
+        files: ^plugins/[^/]+/scripts/_shared/.*$
+        require_serial: true

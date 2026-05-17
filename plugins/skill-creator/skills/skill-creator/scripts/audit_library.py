@@ -30,7 +30,6 @@ import sys
 from collections import Counter, defaultdict
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional
 
 import yaml
 
@@ -38,10 +37,14 @@ _HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(_HERE))
 import _console as console  # noqa: E402
 
-_validate_spec = importlib.util.spec_from_file_location("skill_creator_validate", _HERE / "validate.py")
+_validate_spec = importlib.util.spec_from_file_location(
+    "skill_creator_validate", _HERE / "validate.py"
+)
+if _validate_spec is None or _validate_spec.loader is None:
+    raise RuntimeError(f"failed to locate validate.py next to {__file__}")
 _validate = importlib.util.module_from_spec(_validate_spec)
 sys.modules["skill_creator_validate"] = _validate
-_validate_spec.loader.exec_module(_validate)  # type: ignore[union-attr]
+_validate_spec.loader.exec_module(_validate)
 
 
 LISTING_BUDGET_CHARS = 8000
@@ -57,21 +60,21 @@ class Issue:
     severity: str
     check: str
     message: str
-    path: Optional[str] = None
+    path: str | None = None
 
 
 @dataclass
 class AuditResult:
-    issues: List[Issue] = field(default_factory=list)
-    per_skill: Dict[str, List[dict]] = field(default_factory=dict)
+    issues: list[Issue] = field(default_factory=list)
+    per_skill: dict[str, list[dict]] = field(default_factory=dict)
 
-    def fail(self, check: str, message: str, path: Optional[Path] = None) -> None:
+    def fail(self, check: str, message: str, path: Path | None = None) -> None:
         self.issues.append(Issue("fail", check, message, str(path) if path else None))
 
-    def warn(self, check: str, message: str, path: Optional[Path] = None) -> None:
+    def warn(self, check: str, message: str, path: Path | None = None) -> None:
         self.issues.append(Issue("warn", check, message, str(path) if path else None))
 
-    def info(self, check: str, message: str, path: Optional[Path] = None) -> None:
+    def info(self, check: str, message: str, path: Path | None = None) -> None:
         self.issues.append(Issue("info", check, message, str(path) if path else None))
 
 
@@ -103,7 +106,7 @@ def _cosine(a: Counter, b: Counter) -> float:
     return dot / (na * nb) if na and nb else 0.0
 
 
-def _extract_canary(skill_dir: Path) -> Optional[str]:
+def _extract_canary(skill_dir: Path) -> str | None:
     canary_file = skill_dir / "evals" / "loading_verification.json"
     if not canary_file.exists():
         return None
@@ -115,7 +118,7 @@ def _extract_canary(skill_dir: Path) -> Optional[str]:
     return canary if isinstance(canary, str) and canary.strip() else None
 
 
-def _parse_duplication_header(text: str) -> List[str]:
+def _parse_duplication_header(text: str) -> list[str]:
     m = DUPLICATION_HEADER_RE.search(text)
     if not m:
         return []
@@ -137,7 +140,7 @@ def _sha256(path: Path) -> str:
     return h.hexdigest()
 
 
-def _plugin_slug_from(library_dir: Path) -> Optional[str]:
+def _plugin_slug_from(library_dir: Path) -> str | None:
     """Derive the plugin slug for a library path of the form plugins/<plugin>/skills."""
     parts = library_dir.resolve().parts
     if "plugins" in parts:
@@ -147,8 +150,8 @@ def _plugin_slug_from(library_dir: Path) -> Optional[str]:
     return None
 
 
-def run_per_skill(library_dir: Path, profile: str) -> Dict[str, List[dict]]:
-    per_skill: Dict[str, List[dict]] = {}
+def run_per_skill(library_dir: Path, profile: str) -> dict[str, list[dict]]:
+    per_skill: dict[str, list[dict]] = {}
     for skill_dir in sorted(library_dir.iterdir()):
         if not skill_dir.is_dir() or not (skill_dir / "SKILL.md").exists():
             continue
@@ -166,7 +169,7 @@ def run_per_skill(library_dir: Path, profile: str) -> Dict[str, List[dict]]:
 
 
 def check_overlap(library_dir: Path, audit: AuditResult) -> None:
-    descriptions: Dict[str, str] = {}
+    descriptions: dict[str, str] = {}
     for skill_dir in sorted(library_dir.iterdir()):
         if not skill_dir.is_dir():
             continue
@@ -180,7 +183,7 @@ def check_overlap(library_dir: Path, audit: AuditResult) -> None:
     names = sorted(descriptions)
     bows = {n: _tokens(descriptions[n]) for n in names}
     for i, a in enumerate(names):
-        for b in names[i + 1:]:
+        for b in names[i + 1 :]:
             score = _cosine(bows[a], bows[b])
             if score >= 0.95:
                 audit.fail(
@@ -195,8 +198,8 @@ def check_overlap(library_dir: Path, audit: AuditResult) -> None:
 
 
 def check_canaries(library_dir: Path, audit: AuditResult) -> None:
-    canaries: Dict[str, str] = {}
-    seen: Dict[str, str] = {}
+    canaries: dict[str, str] = {}
+    seen: dict[str, str] = {}
     for skill_dir in sorted(library_dir.iterdir()):
         if not skill_dir.is_dir():
             continue
@@ -246,8 +249,8 @@ def check_listing_budget(library_dir: Path, audit: AuditResult) -> int:
     return total
 
 
-def check_duplicate_groups(library_dir: Path, audit: AuditResult) -> Dict[str, dict]:
-    siblings_by_set: Dict[frozenset[str], Dict[str, str]] = defaultdict(dict)
+def check_duplicate_groups(library_dir: Path, audit: AuditResult) -> dict[str, dict]:
+    siblings_by_set: dict[frozenset[str], dict[str, str]] = defaultdict(dict)
     for skill_dir in sorted(library_dir.iterdir()):
         scripts_dir = skill_dir / "scripts"
         if not scripts_dir.is_dir():
@@ -284,7 +287,7 @@ def check_duplicate_groups(library_dir: Path, audit: AuditResult) -> Dict[str, d
     return groups
 
 
-def emit_text(audit: AuditResult, total_chars: int, groups: Dict[str, dict]) -> None:
+def emit_text(audit: AuditResult, total_chars: int, groups: dict[str, dict]) -> None:
     fails = [i for i in audit.issues if i.severity == "fail"]
     warns = [i for i in audit.issues if i.severity == "warn"]
     if not audit.issues:
@@ -304,7 +307,7 @@ def emit_text(audit: AuditResult, total_chars: int, groups: Dict[str, dict]) -> 
 
 
 def emit_by_plugin(
-    per_library: List[tuple[Path, "AuditResult", int, Dict[str, dict]]],
+    per_library: list[tuple[Path, AuditResult, int, dict[str, dict]]],
 ) -> None:
     """Print a per-plugin listing-budget breakdown."""
     print("Listing-budget breakdown (8000 char cap)", file=sys.stderr)
@@ -350,7 +353,7 @@ def emit_by_plugin(
         )
 
 
-def _audit_one(library_dir: Path, profile: str) -> tuple[AuditResult, int, Dict[str, dict]]:
+def _audit_one(library_dir: Path, profile: str) -> tuple[AuditResult, int, dict[str, dict]]:
     audit = AuditResult()
     per_skill = run_per_skill(library_dir, profile)
     audit.per_skill = per_skill
@@ -363,9 +366,13 @@ def _audit_one(library_dir: Path, profile: str) -> tuple[AuditResult, int, Dict[
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Library-wide audit of skill collection.")
-    parser.add_argument("library_dirs", nargs="*", default=["plugins/skill-creator/skills"],
-                        help="One or more library paths (default: plugins/skill-creator/skills). "
-                             "Pass multiple to emit an aggregate listing-budget.")
+    parser.add_argument(
+        "library_dirs",
+        nargs="*",
+        default=["plugins/skill-creator/skills"],
+        help="One or more library paths (default: plugins/skill-creator/skills). "
+        "Pass multiple to emit an aggregate listing-budget.",
+    )
     parser.add_argument("--profile", choices=("claude-code", "skills-api"), default="claude-code")
     parser.add_argument("--severity", choices=("warn", "fail"), default="fail")
     parser.add_argument("--json", action="store_true")
@@ -375,7 +382,7 @@ def main() -> int:
         help="Emit a per-plugin listing-budget breakdown across the supplied libraries.",
     )
     args = parser.parse_args()
-    resolved_dirs: List[Path] = []
+    resolved_dirs: list[Path] = []
     for raw in args.library_dirs:
         p = Path(raw).resolve()
         if not p.is_dir():
@@ -387,7 +394,7 @@ def main() -> int:
     if args.severity == "warn":
         blocking_severities.add("warn")
 
-    per_library: List[tuple[Path, AuditResult, int, Dict[str, dict]]] = []
+    per_library: list[tuple[Path, AuditResult, int, dict[str, dict]]] = []
     for library_dir in resolved_dirs:
         per_library.append((library_dir, *_audit_one(library_dir, args.profile)))
 
@@ -402,22 +409,26 @@ def main() -> int:
     )
 
     if args.json:
-        print(json.dumps({
-            "libraries": [
+        print(
+            json.dumps(
                 {
-                    "path": str(d),
-                    "plugin": _plugin_slug_from(d),
-                    "issues": [asdict(i) for i in a.issues],
-                    "per_skill": a.per_skill,
-                    "listing_budget": total,
-                    "duplicate_groups": g,
+                    "libraries": [
+                        {
+                            "path": str(d),
+                            "plugin": _plugin_slug_from(d),
+                            "issues": [asdict(i) for i in a.issues],
+                            "per_skill": a.per_skill,
+                            "listing_budget": total,
+                            "duplicate_groups": g,
+                        }
+                        for d, a, total, g in per_library
+                    ],
+                    "aggregate_listing_budget": aggregate_chars,
+                    "aggregate_over_budget": aggregate_block_fail,
+                    "aggregate_near_budget": aggregate_block_warn,
                 }
-                for d, a, total, g in per_library
-            ],
-            "aggregate_listing_budget": aggregate_chars,
-            "aggregate_over_budget": aggregate_block_fail,
-            "aggregate_near_budget": aggregate_block_warn,
-        }))
+            )
+        )
     elif args.by_plugin:
         emit_by_plugin(per_library)
     else:

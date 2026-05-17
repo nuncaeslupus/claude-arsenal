@@ -25,7 +25,6 @@ import shutil
 import sys
 from collections import defaultdict
 from pathlib import Path
-from typing import Dict, List, Optional
 
 _HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(_HERE))
@@ -42,11 +41,11 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def _parse_header(text: str) -> List[tuple[str, bool]]:
+def _parse_header(text: str) -> list[tuple[str, bool]]:
     m = DUPLICATION_HEADER_RE.search(text)
     if not m:
         return []
-    out: List[tuple[str, bool]] = []
+    out: list[tuple[str, bool]] = []
     for line in m.group(1).splitlines():
         stripped = line.strip().lstrip("-*").strip()
         if not stripped:
@@ -59,8 +58,8 @@ def _parse_header(text: str) -> List[tuple[str, bool]]:
     return out
 
 
-def discover(library_dir: Path) -> Dict[frozenset[str], List[Path]]:
-    groups: Dict[frozenset[str], List[Path]] = defaultdict(list)
+def discover(library_dir: Path) -> dict[frozenset[str], list[Path]]:
+    groups: dict[frozenset[str], list[Path]] = defaultdict(list)
     for skill_dir in sorted(library_dir.iterdir()):
         scripts_dir = skill_dir / "scripts"
         if not scripts_dir.is_dir():
@@ -75,7 +74,7 @@ def discover(library_dir: Path) -> Dict[frozenset[str], List[Path]]:
     return groups
 
 
-def report(groups: Dict[frozenset[str], List[Path]], library_root: Path) -> bool:
+def report(groups: dict[frozenset[str], list[Path]], library_root: Path) -> bool:
     any_drift = False
     if not groups:
         console.ok("no duplicate-script groups declared")
@@ -90,7 +89,8 @@ def report(groups: Dict[frozenset[str], List[Path]], library_root: Path) -> bool
         elif len(files) != len(key):
             any_drift = True
             console.warn(
-                f"incomplete group: declared {len(key)} siblings, found {len(files)} on disk — {label}"
+                f"incomplete group: declared {len(key)} siblings, "
+                f"found {len(files)} on disk — {label}"
             )
         else:
             any_drift = True
@@ -104,13 +104,19 @@ def report(groups: Dict[frozenset[str], List[Path]], library_root: Path) -> bool
     return any_drift
 
 
-def apply_canonical(canonical: Path, groups: Dict[frozenset[str], List[Path]], library_root: Path) -> int:
+def apply_canonical(
+    canonical: Path, groups: dict[frozenset[str], list[Path]], library_root: Path
+) -> int:
     canonical = canonical.resolve()
     if not canonical.exists():
         console.fail(f"canonical not found: {canonical}")
         return 2
     matched = None
-    canonical_rel = canonical.relative_to(library_root.parent.resolve()).as_posix() if str(canonical).startswith(str(library_root.parent.resolve())) else str(canonical)
+    canonical_rel = (
+        canonical.relative_to(library_root.parent.resolve()).as_posix()
+        if str(canonical).startswith(str(library_root.parent.resolve()))
+        else str(canonical)
+    )
     for key, files in groups.items():
         for f in files:
             if f.resolve() == canonical:
@@ -142,9 +148,13 @@ def apply_canonical(canonical: Path, groups: Dict[frozenset[str], List[Path]], l
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Detect and propagate duplicate-script drift.")
-    parser.add_argument("--library", default="plugins/skill-creator/skills", help="Skill library root")
+    parser.add_argument(
+        "--library", default="plugins/skill-creator/skills", help="Skill library root"
+    )
     parser.add_argument("--check", action="store_true", help="Report drift; exit 1 if any")
-    parser.add_argument("--apply", metavar="CANONICAL", help="Copy canonical file onto its siblings")
+    parser.add_argument(
+        "--apply", metavar="CANONICAL", help="Copy canonical file onto its siblings"
+    )
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
     library_dir = Path(args.library).resolve()
@@ -153,10 +163,7 @@ def main() -> int:
         return 2
     groups = discover(library_dir)
     if args.json:
-        payload = {
-            ",".join(sorted(k)): {str(f): _sha256(f) for f in v}
-            for k, v in groups.items()
-        }
+        payload = {",".join(sorted(k)): {str(f): _sha256(f) for f in v} for k, v in groups.items()}
         print(json.dumps(payload))
     if args.apply:
         return apply_canonical(Path(args.apply), groups, library_dir)

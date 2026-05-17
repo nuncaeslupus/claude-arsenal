@@ -12,11 +12,12 @@ from typing import TextIO
 
 try:
     from termcolor import colored as _colored
+
     _HAS_COLOR = True
 except Exception:  # pragma: no cover - termcolor optional
     _HAS_COLOR = False
 
-    def _colored(text: str, *_: object, **__: object) -> str:
+    def _colored(text: str, *_: object, **__: object) -> str:  # type: ignore[misc]
         return text
 
 
@@ -25,7 +26,7 @@ _ICONS = {
     "ok": "✓",
     "fail": "✗",
     "warn": "⚠",
-    "info": "ℹ",
+    "info": "ℹ",  # noqa: RUF001
 }
 _COLORS = {
     "start": "blue",

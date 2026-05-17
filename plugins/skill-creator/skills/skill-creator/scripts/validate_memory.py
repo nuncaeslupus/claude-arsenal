@@ -17,17 +17,14 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import re
 import sys
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import List, Optional
 
 _HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(_HERE))
 import _console as console  # noqa: E402
-
 
 HOME_PATH_REGEX = re.compile(r"(~/\.claude/|/home/\w+/\.claude/|/Users/\w+/\.claude/)")
 AT_IMPORT_REGEX = re.compile(r"^\s*@([A-Za-z0-9_./-]+\.md)\b", re.MULTILINE)
@@ -40,17 +37,17 @@ class Issue:
     severity: str
     check: str
     message: str
-    path: Optional[str] = None
+    path: str | None = None
 
 
 @dataclass
 class Result:
-    issues: List[Issue] = field(default_factory=list)
+    issues: list[Issue] = field(default_factory=list)
 
-    def fail(self, check: str, message: str, path: Optional[Path] = None) -> None:
+    def fail(self, check: str, message: str, path: Path | None = None) -> None:
         self.issues.append(Issue("fail", check, message, str(path) if path else None))
 
-    def warn(self, check: str, message: str, path: Optional[Path] = None) -> None:
+    def warn(self, check: str, message: str, path: Path | None = None) -> None:
         self.issues.append(Issue("warn", check, message, str(path) if path else None))
 
 
@@ -81,7 +78,7 @@ def _strip_preamble(text: str) -> str:
     return text
 
 
-def _import_chain_depth(start: Path, root: Path, seen: Optional[set[Path]] = None) -> int:
+def _import_chain_depth(start: Path, root: Path, seen: set[Path] | None = None) -> int:
     if seen is None:
         seen = set()
     start = start.resolve()
@@ -140,22 +137,21 @@ def check_memory_file(path: Path, root: Path, result: Result) -> None:
                     path,
                 )
         if path.is_symlink() and (path.parent / "AGENTS.md").exists():
-            target = (path.parent / os.readlink(path)).resolve()
+            target = (path.parent / path.readlink()).resolve()
             if target == (path.parent / "AGENTS.md").resolve():
                 result.fail(
                     "memory.symlink",
                     "CLAUDE.md must not be a symlink to AGENTS.md (use @AGENTS.md import)",
                     path,
                 )
-    if path.name == "AGENTS.md":
-        if path.is_symlink():
-            target = (path.parent / os.readlink(path)).resolve()
-            if target == (path.parent / "CLAUDE.md").resolve():
-                result.fail(
-                    "memory.symlink",
-                    "AGENTS.md must not be a symlink to CLAUDE.md",
-                    path,
-                )
+    if path.name == "AGENTS.md" and path.is_symlink():
+        target = (path.parent / path.readlink()).resolve()
+        if target == (path.parent / "CLAUDE.md").resolve():
+            result.fail(
+                "memory.symlink",
+                "AGENTS.md must not be a symlink to CLAUDE.md",
+                path,
+            )
     depth = _import_chain_depth(path, root)
     if depth > 5:
         result.warn(
@@ -179,7 +175,9 @@ def emit_text(result: Result) -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Validator for CLAUDE.md / AGENTS.md memory layer.")
+    parser = argparse.ArgumentParser(
+        description="Validator for CLAUDE.md / AGENTS.md memory layer."
+    )
     parser.add_argument("--root", default=".", help="Repo root (default: cwd)")
     parser.add_argument("--severity", choices=("warn", "fail"), default="fail")
     parser.add_argument("--json", action="store_true")

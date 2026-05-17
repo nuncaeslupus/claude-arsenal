@@ -2,7 +2,8 @@
 """init_skill.py — scaffold a new Claude Code skill.
 
 Usage:
-    python3 init_skill.py <skill-name> [--library plugins/<plugin>/skills] [--plugin <name>] [--force]
+    python3 init_skill.py <skill-name>
+        [--library plugins/<plugin>/skills] [--plugin <name>] [--force]
 
 Creates `<library>/<skill-name>/` with SKILL.md, references/, scripts/,
 assets/, evals/ directories, fills the SKILL.md frontmatter with the
@@ -22,7 +23,7 @@ import json
 import re
 import secrets
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 _HERE = Path(__file__).resolve().parent
@@ -34,7 +35,7 @@ NAME_REGEX = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 
 
 def _generate_canary(skill_name: str) -> str:
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    today = datetime.now(UTC).strftime("%Y-%m-%d")
     # 64-bit random suffix + 32-bit cwd hash for cross-machine uniqueness.
     cwd_hash = hashlib.md5(str(Path.cwd()).encode("utf-8")).hexdigest()[:8]
     suffix = secrets.token_hex(8)
@@ -55,12 +56,18 @@ def main() -> int:
     parser.add_argument(
         "--library",
         default=None,
-        help="Skill library root (default: plugins/<--plugin>/skills, or plugins/skill-creator/skills if --plugin is unset)",
+        help=(
+            "Skill library root (default: plugins/<--plugin>/skills, or "
+            "plugins/skill-creator/skills if --plugin is unset)"
+        ),
     )
     parser.add_argument(
         "--plugin",
         default=None,
-        help="Plugin slug to scaffold inside; sets --library to plugins/<plugin>/skills when --library is not given.",
+        help=(
+            "Plugin slug to scaffold inside; sets --library to "
+            "plugins/<plugin>/skills when --library is not given."
+        ),
     )
     parser.add_argument("--force", action="store_true", help="Overwrite an existing folder")
     args = parser.parse_args()
