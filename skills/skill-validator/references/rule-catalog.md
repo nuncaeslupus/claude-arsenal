@@ -126,7 +126,7 @@ SEMANTIC and HYBRID rules note what the validator can pre-check mechanically and
 - Tags: [reference] [portable]
 - Class: MECHANICAL · Severity: fail at >100, warn at >200 · Status: VALIDATED · Scope: per-skill
 - Rule: Reference files >100 lines must begin with a ToC.
-- Heuristic: For each `references/**/*.md` with `line_count > 100`: scan the first 50 lines for `^##\s+(Table of Contents|Contents)\s*$` (case-insensitive). Anthropic-supremacy threshold (100, corrected from skill-creator's 300).
+- Heuristic: For each `references/**/*.md` with `line_count > 100`: scan the first 30 non-blank lines for `^##\s+(Table of Contents|Contents)\s*$` (case-insensitive). Aligned with R-CHUNK-1 (which supersedes this rule). Anthropic-supremacy threshold (100, corrected from skill-creator's 300).
 - Citation: platform.claude.com agent-skills/best-practices.
 
 ### R-BODY-5

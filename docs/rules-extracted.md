@@ -132,7 +132,7 @@ The validator-aligned, more terse twin of this file lives at `skills/skill-valid
 - **Tags:** [reference] [portable]
 - **Class:** MECHANICAL · **Severity:** fail at >100, warn at >200 · **Status:** VALIDATED · **Scope:** per-skill
 - **Rule:** Reference files >100 lines start with `## Contents` (or `## Table of Contents`).
-- **Heuristic:** First 50 lines must contain `^##\s+(Table of Contents|Contents)\s*$` (case-insensitive).
+- **Heuristic:** First 30 non-blank lines must contain `^##\s+(Table of Contents|Contents)\s*$` (case-insensitive). Aligned with R-CHUNK-1 / R-BOUNDARY-9 — treat the three as one check.
 - **Why:** Anthropic-supremacy at 100 lines (revised from skill-creator's 300).
 
 #### R-BODY-5 — no README.md or AGENTS.md inside skill
@@ -409,7 +409,7 @@ R-RETRO-*, R-SELF-*, R-DRIFT-*, R-EXTRACT-*, R-DESTRUCT-*, R-VC-*, R-ROLLBACK-* 
 
 #### R-XPOLL-8 — deterministic helper outputs are facts (no reasoning prose between bash and output)
 - **Tags:** [skill] [portable] · HYBRID · warn · VALIDATED · per-skill
-- **Heuristic:** Detect bash code blocks followed by reasoning-prose markers (`Now I will check…`, `Let me verify…`). Also incorporates a time-sensitivity regex check (`\b(20[12][0-9]|January|…|December)\b` outside fences and `<details><summary>Legacy…`).
+- **Heuristic:** Detect bash code blocks followed by reasoning-prose markers (`Now I will check...`, `Let me verify...`). Also incorporates a time-sensitivity regex check (`\b(20[12][0-9]|January|February|March|April|May|June|July|August|September|October|November|December)\b` outside fences and `<details><summary>Legacy...`).
 
 #### R-XPOLL-10 — keyword-stuffing description detection (PROPOSED)
 - **Tags:** [skill] [portable] · MECHANICAL · warn · PROPOSED · per-skill
