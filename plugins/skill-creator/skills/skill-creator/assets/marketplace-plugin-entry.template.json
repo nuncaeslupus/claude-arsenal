@@ -1,0 +1,5 @@
+{
+  "name": "{{NAME}}",
+  "source": "./plugins/{{NAME}}",
+  "description": "<one-line plugin description (matches plugin.json)>"
+}
