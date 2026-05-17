@@ -134,7 +134,8 @@ contributions (name + description, the listing-relevant fields):
 | `skills/skill-validator/SKILL.md` | 687 | **~273 chars** | Placeholder. Deleted at S2; rule-catalog content moves to research doc + rubric. |
 | `github/SKILL.md` | 1267 | **~76 chars** | At wrong nesting depth (repo root, not under a plugin). Merged into `plugins/core/skills/github/` at S6. |
 | `session-end/SKILL.md` | 1240 | **~69 chars** | At wrong nesting depth. Merge candidate with external `session-summary/` at S6. |
-| **Total today** |  | **~418 chars** | 5.2 % of cap, 94.8 % headroom. |
+| `mutmut-report/SKILL.md` | 1278 | **~99 chars** | At wrong nesting depth. Python-specific mutation-testing skill (pre-dates marketplace work). Decision deferred to S5/S6 (keep-and-port to `plugins/core/skills/mutmut-report/`, keep as personal-scope skill outside the marketplace, or drop). |
+| **Total today** |  | **~517 chars** | 6.5 % of cap, 93.5 % headroom. |
 
 > Listing budget is conventionally measured as `name + description` since
 > those are the fields that load when Claude walks the skill index. Exact

@@ -222,6 +222,9 @@ __marimo__/
 # Temporary files
 tmp/
 
+# Author-local skill findings (never committed)
+findings.md
+
 # OS junk
 .DS_Store
 .AppleDouble

@@ -1,5 +1,0 @@
-{
-  "name": "my-skills",
-  "version": "0.1.0",
-  "description": "Personal Claude Code skills, including skill-creator and skill-validator meta-skills derived from claude-skill-system research v1.17."
-}
