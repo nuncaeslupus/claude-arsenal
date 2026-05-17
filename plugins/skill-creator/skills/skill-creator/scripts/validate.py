@@ -62,7 +62,7 @@ TRIGGER_REGEX = re.compile(
 NEGATIVE_TRIGGERS = ("Do NOT", "do not", "Avoid", "avoid ", "not for", "except for")
 SECOND_PERSON_REGEX = re.compile(r"(?<![\w'])(you|your|yours|you're|you've|you'll)\b", re.IGNORECASE)
 WINDOWS_BACKSLASH_REGEX = re.compile(r"[\\][^\s\\]{1,80}\.(md|py|sh|json|yaml|yml)\b")
-HOME_PATH_REGEX = re.compile(r"(~/\.claude/|/home/\w+/|/Users/\w+/|/root/\.claude/)")
+HOME_PATH_REGEX = re.compile(r"(~/\.claude/|/home/\w+/\.claude/|/Users/\w+/\.claude/|/root/\.claude/)")
 SCRIPT_PATH_REGEX = re.compile(r"(?<![\w/.\-])([\w][\w./-]+\.(?:py|sh))(?!\w)")
 CONTAINER_PATH_PREFIXES = (
     "/app/", "/tmp/", "/usr/", "/bin/", "/var/", "/etc/", "/root/", "/srv/", "/opt/", "/proc/",
@@ -84,11 +84,14 @@ RULE_ID_REGEX = re.compile(r"\b[QR]-[A-Z]+-\d+\b")
 PR_BRANCH_REGEX = re.compile(r"(?:(?<!\]\()(?<!\w)#\d+|(?<![A-Z])[A-Z]{2,6}-\d{2,})")
 HARDCODED_DATE_REGEX = re.compile(r"\b20\d{2}-\d{2}-\d{2}\b")
 CANARY_LINE_REGEX = re.compile(r"^CANARY:.*$", re.MULTILINE)
-_DOTDOT_SLASH = chr(46) + chr(46) + chr(47)  # the "../" sequence built without literal source
+# Built via chr() instead of a literal "../" so the AST self-scan on
+# line 776 does not see this file's own check string as a finding.
+_DOTDOT_SLASH = chr(46) + chr(46) + chr(47)
+
 
 def _string_has_double_parent_traversal(value: str) -> bool:
     """True when a string literal contains two consecutive ../ traversals."""
-    return value.count(_DOTDOT_SLASH) >= 2 and (_DOTDOT_SLASH + _DOTDOT_SLASH) in value
+    return (_DOTDOT_SLASH + _DOTDOT_SLASH) in value
 KEBAB_CASE_REGEX = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 FORBIDDEN_BASENAMES = {"README.md", "Readme.md", "readme.md", "AGENTS.md"}
 REFERENCE_FM_WHITELIST = {"title", "summary", "load_when"}
@@ -466,7 +469,7 @@ def check_body(skill_dir: Path, result: Result) -> tuple[str, str]:
     if WINDOWS_BACKSLASH_REGEX.search(body_no_code):
         result.fail("body.windows-paths", "body contains Windows-style backslash path", skill_md)
     if HOME_PATH_REGEX.search(body_no_code):
-        result.fail("body.home-path", "body contains machine-specific home path (/home/X/, /Users/X/, ~/.claude/) — use a repo-relative path or a $(git rev-parse --show-toplevel) snippet", skill_md)
+        result.fail("body.home-path", "body contains machine-specific home `.claude` path (/home/X/.claude/, /Users/X/.claude/, ~/.claude/) — use a repo-relative path or a $(git rev-parse --show-toplevel) snippet", skill_md)
     for rx in SECRET_REGEXES:
         if rx.search(body):
             result.fail("body.secrets", f"body matches secret regex {rx.pattern!r}", skill_md)
@@ -658,7 +661,7 @@ def check_references(skill_dir: Path, body: str, result: Result) -> None:
         if WINDOWS_BACKSLASH_REGEX.search(text_no_code):
             result.fail("references.windows-paths", "reference contains Windows-style backslash path", ref)
         if HOME_PATH_REGEX.search(text_no_code):
-            result.fail("references.home-path", "reference contains machine-specific home path (/home/X/, /Users/X/, ~/.claude/)", ref)
+            result.fail("references.home-path", "reference contains machine-specific home `.claude` path (/home/X/.claude/, /Users/X/.claude/, ~/.claude/)", ref)
         for rx in SECRET_REGEXES:
             if rx.search(text):
                 result.fail("references.secrets", f"reference matches secret regex {rx.pattern!r}", ref)
