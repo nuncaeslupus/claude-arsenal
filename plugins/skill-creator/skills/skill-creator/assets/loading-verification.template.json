@@ -1,0 +1,11 @@
+{
+  "skill": "{{NAME}}",
+  "canary": "{{CANARY}}",
+  "negative_control": "this-fact-is-false-and-must-not-appear-in-the-skill-body",
+  "load_prompts": [
+    "Use the {{NAME}} skill to ..."
+  ],
+  "no_load_prompts": [
+    "Generic prompt that should NOT activate {{NAME}}"
+  ]
+}

@@ -1,0 +1,39 @@
+---
+name: {{NAME}}
+description: Use when <one-line trigger>. Triggers — <concrete URL / CLI / user phrase>. Owns scripts: <verb_noun.py>. Do NOT use for <out-of-scope counterexample>.
+---
+
+# {{NAME}}
+
+One-paragraph purpose. State what this skill does, in one sentence.
+
+CANARY: {{CANARY}}
+
+## When to load
+
+Load this skill when:
+
+- <concrete trigger #1>
+- <concrete trigger #2>
+- <concrete trigger #3>
+
+If you reached this skill by mistake (e.g. the trigger fired but the
+task is actually <related-but-different>), defer to <other-skill>.
+
+## How to use
+
+Document the canonical CLI / function call sequence here.
+
+```bash
+python3 .claude/skills/{{NAME}}/scripts/<verb_noun>.py --output ...
+```
+
+## References — load on demand
+
+- [Topic A](references/topic-a.md) — load when …
+- [Topic B](references/topic-b.md) — load when …
+
+## Gotchas
+
+- **<failure mode 1>.** What goes wrong AND why.
+- **<failure mode 2>.** What goes wrong AND why.
