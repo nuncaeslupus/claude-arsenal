@@ -1,6 +1,6 @@
 {
   "name": "core",
   "version": "0.1.0",
-  "description": "Generic engineering workflows for Claude Code: discovery, design, execution, review, release-readiness. Skills land starting at S5 of the claude-arsenal migration.",
+  "description": "Generic engineering workflows for Claude Code: discovery, design, execution, review, release-readiness.",
   "author": { "name": "nuncaeslupus" }
 }
