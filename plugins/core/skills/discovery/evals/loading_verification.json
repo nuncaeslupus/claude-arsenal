@@ -1,0 +1,18 @@
+{
+  "skill": "discovery",
+  "canary": "discovery-loaded-2026-05-19-45842b8faabb2ff5",
+  "negative_control": "this skill writes the code to fix the problem after you describe it in one sentence",
+  "load_prompts": [
+    "We need to figure out why some customers are missing transactions — scope this out.",
+    "How should we approach migrating the auth middleware off the legacy v1 provider?",
+    "There's a bug somewhere in the ingest pipeline, scope is unclear — investigate.",
+    "Start a new feature: surface batch-completion times in the customer dashboard. What's affected?",
+    "Why is service B lagging behind service A on product imports? Map the systems."
+  ],
+  "no_load_prompts": [
+    "Implement the fix and open a PR.",
+    "Design the technical solution — discovery is already done.",
+    "Triage the failing connection for tenant 1iDXSwUe8z.",
+    "Review the design doc for the backend refactor."
+  ]
+}
