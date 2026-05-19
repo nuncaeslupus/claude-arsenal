@@ -225,6 +225,9 @@ tmp/
 # Author-local skill findings (never committed)
 findings.md
 
+# Claude Code per-user settings (never committed)
+.claude/settings.local.json
+
 # OS junk
 .DS_Store
 .AppleDouble
