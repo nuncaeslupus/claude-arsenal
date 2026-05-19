@@ -51,7 +51,8 @@ plugins that are wholly dropped.
 
 | Path | Disposition |
 |---|---|
-| `tmp/external-skills/.claude/agents/flanks-memory.md` | Rename to `agents/memory.md`, port-and-strip at S4. |
+| `tmp/external-skills/.claude/agents/flanks-memory.md` | **Skipped at S4** (see §7). |
+| `tmp/external-skills/.claude/agents/impact-analyzer.md` | **Skipped at S4** (see §7). |
 
 ### 1.4 Policy items to drop or generalise
 
@@ -203,3 +204,22 @@ LC_ALL=C comm -23 /tmp/ours-R.txt /tmp/theirs-R.txt | wc -l   # expect 131
 # SKILL.md byte counts
 wc -c skills/skill-validator/SKILL.md github/SKILL.md session-end/SKILL.md
 ```
+
+---
+
+## 7. S4 deferrals — agents skipped
+
+The original plan listed `agents/memory.md` (from `flanks-memory.md`) and
+`agents/impact-analyzer.md` as S4 deliverables. Both were dropped during S4:
+
+- **`memory.md`** — Claude Code already ships a built-in auto-memory system
+  (`MEMORY.md` under `~/.claude/projects/.../memory/`) that handles
+  cross-session knowledge accumulation automatically. A project-scoped
+  `@memory` subagent would duplicate the same job.
+- **`impact-analyzer.md`** — Designed for the FlanksAPI 33-service monorepo
+  (RabbitMQ, docker-compose links, inter-service URLs). Stripped of those
+  specifics, the agent collapses into a generic "look around for coupling"
+  prompt that a planning subagent already covers.
+
+Net S4 deliverable: `plugins/core/.claude-plugin/plugin.json` + marketplace
+entry, no skills, no agents. Skills land at S5.
