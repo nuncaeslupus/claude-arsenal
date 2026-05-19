@@ -33,7 +33,8 @@ Before creating the branch, decide where the work lives. From the repo root, run
   ```bash
   REPO=$(git rev-parse --show-toplevel)
   TICKET=<ticket-id>
-  git -C "$REPO" worktree add "${REPO}-${TICKET}" -b "${TICKET}-short-description" origin/HEAD
+  DEFAULT=$(git -C "$REPO" symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null || echo origin/main)
+  git -C "$REPO" worktree add "../${TICKET}-worktree" -b "${TICKET}-short-description" "$DEFAULT"
   ```
 
   Then run all subsequent steps (branch, commits, tests, PR) from that worktree path. When in doubt, prefer creating the worktree: it never destroys state. Ask the user only when the path is genuinely ambiguous (e.g. they may want to abandon the in-flight branch).
@@ -77,7 +78,7 @@ For every code change:
 - **Integration tests**: for new API endpoints, database queries, or inter-service calls
 - **Edge cases**: null/empty inputs, boundary values, error conditions
 - **Regression**: if fixing a bug, write a test that reproduces it first
-- **API-contract bugs lock the regression at the API level**: when the fix is a signature mismatch — wrong arity, wrong kwargs, wrong return shape — the regression test asserts the API contract on the shared object (the logger's signature, the emitter's signature, the HTTP client's response shape), not just the one call site that triggered the report. A test that pins the contract catches the next caller that makes the same mistake, before it reaches production.
+- **API-contract bugs lock the regression at the API level**: when the fix is a signature mismatch — wrong arity, wrong kwargs, wrong return shape — the regression test asserts the API contract on the interface itself (the logger's signature, the emitter's signature, the HTTP client's response shape), not just the one call site that triggered the report. A test that pins the contract catches the next caller that makes the same mistake, before it reaches production.
 
 Test naming convention: `test_<what>_<condition>_<expected_result>`
 

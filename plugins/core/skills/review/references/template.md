@@ -36,7 +36,7 @@
 | Configuration | Pass/Fail | |
 | Testing | Pass/Fail | |
 | Observability | Pass/Fail | |
-| Git conventions | Pass/Fail | |
+| Git conventions (branch naming, commit messages) | Pass/Fail | |
 
 ### Debt and complexity
 
