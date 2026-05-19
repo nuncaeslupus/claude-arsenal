@@ -223,3 +223,41 @@ The original plan listed `agents/memory.md` (from `flanks-memory.md`) and
 
 Net S4 deliverable: `plugins/core/.claude-plugin/plugin.json` + marketplace
 entry, no skills, no agents. Skills land at S5.
+
+## 8. S5 deferrals — SURFACE skills moved out of `core`
+
+The plan called for an in-stage keep/drop matrix on eight Flanks-flavoured
+skills (`tramoia`, `flenkins`, `docs`, `gcloud`, `har`, `honeycomb`, `jira`,
+`sentry`). Resolved at S5:
+
+- `tramoia`, `flenkins` — **dropped permanently** (Flanks-internal CLI /
+  test bench; no portable surface).
+- `docs`, `gcloud`, `har`, `honeycomb`, `jira`, `sentry` — **none enter
+  `plugins/core/skills/`**. They are deferred to **post-v0.1.0** and will
+  land in separate per-domain plugins later (tentative groupings:
+  observability for `sentry`/`honeycomb`/`gcloud`, knowledge-base for
+  `jira`/`docs`, scraping for `har`). Classification is open until that
+  work starts; the plan and plugin slugs are not yet decided.
+
+Net S5 deliverable: `plugins/core/skills/` ships five workflow skills
+(`discovery`, `design`, `execution`, `review`, `release-readiness`).
+
+### 8.1 `engineering-core` — deferred to post-v0.1.0
+
+The plan listed `engineering-core` as the sixth S5 skill. Resolved at
+port time: the source skill is heavily Flanks-stack-specific
+(FastAPI/asyncpg/Traefik/flenkins/`PD-XXXXX`/master-branch policy, ~1020
+lines across 7 references + 2 samples). Stripping every Flanks-specific
+hook leaves only universal truisms ("use env vars for secrets", "tests
+required") that do not justify a SKILL; keeping the structure as a
+meta-shape ships a half-real skill. Decision: **defer** to post-v0.1.0,
+where it will land either as a consumer-forkable template or be replaced
+by per-stack engineering-core variants in separate plugins.
+
+Cross-references from sibling skills are already conditional — `discovery`
+says *"if the engineering-core skill is available"* and `execution` says
+*"engineering-core gates complete (if applicable)"* — so no rewiring is
+needed when the skill is absent.
+
+All SURFACE work and `engineering-core` happen after the marketplace
+tags v0.1.0.

@@ -1,0 +1,18 @@
+{
+  "skill": "release-readiness",
+  "canary": "release-readiness-loaded-2026-05-19-e8a0e2967cbab28d",
+  "negative_control": "this skill rolls back the last production deploy automatically when a check fails",
+  "load_prompts": [
+    "Is this PR ready to merge? Run the release-readiness check.",
+    "Final checks before release on the portfolio refactor.",
+    "Is this safe to ship? Look at compatibility, rollback, observability.",
+    "Release readiness for the auth-middleware swap — what could break in production?",
+    "Confirm the change is production-ready and the rollback path is clear."
+  ],
+  "no_load_prompts": [
+    "Implement the design for the portfolio refactor.",
+    "Review this PR and leave comments.",
+    "Discovery: why is the import service lagging?",
+    "Triage the failing connection for tenant 1iDXSwUe8z."
+  ]
+}
