@@ -24,8 +24,12 @@ import sys
 from pathlib import Path
 
 # language -> ordered list of manifest patterns; first match wins.
-# Patterns containing "*" are glob expressions evaluated against the
-# project root only (not recursive).
+# Literal patterns are looked up at the project root. Glob patterns
+# (containing "*") are evaluated against the root and a small set of
+# common source subdirectories — see GLOB_SEARCH_DIRS — so projects
+# that keep sources under src/ or lib/ are still detected when no
+# root-level manifest exists.
+GLOB_SEARCH_DIRS: tuple[str, ...] = (".", "src", "lib", "app")
 MANIFESTS: dict[str, list[str]] = {
     "python": [
         "pyproject.toml",
@@ -43,7 +47,7 @@ MANIFESTS: dict[str, list[str]] = {
     "java": ["pom.xml", "build.gradle"],
     "kotlin": ["build.gradle.kts", "*.kt"],
     "scala": ["build.sbt"],
-    "csharp": ["*.csproj", "*.sln"],
+    "csharp": ["*.csproj"],
     "fsharp": ["*.fsproj"],
     "php": ["composer.json"],
     "elixir": ["mix.exs"],
@@ -53,7 +57,7 @@ MANIFESTS: dict[str, list[str]] = {
     "swift": ["Package.swift"],
     "dart": ["pubspec.yaml"],
     "lua": [".luarc.json"],
-    "c": ["compile_commands.json", "*.c"],
+    "c": ["*.c"],
     "cpp": ["compile_commands.json", "*.cpp", "*.cc", "*.cxx"],
     "html": ["*.html"],
     "css": ["*.css", "*.scss"],
@@ -64,9 +68,14 @@ MANIFESTS: dict[str, list[str]] = {
 
 def _match(root: Path, pattern: str) -> str | None:
     if "*" in pattern:
-        matches = sorted(root.glob(pattern))
-        if matches:
-            return matches[0].name
+        for subdir in GLOB_SEARCH_DIRS:
+            base = root / subdir if subdir != "." else root
+            if not base.is_dir():
+                continue
+            matches = sorted(base.glob(pattern))
+            if matches:
+                hit = matches[0]
+                return hit.name if subdir == "." else f"{subdir}/{hit.name}"
         return None
     candidate = root / pattern
     if candidate.exists():
