@@ -6,6 +6,11 @@
       "name": "skill-creator",
       "source": "./plugins/skill-creator",
       "description": "Meta-skill that gates every authoring, editing, or refactoring change to a Claude Code skill. Ships the validator, library auditor, alignment runner, scaffolder, and the rubric every other skill in the marketplace is checked against."
+    },
+    {
+      "name": "core",
+      "source": "./plugins/core",
+      "description": "Generic engineering workflows for Claude Code: discovery, design, execution, review, release-readiness."
     }
   ]
 }
