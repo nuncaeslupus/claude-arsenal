@@ -1,20 +1,15 @@
 # claude-arsenal
 
 A Claude Code marketplace. One install gives any project the
-`skill-creator` meta-skill (which gates every other edit inside a
-`skills/` folder against a rubric) plus a generic engineering-workflow
-plugin (`core`: discovery → design → execution → review →
-release-readiness).
-
-> **Status: pre-v0.1.0.** The repo is in the middle of a marketplace
-> migration tracked at `docs/migration-baseline.md` and
-> `~/.claude/plans/first-i-want-to-resilient-puddle.md`. Plugins land
-> incrementally at S2 (`skill-creator`) and S4–S6 (`core`). Do not
-> install yet — wait for the v0.1.0 tag.
+`skill-creator` meta-skill (which gates every authoring or editing
+change inside a `skills/` folder against a rubric) plus a generic
+engineering-workflow plugin (`core`: discovery → design → execution →
+review → release-readiness, plus `github`, `lsp-setup`, and
+`session-end`).
 
 ---
 
-## Install (post-v0.1.0)
+## Install
 
 Inside a Claude Code session:
 
@@ -27,11 +22,13 @@ Inside a Claude Code session:
 Verify:
 
 ```text
-/skill-creator:skill-creator        # loads with a canary phrase
-/core:discovery                     # workflow skill is listed
+Help me create a new skill          # loads skill-creator (with the canary phrase)
+Investigate why login is slow       # loads core:discovery
 ```
 
-Full install guide and update / uninstall flow: `docs/INSTALL.md`.
+Full install guide and update/uninstall flow:
+[`docs/INSTALL.md`](docs/INSTALL.md).
+File-ownership table and customisation rule: [`docs/UPDATE.md`](docs/UPDATE.md).
 
 ---
 
@@ -39,32 +36,32 @@ Full install guide and update / uninstall flow: `docs/INSTALL.md`.
 
 | Plugin | Role |
 |---|---|
-| `skill-creator` | Meta-skill. Validates SKILL.md + references + scripts against a 98-rule rubric. Hooks block unguarded edits inside `skills/` folders. |
-| `core` | Engineering workflows: discovery, design, execution, review, release-readiness, session-summary, github. |
+| `skill-creator` | Meta-skill. Validates SKILL.md + references + scripts against the rubric. Hooks block unguarded edits inside `skills/` folders. |
+| `core` | Engineering workflows: `discovery`, `design`, `execution`, `review`, `release-readiness`, `github`, `lsp-setup`, `session-end`. |
 
 The active rubric is at
-`plugins/skill-creator/skills/skill-creator/references/skill-rules.md`,
+[`plugins/skill-creator/skills/skill-creator/references/skill-rules.md`](plugins/skill-creator/skills/skill-creator/references/skill-rules.md),
 sourced from
-`docs/research/claude-skill-system_v1.17.md` (the upstream research
-archive, committed verbatim).
+[`docs/research/claude-skill-system_v1.17.md`](docs/research/claude-skill-system_v1.17.md)
+(the upstream research archive, committed verbatim).
 
 ---
 
 ## For contributors
 
-Dev-mode walkthrough (full version: `docs/CONTRIBUTING.md`):
+Dev-mode walkthrough (full version: [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md)):
 
 ```bash
 git clone https://github.com/nuncaeslupus/claude-arsenal
 cd claude-arsenal
 uv sync
 make help            # list targets
-make smoke           # validate all plugins (post-S2)
-claude --plugin-dir ./plugins/skill-creator --plugin-dir ./plugins/core
+make smoke           # validate all plugins
+make dev             # claude --plugin-dir ./plugins/skill-creator --plugin-dir ./plugins/core
 ```
 
 Project layout, branch policy, and the cite form are documented in
-`CLAUDE.md` (internal-only — not shipped to consumers).
+[`CLAUDE.md`](CLAUDE.md) (internal-only — not shipped to consumers).
 
 ---
 
