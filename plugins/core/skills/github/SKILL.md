@@ -49,10 +49,10 @@ If the host project has no lint target, document that gap (propose a Makefile ad
 
 ## The agile review loop
 
-After `gh pr create` returns the PR number, immediately enter the polling loop. **Inline the action rubric in the `/loop` prompt** — a bare `query_pr_state.py` invocation produces a JSON snapshot each tick and forces the LLM to re-derive what to do every time.
+After `gh pr create` returns the PR number, immediately enter the polling loop. **Inline the action rubric in the `/loop` prompt** — a bare `query_pr_state.py` invocation produces a JSON snapshot each tick and forces the LLM to re-derive what to do every time. Pass `--unresolved-only` so the loop does not re-trigger on already-addressed comments.
 
 ```bash
-/loop 90s python3 "${CLAUDE_SKILL_DIR}/scripts/query_pr_state.py" --pr <PR_NUMBER> — if state is bot_commented, address per the rubric (agree → fix; disagree → reply via gh api repos/<owner>/<repo>/pulls/<PR_NUMBER>/comments/<id>/replies; ambiguous → ask user). If ci_failed, fetch the failing job log and fix. Only stop the loop on ready_to_merge — bot_approved still waits for the quiet window. When stopping, CronDelete <job-id> and hand back to user to merge.
+/loop 90s python3 "${CLAUDE_SKILL_DIR}/scripts/query_pr_state.py" --pr <PR_NUMBER> --unresolved-only — if state is bot_commented, address per the rubric (agree → fix; disagree → reply via gh api repos/<owner>/<repo>/pulls/<PR_NUMBER>/comments/<id>/replies; ambiguous → ask user). If ci_failed, fetch the failing job log and fix. Only stop the loop on ready_to_merge — bot_approved still waits for the quiet window. When stopping, CronDelete <job-id> and hand back to user to merge.
 ```
 
 `/loop` rounds `90s` up to `*/2 * * * *` (every 2 min) because cron has no sub-minute granularity. Stop early with `CronDelete <job-id>` — `/loop` prints the ID at scheduling time, and `CronList` recovers it later.

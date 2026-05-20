@@ -85,6 +85,69 @@ def _aggregate_ci(checks: list[dict]) -> str:
     return "success"
 
 
+def _fetch_review_threads(owner: str, name: str, pr_number: int) -> list[dict]:
+    """Fetch PR review threads via GraphQL. Returns the threads list (possibly empty).
+
+    Each thread has `isResolved` plus its comments with `databaseId` (the REST API
+    integer ID matching `bot_line_comments[].id`) and `author { login __typename }`.
+    `__typename` is `Bot`, `User`, or `Mannequin` — used to decide whether a reply
+    came from a human (the PR author "addressed in <sha>" pattern).
+    """
+    query = (
+        "query($owner:String!, $name:String!, $pr:Int!) {"
+        "  repository(owner:$owner, name:$name) {"
+        "    pullRequest(number:$pr) {"
+        "      reviewThreads(first:100) {"
+        "        nodes {"
+        "          isResolved"
+        "          comments(first:50) {"
+        "            nodes { databaseId author { login __typename } }"
+        "          }"
+        "        }"
+        "      }"
+        "    }"
+        "  }"
+        "}"
+    )
+    data = _gh(
+        "api",
+        "graphql",
+        "-f",
+        f"query={query}",
+        "-F",
+        f"owner={owner}",
+        "-F",
+        f"name={name}",
+        "-F",
+        f"pr={pr_number}",
+    )
+    if not data:
+        return []
+    return (
+        ((data.get("data") or {}).get("repository") or {}).get("pullRequest") or {}
+    ).get("reviewThreads", {}).get("nodes") or []
+
+
+def _addressed_comment_ids(threads: list[dict]) -> set[int]:
+    """Return the set of REST comment IDs that belong to a thread that is either
+    GH-side resolved OR has a human reply (the PR author / a maintainer posted
+    'addressed in <sha>'). The remaining comments are the ones the loop still
+    needs to act on."""
+    addressed: set[int] = set()
+    for thread in threads:
+        comments = (thread.get("comments") or {}).get("nodes") or []
+        if not comments:
+            continue
+        ids = {c["databaseId"] for c in comments if c.get("databaseId")}
+        if thread.get("isResolved"):
+            addressed.update(ids)
+            continue
+        latest = comments[-1].get("author") or {}
+        if latest.get("__typename") == "User":
+            addressed.update(ids)
+    return addressed
+
+
 def _classify(
     args: argparse.Namespace,
     head_ts: datetime,
@@ -212,6 +275,16 @@ def main() -> int:
         default=60,
         help="seconds the bot must be quiet after approval before declaring ready_to_merge",
     )
+    p.add_argument(
+        "--unresolved-only",
+        action="store_true",
+        help=(
+            "drop bot line-comments whose review thread is GH-side resolved OR has a "
+            "human reply (the 'addressed in <sha>' pattern). Requires one extra GraphQL "
+            "call. Recommended for /loop usage so each tick does not re-trigger on "
+            "already-addressed comments."
+        ),
+    )
     args = p.parse_args()
     args.watch_bots = [b.strip() for b in args.watch_bots.split(",") if b.strip()]
 
@@ -246,6 +319,11 @@ def main() -> int:
     reactions = _gh("api", f"repos/{owner}/{name}/issues/{args.pr}/reactions") or []
     line_comments = _gh("api", f"repos/{owner}/{name}/pulls/{args.pr}/comments") or []
     reviews = pr.get("reviews") or []
+
+    if args.unresolved_only:
+        threads = _fetch_review_threads(owner, name, args.pr)
+        addressed = _addressed_comment_ids(threads)
+        line_comments = [c for c in line_comments if c.get("id") not in addressed]
 
     result = _classify(args, head_ts, ci, reactions, reviews, line_comments)
     json.dump(result, sys.stdout, indent=2)
