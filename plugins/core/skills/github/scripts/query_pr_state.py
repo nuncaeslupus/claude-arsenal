@@ -192,12 +192,12 @@ def _classify(
         elif state == "COMMENTED":
             bot_commented_review = True
 
-    # GitHub's review-thread resolution status is only exposed via GraphQL; rather than
-    # guess that a comment is "addressed" by virtue of a later commit (it usually isn't —
-    # a later commit may have fixed something else entirely), return ALL bot line-comments
-    # and let the caller (Claude) judge per-comment. The previous timestamp-only heuristic
-    # caused false ready_to_merge readings on PRs where bots commented before an unrelated
-    # fix push.
+    # By default, return ALL watched-bot line-comments and let the caller (Claude) judge
+    # per-comment. The previous timestamp-only heuristic ("addressed if older than the head
+    # commit") caused false ready_to_merge readings on PRs where bots commented before an
+    # unrelated fix push. With --unresolved-only (filter applied in main() before this
+    # function is called), comments belonging to GH-side resolved threads OR threads with a
+    # human reply are dropped upstream — see _fetch_review_threads / _addressed_comment_ids.
     bot_comments = []
     for c in line_comments:
         user = _norm_user((c.get("user") or {}).get("login"))
