@@ -52,7 +52,7 @@ If the host project has no lint target, document that gap (propose a Makefile ad
 After `gh pr create` returns the PR number, immediately enter the polling loop. **Inline the action rubric in the `/loop` prompt** — a bare `query_pr_state.py` invocation produces a JSON snapshot each tick and forces the LLM to re-derive what to do every time. Pass `--unresolved-only` so the loop does not re-trigger on already-addressed comments.
 
 ```bash
-/loop 90s python3 "${CLAUDE_SKILL_DIR}/scripts/query_pr_state.py" --pr <PR_NUMBER> --unresolved-only — if state is bot_commented, address per the rubric (agree → fix; disagree → reply via gh api repos/<owner>/<repo>/pulls/<PR_NUMBER>/comments/<id>/replies; ambiguous → ask user). If ci_failed, fetch the failing job log and fix. Only stop the loop on ready_to_merge — bot_approved still waits for the quiet window. When stopping, CronDelete <job-id> and hand back to user to merge.
+/loop 90s python3 "${CLAUDE_SKILL_DIR}/scripts/query_pr_state.py" --pr <PR_NUMBER> --unresolved-only — if state is bot_commented, address per the rubric (agree → fix + push + reply "addressed in <sha>" via gh api repos/<owner>/<repo>/pulls/<PR_NUMBER>/comments/<id>/replies; disagree → reply with rationale on the same endpoint; ambiguous → reply asking for clarification + ping the user). If ci_failed, fetch the failing job log and fix + reply on any related comments. Every fix or dismissal MUST be paired with a reply on the thread — that is what makes --unresolved-only filter the comment on the next tick. Only stop the loop on ready_to_merge, merged, or closed — bot_approved still waits for the quiet window. When stopping, CronDelete <job-id> and hand back to user to merge.
 ```
 
 `/loop` rounds `90s` up to `*/2 * * * *` (every 2 min) because cron has no sub-minute granularity. Stop early with `CronDelete <job-id>` — `/loop` prints the ID at scheduling time, and `CronList` recovers it later.
@@ -61,16 +61,17 @@ The script returns JSON to stdout and exits with:
 
 | Exit | State |
 |---|---|
-| 0 | `bot_commented` (any bot line-comments — Claude judges per-comment) OR `ready_to_merge` |
+| 0 | `bot_commented` (any bot line-comments — Claude judges per-comment) OR `ready_to_merge` OR `merged` / `closed` (PR no longer open — short-circuit, nothing to do) |
 | 1 | `waiting` / `bot_eyeing` / `ci_running` / `bot_approved` (loop continues) |
 | 2 | `ci_failed` (Claude must act) |
 
 Handle each state per the rubric in [pr-review-loop](references/pr-review-loop.md):
 
-- `bot_eyeing` → loop continues. **Never** treat `:eyes:` as cleared on Claude's behalf — the bot owns clearing it.
-- `bot_commented` → for each comment in `bot_line_comments`, judge: **already addressed** (reply "addressed in <sha>"), **agree** (fix + push), **disagree** (reply with rationale via `gh api .../pulls/<N>/comments/<id>/replies`), or **ambiguous** (ask user). Loop continues after action.
-- `ci_failed` → fetch the failed log via `gh run view --log-failed <run-id>`, fix, push. Loop continues.
+- `bot_eyeing` → loop continues. Bot owns clearing `:eyes:` by acting again. Exception: with `--unresolved-only`, when every comment the bot wrote is filtered out and the bot did review at some point, the script promotes the state to `bot_approved` / `ready_to_merge` — the loop has done its part and stale eyes lose their blocking force.
+- `bot_commented` → for each comment in `bot_line_comments`, judge: **already addressed** (reply "addressed in <sha>"), **agree** (fix + push + **reply** "addressed in <sha>" — the reply is what `--unresolved-only` anchors on), **disagree** (reply with rationale via `gh api .../pulls/<N>/comments/<id>/replies`), or **ambiguous** (reply asking for clarification + ping the user). Loop continues after action. **Every fix or dismissal MUST be paired with a reply on the thread.**
+- `ci_failed` → fetch the failed log via `gh run view --log-failed <run-id>`, fix, push. Reply on any comments the fix relates to. Loop continues.
 - `ready_to_merge` → exit the loop, tell the user "PR #N ready to merge".
+- `merged` / `closed` → exit the loop immediately. PR is no longer open; nothing to do.
 
 ## Project type — Classic vs v2
 

@@ -168,6 +168,7 @@ def _classify(
     reactions: list[dict],
     reviews: list[dict],
     line_comments: list[dict],
+    addressed_count: int = 0,
 ) -> dict:
     watched = {_norm_user(b) for b in args.watch_bots}
     bot_eye = bot_thumb = bot_changes_requested = bot_approved_review = bot_commented_review = False
@@ -229,6 +230,24 @@ def _classify(
             }
         )
 
+    # Did the bot ever say anything (line comments OR a review submission)? Used below to
+    # decide whether "everything addressed" is a meaningful signal — a bot that never spoke
+    # cannot have had everything addressed. `addressed_count > 0` already implies the bot
+    # said something we filtered (count is bot-scoped — see main()), so it's a third
+    # engagement signal alongside review-submission states.
+    bot_engaged = (
+        bot_commented_review
+        or bot_approved_review
+        or bot_changes_requested
+        or addressed_count > 0
+    )
+    # "Everything addressed" promotes a bot_eyeing case to bot_approved-equivalent:
+    # --unresolved-only filtered at least one comment AND nothing remains AND the bot did
+    # engage at some point. This overrides the "eyes is a hard block" rule because the loop
+    # has provably done its part — every comment the bot wrote has been resolved (GH-side)
+    # or human-replied. The bot's stale :eyes: can no longer block ready_to_merge.
+    everything_addressed = addressed_count > 0 and not bot_comments and bot_engaged
+
     if ci == "failure":
         state, exit_code = "ci_failed", 2
     elif bot_comments:
@@ -238,16 +257,20 @@ def _classify(
         state, exit_code = "waiting", 1
     elif ci == "running":
         state, exit_code = "ci_running", 1
-    elif bot_eye and not (bot_thumb or bot_approved_review):
+    elif bot_eye and not (bot_thumb or bot_approved_review or everything_addressed):
         # :eyes: is a "look here later" signal. Until the bot either thumbs/approves
         # OR explicitly retracts via a new review event, treat as eyeing — never
         # ready_to_merge. (A stale :eyes: from an earlier push still blocks; the bot
-        # owns clearing it by acting again.)
+        # owns clearing it by acting again.) Exception: if everything_addressed is true,
+        # the loop has already resolved every bot-raised concern and the eyes lose their
+        # blocking force.
         state, exit_code = "bot_eyeing", 1
-    elif ci == "success" and (bot_thumb or bot_approved_review or not watched):
-        # Explicit positive signal (thumb / approved review) OR CI-only mode.
-        # Silent approval requires the bot to have left a positive signal — not
-        # just to have once commented and then gone silent.
+    elif ci == "success" and (
+        bot_thumb or bot_approved_review or everything_addressed or not watched
+    ):
+        # Explicit positive signal (thumb / approved review), "everything addressed"
+        # equivalent, OR CI-only mode. Silent approval requires the bot to have left a
+        # positive signal — not just to have once commented and then gone silent.
         anchors = [t for t in (last_bot_event_ts, head_ts) if t is not None]
         quiet_anchor = max(anchors)
         now = datetime.now(UTC)
@@ -311,11 +334,26 @@ def main() -> int:
         "--repo",
         repo,
         "--json",
-        "statusCheckRollup,headRefOid,reviews,commits",
+        "state,mergedAt,closedAt,statusCheckRollup,headRefOid,reviews,commits",
     )
     if not pr:
         sys.stderr.write(f"PR #{args.pr} not found in {repo}\n")
         return 2
+
+    # Terminal states short-circuit the rest of the classifier — there is nothing for the
+    # /loop to act on once the PR is no longer open. Returning a stable state name + exit 0
+    # lets the loop's `stop on ready_to_merge|merged|closed` rubric terminate cleanly.
+    pr_state = (pr.get("state") or "").upper()
+    if pr_state == "MERGED":
+        result = {"state": "merged", "exit_code": 0, "merged_at": pr.get("mergedAt")}
+        json.dump(result, sys.stdout, indent=2)
+        sys.stdout.write("\n")
+        return 0
+    if pr_state == "CLOSED":
+        result = {"state": "closed", "exit_code": 0, "closed_at": pr.get("closedAt")}
+        json.dump(result, sys.stdout, indent=2)
+        sys.stdout.write("\n")
+        return 0
 
     commits = pr.get("commits") or []
     if not commits:
@@ -336,9 +374,20 @@ def main() -> int:
     if args.unresolved_only:
         threads = _fetch_review_threads(owner, name, args.pr)
         addressed = _addressed_comment_ids(threads)
+        # Count only watched-bot comments toward "everything addressed" — a thread between
+        # two humans being resolved should NOT trigger the bot-stale-eyes override.
+        watched_logins = {_norm_user(b) for b in args.watch_bots}
+        addressed_count = sum(
+            1
+            for c in line_comments
+            if c.get("id") in addressed
+            and _norm_user((c.get("user") or {}).get("login")) in watched_logins
+        )
         line_comments = [c for c in line_comments if c.get("id") not in addressed]
+    else:
+        addressed_count = 0
 
-    result = _classify(args, head_ts, ci, reactions, reviews, line_comments)
+    result = _classify(args, head_ts, ci, reactions, reviews, line_comments, addressed_count)
     json.dump(result, sys.stdout, indent=2)
     sys.stdout.write("\n")
     return int(result["exit_code"])
