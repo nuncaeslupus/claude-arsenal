@@ -3,6 +3,7 @@ name = "claude-arsenal"
 version = "0.1.0"
 description = "Claude Code marketplace shipping the skill-creator meta-skill plus the core workflow plugin."
 requires-python = ">=3.12"
+license = { file = "LICENSE" }
 dependencies = [
     "PyYAML>=6.0",
 ]
