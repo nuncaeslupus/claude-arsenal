@@ -300,7 +300,7 @@ Anchor: `docs/research/claude-skill-system_v1.17.md § Q-019 — Auto memory & A
 - R-MEM-3 — **DEMOTED at v1.12 per DA-130.** The PROPOSED `AGENTS.md` ↔ `CLAUDE.md` symlink convention is permanently rejected and superseded by R-MEM-10 (which uses `@AGENTS.md` import and is enforced by `validate_memory.py`).
 - R-MEM-4 — Anti-duplication in CLAUDE.md: use `@import`; for path-scoped rules use `.claude/rules/*.md` with `paths:` frontmatter; reference skills by name, never copy skill content. Deferred to `validate_memory.py` (memory-layer surface).
 - R-MEM-5 — CLAUDE.md is delivered as a USER message after the system prompt, not part of it; compliance is best-effort. Specificity beats CAPS-LOCK; the system-prompt-level escape hatch is the `--append-system-prompt` CLI flag. Documentary / infrastructural, not per-skill checkable.
-- R-MEM-6 — Path-scoped instructions live at `.claude/rules/<topic>.md` with a `paths:` glob in frontmatter; the `InstructionsLoaded` hook logs which rules fire. Deferred to `validate_memory.py`.
+- R-MEM-6 — Path-scoped instructions live at `.claude/rules/<topic>.md` with a `paths:` glob in frontmatter; the `InstructionsLoaded` hook logs which rules fire. Deferred: enforcing this mechanically would require extending `validate_memory.py` to also discover `.claude/rules/<topic>.md` (it currently scans only `CLAUDE.md` / `AGENTS.md`). Tracked as a follow-up; for now this rule is documentary.
 - R-MEM-10 — Mechanical lint at `<root>/CLAUDE.md`: FAIL if it is a symlink to `<root>/AGENTS.md` or vice versa; PASS if body's first content line is `@AGENTS.md` and `<root>/AGENTS.md` exists. (This one *is* enforced — by `validate_memory.py` — and is listed here only for cross-reference with R-MEM-1.)
 
 ### Reference chunking and lazy-load topology — R-CHUNK-6, R-LAZYLOAD-2, R-LAZYLOAD-3
@@ -321,14 +321,14 @@ Anchor: `docs/research/claude-skill-system_v1.17.md § Q-008`.
 
 Anchor: `docs/research/claude-skill-system_v1.17.md § Helper Scripts`.
 
-Most rows here restate facets of the helper-script contract already enforced by `R-HELP-1` (CLI surface + documented invocation + shebang + `main()` guard) or by adjacent rubric rules. Each row notes its rubric counterpart.
+Most rows here restate facets of the helper-script contract listed in `R-HELP-1` (CLI surface + documented invocation + shebang + `main()` guard) or by adjacent rubric rules. Each row notes its rubric counterpart and, where the rubric expectation is broader than what the mechanical validator currently checks, whether the facet is enforced or rubric-only (author/reviewer-checked).
 
 - R-HELP-2 — Helpers expose positional args + named flags, `--help`, machine-readable JSON stdout, and errors to stderr. CLI-surface basics are enforced by `R-HELP-1`; the JSON-vs-text stdout choice stays deferred because progress-style scripts (e.g. `audit_rule_drift.py`) legitimately emit human-readable output, so a hard "must be JSON" rule would false-positive.
-- R-HELP-3 — Each helper invocation is documented in SKILL.md with command line, args, return shape, and when-vs-fallback reasoning. Covered by `R-HELP-1`.
+- R-HELP-3 — Each helper invocation is documented in SKILL.md with command line, args, return shape, and when-vs-fallback reasoning. Listed in the rubric as part of `R-HELP-1`'s expectation set; the mechanical validator does **not** currently check that every `scripts/*.py` is mentioned in SKILL.md, so this facet is rubric-only (author/reviewer-checked) for now.
 - R-HELP-4 — Reference helpers via `${CLAUDE_SKILL_DIR}/scripts/<file>` so invocations survive bundling and CWD changes. Covered by `R-SHARE-4`.
 - R-HELP-5 — Pre-approve deterministic helpers via the `allowed-tools` frontmatter field (e.g. `Bash(python *)`) to skip per-call approval prompts. Covered by `R-FM-7`.
 - R-HELP-6 — Extract-when-repeated: when Claude reinvents the same helper ≥3 times within a session, it graduates into `scripts/`. Pattern detection needs session-transcript introspection; sibling of the already-deferred `R-EXTRACT-1..3` family.
-- R-HELP-7 — Python helpers begin with `#!/usr/bin/env python3`; executable bit optional. Covered by `R-HELP-1`.
+- R-HELP-7 — Python helpers begin with `#!/usr/bin/env python3`; executable bit optional. Listed in the rubric as part of `R-HELP-1`; the mechanical validator does **not** currently check for shebang presence, so this facet is rubric-only (author/reviewer-checked) for now.
 
 ### Progressive disclosure architecture — R-CTX-1
 
