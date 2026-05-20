@@ -6,21 +6,25 @@ The agile review loop, triggered after `gh pr create`, runs `query_pr_state.py` 
 
 | Snapshot state | Trigger conditions | Exit | Next action |
 |---|---|---|---|
+| `merged` | `gh pr view`'s `state` field is `MERGED` | 0 | Exit the loop. Nothing to act on. |
+| `closed` | `gh pr view`'s `state` field is `CLOSED` (closed without merge) | 0 | Exit the loop. Nothing to act on. |
 | `waiting` | No watched-bot positive signal yet, OR bot opened `CHANGES_REQUESTED` with no line-comments | 1 | Loop continues. |
-| `bot_eyeing` | A watched bot has reacted `:eyes:` on the PR header AND has not since thumbed/approved | 1 | Loop continues. The bot owns clearing the eyes — never assume the eyes are stale on Claude's behalf. |
+| `bot_eyeing` | A watched bot has reacted `:eyes:` on the PR header AND has not since thumbed/approved | 1 | Loop continues. The bot owns clearing the eyes — *unless* `--unresolved-only` is on and "everything addressed" fires (see below), in which case the script promotes to `bot_approved`/`ready_to_merge`. |
 | `ci_running` | At least one CI check is `in_progress` / `queued` | 1 | Loop continues. |
-| `ci_failed` | At least one CI check is `failure` | 2 | Fetch `gh run view --log-failed <run-id>`, fix, commit, push. Loop resumes on next tick. |
-| `bot_commented` | At least one watched-bot line-level comment exists on the PR (regardless of when) | 0 | Address each comment per the rubric below. Claude judges per-comment whether it was already addressed; the script does not pre-filter. |
-| `bot_approved` | CI green + explicit positive signal (thumb / APPROVED review) + quiet anchor not yet elapsed | 1 | Loop continues. Quiet anchor = later of (last bot event, head commit). |
+| `ci_failed` | At least one CI check is `failure` | 2 | Fetch `gh run view --log-failed <run-id>`, fix, commit, push. Reply on any related comments. Loop resumes on next tick. |
+| `bot_commented` | At least one (unfiltered, under `--unresolved-only`) watched-bot line-level comment exists on the PR | 0 | Address each comment per the rubric below. The reply on the thread is what causes `--unresolved-only` to drop it from the next tick. |
+| `bot_approved` | CI green + explicit positive signal (thumb / APPROVED review) **OR** `--unresolved-only` "everything addressed" promotion + quiet anchor not yet elapsed | 1 | Loop continues. Quiet anchor = later of (last bot event, head commit). |
 | `ready_to_merge` | Same as `bot_approved` + quiet window of `--min-quiet-seconds` (default 60) has elapsed | 0 | Exit loop. Tell the user `PR #N ready to merge`. |
 
-**Eyes is a hard block.** If a watched bot has reacted `:eyes:` and not since thumbed or approved, the loop will NEVER declare `ready_to_merge` — regardless of timestamps. Bots set `:eyes:` to mark "I will get back to this" and own clearing it by acting again (thumb, approval, or a follow-up review). Letting Claude assume a stale eyes is safely ignorable is how PRs get merged with unread feedback.
+**Terminal states short-circuit.** `merged` and `closed` are checked first, before anything else — once the PR is no longer open the loop has no work and exits.
 
-**No timestamp filter on comments.** The script returns ALL bot line-level comments and leaves the judgment of "addressed vs not" to Claude per-comment. The previous heuristic ("addressed if older than head commit") was wrong — a later commit may fix something unrelated, leaving the original comment still outstanding.
+**Eyes is a hard block — with one exception.** Without `--unresolved-only`, a watched bot's `:eyes:` reaction blocks `ready_to_merge` indefinitely; the bot owns clearing it. With `--unresolved-only`, if the filter dropped at least one comment AND no watched-bot comments remain AND the bot did engage at some point (line-commented or submitted a review), the script promotes the case to `bot_approved`/`ready_to_merge`. Rationale: the loop has provably addressed every concern the bot raised; the stale eyes can no longer block. This is the "**everything addressed**" path.
+
+**No timestamp filter on comments.** By default the script returns ALL watched-bot line-level comments and leaves the judgment of "addressed vs not" to Claude per-comment. The previous heuristic ("addressed if older than head commit") was wrong — a later commit may fix something unrelated, leaving the original comment still outstanding. With `--unresolved-only`, GH-side resolution + human-reply detection moves the filtering into the script (see "How the script tracks 'addressed'" below).
 
 **CI-only mode**: when invoked with `--watch-bots ""` (no bots configured), the script skips bot tracking. Green CI plus the quiet window past the head commit is enough to reach `ready_to_merge`.
 
-**Silent approval requires a positive signal.** A bot that commented and then went silent is NOT silent approval — silent approval requires the bot to have left a `:+1:` / `:rocket:` reaction or an `APPROVED` review. If the bot only ever commented (no positive signal), the state stays `waiting` indefinitely, awaiting the bot's resolution OR Claude pushing back. This is intentional: ambiguous silence should not auto-merge.
+**Silent approval requires a positive signal.** A bot that commented and then went silent is NOT silent approval. Silent approval requires either a `:+1:` / `:rocket:` reaction, an `APPROVED` review submission, OR — under `--unresolved-only` — every comment the bot wrote being addressed (replied to + filtered out). If none of those hold, the state stays `waiting` indefinitely. This is intentional: ambiguous silence should not auto-merge.
 
 ## Default watched bots
 
@@ -34,18 +38,20 @@ Override with `--watch-bots gemini-code-assist[bot],custom-bot[bot]`. Empty list
 
 ## Comment-handling rubric
 
-When `query_pr_state.py` returns `bot_commented`, its JSON payload includes a `bot_line_comments` array — ALL watched-bot line-level comments on the PR, with no timestamp filter. Each entry carries `id`, `user`, `path`, `line`, `body`, `created_at`.
+When `query_pr_state.py` returns `bot_commented`, its JSON payload includes a `bot_line_comments` array. Under `--unresolved-only` this only contains comments still needing attention; without the flag it contains every watched-bot line-comment on the PR. Each entry carries `id`, `user`, `path`, `line`, `body`, `created_at`.
 
 Claude's job is to judge, for each comment, one of four outcomes:
 
 | Claude's stance | Action |
 |---|---|
-| **Already addressed** | The current code already does what the comment asks (or the comment refers to a deleted file/line). Reply once via `gh api repos/<owner>/<repo>/pulls/<N>/comments/<comment-id>/replies -f body="addressed in <commit-sha>"`. This is the move that "clears" the comment from future loop ticks once GitHub marks the thread resolved (or via your own reply heuristic). |
-| **Agrees, not yet addressed** | Edit the file, stage, commit (`fix(<scope>): address review on <path>:<line>`), push. One commit per logical fix; bundling acceptable when ≥2 comments hit the same diff. |
-| **Disagrees** | Reply to the line-level comment with a one-paragraph rationale via `gh api repos/<owner>/<repo>/pulls/<N>/comments/<comment-id>/replies`. Cite the specific line in the reply. |
-| **Ambiguous** (need user input) | Pause the loop, surface the comment to the user with the proposed fix or push-back, wait for direction. Resume after. |
+| **Already addressed** | The current code already does what the comment asks (or the comment refers to a deleted file/line). Reply once via `gh api repos/<owner>/<repo>/pulls/<N>/comments/<comment-id>/replies -f body="addressed in <commit-sha>"`. The reply is what makes `--unresolved-only` filter the comment on the next tick. |
+| **Agrees, not yet addressed** | Edit the file, stage, commit (`fix(<scope>): address review on <path>:<line>`), push, **then reply** "addressed in `<sha>`" via the same `pulls/<N>/comments/<id>/replies` endpoint. One commit per logical fix; bundling acceptable when ≥2 comments hit the same diff (reply on each thread, citing the same SHA). |
+| **Disagrees** | Reply to the line-level comment with a one-paragraph rationale via `gh api repos/<owner>/<repo>/pulls/<N>/comments/<comment-id>/replies`. Cite the specific line. A disagreement is still a reply — it satisfies the human-reply heuristic and filters the thread out of the next tick. |
+| **Ambiguous** (need user input) | Reply on the thread saying "asking the author for clarification" (or similar), then surface the comment to the user with the proposed options. Resume after they answer. The reply is mandatory — without it, the comment will re-fire on every tick. |
 
-Never silently skip a comment. Every comment gets *some* response — code change, reply, or escalation to user.
+**Every fix or dismissal MUST be paired with a reply on the thread.** This is the contract that lets `--unresolved-only` work: it filters comments whose latest thread author is a `User`. A push without a reply does NOT count — the bot's comment stays the most recent, and the loop re-triggers on the next tick.
+
+Never silently skip a comment. Every comment gets *some* response — code change + reply, reply alone, or escalation to user + holding reply.
 
 ## How the script tracks "addressed"
 
@@ -67,7 +73,7 @@ The fetch costs one extra GraphQL call per tick (~50 ms typical), well under the
 - **Always include the agree/disagree/ambiguous rubric inline in the `/loop` prompt** AND pass `--unresolved-only` to the script. A bare `/loop 90s python3 .../query_pr_state.py --pr <N>` produces a JSON snapshot each tick and forces the LLM to re-derive what to do from the skill body every time. `--unresolved-only` filters out comments whose review thread is GH-side resolved OR has a human reply (the "addressed in <sha>" pattern) so each tick stays focused on what actually still needs attention. The rubric-inlined form keeps each tick self-contained:
 
   ```
-  /loop 90s python3 "${CLAUDE_SKILL_DIR}/scripts/query_pr_state.py" --pr <N> --unresolved-only — if state is bot_commented, address per the rubric (agree → fix; disagree → reply via gh api repos/<owner>/<repo>/pulls/<N>/comments/<id>/replies; ambiguous → ask user). If ci_failed, fetch the failing job log and fix. Only stop the loop on ready_to_merge — bot_approved still waits for the quiet window. When stopping, CronDelete <job-id> and hand back to user to merge.
+  /loop 90s python3 "${CLAUDE_SKILL_DIR}/scripts/query_pr_state.py" --pr <N> --unresolved-only — if state is bot_commented, address per the rubric (agree → fix + push + reply "addressed in <sha>" via gh api repos/<owner>/<repo>/pulls/<N>/comments/<id>/replies; disagree → reply with rationale on the same endpoint; ambiguous → reply asking for clarification + ping the user). If ci_failed, fetch the failing job log and fix + reply on any related comments. Every fix or dismissal MUST be paired with a reply on the thread — that is what makes --unresolved-only filter the comment on the next tick. Only stop the loop on ready_to_merge, merged, or closed — bot_approved still waits for the quiet window. When stopping, CronDelete <job-id> and hand back to user to merge.
   ```
 
 - Termination: the loop exits as soon as `query_pr_state.py` returns `ready_to_merge` (exit 0 with `state: "ready_to_merge"`). Call `CronDelete <job-id>` to stop early — the `/loop` skill prints the job ID at scheduling time, and `CronList` recovers it later.
