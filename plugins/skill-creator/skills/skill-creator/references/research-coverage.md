@@ -172,7 +172,7 @@ Anchor: `docs/research/claude-skill-system_v1.17.md § Meta-Skill Spec`.
 - R-META-18 — Refuse benchmark publication on missing Bash baseline, mis-placed `grading.json`, or aggregate script glob mismatch.
 - R-META-19 — Meta-skill `allowed-tools` includes `Bash` OR body has a literal preflight `command -v bash`.
 
-### Loading verification — R-LOAD-1..7
+### Loading verification — R-LOAD-1..8
 
 Anchor: `docs/research/claude-skill-system_v1.17.md § Validation Test Suite`.
 
@@ -183,6 +183,7 @@ Anchor: `docs/research/claude-skill-system_v1.17.md § Validation Test Suite`.
 - R-LOAD-5 — `evals/loading_verification.json` exists and conforms to schema.
 - R-LOAD-6 — ≥1 canary AND ≥1 negative-control entry in `loading_verification.json`.
 - R-LOAD-7 — Both `evals/evals.json` (trigger-rate) AND `evals/loading_verification.json` present.
+- R-LOAD-8 — **REJECTED as DA-099.** Multi-vector skill-loading introspection (`<available_skills>` array + `InstructionsLoaded` events) depends on rejected primitives DA-091 / DA-092. No working surface; loading verification is carried by R-LOAD-1, R-LOAD-2, R-LOAD-4.
 
 ### LLM-judge harness — R-LLMJ-1..12
 
@@ -286,7 +287,7 @@ Anchor: `docs/research/claude-skill-system_v1.17.md § System Organization`.
 - R-SYS-4 — Split a skill at >500 lines OR mutually-exclusive variants.
 - R-SYS-5 — Cross-skill composition uses subagent `skills:` preload OR `context: fork`.
 
-### AutoDream and memory layering — R-AUTODREAM-1..4, R-MEM-1, R-MEM-10
+### AutoDream and memory layering — R-AUTODREAM-1..4, R-MEM-1..6, R-MEM-10
 
 Anchor: `docs/research/claude-skill-system_v1.17.md § Q-019 — Auto memory & AutoDream`.
 
@@ -295,6 +296,11 @@ Anchor: `docs/research/claude-skill-system_v1.17.md § Q-019 — Auto memory & A
 - R-AUTODREAM-3 — AutoDream is orthogonal to Task Budgets, auto-compaction, and the R-FAIL-1 re-attach pool.
 - R-AUTODREAM-4 — Refer to the consolidator as "AutoDream"; KAIROS is the umbrella for proactive autonomous-agent mode.
 - R-MEM-1 — Memory hierarchy is cross-container only; AutoDream MAY rewrite user-reinforced entries *within* MEMORY.md, but the cross-container precedence (CLAUDE.md > AGENTS.md > MEMORY.md) is invariant.
+- R-MEM-2 — CLAUDE.md carries facts every session needs; skills carry procedures triggered on demand. Quantitative target: CLAUDE.md ≤200 lines, procedures >~10 lines migrate to skills. The fact-vs-procedure boundary is a semantic judgment, deferred to peer review rather than mechanical enforcement.
+- R-MEM-3 — **DEMOTED at v1.12 per DA-130.** The PROPOSED `AGENTS.md` ↔ `CLAUDE.md` symlink convention is permanently rejected and superseded by R-MEM-10 (which uses `@AGENTS.md` import and is enforced by `validate_memory.py`).
+- R-MEM-4 — Anti-duplication in CLAUDE.md: use `@import`; for path-scoped rules use `.claude/rules/*.md` with `paths:` frontmatter; reference skills by name, never copy skill content. Deferred to `validate_memory.py` (memory-layer surface).
+- R-MEM-5 — CLAUDE.md is delivered as a USER message after the system prompt, not part of it; compliance is best-effort. Specificity beats CAPS-LOCK; the system-prompt-level escape hatch is the `--append-system-prompt` CLI flag. Documentary / infrastructural, not per-skill checkable.
+- R-MEM-6 — Path-scoped instructions live at `.claude/rules/<topic>.md` with a `paths:` glob in frontmatter; the `InstructionsLoaded` hook logs which rules fire. Deferred: enforcing this mechanically would require extending `validate_memory.py` to also discover `.claude/rules/<topic>.md` (it currently scans only `CLAUDE.md` / `AGENTS.md`). Tracked as a follow-up; for now this rule is documentary.
 - R-MEM-10 — Mechanical lint at `<root>/CLAUDE.md`: FAIL if it is a symlink to `<root>/AGENTS.md` or vice versa; PASS if body's first content line is `@AGENTS.md` and `<root>/AGENTS.md` exists. (This one *is* enforced — by `validate_memory.py` — and is listed here only for cross-reference with R-MEM-1.)
 
 ### Reference chunking and lazy-load topology — R-CHUNK-6, R-LAZYLOAD-2, R-LAZYLOAD-3
@@ -310,6 +316,25 @@ Anchor: `docs/research/claude-skill-system_v1.17.md § Reference Chunking & Lazy
 Anchor: `docs/research/claude-skill-system_v1.17.md § Q-008`.
 
 - R-CONTAM-1 — Contamination score = `0.3·multi_interface_tools + 0.4·language_mismatch + 0.3·scope_breadth`. The mechanical proxy lives in the rubric (warn at ≥0.5); the canonical verdict requires an LLM judge.
+
+### Helper-script governance — R-HELP-2..7
+
+Anchor: `docs/research/claude-skill-system_v1.17.md § Helper Scripts`.
+
+Most rows here restate facets of the helper-script contract listed in `R-HELP-1` (CLI surface + documented invocation + shebang + `main()` guard) or by adjacent rubric rules. Each row notes its rubric counterpart and, where the rubric expectation is broader than what the mechanical validator currently checks, whether the facet is enforced or rubric-only (author/reviewer-checked).
+
+- R-HELP-2 — Helpers expose positional args + named flags, `--help`, machine-readable JSON stdout, and errors to stderr. CLI-surface basics are enforced by `R-HELP-1`; the JSON-vs-text stdout choice stays deferred because progress-style scripts (e.g. `audit_rule_drift.py`) legitimately emit human-readable output, so a hard "must be JSON" rule would false-positive.
+- R-HELP-3 — Each helper invocation is documented in SKILL.md with command line, args, return shape, and when-vs-fallback reasoning. Listed in the rubric as part of `R-HELP-1`'s expectation set; the mechanical validator does **not** currently check that every `scripts/*.py` is mentioned in SKILL.md, so this facet is rubric-only (author/reviewer-checked) for now.
+- R-HELP-4 — Reference helpers via `${CLAUDE_SKILL_DIR}/scripts/<file>` so invocations survive bundling and CWD changes. Covered by `R-SHARE-4`.
+- R-HELP-5 — Pre-approve deterministic helpers via the `allowed-tools` frontmatter field (e.g. `Bash(python *)`) to skip per-call approval prompts. Covered by `R-FM-7`.
+- R-HELP-6 — Extract-when-repeated: when Claude reinvents the same helper ≥3 times within a session, it graduates into `scripts/`. Pattern detection needs session-transcript introspection; sibling of the already-deferred `R-EXTRACT-1..3` family.
+- R-HELP-7 — Python helpers begin with `#!/usr/bin/env python3`; executable bit optional. Listed in the rubric as part of `R-HELP-1`; the mechanical validator does **not** currently check for shebang presence, so this facet is rubric-only (author/reviewer-checked) for now.
+
+### Progressive disclosure architecture — R-CTX-1
+
+Anchor: `docs/research/claude-skill-system_v1.17.md § Progressive Disclosure`.
+
+- R-CTX-1 — Three-tier disclosure: metadata (always loaded) → SKILL.md body (≤5K tokens, on trigger) → `references/`, `scripts/`, `assets/` (on demand). This is an architectural claim already enforced piecewise by the rubric — `R-BODY-1` (line cap), `R-BODY-2` (token cap), `R-BODY-4` / `R-CTX-4` (front-load constraints likely to survive auto-compaction), `R-BODY-6` (per-reference budget), and `R-CHUNK-6` (one-hop reference graph). This row is the named research anchor; no separate validator surface is needed.
 
 When one of these IDs becomes blocking in practice — a retro merge
 ships, a CI gate needs a new rule — promote it into the matching
