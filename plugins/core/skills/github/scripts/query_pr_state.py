@@ -23,7 +23,7 @@ import json
 import shutil
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 DEFAULT_BOTS = ["gemini-code-assist[bot]", "coderabbitai[bot]", "claude[bot]"]
@@ -53,7 +53,7 @@ def _gh(*args: str) -> Any:
 
 def _default_repo() -> str:
     data = _gh("repo", "view", "--json", "nameWithOwner")
-    return data["nameWithOwner"]
+    return str(data["nameWithOwner"])
 
 
 def _parse_ts(s: str | None) -> datetime | None:
@@ -73,7 +73,10 @@ def _aggregate_ci(checks: list[dict]) -> str:
         state = c.get("state", "")
         if status in ("IN_PROGRESS", "QUEUED", "PENDING"):
             any_running = True
-        elif conclusion in ("FAILURE", "TIMED_OUT", "CANCELLED", "ACTION_REQUIRED") or state == "FAILURE":
+        elif (
+            conclusion in ("FAILURE", "TIMED_OUT", "CANCELLED", "ACTION_REQUIRED")
+            or state == "FAILURE"
+        ):
             any_failed = True
     if any_failed:
         return "failure"
@@ -82,8 +85,14 @@ def _aggregate_ci(checks: list[dict]) -> str:
     return "success"
 
 
-def _classify(args, head_ts: datetime, ci: str, reactions: list[dict],
-              reviews: list[dict], line_comments: list[dict]) -> dict:
+def _classify(
+    args: argparse.Namespace,
+    head_ts: datetime,
+    ci: str,
+    reactions: list[dict],
+    reviews: list[dict],
+    line_comments: list[dict],
+) -> dict:
     watched = {_norm_user(b) for b in args.watch_bots}
     bot_eye = bot_thumb = bot_changes_requested = bot_approved_review = bot_commented_review = False
     last_bot_event_ts: datetime | None = None
@@ -128,14 +137,16 @@ def _classify(args, head_ts: datetime, ci: str, reactions: list[dict],
         ts = _parse_ts(c.get("created_at"))
         _bump(ts)
         if ts and ts > head_ts:
-            unaddressed.append({
-                "id": c["id"],
-                "user": user,
-                "path": c.get("path"),
-                "line": c.get("line"),
-                "body": c.get("body"),
-                "created_at": c.get("created_at"),
-            })
+            unaddressed.append(
+                {
+                    "id": c["id"],
+                    "user": user,
+                    "path": c.get("path"),
+                    "line": c.get("line"),
+                    "body": c.get("body"),
+                    "created_at": c.get("created_at"),
+                }
+            )
 
     if ci == "failure":
         state, exit_code = "ci_failed", 2
@@ -149,14 +160,16 @@ def _classify(args, head_ts: datetime, ci: str, reactions: list[dict],
         state, exit_code = "ci_running", 1
     elif bot_eye and not (bot_thumb or bot_approved_review or bot_commented_review):
         state, exit_code = "bot_eyeing", 1
-    elif ci == "success" and (bot_thumb or bot_approved_review or bot_commented_review or not watched):
+    elif ci == "success" and (
+        bot_thumb or bot_approved_review or bot_commented_review or not watched
+    ):
         # Either: bot has weighed in (any review/reaction) with nothing outstanding,
         # OR: no bots are being watched (CI-only mode).
         # Quiet anchor = later of (last bot event, head commit). Bot has had time
         # to respond to the fix; silence after that window = silent approval.
         anchors = [t for t in (last_bot_event_ts, head_ts) if t is not None]
         quiet_anchor = max(anchors)
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         if (now - quiet_anchor).total_seconds() >= args.min_quiet_seconds:
             state, exit_code = "ready_to_merge", 0
         else:
@@ -183,18 +196,32 @@ def main() -> int:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument("--pr", required=True, type=int, help="PR number")
     p.add_argument("--repo", help="owner/name (defaults to current repo)")
-    p.add_argument("--watch-bots", default=",".join(DEFAULT_BOTS),
-                   help="comma-separated bot usernames; empty disables bot tracking")
-    p.add_argument("--min-quiet-seconds", type=int, default=60,
-                   help="seconds the bot must be quiet after approval before declaring ready_to_merge")
+    p.add_argument(
+        "--watch-bots",
+        default=",".join(DEFAULT_BOTS),
+        help="comma-separated bot usernames; empty disables bot tracking",
+    )
+    p.add_argument(
+        "--min-quiet-seconds",
+        type=int,
+        default=60,
+        help="seconds the bot must be quiet after approval before declaring ready_to_merge",
+    )
     args = p.parse_args()
     args.watch_bots = [b.strip() for b in args.watch_bots.split(",") if b.strip()]
 
     repo = args.repo or _default_repo()
     owner, name = repo.split("/", 1)
 
-    pr = _gh("pr", "view", str(args.pr), "--repo", repo,
-             "--json", "statusCheckRollup,headRefOid,reviews,commits")
+    pr = _gh(
+        "pr",
+        "view",
+        str(args.pr),
+        "--repo",
+        repo,
+        "--json",
+        "statusCheckRollup,headRefOid,reviews,commits",
+    )
     if not pr:
         sys.stderr.write(f"PR #{args.pr} not found in {repo}\n")
         return 2

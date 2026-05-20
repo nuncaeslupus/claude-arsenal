@@ -62,10 +62,10 @@ TEMPLATE = """# Handoff — <one-line topic / stage name>
 
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    p.add_argument("--output", default="status/handoff.md",
-                   help="target path (default: status/handoff.md)")
-    p.add_argument("--force", action="store_true",
-                   help="overwrite an existing handoff.md")
+    p.add_argument(
+        "--output", default="status/handoff.md", help="target path (default: status/handoff.md)"
+    )
+    p.add_argument("--force", action="store_true", help="overwrite an existing handoff.md")
     args = p.parse_args()
 
     target = Path(args.output)

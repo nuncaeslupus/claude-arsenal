@@ -41,7 +41,7 @@ def _gh(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
 
 def _default_repo() -> str:
     res = _gh("repo", "view", "--json", "nameWithOwner")
-    return json.loads(res.stdout)["nameWithOwner"]
+    return str(json.loads(res.stdout)["nameWithOwner"])
 
 
 def detect(repo: str) -> str:
@@ -51,8 +51,17 @@ def detect(repo: str) -> str:
     if classic.returncode == 0 and classic.stdout.strip().startswith("["):
         return "classic"
 
-    v2 = _gh("api", "graphql", "-f", f"query={V2_QUERY}",
-             "-F", f"o={owner}", "-F", f"r={name}", check=False)
+    v2 = _gh(
+        "api",
+        "graphql",
+        "-f",
+        f"query={V2_QUERY}",
+        "-F",
+        f"o={owner}",
+        "-F",
+        f"r={name}",
+        check=False,
+    )
     if v2.returncode == 0:
         try:
             total = json.loads(v2.stdout)["data"]["repository"]["projectsV2"]["totalCount"]
@@ -82,10 +91,14 @@ def write_marker(claude_md: Path, kind: str) -> bool:
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument("--repo", help="owner/name (defaults to current repo)")
-    p.add_argument("--write-claude-md", action="store_true",
-                   help="append/update the projects=X marker in CLAUDE.md")
-    p.add_argument("--claude-md", default="CLAUDE.md",
-                   help="path to CLAUDE.md (default: ./CLAUDE.md)")
+    p.add_argument(
+        "--write-claude-md",
+        action="store_true",
+        help="append/update the projects=X marker in CLAUDE.md",
+    )
+    p.add_argument(
+        "--claude-md", default="CLAUDE.md", help="path to CLAUDE.md (default: ./CLAUDE.md)"
+    )
     args = p.parse_args()
 
     repo = args.repo or _default_repo()
@@ -94,9 +107,8 @@ def main() -> int:
 
     if args.write_claude_md:
         wrote = write_marker(Path(args.claude_md), kind)
-        sys.stderr.write(
-            f"{'updated' if wrote else 'no change to'} marker in {args.claude_md}: projects={kind}\n"
-        )
+        verb = "updated" if wrote else "no change to"
+        sys.stderr.write(f"{verb} marker in {args.claude_md}: projects={kind}\n")
     return 0
 
 

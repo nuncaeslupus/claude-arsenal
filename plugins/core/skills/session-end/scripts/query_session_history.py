@@ -23,7 +23,7 @@ import json
 import re
 import sys
 from collections import Counter, defaultdict
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 CORRECTION_RE = re.compile(
@@ -45,10 +45,10 @@ def _default_project_dir() -> Path:
 def _iter_transcripts(project_dir: Path, days: int, limit: int) -> list[Path]:
     if not project_dir.is_dir():
         return []
-    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    cutoff = datetime.now(UTC) - timedelta(days=days)
     files = []
     for p in project_dir.glob("*.jsonl"):
-        mtime = datetime.fromtimestamp(p.stat().st_mtime, tz=timezone.utc)
+        mtime = datetime.fromtimestamp(p.stat().st_mtime, tz=UTC)
         if mtime >= cutoff:
             files.append((mtime, p))
     files.sort(key=lambda t: t[0], reverse=True)
@@ -83,23 +83,33 @@ def _scan(files: list[Path]) -> dict:
                     text = content if isinstance(content, str) else ""
                     if not text and isinstance(content, list):
                         text = " ".join(
-                            b.get("text", "") for b in content if isinstance(b, dict) and b.get("type") == "text"
+                            b.get("text", "")
+                            for b in content
+                            if isinstance(b, dict) and b.get("type") == "text"
                         )
                     if text:
                         session_user_msgs += 1
                         m = CORRECTION_RE.search(text)
                         if m:
-                            corrections.append({
-                                "session": session_id,
-                                "phrase": m.group(0),
-                                "excerpt": text[:200],
-                                "prev_assistant": prev_assistant_excerpt[:200] if prev_assistant_excerpt else None,
-                            })
+                            corrections.append(
+                                {
+                                    "session": session_id,
+                                    "phrase": m.group(0),
+                                    "excerpt": text[:200],
+                                    "prev_assistant": prev_assistant_excerpt[:200]
+                                    if prev_assistant_excerpt
+                                    else None,
+                                }
+                            )
                 elif rtype == "assistant":
                     msg = rec.get("message", {})
                     content = msg.get("content", [])
                     if isinstance(content, list):
-                        texts = [b.get("text", "") for b in content if isinstance(b, dict) and b.get("type") == "text"]
+                        texts = [
+                            b.get("text", "")
+                            for b in content
+                            if isinstance(b, dict) and b.get("type") == "text"
+                        ]
                         if texts:
                             prev_assistant_excerpt = " ".join(texts)[:200]
                         for b in content:
@@ -112,11 +122,15 @@ def _scan(files: list[Path]) -> dict:
                                 rel = fp.split("/", 100)[-3:] if fp else []
                                 tail = "/".join(rel[-2:]) if rel else fp
                                 if THROWAWAY_RE.match(tail):
-                                    throwaways.append({
-                                        "session": session_id,
-                                        "path": tail,
-                                        "size_lines": len((inp.get("content") or "").splitlines()),
-                                    })
+                                    throwaways.append(
+                                        {
+                                            "session": session_id,
+                                            "path": tail,
+                                            "size_lines": len(
+                                                (inp.get("content") or "").splitlines()
+                                            ),
+                                        }
+                                    )
                             elif name == "Bash":
                                 cmd = (inp.get("command") or "").strip()
                                 if cmd.startswith("mv ") or cmd.startswith("cp "):
@@ -136,7 +150,9 @@ def _scan(files: list[Path]) -> dict:
                             text = tc if isinstance(tc, str) else ""
                             if isinstance(tc, list):
                                 text = " ".join(
-                                    x.get("text", "") for x in tc if isinstance(x, dict) and x.get("type") == "text"
+                                    x.get("text", "")
+                                    for x in tc
+                                    if isinstance(x, dict) and x.get("type") == "text"
                                 )
                             head_match = ERROR_HEAD_RE.search(text or "")
                             if not head_match:
@@ -149,12 +165,19 @@ def _scan(files: list[Path]) -> dict:
             continue
 
     repeated_tool_errors = [
-        {"tool_name": k[0], "first_line": k[1], "count": v, "sessions": sorted(tool_error_sessions[k])}
-        for k, v in tool_error_counts.most_common(10) if v >= 3
+        {
+            "tool_name": k[0],
+            "first_line": k[1],
+            "count": v,
+            "sessions": sorted(tool_error_sessions[k]),
+        }
+        for k, v in tool_error_counts.most_common(10)
+        if v >= 3
     ]
     repeated_failing_bash = [
         {"command": k[:200], "count": v, "sessions": sorted(bash_fail_sessions[k])}
-        for k, v in bash_fail_counts.most_common(10) if v >= 2
+        for k, v in bash_fail_counts.most_common(10)
+        if v >= 2
     ]
     orphan_throwaways = [t for t in throwaways if t["path"] not in promoted]
 
@@ -169,7 +192,9 @@ def _scan(files: list[Path]) -> dict:
 
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    p.add_argument("--days", type=int, default=7, help="scan transcripts modified within the last N days")
+    p.add_argument(
+        "--days", type=int, default=7, help="scan transcripts modified within the last N days"
+    )
     p.add_argument("--limit", type=int, default=10, help="scan at most N most-recent transcripts")
     p.add_argument("--project", help="path to ~/.claude/projects/<dir> (defaults to CWD-derived)")
     args = p.parse_args()

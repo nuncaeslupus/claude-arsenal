@@ -41,6 +41,12 @@ Body template:
 
 Branches: `feat/<short-description>`, `fix/<short-description>`. Main branch is `main`. The same dynamic Co-Authored-By rule applies inside the PR body (do not hardcode a model name there either).
 
+## Pre-PR gate — always run host lint before `gh pr create`
+
+Before any `gh pr create` invocation, run the host repo's full lint/format/test gate (whatever the project's Makefile / package.json exposes — e.g. `make lint`, `make smoke`, `npm run lint`). Pre-commit hooks do not always cover the same checks CI runs; relying on them alone is how PRs land red. Treat a clean local lint as a non-negotiable precondition for opening the PR — the agile review loop assumes CI was green at push time.
+
+If the host project has no lint target, document that gap (propose a Makefile addition to the user) and proceed; but the omission is the proposal, not a license to skip.
+
 ## The agile review loop
 
 After `gh pr create` returns the PR number, immediately enter the polling loop:

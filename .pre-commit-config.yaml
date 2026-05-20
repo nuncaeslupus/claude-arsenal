@@ -18,3 +18,21 @@ repos:
         pass_filenames: false
         files: ^plugins/[^/]+/scripts/_shared/.*$
         require_serial: true
+
+      - id: ruff-check
+        name: ruff check (plugins)
+        description: Lint Python under plugins/ — matches what CI's `make lint` runs
+        entry: uv run ruff check plugins
+        language: system
+        pass_filenames: false
+        files: ^plugins/.*\.py$
+        require_serial: true
+
+      - id: ruff-format
+        name: ruff format --check (plugins)
+        description: Verify formatting — matches what CI's `make lint` runs
+        entry: uv run ruff format --check plugins
+        language: system
+        pass_filenames: false
+        files: ^plugins/.*\.py$
+        require_serial: true
