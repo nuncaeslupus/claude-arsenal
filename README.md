@@ -67,4 +67,4 @@ Project layout, branch policy, and the cite form are documented in
 
 ## License
 
-TBD before v0.1.0.
+MIT — see [`LICENSE`](LICENSE).

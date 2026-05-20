@@ -14,13 +14,12 @@ marketplace-local conventions on top.
 
 `claude-arsenal` is a Claude Code marketplace. Plugins live at
 `plugins/<name>/`; each plugin ships skills, hooks, and optional agents.
-The first plugin to land is `skill-creator` (S2) — the meta-skill that
-gates every other edit inside a `skills/` folder.
+The `skill-creator` plugin is the meta-skill that gates every other edit
+inside a `skills/` folder.
 
-Migration status lives in `docs/migration-baseline.md` (deleted at S6
-once the merges of `github/` and `session-end/` land inside
-`plugins/core/skills/`). The full migration plan lives at
-`~/.claude/plans/first-i-want-to-resilient-puddle.md`.
+The migration plan that built this repo lives at
+`~/.claude/plans/first-i-want-to-resilient-puddle.md` (historical
+reference only; v0.1.0 is the cutover).
 
 ---
 
@@ -28,15 +27,14 @@ once the merges of `github/` and `session-end/` land inside
 
 | If the task is… | Use… |
 |---|---|
-| Authoring or modifying a skill | `/skill-creator:skill-creator` (once S2 lands) — runs the rubric and writes findings. |
-| Touching a SKILL.md / references / scripts inside a plugin | The pre-edit hook (S2) blocks unless `skill-creator` is loaded. |
+| Authoring or modifying a skill | `/skill-creator:skill-creator` — runs the rubric and writes findings. |
+| Touching a SKILL.md / references / scripts inside a plugin | The pre-edit hook blocks unless `skill-creator` is loaded. |
 | Adding a new plugin | Scaffold `plugins/<name>/.claude-plugin/plugin.json`, then add the entry to `.claude-plugin/marketplace.json`. |
-| Running the rule-drift check | `make audit-rule-drift` (S2 — diffs `references/skill-rules.md` against `docs/research/claude-skill-system_v1.17.md`). |
+| Running the rule-drift check | `make audit-rule-drift` — diffs `references/skill-rules.md` against `docs/research/claude-skill-system_v1.17.md`. |
 | Updating dependencies | `uv sync`, then commit `uv.lock`. |
 
 The Makefile is the entry point for every routine action. Run `make help`
-to list targets. Targets that depend on unported scripts exit non-zero
-with a clear message until the relevant stage lands.
+to list targets.
 
 ---
 
@@ -45,8 +43,7 @@ with a clear message until the relevant stage lands.
 ```
 .claude-plugin/marketplace.json         # marketplace manifest
 docs/
-  migration-baseline.md                 # S0 baseline; deleted at S6
-  research/claude-skill-system_v1.17.md # the upstream research archive (lands at S2)
+  research/claude-skill-system_v1.17.md # the upstream research archive
   INSTALL.md, UPDATE.md, CONTRIBUTING.md # consumer + dev docs
 plugins/
   <plugin>/.claude-plugin/plugin.json   # per-plugin manifest
@@ -61,17 +58,15 @@ pyproject.toml                          # uv + ruff + mypy config
 
 ---
 
-## Branch policy during migration
+## Branch policy
 
-- Migration work lives on `feat/claude-arsenal-migration` until S8.
-- The repo is renamed `my-skills` → `claude-arsenal` at S8 via `git mv`,
-  preserving history.
-- Do not push the migration branch to `origin` until S2 ends with a
-  user-review pause (decision recorded at S0).
+Default policy is conventional-commits on short-lived feature branches
+with PR review. The `github/` skill documents the canonical
+commit/branch format.
 
-After v0.1.0 (S8), default policy is conventional-commits on short-lived
-feature branches with PR review. The `github/` skill (post-S6 merge)
-documents the canonical commit/branch format.
+The repo was renamed `my-skills` → `claude-arsenal` at v0.1.0 via the
+GitHub Settings UI (preserves history and sets up redirects); no
+`git mv` was performed on the working tree.
 
 ---
 
@@ -84,8 +79,8 @@ documents the canonical commit/branch format.
   `claude-arsenal:<plugin>:<skill>` cite form) live in **this** file.
 - **Skill rubric** (the ~98 author-checkable rule rows that the
   validator enforces) lives in
-  `plugins/skill-creator/skills/skill-creator/references/skill-rules.md`
-  once S2 lands. The validator cites rule IDs back to
+  `plugins/skill-creator/skills/skill-creator/references/skill-rules.md`.
+  The validator cites rule IDs back to
   `docs/research/claude-skill-system_v1.17.md § <section>`.
 - **Deferred rules** (the ~91 meta-only governance IDs) live one-line-each
   in `plugins/skill-creator/skills/skill-creator/references/research-coverage.md`
@@ -112,7 +107,7 @@ rubric rows and validator findings only.
 ## Listing budget
 
 The skills index has an 8000-character cap (name + description per
-skill). `audit_library.py plugins/*/skills --by-plugin` (S2) reports
+skill). `audit_library.py plugins/*/skills --by-plugin` reports
 per-plugin contribution and headroom. Aim for ≥50 % headroom across the
 default install set; tell consumers to run the same audit against their
 local cache when they hit the cap.
