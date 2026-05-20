@@ -128,7 +128,7 @@ Adding a rule:
 2. Add a row with a stable ID. Format:
    `R-<group>-<n>` for must/should rules, `Q-<group>-<n>` for
    content-quality scanner rules. Cite the source —
-   `docs/research/claude-skill-system_v1.17.md § <section>`.
+   `docs/research/claude-skill-system_v1.17.md` § <section>.
 3. Run `make audit-rule-drift`. The auditor walks every `R-*` ID in
    the rubric and confirms it is grounded in the research doc; rubric
    rows pointing at a non-existent section fail the build.
@@ -185,7 +185,7 @@ to consumers.
   `<type>(<scope>): <subject>` with `feat | fix | docs | refactor |
   test | chore | ...` as the type.
 - Co-author trailer is dynamic — use the *active* model's name (the
-  `core/github` skill explains why; no hard-coding).
+  `core:github` skill explains why; no hard-coding).
 - Never `--no-verify`. If a pre-commit hook complains, fix the
   underlying issue.
 
