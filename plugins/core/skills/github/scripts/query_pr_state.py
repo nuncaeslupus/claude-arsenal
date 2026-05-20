@@ -232,8 +232,15 @@ def _classify(
 
     # Did the bot ever say anything (line comments OR a review submission)? Used below to
     # decide whether "everything addressed" is a meaningful signal — a bot that never spoke
-    # cannot have had everything addressed.
-    bot_engaged = bot_commented_review or bot_approved_review or bot_changes_requested
+    # cannot have had everything addressed. `addressed_count > 0` already implies the bot
+    # said something we filtered (count is bot-scoped — see main()), so it's a third
+    # engagement signal alongside review-submission states.
+    bot_engaged = (
+        bot_commented_review
+        or bot_approved_review
+        or bot_changes_requested
+        or addressed_count > 0
+    )
     # "Everything addressed" promotes a bot_eyeing case to bot_approved-equivalent:
     # --unresolved-only filtered at least one comment AND nothing remains AND the bot did
     # engage at some point. This overrides the "eyes is a hard block" rule because the loop
@@ -367,8 +374,16 @@ def main() -> int:
     if args.unresolved_only:
         threads = _fetch_review_threads(owner, name, args.pr)
         addressed = _addressed_comment_ids(threads)
+        # Count only watched-bot comments toward "everything addressed" — a thread between
+        # two humans being resolved should NOT trigger the bot-stale-eyes override.
+        watched_logins = {_norm_user(b) for b in args.watch_bots}
+        addressed_count = sum(
+            1
+            for c in line_comments
+            if c.get("id") in addressed
+            and _norm_user((c.get("user") or {}).get("login")) in watched_logins
+        )
         line_comments = [c for c in line_comments if c.get("id") not in addressed]
-        addressed_count = len(addressed)
     else:
         addressed_count = 0
 
