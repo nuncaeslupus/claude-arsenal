@@ -169,6 +169,15 @@ CANONICAL_ARGS = {
     "--strict",
     # init_skill consumer flag
     "--plugin",
+    # github skill flags
+    "--pr",
+    "--repo",
+    "--watch-bots",
+    "--min-quiet-seconds",
+    "--write-claude-md",
+    "--claude-md",
+    # session-end skill flags
+    "--project",
 }
 FORBIDDEN_ARG_SYNONYMS = {
     "--out": "--output",
