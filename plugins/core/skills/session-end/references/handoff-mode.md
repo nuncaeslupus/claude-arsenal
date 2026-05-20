@@ -16,7 +16,7 @@ The skill writes `status/handoff.md` (committed in the repo, not gitignored). Th
 
 Template (rendered by `create_handoff.py`):
 
-```markdown
+````markdown
 # Handoff — <one-line topic / stage name>
 
 ## TL;DR
@@ -46,10 +46,10 @@ Template (rendered by `create_handoff.py`):
 
 ## Reproducible sanity commands
 
-\`\`\`bash
+```bash
 <verbatim shell line that proves "it works" right now>
-\`\`\`
 ```
+````
 
 The `create_handoff.py` script writes the template to `status/handoff.md` with placeholders intact; Claude fills in the placeholders from conversation context before staging. The script will not overwrite a non-template handoff.md unless `--force` is passed; Claude prefers a `--merge` mode (load existing, surface diffs, merge) for partial sessions but the default is full rewrite.
 

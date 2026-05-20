@@ -59,14 +59,14 @@ The script returns JSON to stdout and exits with:
 
 | Exit | State |
 |---|---|
-| 0 | `bot_commented` (unaddressed bot comments) OR `ready_to_merge` |
-| 1 | `waiting` / `bot_eyeing` / `ci_running` (loop continues) |
+| 0 | `bot_commented` (any bot line-comments — Claude judges per-comment) OR `ready_to_merge` |
+| 1 | `waiting` / `bot_eyeing` / `ci_running` / `bot_approved` (loop continues) |
 | 2 | `ci_failed` (Claude must act) |
 
 Handle each state per the rubric in [pr-review-loop](references/pr-review-loop.md):
 
-- `bot_eyeing` → loop continues.
-- `bot_commented` → for each comment Claude **agrees with**, edit the file, stage, commit, push. For each comment Claude **disagrees with**, post a reply via `gh api repos/<owner>/<repo>/pulls/<N>/comments/<comment-id>/replies -f body=...` explaining the disagreement; do not silently ignore. Loop continues after push.
+- `bot_eyeing` → loop continues. **Never** treat `:eyes:` as cleared on Claude's behalf — the bot owns clearing it.
+- `bot_commented` → for each comment in `bot_line_comments`, judge: **already addressed** (reply "addressed in <sha>"), **agree** (fix + push), **disagree** (reply with rationale via `gh api .../pulls/<N>/comments/<id>/replies`), or **ambiguous** (ask user). Loop continues after action.
 - `ci_failed` → fetch the failed log via `gh run view --log-failed <run-id>`, fix, push. Loop continues.
 - `ready_to_merge` → exit the loop, tell the user "PR #N ready to merge".
 

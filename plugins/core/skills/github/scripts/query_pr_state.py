@@ -129,44 +129,49 @@ def _classify(
         elif state == "COMMENTED":
             bot_commented_review = True
 
-    unaddressed = []
+    # GitHub's review-thread resolution status is only exposed via GraphQL; rather than
+    # guess that a comment is "addressed" by virtue of a later commit (it usually isn't —
+    # a later commit may have fixed something else entirely), return ALL bot line-comments
+    # and let the caller (Claude) judge per-comment. The previous timestamp-only heuristic
+    # caused false ready_to_merge readings on PRs where bots commented before an unrelated
+    # fix push.
+    bot_comments = []
     for c in line_comments:
         user = _norm_user((c.get("user") or {}).get("login"))
         if user not in watched:
             continue
         ts = _parse_ts(c.get("created_at"))
         _bump(ts)
-        if ts and ts > head_ts:
-            unaddressed.append(
-                {
-                    "id": c["id"],
-                    "user": user,
-                    "path": c.get("path"),
-                    "line": c.get("line"),
-                    "body": c.get("body"),
-                    "created_at": c.get("created_at"),
-                }
-            )
+        bot_comments.append(
+            {
+                "id": c["id"],
+                "user": user,
+                "path": c.get("path"),
+                "line": c.get("line"),
+                "body": c.get("body"),
+                "created_at": c.get("created_at"),
+            }
+        )
 
     if ci == "failure":
         state, exit_code = "ci_failed", 2
-    elif unaddressed:
+    elif bot_comments:
         state, exit_code = "bot_commented", 0
     elif bot_changes_requested:
-        # Explicit CHANGES_REQUESTED with no line-comments newer than head: bot is
-        # still requesting work but Claude already pushed. Treat as waiting for re-review.
+        # Explicit CHANGES_REQUESTED with no line-comments: bot wants more work.
         state, exit_code = "waiting", 1
     elif ci == "running":
         state, exit_code = "ci_running", 1
-    elif bot_eye and not (bot_thumb or bot_approved_review or bot_commented_review):
+    elif bot_eye and not (bot_thumb or bot_approved_review):
+        # :eyes: is a "look here later" signal. Until the bot either thumbs/approves
+        # OR explicitly retracts via a new review event, treat as eyeing — never
+        # ready_to_merge. (A stale :eyes: from an earlier push still blocks; the bot
+        # owns clearing it by acting again.)
         state, exit_code = "bot_eyeing", 1
-    elif ci == "success" and (
-        bot_thumb or bot_approved_review or bot_commented_review or not watched
-    ):
-        # Either: bot has weighed in (any review/reaction) with nothing outstanding,
-        # OR: no bots are being watched (CI-only mode).
-        # Quiet anchor = later of (last bot event, head commit). Bot has had time
-        # to respond to the fix; silence after that window = silent approval.
+    elif ci == "success" and (bot_thumb or bot_approved_review or not watched):
+        # Explicit positive signal (thumb / approved review) OR CI-only mode.
+        # Silent approval requires the bot to have left a positive signal — not
+        # just to have once commented and then gone silent.
         anchors = [t for t in (last_bot_event_ts, head_ts) if t is not None]
         quiet_anchor = max(anchors)
         now = datetime.now(UTC)
@@ -188,7 +193,7 @@ def _classify(
             "commented": bot_commented_review,
             "changes_requested": bot_changes_requested,
         },
-        "unaddressed_comments": unaddressed,
+        "bot_line_comments": bot_comments,
     }
 
 

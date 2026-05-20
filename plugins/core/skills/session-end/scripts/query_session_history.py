@@ -68,6 +68,8 @@ def _scan(files: list[Path]) -> dict:
         session_id = path.stem
         prev_assistant_excerpt: str | None = None
         session_user_msgs = 0
+        # tool_use_id → (tool_name, normalized_command_if_bash)
+        tool_use_map: dict[str, tuple[str, str]] = {}
         with path.open() as fh:
             for raw in fh:
                 if not raw.strip():
@@ -80,6 +82,35 @@ def _scan(files: list[Path]) -> dict:
                 if rtype == "user":
                     msg = rec.get("message", {})
                     content = msg.get("content")
+                    # Tool results live inside user messages — parse them here.
+                    if isinstance(content, list):
+                        for b in content:
+                            if not isinstance(b, dict):
+                                continue
+                            if b.get("type") != "tool_result" or not b.get("is_error"):
+                                continue
+                            tc = b.get("content")
+                            text = tc if isinstance(tc, str) else ""
+                            if isinstance(tc, list):
+                                text = " ".join(
+                                    x.get("text", "")
+                                    for x in tc
+                                    if isinstance(x, dict) and x.get("type") == "text"
+                                )
+                            head_match = ERROR_HEAD_RE.search(text or "")
+                            if not head_match:
+                                continue
+                            first_line = head_match.group(0).strip()
+                            tool_info = tool_use_map.get(b.get("tool_use_id", ""))
+                            tool_name = tool_info[0] if tool_info else "Unknown"
+                            key = (tool_name, first_line[:120])
+                            tool_error_counts[key] += 1
+                            tool_error_sessions[key].add(session_id)
+                            if tool_name == "Bash" and tool_info and tool_info[1]:
+                                cmd = " ".join(tool_info[1].split())[:200]
+                                bash_fail_counts[cmd] += 1
+                                bash_fail_sessions[cmd].add(session_id)
+                    # User text content (correction-phrase detection).
                     text = content if isinstance(content, str) else ""
                     if not text and isinstance(content, list):
                         text = " ".join(
@@ -117,6 +148,13 @@ def _scan(files: list[Path]) -> dict:
                                 continue
                             name = b.get("name", "")
                             inp = b.get("input", {})
+                            # Record the use so tool_result handling can resolve the name + command.
+                            tool_id = b.get("id", "")
+                            if tool_id:
+                                cmd_for_map = ""
+                                if name == "Bash":
+                                    cmd_for_map = (inp.get("command") or "").strip()
+                                tool_use_map[tool_id] = (name, cmd_for_map)
                             if name == "Write":
                                 fp = inp.get("file_path", "")
                                 rel = fp.split("/", 100)[-3:] if fp else []
@@ -137,30 +175,6 @@ def _scan(files: list[Path]) -> dict:
                                     for word in cmd.split():
                                         if THROWAWAY_RE.match(word):
                                             promoted.add(word)
-                elif rtype in ("tool_result", "user"):
-                    msg = rec.get("message", {})
-                    content = msg.get("content", [])
-                    if isinstance(content, list):
-                        for b in content:
-                            if not isinstance(b, dict) or b.get("type") != "tool_result":
-                                continue
-                            if not b.get("is_error"):
-                                continue
-                            tc = b.get("content")
-                            text = tc if isinstance(tc, str) else ""
-                            if isinstance(tc, list):
-                                text = " ".join(
-                                    x.get("text", "")
-                                    for x in tc
-                                    if isinstance(x, dict) and x.get("type") == "text"
-                                )
-                            head_match = ERROR_HEAD_RE.search(text or "")
-                            if not head_match:
-                                continue
-                            first_line = head_match.group(0).strip()
-                            key = ("Unknown", first_line[:120])
-                            tool_error_counts[key] += 1
-                            tool_error_sessions[key].add(session_id)
         if session_user_msgs < 5:
             continue
 
