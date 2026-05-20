@@ -58,7 +58,14 @@ The current design returns ALL bot line-comments and pushes the judgment of "is 
 ## Loop control
 
 - Cadence: `/loop 90s …`. Lower than 60s risks hitting `gh` rate limits on long-running PRs; higher than 120s slows the user.
-- Termination: the loop exits as soon as `query_pr_state.py` returns `ready_to_merge` (exit 0 with `state: "ready_to_merge"`).
+- **Cron's floor is 1 minute.** `/loop` converts `Ns` to `ceil(N/60)m`, so `90s` schedules as `*/2 * * * *` (every 2 min) — it does NOT poll sub-minute. Treat the `90s` figure as user-facing intent; the underlying cron cadence is 2 min. If you genuinely need every-minute polling, write `/loop 1m …` and accept the higher API load.
+- **Always include the agree/disagree/ambiguous rubric inline in the `/loop` prompt.** A bare `/loop 90s python3 .../query_pr_state.py --pr <N>` produces a JSON snapshot each tick and forces the LLM to re-derive what to do from the skill body every time. The rubric-inlined form keeps each tick self-contained:
+
+  ```
+  /loop 90s python3 "${CLAUDE_SKILL_DIR}/scripts/query_pr_state.py" --pr <N> — if state is bot_commented, address per the rubric (agree → fix; disagree → reply via gh api .../comments/<id>/replies; ambiguous → ask user). If ci_failed, fetch the failing job log and fix. If bot_approved or ready_to_merge, stop the loop with CronDelete <job-id> and hand back to user to merge.
+  ```
+
+- Termination: the loop exits as soon as `query_pr_state.py` returns `ready_to_merge` (exit 0 with `state: "ready_to_merge"`). Call `CronDelete <job-id>` to stop early — the `/loop` skill prints the job ID at scheduling time, and `CronList` recovers it later.
 - Abort: Claude stops the loop if `query_pr_state.py` returns exit 2 with a state other than `ci_failed` (e.g. authentication error, repo not found). Surface the error to the user.
 
 ## Caveats
