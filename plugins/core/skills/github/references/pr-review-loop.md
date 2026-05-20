@@ -62,7 +62,7 @@ The current design returns ALL bot line-comments and pushes the judgment of "is 
 - **Always include the agree/disagree/ambiguous rubric inline in the `/loop` prompt.** A bare `/loop 90s python3 .../query_pr_state.py --pr <N>` produces a JSON snapshot each tick and forces the LLM to re-derive what to do from the skill body every time. The rubric-inlined form keeps each tick self-contained:
 
   ```
-  /loop 90s python3 "${CLAUDE_SKILL_DIR}/scripts/query_pr_state.py" --pr <N> — if state is bot_commented, address per the rubric (agree → fix; disagree → reply via gh api .../comments/<id>/replies; ambiguous → ask user). If ci_failed, fetch the failing job log and fix. If bot_approved or ready_to_merge, stop the loop with CronDelete <job-id> and hand back to user to merge.
+  /loop 90s python3 "${CLAUDE_SKILL_DIR}/scripts/query_pr_state.py" --pr <N> — if state is bot_commented, address per the rubric (agree → fix; disagree → reply via gh api repos/<owner>/<repo>/pulls/<N>/comments/<id>/replies; ambiguous → ask user). If ci_failed, fetch the failing job log and fix. Only stop the loop on ready_to_merge — bot_approved still waits for the quiet window. When stopping, CronDelete <job-id> and hand back to user to merge.
   ```
 
 - Termination: the loop exits as soon as `query_pr_state.py` returns `ready_to_merge` (exit 0 with `state: "ready_to_merge"`). Call `CronDelete <job-id>` to stop early — the `/loop` skill prints the job ID at scheduling time, and `CronList` recovers it later.
