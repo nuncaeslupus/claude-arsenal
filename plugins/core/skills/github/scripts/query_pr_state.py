@@ -88,10 +88,14 @@ def _aggregate_ci(checks: list[dict]) -> str:
 def _fetch_review_threads(owner: str, name: str, pr_number: int) -> list[dict]:
     """Fetch PR review threads via GraphQL. Returns the threads list (possibly empty).
 
-    Each thread has `isResolved` plus its comments with `databaseId` (the REST API
-    integer ID matching `bot_line_comments[].id`) and `author { login __typename }`.
-    `__typename` is `Bot`, `User`, or `Mannequin` — used to decide whether a reply
-    came from a human (the PR author "addressed in <sha>" pattern).
+    Each thread has `isResolved` plus two aliased comment slices:
+      - `all_comments` (first: 100) — used to collect `databaseId`s (the REST API
+        integer IDs matching `bot_line_comments[].id`).
+      - `latest_comment` (last: 1) — used to read the *actual* most-recent author's
+        `__typename` (`Bot`, `User`, or `Mannequin`), independent of how long the
+        thread is. Without the `last: 1` slice, a thread with more than 100 comments
+        would silently lose the real latest author and the "human replied" heuristic
+        would mis-fire on huge threads.
     """
     query = (
         "query($owner:String!, $name:String!, $pr:Int!) {"
@@ -100,9 +104,8 @@ def _fetch_review_threads(owner: str, name: str, pr_number: int) -> list[dict]:
         "      reviewThreads(first:100) {"
         "        nodes {"
         "          isResolved"
-        "          comments(first:50) {"
-        "            nodes { databaseId author { login __typename } }"
-        "          }"
+        "          all_comments: comments(first:100) { nodes { databaseId } }"
+        "          latest_comment: comments(last:1) { nodes { author { __typename } } }"
         "        }"
         "      }"
         "    }"
@@ -132,18 +135,28 @@ def _addressed_comment_ids(threads: list[dict]) -> set[int]:
     """Return the set of REST comment IDs that belong to a thread that is either
     GH-side resolved OR has a human reply (the PR author / a maintainer posted
     'addressed in <sha>'). The remaining comments are the ones the loop still
-    needs to act on."""
+    needs to act on.
+
+    For threads with more than 100 comments, the `all_comments` slice covers only
+    the first 100 — bot comments beyond that stay unfiltered (the safe default:
+    better to leave a comment in the loop than to wrongly mark it addressed). The
+    `latest_comment` slice always reflects the true most recent author, so the
+    human-reply check is correct regardless of thread length.
+    """
     addressed: set[int] = set()
     for thread in threads:
-        comments = (thread.get("comments") or {}).get("nodes") or []
-        if not comments:
+        all_comments = (thread.get("all_comments") or {}).get("nodes") or []
+        if not all_comments:
             continue
-        ids = {c["databaseId"] for c in comments if c.get("databaseId")}
+        ids = {c["databaseId"] for c in all_comments if c.get("databaseId")}
         if thread.get("isResolved"):
             addressed.update(ids)
             continue
-        latest = comments[-1].get("author") or {}
-        if latest.get("__typename") == "User":
+        latest_nodes = (thread.get("latest_comment") or {}).get("nodes") or []
+        if not latest_nodes:
+            continue
+        latest_author = latest_nodes[0].get("author") or {}
+        if latest_author.get("__typename") == "User":
             addressed.update(ids)
     return addressed
 
