@@ -85,6 +85,82 @@ def _aggregate_ci(checks: list[dict]) -> str:
     return "success"
 
 
+def _fetch_review_threads(owner: str, name: str, pr_number: int) -> list[dict]:
+    """Fetch PR review threads via GraphQL. Returns the threads list (possibly empty).
+
+    Each thread has `isResolved` plus two aliased comment slices:
+      - `all_comments` (first: 100) — used to collect `databaseId`s (the REST API
+        integer IDs matching `bot_line_comments[].id`).
+      - `latest_comment` (last: 1) — used to read the *actual* most-recent author's
+        `__typename` (`Bot`, `User`, or `Mannequin`), independent of how long the
+        thread is. Without the `last: 1` slice, a thread with more than 100 comments
+        would silently lose the real latest author and the "human replied" heuristic
+        would mis-fire on huge threads.
+    """
+    query = (
+        "query($owner:String!, $name:String!, $pr:Int!) {"
+        "  repository(owner:$owner, name:$name) {"
+        "    pullRequest(number:$pr) {"
+        "      reviewThreads(first:100) {"
+        "        nodes {"
+        "          isResolved"
+        "          all_comments: comments(first:100) { nodes { databaseId } }"
+        "          latest_comment: comments(last:1) { nodes { author { __typename } } }"
+        "        }"
+        "      }"
+        "    }"
+        "  }"
+        "}"
+    )
+    data = _gh(
+        "api",
+        "graphql",
+        "-f",
+        f"query={query}",
+        "-F",
+        f"owner={owner}",
+        "-F",
+        f"name={name}",
+        "-F",
+        f"pr={pr_number}",
+    )
+    if not data:
+        return []
+    return (
+        ((data.get("data") or {}).get("repository") or {}).get("pullRequest") or {}
+    ).get("reviewThreads", {}).get("nodes") or []
+
+
+def _addressed_comment_ids(threads: list[dict]) -> set[int]:
+    """Return the set of REST comment IDs that belong to a thread that is either
+    GH-side resolved OR has a human reply (the PR author / a maintainer posted
+    'addressed in <sha>'). The remaining comments are the ones the loop still
+    needs to act on.
+
+    For threads with more than 100 comments, the `all_comments` slice covers only
+    the first 100 — bot comments beyond that stay unfiltered (the safe default:
+    better to leave a comment in the loop than to wrongly mark it addressed). The
+    `latest_comment` slice always reflects the true most recent author, so the
+    human-reply check is correct regardless of thread length.
+    """
+    addressed: set[int] = set()
+    for thread in threads:
+        all_comments = (thread.get("all_comments") or {}).get("nodes") or []
+        if not all_comments:
+            continue
+        ids = {c["databaseId"] for c in all_comments if c.get("databaseId")}
+        if thread.get("isResolved"):
+            addressed.update(ids)
+            continue
+        latest_nodes = (thread.get("latest_comment") or {}).get("nodes") or []
+        if not latest_nodes:
+            continue
+        latest_author = latest_nodes[0].get("author") or {}
+        if latest_author.get("__typename") == "User":
+            addressed.update(ids)
+    return addressed
+
+
 def _classify(
     args: argparse.Namespace,
     head_ts: datetime,
@@ -129,12 +205,12 @@ def _classify(
         elif state == "COMMENTED":
             bot_commented_review = True
 
-    # GitHub's review-thread resolution status is only exposed via GraphQL; rather than
-    # guess that a comment is "addressed" by virtue of a later commit (it usually isn't —
-    # a later commit may have fixed something else entirely), return ALL bot line-comments
-    # and let the caller (Claude) judge per-comment. The previous timestamp-only heuristic
-    # caused false ready_to_merge readings on PRs where bots commented before an unrelated
-    # fix push.
+    # By default, return ALL watched-bot line-comments and let the caller (Claude) judge
+    # per-comment. The previous timestamp-only heuristic ("addressed if older than the head
+    # commit") caused false ready_to_merge readings on PRs where bots commented before an
+    # unrelated fix push. With --unresolved-only (filter applied in main() before this
+    # function is called), comments belonging to GH-side resolved threads OR threads with a
+    # human reply are dropped upstream — see _fetch_review_threads / _addressed_comment_ids.
     bot_comments = []
     for c in line_comments:
         user = _norm_user((c.get("user") or {}).get("login"))
@@ -212,6 +288,16 @@ def main() -> int:
         default=60,
         help="seconds the bot must be quiet after approval before declaring ready_to_merge",
     )
+    p.add_argument(
+        "--unresolved-only",
+        action="store_true",
+        help=(
+            "drop bot line-comments whose review thread is GH-side resolved OR has a "
+            "human reply (the 'addressed in <sha>' pattern). Requires one extra GraphQL "
+            "call. Recommended for /loop usage so each tick does not re-trigger on "
+            "already-addressed comments."
+        ),
+    )
     args = p.parse_args()
     args.watch_bots = [b.strip() for b in args.watch_bots.split(",") if b.strip()]
 
@@ -246,6 +332,11 @@ def main() -> int:
     reactions = _gh("api", f"repos/{owner}/{name}/issues/{args.pr}/reactions") or []
     line_comments = _gh("api", f"repos/{owner}/{name}/pulls/{args.pr}/comments") or []
     reviews = pr.get("reviews") or []
+
+    if args.unresolved_only:
+        threads = _fetch_review_threads(owner, name, args.pr)
+        addressed = _addressed_comment_ids(threads)
+        line_comments = [c for c in line_comments if c.get("id") not in addressed]
 
     result = _classify(args, head_ts, ci, reactions, reviews, line_comments)
     json.dump(result, sys.stdout, indent=2)

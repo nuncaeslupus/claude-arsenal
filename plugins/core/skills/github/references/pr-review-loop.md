@@ -49,20 +49,25 @@ Never silently skip a comment. Every comment gets *some* response — code chang
 
 ## How the script tracks "addressed"
 
-It doesn't. Deliberately.
+By default the script does not — it returns ALL bot line-comments and pushes the judgment to Claude per-comment. The previous timestamp-based heuristic ("addressed if older than the head commit") was wrong: a later commit may fix something unrelated, leaving the original comment still outstanding.
 
-The previous heuristic ("addressed if older than the head commit") was wrong: a later commit may fix something unrelated, leaving the original comment still outstanding. False `ready_to_merge` readings on PRs with un-addressed feedback were the result.
+Pass `--unresolved-only` and the script filters comments via a GraphQL fetch of the PR's review threads. A comment is considered **addressed** (and dropped from the output) when its thread satisfies either:
 
-The current design returns ALL bot line-comments and pushes the judgment of "is this addressed?" to Claude per-comment. GitHub exposes a `resolved` flag on review threads via GraphQL — a future iteration may consume it to filter out resolved threads automatically, but until then Claude reads each comment and decides.
+- `isResolved: true` on the GH-side — someone (you or the bot) clicked "Resolve conversation"; or
+- the most recent comment in the thread is from a `User` (i.e., a human replied — the canonical "addressed in `<sha>`" pattern).
+
+Bot replies do NOT count as resolution — only human follow-ups or explicit GH-side resolution do. This matches what `/loop` consumers actually want: each tick stays focused on comments the bot is still waiting on, and a single `gh api .../comments/<id>/replies -f body="addressed in <sha>"` is enough to take a comment out of the next tick's output.
+
+The fetch costs one extra GraphQL call per tick (~50 ms typical), well under the rate-limit budget at the documented `/loop 90s` cadence.
 
 ## Loop control
 
 - Cadence: `/loop 90s …`. Lower than 60s risks hitting `gh` rate limits on long-running PRs; higher than 120s slows the user.
 - **Cron's floor is 1 minute.** `/loop` converts `Ns` to `ceil(N/60)m`, so `90s` schedules as `*/2 * * * *` (every 2 min) — it does NOT poll sub-minute. Treat the `90s` figure as user-facing intent; the underlying cron cadence is 2 min. If you genuinely need every-minute polling, write `/loop 1m …` and accept the higher API load.
-- **Always include the agree/disagree/ambiguous rubric inline in the `/loop` prompt.** A bare `/loop 90s python3 .../query_pr_state.py --pr <N>` produces a JSON snapshot each tick and forces the LLM to re-derive what to do from the skill body every time. The rubric-inlined form keeps each tick self-contained:
+- **Always include the agree/disagree/ambiguous rubric inline in the `/loop` prompt** AND pass `--unresolved-only` to the script. A bare `/loop 90s python3 .../query_pr_state.py --pr <N>` produces a JSON snapshot each tick and forces the LLM to re-derive what to do from the skill body every time. `--unresolved-only` filters out comments whose review thread is GH-side resolved OR has a human reply (the "addressed in <sha>" pattern) so each tick stays focused on what actually still needs attention. The rubric-inlined form keeps each tick self-contained:
 
   ```
-  /loop 90s python3 "${CLAUDE_SKILL_DIR}/scripts/query_pr_state.py" --pr <N> — if state is bot_commented, address per the rubric (agree → fix; disagree → reply via gh api repos/<owner>/<repo>/pulls/<N>/comments/<id>/replies; ambiguous → ask user). If ci_failed, fetch the failing job log and fix. Only stop the loop on ready_to_merge — bot_approved still waits for the quiet window. When stopping, CronDelete <job-id> and hand back to user to merge.
+  /loop 90s python3 "${CLAUDE_SKILL_DIR}/scripts/query_pr_state.py" --pr <N> --unresolved-only — if state is bot_commented, address per the rubric (agree → fix; disagree → reply via gh api repos/<owner>/<repo>/pulls/<N>/comments/<id>/replies; ambiguous → ask user). If ci_failed, fetch the failing job log and fix. Only stop the loop on ready_to_merge — bot_approved still waits for the quiet window. When stopping, CronDelete <job-id> and hand back to user to merge.
   ```
 
 - Termination: the loop exits as soon as `query_pr_state.py` returns `ready_to_merge` (exit 0 with `state: "ready_to_merge"`). Call `CronDelete <job-id>` to stop early — the `/loop` skill prints the job ID at scheduling time, and `CronList` recovers it later.

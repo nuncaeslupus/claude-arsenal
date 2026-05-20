@@ -174,6 +174,7 @@ CANONICAL_ARGS = {
     "--repo",
     "--watch-bots",
     "--min-quiet-seconds",
+    "--unresolved-only",
     "--write-claude-md",
     "--claude-md",
     # session-end skill flags
