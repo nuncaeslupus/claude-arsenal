@@ -17,9 +17,9 @@ marketplace-local conventions on top.
 The `skill-creator` plugin is the meta-skill that gates every other edit
 inside a `skills/` folder.
 
-The migration plan that built this repo lives at
-`~/.claude/plans/first-i-want-to-resilient-puddle.md` (historical
-reference only; v0.1.0 is the cutover).
+The migration plan that built this repo is preserved in the author's
+local `~/.claude/plans/` (historical reference only; v0.1.0 is the
+cutover).
 
 ---
 
@@ -61,7 +61,7 @@ pyproject.toml                          # uv + ruff + mypy config
 ## Branch policy
 
 Default policy is conventional-commits on short-lived feature branches
-with PR review. The `github/` skill documents the canonical
+with PR review. The `github` skill documents the canonical
 commit/branch format.
 
 The repo was renamed `my-skills` → `claude-arsenal` at v0.1.0 via the
@@ -107,7 +107,8 @@ rubric rows and validator findings only.
 ## Listing budget
 
 The skills index has an 8000-character cap (name + description per
-skill). `audit_library.py plugins/*/skills --by-plugin` reports
-per-plugin contribution and headroom. Aim for ≥50 % headroom across the
-default install set; tell consumers to run the same audit against their
-local cache when they hit the cap.
+skill). Locally, `make audit` reports per-plugin contribution and
+headroom; under the hood it runs
+`audit_library.py plugins/*/skills --by-plugin`, which is also what
+consumers should point at their own `~/.claude/plugins/cache` when they
+hit the cap. Aim for ≥50 % headroom across the default install set.
