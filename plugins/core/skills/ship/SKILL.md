@@ -1,13 +1,15 @@
 ---
-name: release-readiness
+name: ship
 description: When the user is confirming a change is ready for production before merge — compatibility, tests, observability, rollback. Do NOT use for implementation (see execution) or PR review (see review).
 metadata:
   type: workflow
 ---
 
-# Release Readiness Workflow
+# Ship Workflow
 
-CANARY: release-readiness-loaded-2026-05-19-e8a0e2967cbab28d
+CANARY: ship-loaded-2026-06-01-969928a90f431ecb
+
+Reads `status/specification.md` to know what should be shipping. Confirms scope coverage, compatibility, tests, observability, and rollback before the merge.
 
 ## Steps
 
@@ -32,7 +34,7 @@ CANARY: release-readiness-loaded-2026-05-19-e8a0e2967cbab28d
 
 ### Step 4: Test confirmation
 
-- [ ] All unit/integration tests pass
+- [ ] All unit/integration tests pass (including the new tests written for this change)
 - [ ] E2E tests pass (if applicable)
 - [ ] Manual testing completed for high-risk paths
 - [ ] No flaky tests introduced
@@ -52,12 +54,12 @@ CANARY: release-readiness-loaded-2026-05-19-e8a0e2967cbab28d
 - [ ] Rollback plan documented
 - [ ] On-call team aware (if high-risk)
 
-### Step 7: Produce release readiness output
+### Step 7: Produce ship output
 
-Load `references/template.md` when producing the release-readiness output document.
+Load `references/template.md` when producing the ship output document.
 
 ---
 
 ## Abbreviation
 
-**Abbreviated release-readiness** = Steps 2 + 4 + Go/No-Go. Whether abbreviation is allowed depends on project conventions documented in the host repo's `CLAUDE.md`.
+**Abbreviated ship** = Steps 2 + 4 + Go/No-Go. Whether abbreviation is allowed depends on project conventions documented in the host repo's `CLAUDE.md`.

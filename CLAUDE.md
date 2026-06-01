@@ -93,7 +93,7 @@ GitHub Settings UI (preserves history and sets up redirects); no
 When referencing a skill or its reference, use the marketplace-namespaced
 form:
 
-- Skill: `claude-arsenal:<plugin>:<skill>` (e.g. `claude-arsenal:core:discovery`).
+- Skill: `claude-arsenal:<plugin>:<skill>` (e.g. `claude-arsenal:core:specify`).
 - Reference: `claude-arsenal:<plugin>:<skill> § references/<file>.md`.
 - Rubric row: cite the rule ID (e.g. `R-FM-3`) and let the validator's
   `findings.md` carry the file:line back-reference.
@@ -112,3 +112,24 @@ headroom; under the hood it runs
 `audit_library.py plugins/*/skills --by-plugin`, which is also what
 consumers should point at their own `~/.claude/plugins/cache` when they
 hit the cap. Aim for ≥50 % headroom across the default install set.
+
+---
+
+## Host-repo CLAUDE.md flags consumed by core skills
+
+Core skills read optional HTML-comment markers from the **host repo's**
+`CLAUDE.md` (not this one) to adapt their behavior. This is the full
+registry of flags a core skill honors:
+
+- `<!-- test-discipline: test-first | test-after -->` — default
+  `test-first`. Read by `execution`: `test-after` writes tests alongside
+  the change instead of failing-test-first (see `execution` Step 2a).
+- `<!-- session-end: handoff=yes | ticket | no -->` — no default (the
+  skill asks once, then writes the marker). Read by `session-end`: `yes`
+  writes `status/handoff.md`; `ticket` and `no` skip it (Step 1).
+- `<!-- github-skill: projects=classic | v2 | none -->` — auto-detected
+  on first run. Read by `github` to skip GitHub Projects re-detection in
+  later sessions.
+
+Markers are per-host-repo and optional; absent a marker each skill uses
+its default (or asks once, for `session-end`).

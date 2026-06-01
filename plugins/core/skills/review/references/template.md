@@ -3,6 +3,7 @@
 **Date**: YYYY-MM-DD
 **PR/Change**: link or reference
 **Ticket**: <id>
+**Specification**: `status/specification.md` (the intent this change is audited against)
 **Author**: <name>
 **Reviewer**: <name>
 
@@ -47,6 +48,7 @@
 | Aspect | Status | Notes |
 |--------|--------|-------|
 | New code paths covered | Yes/No | |
+| Test-code ordering (tests precede or accompany code) | Yes/No/N-A | |
 | Happy path tested | Yes/No | |
 | Error paths tested (2+) | Yes/No | |
 | Integration tests | Yes/No/N/A | |

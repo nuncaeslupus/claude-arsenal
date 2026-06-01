@@ -11,7 +11,7 @@
 # reports a blocking issue.
 #
 # The cross-library aggregate budget is NOT enforced here — that
-# check is owned by release-readiness and is invoked with the
+# check is owned by ship and is invoked with the
 # multi-path form of audit_library.py.
 #
 # Live-session probes (load_prompts / no_load_prompts from each

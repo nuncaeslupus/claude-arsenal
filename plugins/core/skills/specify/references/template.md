@@ -1,4 +1,9 @@
-# Discovery: <title>
+# Specification: <title>
+
+> Seed for `status/specification.md`. `specify` owns sections 1–4 below.
+> `design` later appends sections 5–6 (contracts, risks) — see
+> `template-specification-tail.md` in the design skill. Keep the file
+> committed; per-task scratch belongs in `tmp/`, never here.
 
 **Date**: YYYY-MM-DD
 **Ticket / PR**: <id>
@@ -66,3 +71,7 @@
 
 **Open questions**:
 - [ ] ...
+
+---
+
+> Sections 5–6 (contracts, risks) are appended by `design`.

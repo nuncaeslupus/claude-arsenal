@@ -1,6 +1,6 @@
 {
-  "skill": "discovery",
-  "canary": "discovery-loaded-2026-05-19-45842b8faabb2ff5",
+  "skill": "specify",
+  "canary": "specify-loaded-2026-06-01-7f9501625b833979",
   "negative_control": "this skill writes the code to fix the problem after you describe it in one sentence",
   "load_prompts": [
     "We need to figure out why some customers are missing transactions — scope this out.",

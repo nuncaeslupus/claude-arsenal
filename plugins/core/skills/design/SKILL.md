@@ -1,6 +1,6 @@
 ---
 name: design
-description: When the user is defining the technical solution after discovery — contracts, task split, risk register, sequencing. Do NOT use for problem investigation (see discovery), implementation (see execution), or PR review (see review).
+description: When the user is defining the technical solution after discovery — contracts, task split, risk register, sequencing. Do NOT use for problem investigation (see specify), implementation (see execution), or PR review (see review).
 metadata:
   type: workflow
 ---
@@ -8,6 +8,8 @@ metadata:
 # Design Workflow
 
 CANARY: design-loaded-2026-05-19-e08675ccb0a5c932
+
+Owns sections 5–6 of `status/specification.md` (contracts, risks) and creates `status/plan.md` (task split). Reads sections 1–4 of `status/specification.md` to understand what the spec already covers.
 
 ## Steps
 
@@ -40,7 +42,7 @@ For each task:
 - **What**: specific deliverable
 - **Where**: which files/services
 - **Dependencies**: what must be done first
-- **Tests**: what validates this task is complete
+- **Tests**: file paths the task creates or modifies, plus a one-sentence testability statement (what assertion proves the task is done).
 - **Estimated effort**: Small (< 1h) / Medium (1-4h) / Large (4h+)
 
 Recommended: tasks should be small enough to be a single commit.
@@ -62,7 +64,7 @@ Pay special attention to:
 
 ### Step 5: Produce design output
 
-Load `references/template.md` when producing the design output document.
+Load `references/template-specification-tail.md` when appending contracts and risks (sections 5–6) to `status/specification.md`. Load `references/template-plan.md` when creating `status/plan.md`.
 
 ---
 

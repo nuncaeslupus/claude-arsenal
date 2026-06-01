@@ -47,8 +47,8 @@ marketplace:
   `claude-arsenal:skill-creator:skill-creator`. Inside the slash
   command surface that is `/skill-creator:skill-creator`; the inner
   duplication is intentional ("plugin owns one same-named skill").
-- `discovery` (inside the `core` plugin) ⇒
-  `claude-arsenal:core:discovery`. Slash form `/core:discovery`.
+- `specify` (inside the `core` plugin) ⇒
+  `claude-arsenal:core:specify`. Slash form `/core:specify`.
 
 Conventions:
 
@@ -64,7 +64,7 @@ Conventions:
   does GitHub. Not GitHub *and* GitLab. If the description uses
   "and", split.
 - **Workflows are orchestrators.** A workflow SKILL names capabilities
-  in prose ("use the `github` skill to read the PR; use `release-readiness`
+  in prose ("use the `github` skill to read the PR; use `ship`
   to confirm the cut") and lets the model route. It does not link to
   peer SKILL.md or peer scripts.
 - **Capability skills don't call other capability skills.** If

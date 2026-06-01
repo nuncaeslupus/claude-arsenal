@@ -1,6 +1,6 @@
 ---
 name: review
-description: When the user is reviewing a PR, diff, design doc, or proposal — risks, tech debt, standards compliance. Do NOT use for implementation (see execution), design (see design), or release sign-off (see release-readiness).
+description: When the user is reviewing a PR, diff, design doc, or proposal — risks, tech debt, standards compliance. Do NOT use for implementation (see execution), design (see design), or release sign-off (see ship).
 metadata:
   type: workflow
 ---
@@ -8,6 +8,8 @@ metadata:
 # Review Workflow
 
 CANARY: review-loaded-2026-05-19-da60b2aa44b817de
+
+Reads `status/specification.md` (the canonical statement of intent) and audits the diff against it. Surfaces drift between spec and implementation.
 
 ## Steps
 
@@ -42,6 +44,8 @@ If engineering standards exist in the host repo (a project-level `engineering-co
 - Are error conditions tested?
 - Do tests actually assert meaningful behavior (not just "it doesn't crash")?
 - If no tests exist and the change is non-trivial → flag as blocker
+
+**Hard blocker rule**: production code changes with zero test companions in the diff are Request Changes — except config-only, docs-only, or refactor with existing green tests covering the touched paths. When waiving on the refactor exception, the reviewer states the exception applied and asserts the green-test evidence explicitly (CI link or local test run).
 
 ### Step 5: Check operational readiness
 

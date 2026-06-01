@@ -3,6 +3,7 @@
 **Date**: YYYY-MM-DD
 **PR/Change**: link or reference
 **Ticket**: <id>
+**Specification**: `status/specification.md` (what should be shipping)
 **Author**: <name>
 **Assessed by**: <name>
 

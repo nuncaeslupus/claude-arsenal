@@ -1,85 +1,34 @@
-# Execution: <title>
+# Notes: T<N> — <task-title>
 
-**Date**: YYYY-MM-DD
-**Ticket / PR**: <id>
-**Design**: link to design document
-**Task**: T<N> from design
-**Author**: <name>
+> Scratch for `tmp/<task-id>-notes.md`. Ephemeral — gitignored by the
+> host repo, never committed. Capture decisions and deviations while
+> implementing; the durable record is `status/plan.md` (task status) and
+> the PR description. Delete the file once the PR is open.
 
----
-
-## 1. Implementation plan
-
-### Task scope
-
-- **Task from design**: T<N> — <description>
-- **Service(s)**: <service>
-- **Dependencies**: T<N-1> merged? yes/no
-- **Branch**: `<ticket-id>-description`
-
-### Files affected
-
-| File | Action | Description |
-|------|--------|-------------|
-| `<service>/app/...` | Create / Modify | |
-| `<service>/tests/...` | Create / Modify | |
-| `<service>/migrations/...` | Create | |
-
-### Prerequisites verified
-
-- [ ] Design approved
-- [ ] engineering-core gates complete
-- [ ] Branch created from latest default branch
-- [ ] Local environment running
-- [ ] Prerequisite tasks merged
+**Task**: T<N> from `status/plan.md`
+**Branch**: `<ticket-id>-description`
 
 ---
 
-## 2. Changes made
+## Failing test (red)
 
-### Commits
+- Test: `<path>::<test_name>`
+- Asserts: <what assertion proves this task is done>
+- Confirmed failing for the expected reason: yes / no
 
-| Commit | Description |
-|--------|-------------|
-| `abc1234` | <what this commit does> |
-| `def5678` | <what this commit does> |
-
-### Contract compliance
-
-- [ ] API contract matches design: <endpoint>
-- [ ] Database migration matches design: <migration>
-- [ ] Inter-service contract matches design: <caller → callee>
-
-### Key decisions during implementation
+## Decisions & deviations
 
 | Decision | Reason |
 |----------|--------|
-| <any deviation from design> | <why> |
+| <deviation from the plan or spec> | <why> |
 
----
+## Scratch
 
-## 3. Tests and validation
+- <findings, dead ends, commands worth remembering while working>
 
-### Tests written
+## Before opening the PR
 
-| Type | File | What it covers |
-|------|------|---------------|
-| Unit | `<service>/tests/...` | |
-| Integration | `<service>/tests/...` | |
-| Edge case | `<service>/tests/...` | |
-
-### Test results
-
-```
-<test-command> <service>    → PASS / FAIL
-<lint-command> <service>    → PASS / FAIL
-<e2e-command>               → PASS / FAIL (if applicable)
-```
-
-### Manual verification
-
-- [ ] Endpoint responds correctly at the configured base URL
-- [ ] Data stored correctly in database
-- [ ] Audit logs generated (if security-relevant)
-- [ ] Backwards compatibility verified (if API change)
-
+- [ ] Red test from above now passes (green)
+- [ ] Lint + full test suite pass
+- [ ] `status/plan.md` task status updated
+- [ ] No debug code, commented-out blocks, or secrets left behind
