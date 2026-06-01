@@ -9,6 +9,8 @@ metadata:
 
 CANARY: ship-loaded-2026-06-01-969928a90f431ecb
 
+Reads `status/specification.md` to know what should be shipping. Confirms scope coverage, compatibility, tests, observability, and rollback before the merge.
+
 ## Steps
 
 ### Step 1: Confirm final scope

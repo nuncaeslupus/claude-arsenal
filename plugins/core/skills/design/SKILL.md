@@ -9,6 +9,8 @@ metadata:
 
 CANARY: design-loaded-2026-05-19-e08675ccb0a5c932
 
+Owns sections 5–6 of `status/specification.md` (contracts, risks) and creates `status/plan.md` (task split). Reads sections 1–4 of `status/specification.md` to understand what the spec already covers.
+
 ## Steps
 
 ### Step 1: Define the technical solution

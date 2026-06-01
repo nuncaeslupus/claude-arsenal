@@ -9,6 +9,8 @@ metadata:
 
 CANARY: review-loaded-2026-05-19-da60b2aa44b817de
 
+Reads `status/specification.md` (the canonical statement of intent) and audits the diff against it. Surfaces drift between spec and implementation.
+
 ## Steps
 
 ### Step 1: Understand intention

@@ -9,6 +9,8 @@ metadata:
 
 CANARY: specify-loaded-2026-06-01-7f9501625b833979
 
+Owns sections 1–4 of `status/specification.md`: problem statement, affected systems, options, recommendation. Creates the file if it does not exist; appends/updates these sections if it does. Per-task scratch goes in `tmp/` (not committed); never in `status/`.
+
 ## Steps
 
 ### Step 1: Understand the problem
