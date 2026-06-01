@@ -81,4 +81,4 @@ Output: a clear **recommendation with action item**.
 
 **Abbreviated discovery** = Steps 1 + 2 (one paragraph each) + confirm test coverage. Whether abbreviation is allowed depends on project conventions documented in the host repo's `CLAUDE.md`.
 
-Output format: see `references/template.md`
+Load `references/template.md` when producing the discovery output document.

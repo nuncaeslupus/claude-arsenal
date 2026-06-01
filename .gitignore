@@ -224,6 +224,7 @@ tmp/
 
 # Author-local skill findings (never committed)
 findings.md
+.findings/
 
 # Claude Code per-user settings (never committed)
 .claude/settings.local.json

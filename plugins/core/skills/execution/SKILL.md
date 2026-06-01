@@ -9,7 +9,7 @@ metadata:
 
 CANARY: execution-loaded-2026-05-19-4597aff5bb98dd36
 
-Per-task execution notes follow the structure in `references/template.md`.
+Load `references/template.md` when writing execution notes for a task.
 
 ## Steps
 
