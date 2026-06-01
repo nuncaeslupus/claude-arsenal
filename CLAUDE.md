@@ -93,7 +93,7 @@ GitHub Settings UI (preserves history and sets up redirects); no
 When referencing a skill or its reference, use the marketplace-namespaced
 form:
 
-- Skill: `claude-arsenal:<plugin>:<skill>` (e.g. `claude-arsenal:core:discovery`).
+- Skill: `claude-arsenal:<plugin>:<skill>` (e.g. `claude-arsenal:core:specify`).
 - Reference: `claude-arsenal:<plugin>:<skill> § references/<file>.md`.
 - Rubric row: cite the rule ID (e.g. `R-FM-3`) and let the validator's
   `findings.md` carry the file:line back-reference.

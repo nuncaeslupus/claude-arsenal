@@ -47,8 +47,8 @@ marketplace:
   `claude-arsenal:skill-creator:skill-creator`. Inside the slash
   command surface that is `/skill-creator:skill-creator`; the inner
   duplication is intentional ("plugin owns one same-named skill").
-- `discovery` (inside the `core` plugin) ⇒
-  `claude-arsenal:core:discovery`. Slash form `/core:discovery`.
+- `specify` (inside the `core` plugin) ⇒
+  `claude-arsenal:core:specify`. Slash form `/core:specify`.
 
 Conventions:
 

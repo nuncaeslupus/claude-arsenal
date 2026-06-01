@@ -182,7 +182,7 @@ at activation time.
 | Q-TRIG-2 | should | The `description` negative-trigger names a sibling skill (or a specific alternative tool) the user might otherwise pattern-match to. "Do NOT use for unrelated tasks" fails; "Do NOT use for raw HTTP requests (see `github`)" passes. |
 | Q-TRIG-3 | should | The `description`'s *what* claim and *when* claim are independent. A tautology ("Use when working with X to work with X") fails. The two clauses must add information when read together. |
 | Q-TRIG-4 | should | The body "When to load" section either (a) self-checks with a defer-if clause, (b) adds nuance the 1024-char description could not hold, or (c) gives meta-guidance for after-load behaviour. A section that only restates the description wastes the budget. |
-| Q-TRIG-5 | should | Cross-skill mentions in body prose name the sibling skill ("use the `discovery` skill") rather than describe its function vaguely ("the workflow that handles discovery tasks"). A reviewer should be able to look up the named skill. |
+| Q-TRIG-5 | should | Cross-skill mentions in body prose name the sibling skill ("use the `specify` skill") rather than describe its function vaguely ("the workflow that handles discovery tasks"). A reviewer should be able to look up the named skill. |
 
 ## Out of scope for this checklist
 
