@@ -52,7 +52,7 @@ If engineering standards exist in the host repo (a project-level `engineering-co
 
 ### Step 6: Produce review output
 
-Output format: see `references/template.md`
+Load `references/template.md` when producing the review output document.
 
 ---
 

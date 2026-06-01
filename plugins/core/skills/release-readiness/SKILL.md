@@ -54,7 +54,7 @@ CANARY: release-readiness-loaded-2026-05-19-e8a0e2967cbab28d
 
 ### Step 7: Produce release readiness output
 
-Output format: see `references/template.md`
+Load `references/template.md` when producing the release-readiness output document.
 
 ---
 

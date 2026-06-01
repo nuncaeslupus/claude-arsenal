@@ -62,7 +62,7 @@ Pay special attention to:
 
 ### Step 5: Produce design output
 
-Output format: see `references/template.md`
+Load `references/template.md` when producing the design output document.
 
 ---
 
