@@ -53,9 +53,23 @@ Remove the worktree with `git worktree remove <worktree-path>` once the PR is me
 - Identify patterns to follow (naming, structure, error handling)
 - Note any deviations from standard patterns and why
 
-### Step 2: Implement changes
+### Step 2: Implement (red -> green -> refactor)
 
 For each task from the design:
+
+#### 2a. Write the failing test first
+
+Before changing production code, write the test that will prove the change works:
+
+- **Bug fix**: write a regression test that reproduces the failure first. Run it and confirm it fails for the expected reason — the bug itself, not an unrelated error.
+- **New feature**: write a test that specifies the contract or acceptance criterion the task must satisfy. Run it and confirm it fails because the behavior does not exist yet.
+- **Coverage**: unit tests for new functions and logic branches; integration tests for new endpoints, queries, or inter-service calls; edge cases for null/empty inputs, boundary values, and error conditions.
+
+Name each test with the convention `test_<what>_<condition>_<expected_result>`.
+
+If the host repo's `CLAUDE.md` contains `<!-- test-discipline: test-after -->`, write the test alongside the change instead.
+
+#### 2b. Implement to green
 
 1. **Read before writing**: always read the existing code in the target file/module first
 2. **Follow existing patterns**: match the style, naming, and structure of surrounding code
@@ -64,23 +78,18 @@ For each task from the design:
 5. **Error handling**: handle errors explicitly, never silently swallow exceptions
 6. **No hardcoded values**: configuration via environment variables or constants
 7. **Comments**: match the file's existing comment density and docstring style. Default to no comment. Earn one only when the *why* is non-obvious — a hidden invariant, a non-obvious edge case, a workaround for a specific bug, behavior that would surprise the reader. Don't explain *what* the code does (well-named identifiers handle that). Don't reference the current task, PR, or caller — that belongs in the PR description, not the source, and rots as the codebase evolves. Multi-line comments (3-4 lines or more) need genuinely unexpected behavior the code cannot convey on its own.
+8. **Re-run the test from 2a; do not proceed until it passes.**
 
 After each significant change:
 - Run linting (use the host repo's lint command — e.g. `make lint`, `ruff check`, `eslint`)
 - Run relevant tests (use the host repo's test command — e.g. `make test`, `pytest <path>`)
 - Fix issues before proceeding
 
-### Step 3: Write tests
+### Step 3: Verify and refactor
 
-For every code change:
+Re-run the full lint and test suite for the affected area. With the test from 2a green as a safety net, refactor for clarity — rename, extract, deduplicate — re-running the tests after each step to confirm nothing breaks.
 
-- **Unit tests**: for new functions, methods, or logic branches
-- **Integration tests**: for new API endpoints, database queries, or inter-service calls
-- **Edge cases**: null/empty inputs, boundary values, error conditions
-- **Regression**: if fixing a bug, write a test that reproduces it first
 - **API-contract bugs lock the regression at the API level**: when the fix is a signature mismatch — wrong arity, wrong kwargs, wrong return shape — the regression test asserts the API contract on the interface itself (the logger's signature, the emitter's signature, the HTTP client's response shape), not just the one call site that triggered the report. A test that pins the contract catches the next caller that makes the same mistake, before it reaches production.
-
-Test naming convention: `test_<what>_<condition>_<expected_result>`
 
 ### Step 4: Self-review before PR
 
@@ -103,4 +112,4 @@ Before creating the PR, verify:
 
 ## Abbreviation
 
-**Abbreviated execution** = Step 2 + Step 4 only. Whether abbreviation is allowed depends on project conventions documented in the host repo's `CLAUDE.md`.
+**Abbreviated execution** = Step 2a + Step 2b + Step 4 (tests are not optional in abbreviation). Whether abbreviation is allowed depends on project conventions documented in the host repo's `CLAUDE.md`; that same file can declare `<!-- test-discipline: test-after -->` to fall back to write-tests-after (see Step 2a).

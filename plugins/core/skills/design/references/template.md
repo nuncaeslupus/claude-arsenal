@@ -69,10 +69,12 @@
 
 ## 3. Implementation tasks
 
-1. **T1** — <description> | Service: <service> | Size: S/M/L
-2. **T2** — <description> | Service: <service> | Size: S/M/L | Depends: T1
-3. **T3** — <description> | Service: <service> | Size: S/M/L | Depends: T1
-4. **T4** — <description> | Service: <service> | Size: S/M/L | Depends: T2, T3
+| T# | Description | Service | Size | Depends | Tests |
+|----|-------------|---------|------|---------|-------|
+| T1 | <description> | <service> | S/M/L | — | <files + testability statement> |
+| T2 | <description> | <service> | S/M/L | T1 | <files + testability statement> |
+| T3 | <description> | <service> | S/M/L | T1 | <files + testability statement> |
+| T4 | <description> | <service> | S/M/L | T2, T3 | <files + testability statement> |
 
 **Merge order**: T1 first, then T2/T3 (parallel), then T4
 **Branch pattern**: `<ticket-id>-T<N>-description` from the default branch

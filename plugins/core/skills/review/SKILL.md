@@ -43,6 +43,8 @@ If engineering standards exist in the host repo (a project-level `engineering-co
 - Do tests actually assert meaningful behavior (not just "it doesn't crash")?
 - If no tests exist and the change is non-trivial → flag as blocker
 
+**Hard blocker rule**: production code changes with zero test companions in the diff are Request Changes — except config-only, docs-only, or refactor with existing green tests covering the touched paths. When waiving on the refactor exception, the reviewer states the exception applied and asserts the green-test evidence explicitly (CI link or local test run).
+
 ### Step 5: Check operational readiness
 
 - Will this change affect deployment? (migration, feature flag, coordination)

@@ -32,7 +32,7 @@ CANARY: ship-loaded-2026-06-01-969928a90f431ecb
 
 ### Step 4: Test confirmation
 
-- [ ] All unit/integration tests pass
+- [ ] All unit/integration tests pass (including the tests written first for this change)
 - [ ] E2E tests pass (if applicable)
 - [ ] Manual testing completed for high-risk paths
 - [ ] No flaky tests introduced

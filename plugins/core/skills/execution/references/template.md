@@ -32,33 +32,11 @@
 - [ ] Branch created from latest default branch
 - [ ] Local environment running
 - [ ] Prerequisite tasks merged
+- [ ] Failing test designed (red)
 
 ---
 
-## 2. Changes made
-
-### Commits
-
-| Commit | Description |
-|--------|-------------|
-| `abc1234` | <what this commit does> |
-| `def5678` | <what this commit does> |
-
-### Contract compliance
-
-- [ ] API contract matches design: <endpoint>
-- [ ] Database migration matches design: <migration>
-- [ ] Inter-service contract matches design: <caller → callee>
-
-### Key decisions during implementation
-
-| Decision | Reason |
-|----------|--------|
-| <any deviation from design> | <why> |
-
----
-
-## 3. Tests and validation
+## 2. Tests and validation
 
 ### Tests written
 
@@ -82,4 +60,27 @@
 - [ ] Data stored correctly in database
 - [ ] Audit logs generated (if security-relevant)
 - [ ] Backwards compatibility verified (if API change)
+
+---
+
+## 3. Changes made
+
+### Commits
+
+| Commit | Description |
+|--------|-------------|
+| `abc1234` | <what this commit does> |
+| `def5678` | <what this commit does> |
+
+### Contract compliance
+
+- [ ] API contract matches design: <endpoint>
+- [ ] Database migration matches design: <migration>
+- [ ] Inter-service contract matches design: <caller → callee>
+
+### Key decisions during implementation
+
+| Decision | Reason |
+|----------|--------|
+| <any deviation from design> | <why> |
 

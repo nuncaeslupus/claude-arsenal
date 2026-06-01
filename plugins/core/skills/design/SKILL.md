@@ -40,7 +40,7 @@ For each task:
 - **What**: specific deliverable
 - **Where**: which files/services
 - **Dependencies**: what must be done first
-- **Tests**: what validates this task is complete
+- **Tests**: file paths the task creates or modifies, plus a one-sentence testability statement (what assertion proves the task is done).
 - **Estimated effort**: Small (< 1h) / Medium (1-4h) / Large (4h+)
 
 Recommended: tasks should be small enough to be a single commit.
