@@ -1,9 +1,9 @@
 {
-  "skill": "release-readiness",
-  "canary": "release-readiness-loaded-2026-05-19-e8a0e2967cbab28d",
+  "skill": "ship",
+  "canary": "ship-loaded-2026-06-01-969928a90f431ecb",
   "negative_control": "this skill rolls back the last production deploy automatically when a check fails",
   "load_prompts": [
-    "Is this PR ready to merge? Run the release-readiness check.",
+    "Is this PR ready to merge? Run the ship check.",
     "Final checks before release on the portfolio refactor.",
     "Is this safe to ship? Look at compatibility, rollback, observability.",
     "Release readiness for the auth-middleware swap — what could break in production?",

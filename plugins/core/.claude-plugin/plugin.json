@@ -1,6 +1,6 @@
 {
   "name": "core",
   "version": "0.1.0",
-  "description": "Generic engineering workflows for Claude Code: specify, design, execution, review, release-readiness.",
+  "description": "Generic engineering workflows for Claude Code: specify, design, execution, review, ship.",
   "author": { "name": "nuncaeslupus" }
 }

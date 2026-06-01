@@ -111,4 +111,4 @@ mechanical pieces today: per-library `audit_library.py` (which
 invokes `validate.py` per skill plus library-level checks). The
 scripted Claude Code probes described above are a planned
 extension. The cross-library aggregate-budget check is owned by
-release-readiness and is invoked separately, not by this harness.
+ship and is invoked separately, not by this harness.

@@ -28,7 +28,7 @@ Anything else fails validation. Keep it minimal.
 - **Must equal the folder name.** `plugins/<plugin>/skills/foo-bar/` ⇒
   `name: foo-bar`. Mismatch fails fast.
 - Capability skills use the data-source or surface noun: `github`,
-  `release-readiness`, `mutmut-report`. One word when possible.
+  `mutmut-report`. One word when possible.
 - Workflow skills use a verb-noun job name: `triage-issues`,
   `solve-tickets`. A `<scope>-` prefix is only used when the plugin
   slug does not already encode the scope.

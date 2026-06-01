@@ -64,7 +64,7 @@ Conventions:
   does GitHub. Not GitHub *and* GitLab. If the description uses
   "and", split.
 - **Workflows are orchestrators.** A workflow SKILL names capabilities
-  in prose ("use the `github` skill to read the PR; use `release-readiness`
+  in prose ("use the `github` skill to read the PR; use `ship`
   to confirm the cut") and lets the model route. It does not link to
   peer SKILL.md or peer scripts.
 - **Capability skills don't call other capability skills.** If
