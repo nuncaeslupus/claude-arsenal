@@ -3,6 +3,7 @@
 **Date**: YYYY-MM-DD
 **PR/Change**: link or reference
 **Ticket**: <id>
+**Specification**: `status/specification.md` (the intent this change is audited against)
 **Author**: <name>
 **Reviewer**: <name>
 

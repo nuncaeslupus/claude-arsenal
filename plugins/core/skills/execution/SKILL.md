@@ -11,7 +11,7 @@ CANARY: execution-loaded-2026-05-19-4597aff5bb98dd36
 
 Reads `status/specification.md` and `status/plan.md`. Updates `status/plan.md` task statuses as work progresses. Per-task notes (decisions, deviations) go in `tmp/<task-id>-notes.md` (gitignored by the host repo, never committed).
 
-Load `references/template.md` when writing execution notes for a task.
+Load `references/template.md` when writing `tmp/<task-id>-notes.md` for a task.
 
 ## Steps
 

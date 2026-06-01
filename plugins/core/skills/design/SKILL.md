@@ -64,7 +64,7 @@ Pay special attention to:
 
 ### Step 5: Produce design output
 
-Load `references/template.md` when producing the design output document.
+Load `references/template-specification-tail.md` when appending contracts and risks (sections 5–6) to `status/specification.md`. Load `references/template-plan.md` when creating `status/plan.md`.
 
 ---
 

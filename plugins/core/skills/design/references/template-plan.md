@@ -1,13 +1,17 @@
-# Design: <title>
+# Plan: <title>
+
+> Seed for `status/plan.md`. `design` creates it from the technical
+> solution and the task split. Pairs with `status/specification.md`
+> (problem, options, contracts, risks); `execution` works the task table
+> and updates each task's status as it goes.
 
 **Date**: YYYY-MM-DD
-**Ticket / PR**: <id>
-**Discovery**: link to discovery document or summary
+**Specification**: `status/specification.md`
 **Author**: <name>
 
 ---
 
-## 1. Technical solution
+## Technical solution
 
 ### Architecture overview
 
@@ -35,39 +39,7 @@
 
 ---
 
-## 2. Contracts
-
-### API contracts
-
-#### `METHOD /v1/path`
-
-- **Auth**: required / internal only
-- **Request**:
-  ```json
-  {}
-  ```
-- **Response (200)**:
-  ```json
-  {}
-  ```
-- **Errors**: 400, 401, 404, 500
-- **Backwards compatible**: yes / no
-
-### Inter-service contracts
-
-| Caller | Callee | Protocol | Contract | Failure handling |
-|--------|--------|----------|----------|-----------------|
-| | | HTTP / message-queue | | retry / dead-letter |
-
-### Database migrations
-
-| Service | Database | Change | Reversible | Forward-compatible |
-|---------|----------|--------|------------|-------------------|
-| | | | yes/no | yes/no |
-
----
-
-## 3. Implementation tasks
+## Implementation tasks
 
 | T# | Description | Service | Size | Depends | Tests |
 |----|-------------|---------|------|---------|-------|
@@ -76,16 +48,17 @@
 | T3 | <description> | <service> | S/M/L | T1 | <files + testability statement> |
 | T4 | <description> | <service> | S/M/L | T2, T3 | <files + testability statement> |
 
+**Status legend**: ☐ not started · ◐ in progress · ☑ merged
+
 **Merge order**: T1 first, then T2/T3 (parallel), then T4
 **Branch pattern**: `<ticket-id>-T<N>-description` from the default branch
 
----
+### Dependency graph
 
-## 4. Risks & Validation
-
-| Risk | Likelihood | Impact | Mitigation | Validation |
-|------|-----------|--------|------------|------------|
-| | Low/Med/High | Low/Med/High | | <unit/integration/manual/perf/security> |
+```
+T1 ──┬─> T2 ──┐
+     └─> T3 ──┴─> T4
+```
 
 ---
 

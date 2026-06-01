@@ -83,4 +83,4 @@ Output: a clear **recommendation with action item**.
 
 **Abbreviated specify** = Steps 1 + 2 (one paragraph each) + confirm test coverage. Whether abbreviation is allowed depends on project conventions documented in the host repo's `CLAUDE.md`.
 
-Load `references/template.md` when producing the specification output document.
+Load `references/template.md` when creating or updating `status/specification.md` (sections 1–4).
