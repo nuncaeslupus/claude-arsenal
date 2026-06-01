@@ -34,7 +34,7 @@ Reads `status/specification.md` to know what should be shipping. Confirms scope 
 
 ### Step 4: Test confirmation
 
-- [ ] All unit/integration tests pass (including the tests written first for this change)
+- [ ] All unit/integration tests pass (including the new tests written for this change)
 - [ ] E2E tests pass (if applicable)
 - [ ] Manual testing completed for high-risk paths
 - [ ] No flaky tests introduced

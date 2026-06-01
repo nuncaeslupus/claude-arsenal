@@ -80,7 +80,7 @@ If the host repo's `CLAUDE.md` contains `<!-- test-discipline: test-after -->`, 
 5. **Error handling**: handle errors explicitly, never silently swallow exceptions
 6. **No hardcoded values**: configuration via environment variables or constants
 7. **Comments**: match the file's existing comment density and docstring style. Default to no comment. Earn one only when the *why* is non-obvious — a hidden invariant, a non-obvious edge case, a workaround for a specific bug, behavior that would surprise the reader. Don't explain *what* the code does (well-named identifiers handle that). Don't reference the current task, PR, or caller — that belongs in the PR description, not the source, and rots as the codebase evolves. Multi-line comments (3-4 lines or more) need genuinely unexpected behavior the code cannot convey on its own.
-8. **Re-run the test from 2a; do not proceed until it passes.**
+8. **Re-run the test from 2a (or the test written alongside the change under `test-after`); do not proceed until it passes.**
 
 After each significant change:
 - Run linting (use the host repo's lint command — e.g. `make lint`, `ruff check`, `eslint`)
