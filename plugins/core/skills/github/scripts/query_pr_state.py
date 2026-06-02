@@ -43,7 +43,7 @@ def _gh(*args: str) -> Any:
         sys.stderr.write("gh CLI not found in PATH\n")
         sys.exit(2)
     try:
-        out = subprocess.check_output(["gh", *args], text=True)
+        out = subprocess.check_output(["gh", *args], text=True, stderr=subprocess.PIPE)
     except subprocess.CalledProcessError as exc:
         sys.stderr.write(f"gh failed: gh {' '.join(args)}\nstderr: {exc.stderr or ''}\n")
         sys.exit(2)

@@ -112,11 +112,10 @@ def apply_canonical(
         console.fail(f"canonical not found: {canonical}")
         return 2
     matched = None
-    canonical_rel = (
-        canonical.relative_to(library_root.parent.resolve()).as_posix()
-        if str(canonical).startswith(str(library_root.parent.resolve()))
-        else str(canonical)
-    )
+    try:
+        canonical_rel = canonical.relative_to(library_root.parent.resolve()).as_posix()
+    except ValueError:
+        canonical_rel = str(canonical)
     for key, files in groups.items():
         for f in files:
             if f.resolve() == canonical:

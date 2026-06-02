@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import re
 import sys
 from collections.abc import Iterable
 from pathlib import Path
@@ -123,6 +124,17 @@ def fence_for(path: Path) -> str:
     return ""
 
 
+def _outer_fence(body: str) -> str:
+    """Return a backtick fence longer than any backtick run in `body`.
+
+    Inlined files (e.g. markdown references) may themselves contain ```` ``` ````
+    fences; a fixed 3-backtick wrapper would terminate early. Size the outer
+    fence to one more backtick than the longest run in the body.
+    """
+    longest = max((len(run) for run in re.findall(r"`+", body)), default=0)
+    return "`" * max(3, longest + 1)
+
+
 def render_prompt(skill_dir: Path, repo_root: Path, rules_text: str, files: list[Path]) -> str:
     try:
         rel_skill = skill_dir.relative_to(repo_root)
@@ -167,9 +179,10 @@ def render_prompt(skill_dir: Path, repo_root: Path, rules_text: str, files: list
             lines.append("_(binary or non-UTF-8 file — not inlined)_")
             lines.append("")
             continue
-        lines.append(f"```{lang}")
+        fence = _outer_fence(body)
+        lines.append(f"{fence}{lang}")
         lines.append(body.rstrip("\n"))
-        lines.append("```")
+        lines.append(fence)
         lines.append("")
     lines.append("## Findings template")
     lines.append("")
