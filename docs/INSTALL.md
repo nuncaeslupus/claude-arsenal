@@ -6,9 +6,9 @@ project two plugins:
 - **`skill-creator`** — the meta-skill that gates every authoring or
   editing change to a skill, plus the validator/auditor/scaffolder
   scripts everything else is checked against.
-- **`core`** — generic engineering workflow skills (`discovery`,
-  `design`, `execution`, `review`, `release-readiness`, `github`,
-  `lsp-setup`, `session-end`).
+- **`core`** — generic engineering workflow skills (`specify`,
+  `design`, `execution`, `review`, `ship`, `github`,
+  `lsp-setup`, `session-end`, `mutmut-report`).
 
 Both plugins are pure-data (markdown + Python helpers + shell hooks).
 No background daemons; nothing runs unless Claude loads a skill or a
@@ -56,7 +56,7 @@ the meta-skill is loaded — install it before `core` so the gate covers
 | Check | Expected |
 |---|---|
 | Type `Help me create a new skill` | The `skill-creator` skill loads. Body contains the canary line `CANARY: skill-creator-loaded-2026-05-17-35c7fe06977dd6f1`. |
-| Type `Investigate why login is slow` | `core:discovery` loads. |
+| Type `Investigate why login is slow` | `core:specify` loads. |
 | (local checkout) `make audit` | Per-plugin listing-budget breakdown prints; `PASS — under cap.` |
 
 The canary is the cheapest signal that the plugin loaded the *correct*
@@ -110,7 +110,7 @@ make smoke
 
 `make smoke` runs the validator on every shipped skill, audits the
 listing budget, and walks `tests/skills_smoke.sh`. A clean run exits
-0 with `9 clean skills` (post-S6) and a budget summary.
+0 with `10 clean skills` and a budget summary.
 
 ### Audit your installed cache
 
@@ -148,7 +148,7 @@ If you prefer to run the validator yourself:
 ```bash
 uv run python \
   plugins/skill-creator/skills/skill-creator/scripts/validate.py \
-  plugins/core/skills/discovery
+  plugins/core/skills/specify
 ```
 
 Exit codes: `0` clean, `1` findings (see `findings.md`), `2` internal
