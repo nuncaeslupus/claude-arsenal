@@ -36,7 +36,7 @@ To customise a skill the marketplace ships:
 
 1. Copy the skill folder into your project: `cp -r
    ~/.claude/plugins/cache/claude-arsenal/plugins/core/skills/specify
-   <project>/.claude/skills/specify`.
+   <project>/.claude/skills/`.
 2. Edit the copy. Claude Code resolves skills with project-level
    precedence over plugin-level, so your fork takes over.
 3. (Optional) Document the divergence in your project's `CLAUDE.md` so
