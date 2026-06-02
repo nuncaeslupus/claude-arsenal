@@ -3,9 +3,9 @@
 A Claude Code marketplace. One install gives any project the
 `skill-creator` meta-skill (which gates every authoring or editing
 change inside a `skills/` folder against a rubric) plus a generic
-engineering-workflow plugin (`core`: discovery → design → execution →
-review → release-readiness, plus `github`, `lsp-setup`, and
-`session-end`).
+engineering-workflow plugin (`core`: specify → design → execution →
+review → ship, plus `github`, `lsp-setup`, `session-end`, and
+`mutmut-report`).
 
 ---
 
@@ -23,7 +23,7 @@ Verify:
 
 ```text
 Help me create a new skill          # loads skill-creator (with the canary phrase)
-Investigate why login is slow       # loads core:discovery
+Investigate why login is slow       # loads core:specify
 ```
 
 Full install guide and update/uninstall flow:
@@ -37,7 +37,7 @@ File-ownership table and customisation rule: [`docs/UPDATE.md`](docs/UPDATE.md).
 | Plugin | Role |
 |---|---|
 | `skill-creator` | Meta-skill. Validates SKILL.md + references + scripts against the rubric. Hooks block unguarded edits inside `skills/` folders. |
-| `core` | Engineering workflows: `discovery`, `design`, `execution`, `review`, `release-readiness`, `github`, `lsp-setup`, `session-end`. |
+| `core` | Engineering workflows: `specify`, `design`, `execution`, `review`, `ship`, `github`, `lsp-setup`, `session-end`, `mutmut-report`. |
 
 The active rubric is at
 [`plugins/skill-creator/skills/skill-creator/references/skill-rules.md`](plugins/skill-creator/skills/skill-creator/references/skill-rules.md),

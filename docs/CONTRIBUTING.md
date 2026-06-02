@@ -164,8 +164,8 @@ plugins/
       tests/skills_smoke.sh
   core/
     .claude-plugin/plugin.json
-    skills/{discovery,design,execution,review,release-readiness,github,
-            lsp-setup,session-end}/
+    skills/{specify,design,execution,review,ship,github,
+            lsp-setup,session-end,mutmut-report}/
 Makefile  pyproject.toml  .pre-commit-config.yaml
 .github/workflows/ci.yml            # `uv sync && make smoke`
 ```

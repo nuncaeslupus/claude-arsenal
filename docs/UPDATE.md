@@ -35,8 +35,8 @@ will discard your changes silently.
 To customise a skill the marketplace ships:
 
 1. Copy the skill folder into your project: `cp -r
-   ~/.claude/plugins/cache/claude-arsenal/plugins/core/skills/discovery
-   <project>/.claude/skills/discovery`.
+   ~/.claude/plugins/cache/claude-arsenal/plugins/core/skills/specify
+   <project>/.claude/skills/`.
 2. Edit the copy. Claude Code resolves skills with project-level
    precedence over plugin-level, so your fork takes over.
 3. (Optional) Document the divergence in your project's `CLAUDE.md` so
@@ -47,7 +47,7 @@ To customise a skill the marketplace ships:
    ```bash
    uv run python \
      ~/.claude/plugins/cache/claude-arsenal/plugins/skill-creator/skills/skill-creator/scripts/validate.py \
-     <project>/.claude/skills/discovery
+     <project>/.claude/skills/specify
    ```
 
 If the cache later ships a fix to the original skill, you have to
