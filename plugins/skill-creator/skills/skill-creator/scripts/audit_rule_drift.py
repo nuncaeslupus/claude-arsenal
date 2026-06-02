@@ -44,9 +44,14 @@ def _resolve_repo_root(start: Path) -> Path:
     for parent in (cur, *cur.parents):
         if (parent / ".claude-plugin" / "marketplace.json").is_file():
             return parent
+    # Vendored layout (skill copied into a host repo) has no marketplace
+    # manifest — fall back to a .git or .claude directory as the root marker.
+    for parent in (cur, *cur.parents):
+        if (parent / ".git").exists() or (parent / ".claude").is_dir():
+            return parent
     raise RuntimeError(
         f"could not locate repo root above {start} "
-        "(expected .claude-plugin/marketplace.json in an ancestor)"
+        "(expected .claude-plugin/marketplace.json, .git, or .claude in an ancestor)"
     )
 
 
