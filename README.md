@@ -30,10 +30,12 @@ Investigate why login is slow       # loads core:specify
 ### Claude Code web (vendoring)
 
 Claude Code **on the web** has no plugin support, so vendor the skills into the
-project's committed `.claude/skills/` instead:
+project's committed `.claude/skills/`. `docs/INSTALL.md` ships a copy-paste
+`make update-skills` target (clone + pin + run `scripts/vendor-skills.sh`) to add
+to the **consuming** project; then:
 
 ```bash
-make update-skills                  # regenerates .claude/skills/ from the pinned tag
+make update-skills                  # the target you added from docs/INSTALL.md
 git add .claude/skills && git commit -m "chore: vendor claude-arsenal skills"
 ```
 
