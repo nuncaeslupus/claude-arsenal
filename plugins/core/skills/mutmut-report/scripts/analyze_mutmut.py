@@ -119,9 +119,9 @@ def classify(diff: str) -> tuple[str, str]:
                 a_stripped = re.sub(r"\s+", " ", a_line)
                 if len(r_stripped) > 4 and len(a_stripped) > 4:
                     # Extract original string content
-                    orig = re.search(r'"([^"]+)"', r_stripped)
+                    orig = re.search(r'(["\'])(.+?)\1', r_stripped)
                     if orig:
-                        orig_str = orig.group(1)
+                        orig_str = orig.group(2)
                         return (
                             "REAL_GAP",
                             f'String "{orig_str[:40]}" wrapped in XX — test '
