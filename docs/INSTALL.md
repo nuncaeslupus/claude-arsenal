@@ -115,7 +115,7 @@ Add this target to the **consuming project's** Makefile:
 
 ```make
 ARSENAL_REPO    ?= https://github.com/nuncaeslupus/claude-arsenal.git
-ARSENAL_REF     ?= v0.1.0            # pin to a tag — upgrade deliberately
+ARSENAL_REF     ?= v0.1.1            # pin to a tag — upgrade deliberately
 ARSENAL_PLUGINS ?= core             # comma list, or "all" to include skill-creator
 
 update-skills:  ## vendor claude-arsenal skills into .claude/skills (for CC web)
