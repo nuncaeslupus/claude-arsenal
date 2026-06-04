@@ -95,6 +95,56 @@ brief window where the gate would block a clean-up edit.
 
 ---
 
+## Use on Claude Code web (vendoring)
+
+Claude Code **on the web** (claude.ai/code) has **no plugin or marketplace
+support** — `/plugin` and `/plugin marketplace add` are CLI/IDE/desktop only.
+The web environment only reads config **committed into the project repo**:
+`.claude/skills/`, `.claude/agents/`, `.claude/commands/`, `.mcp.json`, and
+hooks in `.claude/settings.json`.
+
+So to use these skills on the web, **vendor** them into the consuming
+project's `.claude/skills/`. The canonical copies stay here in
+`plugins/<plugin>/skills/<skill>/`; the vendored copies are generated build
+output you regenerate, never hand-edit. `scripts/vendor-skills.sh` flattens
+the marketplace layout into the flat layout web expects and tags each copy
+with a `.arsenal-vendored` marker (so re-runs clean up renamed/removed skills
+without touching skills you authored yourself).
+
+Add this target to the **consuming project's** Makefile:
+
+```make
+ARSENAL_REPO    ?= https://github.com/nuncaeslupus/claude-arsenal.git
+ARSENAL_REF     ?= v0.1.0            # pin to a tag — upgrade deliberately
+ARSENAL_PLUGINS ?= core             # comma list, or "all" to include skill-creator
+
+update-skills:  ## vendor claude-arsenal skills into .claude/skills (for CC web)
+	@tmp=$$(mktemp -d); trap 'rm -rf $$tmp' EXIT; \
+	git clone --depth 1 --branch $(ARSENAL_REF) $(ARSENAL_REPO) $$tmp >/dev/null 2>&1; \
+	bash $$tmp/scripts/vendor-skills.sh --src $$tmp --dest .claude/skills --plugins $(ARSENAL_PLUGINS)
+```
+
+Then:
+
+```bash
+make update-skills          # regenerates .claude/skills/ from the pinned tag
+git add .claude/skills      # commit so the next web session sees them
+git commit -m "chore: vendor claude-arsenal skills @ v0.1.0"
+```
+
+To **update** later, bump `ARSENAL_REF` to a newer tag and re-run
+`make update-skills` — it overwrites the vendored copies and prunes any that
+the new tag dropped, leaving your own `.claude/skills/` entries untouched.
+Run `bash <clone>/scripts/vendor-skills.sh --src <clone> --list` to preview
+what a ref would vendor.
+
+> **`skill-creator` is excluded by default** — you author skills in the
+> marketplace, not in a consuming project, and its pre-edit gate is a *plugin*
+> hook that does not run on the web. Pass `--plugins all` only if you really
+> want the meta-skill vendored too (ungated).
+
+---
+
 ## Local checkout (optional)
 
 You only need a local clone if you want to run the validator or
