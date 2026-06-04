@@ -129,7 +129,7 @@ Then:
 ```bash
 make update-skills          # regenerates .claude/skills/ from the pinned tag
 git add .claude/skills      # commit so the next web session sees them
-git commit -m "chore: vendor claude-arsenal skills @ v0.1.0"
+git commit -m "chore: vendor claude-arsenal skills @ v0.1.1"
 ```
 
 To **update** later, bump `ARSENAL_REF` to a newer tag and re-run
