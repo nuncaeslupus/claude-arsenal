@@ -42,6 +42,32 @@ def _default_project_dir() -> Path:
     return Path.home() / ".claude" / "projects" / encoded
 
 
+def _parse_records(path: Path) -> list[dict]:
+    """Parse a JSONL transcript into records, skipping blank / invalid lines."""
+    records: list[dict] = []
+    with path.open() as fh:
+        for raw in fh:
+            if not raw.strip():
+                continue
+            try:
+                records.append(json.loads(raw))
+            except json.JSONDecodeError:
+                continue
+    return records
+
+
+def _user_text(rec: dict) -> str:
+    """Concatenated text of a user message record (empty string if none)."""
+    content = rec.get("message", {}).get("content")
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return " ".join(
+            b.get("text", "") for b in content if isinstance(b, dict) and b.get("type") == "text"
+        )
+    return ""
+
+
 def _iter_transcripts(project_dir: Path, days: int, limit: int) -> list[Path]:
     if not project_dir.is_dir():
         return []
@@ -67,9 +93,18 @@ def _scan(files: list[Path]) -> dict:
     for path in files:
         session_id = path.stem
         prev_assistant_excerpt: str | None = None
-        session_user_msgs = 0
         # tool_use_id → (tool_name, normalized_command_if_bash)
         tool_use_map: dict[str, tuple[str, str]] = {}
+
+        # Count user text messages first and skip short/abandoned sessions
+        # before any global mutation below — the previous end-of-loop guard
+        # ran after the counters had already been polluted.
+        session_user_msgs = sum(
+            1 for rec in _parse_records(path) if rec.get("type") == "user" and _user_text(rec)
+        )
+        if session_user_msgs < 5:
+            continue
+
         with path.open() as fh:
             for raw in fh:
                 if not raw.strip():
@@ -111,15 +146,8 @@ def _scan(files: list[Path]) -> dict:
                                 bash_fail_counts[cmd] += 1
                                 bash_fail_sessions[cmd].add(session_id)
                     # User text content (correction-phrase detection).
-                    text = content if isinstance(content, str) else ""
-                    if not text and isinstance(content, list):
-                        text = " ".join(
-                            b.get("text", "")
-                            for b in content
-                            if isinstance(b, dict) and b.get("type") == "text"
-                        )
+                    text = _user_text(rec)
                     if text:
-                        session_user_msgs += 1
                         m = CORRECTION_RE.search(text)
                         if m:
                             corrections.append(
@@ -175,8 +203,6 @@ def _scan(files: list[Path]) -> dict:
                                     for word in cmd.split():
                                         if THROWAWAY_RE.match(word):
                                             promoted.add(word)
-        if session_user_msgs < 5:
-            continue
 
     repeated_tool_errors = [
         {
