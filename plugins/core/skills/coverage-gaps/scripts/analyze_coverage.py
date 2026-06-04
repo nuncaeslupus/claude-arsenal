@@ -84,6 +84,9 @@ def main() -> int:
     except json.JSONDecodeError as exc:
         print(f"✗ {path} is not valid JSON: {exc}", file=sys.stderr)
         return 2
+    except OSError as exc:
+        print(f"✗ failed to read {path}: {exc}", file=sys.stderr)
+        return 2
 
     if not isinstance(data, dict):
         print(f"✗ {path} is not a coverage.py report (expected a JSON object)", file=sys.stderr)
