@@ -76,7 +76,7 @@ def analyze_makefile(root: Path) -> dict:
         if ":" not in line or line.startswith((" ", "\t", "#")):
             continue
         lhs, _, rhs = line.partition(":")
-        if "=" in lhs or rhs.startswith("="):  # variable assignment (VAR =, VAR :=), not a target
+        if "=" in lhs or rhs.lstrip().startswith("="):  # skip variable assignments (VAR =, VAR :=)
             continue
         targets.update(lhs.split())  # a line may declare several targets: "lint format:"
     return {
