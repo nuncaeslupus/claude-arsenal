@@ -108,14 +108,18 @@ def main() -> int:
     try:
         before = load_lock(Path(args.before))
         after = load_lock(Path(args.after))
+        direct = direct_dep_names(Path(args.input))
     except FileNotFoundError as exc:
         print(f"✗ {exc}", file=sys.stderr)
         return 2
     except tomllib.TOMLDecodeError as exc:
-        print(f"✗ malformed lockfile: {exc}", file=sys.stderr)
+        print(f"✗ malformed TOML: {exc}", file=sys.stderr)
+        return 2
+    except OSError as exc:
+        print(f"✗ failed to read file: {exc}", file=sys.stderr)
         return 2
 
-    report = build_report(before, after, direct_dep_names(Path(args.input)))
+    report = build_report(before, after, direct)
     print(json.dumps(report, indent=2))
     return 0
 

@@ -71,7 +71,7 @@ def _user_text(rec: dict) -> str:
         return content
     if isinstance(content, list):
         return " ".join(
-            b.get("text", "") for b in content if isinstance(b, dict) and b.get("type") == "text"
+            b.get("text") or "" for b in content if isinstance(b, dict) and b.get("type") == "text"
         )
     return ""
 
@@ -130,7 +130,7 @@ def _scan(files: list[Path]) -> dict:
                         text = tc if isinstance(tc, str) else ""
                         if isinstance(tc, list):
                             text = " ".join(
-                                x.get("text", "")
+                                x.get("text") or ""
                                 for x in tc
                                 if isinstance(x, dict) and x.get("type") == "text"
                             )
@@ -166,7 +166,7 @@ def _scan(files: list[Path]) -> dict:
                 content = _message(rec).get("content", [])
                 if isinstance(content, list):
                     texts = [
-                        b.get("text", "")
+                        b.get("text") or ""
                         for b in content
                         if isinstance(b, dict) and b.get("type") == "text"
                     ]

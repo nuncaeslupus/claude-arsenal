@@ -71,11 +71,14 @@ def analyze_makefile(root: Path) -> dict:
     path = root / "Makefile"
     if not path.exists():
         return {"present": False, "missing_targets": REQUIRED_MAKE_TARGETS}
-    targets = {
-        line.split(":", 1)[0].strip()
-        for line in path.read_text(encoding="utf-8", errors="ignore").splitlines()
-        if ":" in line and not line.startswith((" ", "\t", "#"))
-    }
+    targets: set[str] = set()
+    for line in path.read_text(encoding="utf-8", errors="ignore").splitlines():
+        if ":" not in line or line.startswith((" ", "\t", "#")):
+            continue
+        lhs, _, rhs = line.partition(":")
+        if "=" in lhs or rhs.lstrip().startswith("="):  # skip variable assignments (VAR =, VAR :=)
+            continue
+        targets.update(lhs.split())  # a line may declare several targets: "lint format:"
     return {
         "present": True,
         "missing_targets": [t for t in REQUIRED_MAKE_TARGETS if t not in targets],
