@@ -120,7 +120,7 @@ ARSENAL_PLUGINS ?= core             # comma list, or "all" to include skill-crea
 
 update-skills:  ## vendor claude-arsenal skills into .claude/skills (for CC web)
 	@tmp=$$(mktemp -d); trap 'rm -rf $$tmp' EXIT; \
-	git clone --depth 1 --branch $(ARSENAL_REF) $(ARSENAL_REPO) $$tmp >/dev/null 2>&1; \
+	git clone --depth 1 --branch $(ARSENAL_REF) $(ARSENAL_REPO) $$tmp >/dev/null 2>&1 && \
 	bash $$tmp/scripts/vendor-skills.sh --src $$tmp --dest .claude/skills --plugins $(ARSENAL_PLUGINS)
 ```
 

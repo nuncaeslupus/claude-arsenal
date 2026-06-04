@@ -37,9 +37,15 @@ usage() { sed -n '2,30p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --src)     src="$2"; shift 2 ;;
-    --dest)    dest="$2"; shift 2 ;;
-    --plugins) plugins="$2"; shift 2 ;;
+    --src)
+      [ $# -ge 2 ] || { echo "vendor-skills: --src requires an argument" >&2; exit 2; }
+      src="$2"; shift 2 ;;
+    --dest)
+      [ $# -ge 2 ] || { echo "vendor-skills: --dest requires an argument" >&2; exit 2; }
+      dest="$2"; shift 2 ;;
+    --plugins)
+      [ $# -ge 2 ] || { echo "vendor-skills: --plugins requires an argument" >&2; exit 2; }
+      plugins="$2"; shift 2 ;;
     --list)    list_only=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "vendor-skills: unknown argument: $1" >&2; exit 2 ;;
@@ -55,7 +61,7 @@ else
   plugin_dirs=()
   IFS=',' read -ra names <<< "$plugins"
   for n in "${names[@]}"; do
-    n="$(echo "$n" | tr -d '[:space:]')"
+    n="${n//[[:space:]]/}"
     [ -n "$n" ] || continue
     if [ -d "$src/plugins/$n" ]; then
       plugin_dirs+=("$src/plugins/$n")
@@ -71,7 +77,8 @@ for pd in "${plugin_dirs[@]}"; do
   [ -d "$pd/skills" ] || continue
   for sd in "$pd/skills"/*/; do
     [ -f "$sd/SKILL.md" ] || continue
-    name="$(basename "$sd")"
+    name="${sd%/}"
+    name="${name##*/}"
     if [ -n "${skill_src[$name]:-}" ]; then
       echo "vendor-skills: skill name collision '$name' (in two plugins) — refusing" >&2
       exit 2
@@ -98,7 +105,7 @@ done
 # --- clean previously-vendored skills (handles renames/removals) ------------
 mkdir -p "$dest"
 while IFS= read -r marker; do
-  rm -rf "$(dirname "$marker")"
+  rm -rf "${marker%/*}"
 done < <(find "$dest" -mindepth 2 -maxdepth 2 -name "$MARKER" 2>/dev/null)
 
 # --- copy selected skills flat, tag each with a marker ----------------------
