@@ -10,7 +10,7 @@
     {
       "name": "core",
       "source": "./plugins/core",
-      "description": "Generic engineering workflows for Claude Code: specify, design, execution, review, ship, plus github, lsp-setup, session-end, and mutmut-report."
+      "description": "Generic engineering workflows for Claude Code: specify, design, execution, review, ship, plus github, lsp-setup, session-end, and the Python toolchain skills python-bootstrap, pypi-release, coverage-gaps, dep-upgrade, and mutmut-report."
     }
   ]
 }

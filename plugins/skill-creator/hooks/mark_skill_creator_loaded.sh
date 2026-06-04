@@ -16,6 +16,9 @@ payload="$(cat)"
 skill_name="$(printf '%s' "$payload" | python3 -c 'import json,sys; print(json.loads(sys.stdin.read()).get("tool_input",{}).get("skill",""))' 2>/dev/null || true)"
 session_id="$(printf '%s' "$payload" | python3 -c 'import json,sys; print(json.loads(sys.stdin.read()).get("session_id",""))' 2>/dev/null || true)"
 
+# Strip any plugin-namespace prefix: the harness invokes skills as
+# "<plugin>:skill-creator" via the Skill tool, not the bare name.
+skill_name="${skill_name##*:}"
 [[ "$skill_name" == "skill-creator" ]] || exit 0
 [[ -n "$session_id" ]] || exit 0
 

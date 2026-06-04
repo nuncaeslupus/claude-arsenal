@@ -8,7 +8,9 @@ project two plugins:
   scripts everything else is checked against.
 - **`core`** — generic engineering workflow skills (`specify`,
   `design`, `execution`, `review`, `ship`, `github`,
-  `lsp-setup`, `session-end`, `mutmut-report`).
+  `lsp-setup`, `session-end`) plus the Python toolchain skills
+  (`python-bootstrap`, `pypi-release`, `coverage-gaps`, `dep-upgrade`,
+  `mutmut-report`).
 
 Both plugins are pure-data (markdown + Python helpers + shell hooks).
 No background daemons; nothing runs unless Claude loads a skill or a
