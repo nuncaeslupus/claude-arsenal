@@ -84,21 +84,28 @@ def _import_chain_depth(start: Path, root: Path, seen: set[Path] | None = None) 
     start = start.resolve()
     if start in seen or not start.exists():
         return 0
+    # `seen` tracks only the nodes on the *current* path (cycle guard), so it
+    # must be backtracked on the way out — otherwise a node reached first via
+    # a short path stays globally marked and truncates a longer path through
+    # it, underestimating depth in a DAG.
     seen.add(start)
     try:
-        text = start.read_text(encoding="utf-8")
-    except Exception:
-        return 0
-    text = _strip_fences(text)
-    max_child = 0
-    for m in AT_IMPORT_REGEX.finditer(text):
-        target = m.group(1)
-        candidate = (start.parent / target).resolve()
-        if not candidate.exists():
-            candidate = (root / target).resolve()
-        depth = _import_chain_depth(candidate, root, seen) if candidate.exists() else 0
-        max_child = max(max_child, depth)
-    return 1 + max_child
+        try:
+            text = start.read_text(encoding="utf-8")
+        except Exception:
+            return 0
+        text = _strip_fences(text)
+        max_child = 0
+        for m in AT_IMPORT_REGEX.finditer(text):
+            target = m.group(1)
+            candidate = (start.parent / target).resolve()
+            if not candidate.exists():
+                candidate = (root / target).resolve()
+            depth = _import_chain_depth(candidate, root, seen) if candidate.exists() else 0
+            max_child = max(max_child, depth)
+        return 1 + max_child
+    finally:
+        seen.remove(start)
 
 
 def check_memory_file(path: Path, root: Path, result: Result) -> None:

@@ -72,13 +72,13 @@ def _match(root: Path, pattern: str) -> str | None:
             base = root / subdir if subdir != "." else root
             if not base.is_dir():
                 continue
-            matches = sorted(base.glob(pattern))
+            matches = sorted(p for p in base.glob(pattern) if p.is_file())
             if matches:
                 hit = matches[0]
                 return hit.name if subdir == "." else f"{subdir}/{hit.name}"
         return None
     candidate = root / pattern
-    if candidate.exists():
+    if candidate.is_file():
         return pattern
     return None
 

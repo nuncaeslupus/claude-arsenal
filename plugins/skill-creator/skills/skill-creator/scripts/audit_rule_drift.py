@@ -40,13 +40,20 @@ def _extract_ids(path: Path) -> set[str]:
 
 
 def _resolve_repo_root(start: Path) -> Path:
+    # Prefer the marketplace manifest (arsenal layout), but also accept a
+    # `.git` or `.claude` marker so the auditor still resolves a root once
+    # the skill is vendored into a host repo that has no marketplace.json.
     cur = start.resolve()
     for parent in (cur, *cur.parents):
-        if (parent / ".claude-plugin" / "marketplace.json").is_file():
+        if (
+            (parent / ".claude-plugin" / "marketplace.json").is_file()
+            or (parent / ".git").exists()
+            or (parent / ".claude").is_dir()
+        ):
             return parent
     raise RuntimeError(
         f"could not locate repo root above {start} "
-        "(expected .claude-plugin/marketplace.json in an ancestor)"
+        "(expected .claude-plugin/marketplace.json, .git, or .claude in an ancestor)"
     )
 
 

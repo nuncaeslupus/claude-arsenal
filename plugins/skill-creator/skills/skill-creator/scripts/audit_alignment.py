@@ -109,6 +109,22 @@ def collect_files(skill_dir: Path) -> list[Path]:
     return files
 
 
+def _fence_delim(body: str) -> str:
+    """Return a backtick fence longer than any backtick run in `body`.
+
+    A fixed 3-backtick fence breaks when an inlined file itself contains a
+    ``` run; size the outer fence to one more than the longest run (min 3).
+    """
+    longest = run = 0
+    for ch in body:
+        if ch == "`":
+            run += 1
+            longest = max(longest, run)
+        else:
+            run = 0
+    return "`" * max(3, longest + 1)
+
+
 def fence_for(path: Path) -> str:
     """Pick a fenced-code language tag for `path`."""
     suffix = path.suffix.lower()
@@ -167,9 +183,11 @@ def render_prompt(skill_dir: Path, repo_root: Path, rules_text: str, files: list
             lines.append("_(binary or non-UTF-8 file — not inlined)_")
             lines.append("")
             continue
-        lines.append(f"```{lang}")
-        lines.append(body.rstrip("\n"))
-        lines.append("```")
+        body = body.rstrip("\n")
+        fence = _fence_delim(body)
+        lines.append(f"{fence}{lang}")
+        lines.append(body)
+        lines.append(fence)
         lines.append("")
     lines.append("## Findings template")
     lines.append("")
