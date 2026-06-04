@@ -43,9 +43,12 @@ def load_pyproject(root: Path) -> dict | None:
 
 def analyze_ruff(tool: dict) -> dict:
     ruff = tool.get("ruff")
-    if ruff is None:
+    if not isinstance(ruff, dict):
         return {"present": False, "missing_select": REQUIRED_RUFF_SELECT}
-    select = ruff.get("lint", {}).get("select", [])
+    lint = ruff.get("lint", {})
+    select = lint.get("select", []) if isinstance(lint, dict) else []
+    if not isinstance(select, list):
+        select = []
     return {
         "present": True,
         "missing_select": [code for code in REQUIRED_RUFF_SELECT if code not in select],
@@ -56,7 +59,7 @@ def analyze_ruff(tool: dict) -> dict:
 
 def analyze_mypy(tool: dict) -> dict:
     mypy = tool.get("mypy")
-    if mypy is None:
+    if not isinstance(mypy, dict):
         return {"present": False, "missing_keys": REQUIRED_MYPY_KEYS}
     return {
         "present": True,
@@ -70,7 +73,7 @@ def analyze_makefile(root: Path) -> dict:
         return {"present": False, "missing_targets": REQUIRED_MAKE_TARGETS}
     targets = {
         line.split(":", 1)[0].strip()
-        for line in path.read_text().splitlines()
+        for line in path.read_text(encoding="utf-8", errors="ignore").splitlines()
         if ":" in line and not line.startswith((" ", "\t", "#"))
     }
     return {
@@ -99,12 +102,16 @@ def build_report(root: Path) -> dict:
 
     project = pyproject.get("project", {})
     tool = pyproject.get("tool", {})
+    if not isinstance(project, dict):
+        project = {}
+    if not isinstance(tool, dict):
+        tool = {}
     requires_python = project.get("requires-python")
     return {
         "mode": "retrofit",
         "pyproject_present": True,
         "requires_python": requires_python,
-        "requires_python_ok": bool(requires_python) and ">=3.12" in requires_python,
+        "requires_python_ok": isinstance(requires_python, str) and ">=3.12" in requires_python,
         "ruff": analyze_ruff(tool),
         "mypy": analyze_mypy(tool),
         "makefile": analyze_makefile(root),

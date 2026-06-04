@@ -38,7 +38,7 @@ def find_dunder_version(root: Path) -> str | None:
     """Scan the most likely package __init__.py files for __version__."""
     candidates = sorted(root.glob("src/*/__init__.py")) + sorted(root.glob("*/__init__.py"))
     for path in candidates:
-        match = DUNDER_RE.search(path.read_text())
+        match = DUNDER_RE.search(path.read_text(encoding="utf-8", errors="ignore"))
         if match:
             return match.group(1)
     return None
@@ -62,8 +62,11 @@ def inspect_dist(root: Path, version: str | None) -> dict:
 def build_report(root: Path, tag: str | None) -> dict:
     pyproject = load_pyproject(root)
     project = pyproject.get("project", {})
+    if not isinstance(project, dict):
+        project = {}
     name = project.get("name")
-    dynamic = "version" in project.get("dynamic", [])
+    dynamic_fields = project.get("dynamic", [])
+    dynamic = isinstance(dynamic_fields, list) and "version" in dynamic_fields
     declared = project.get("version")
     dunder = find_dunder_version(root)
 

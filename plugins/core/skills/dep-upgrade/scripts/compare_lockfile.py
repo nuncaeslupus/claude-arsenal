@@ -25,7 +25,14 @@ NAME_RE = re.compile(r"^([A-Za-z0-9._-]+)")
 def load_lock(path: Path) -> dict[str, str]:
     with path.open("rb") as fh:
         data = tomllib.load(fh)
-    return {pkg["name"]: pkg.get("version", "") for pkg in data.get("package", [])}
+    packages = data.get("package", [])
+    if not isinstance(packages, list):
+        return {}
+    return {
+        pkg["name"]: pkg.get("version", "")
+        for pkg in packages
+        if isinstance(pkg, dict) and "name" in pkg
+    }
 
 
 def direct_dep_names(pyproject: Path) -> set[str]:
@@ -37,15 +44,27 @@ def direct_dep_names(pyproject: Path) -> set[str]:
 
     specs: list[str] = []
     project = data.get("project", {})
-    specs += project.get("dependencies", [])
-    for group in project.get("optional-dependencies", {}).values():
-        specs += group
-    for group in data.get("dependency-groups", {}).values():
-        specs += [g for g in group if isinstance(g, str)]
-    specs += data.get("tool", {}).get("uv", {}).get("dev-dependencies", [])
+    if isinstance(project, dict):
+        specs += project.get("dependencies", [])
+        opt_deps = project.get("optional-dependencies", {})
+        if isinstance(opt_deps, dict):
+            for group in opt_deps.values():
+                if isinstance(group, list):
+                    specs += group
+    dep_groups = data.get("dependency-groups", {})
+    if isinstance(dep_groups, dict):
+        for group in dep_groups.values():
+            if isinstance(group, list):
+                specs += group
+    tool = data.get("tool", {})
+    uv = tool.get("uv", {}) if isinstance(tool, dict) else {}
+    if isinstance(uv, dict):
+        specs += uv.get("dev-dependencies", [])
 
     names = set()
     for spec in specs:
+        if not isinstance(spec, str):
+            continue
         match = NAME_RE.match(spec.strip())
         if match:
             names.add(match.group(1).lower().replace("_", "-"))

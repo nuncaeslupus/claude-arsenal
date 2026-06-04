@@ -30,12 +30,15 @@ def contiguous_runs(lines: list[int]) -> list[list[int]]:
 
 
 def build_report(data: dict, limit: int) -> dict:
+    files_data = data.get("files")
     files = []
-    for path, info in data.get("files", {}).items():
+    for path, info in (files_data if isinstance(files_data, dict) else {}).items():
+        if not isinstance(info, dict):
+            continue
         missing = info.get("missing_lines", [])
         if not missing:
             continue
-        summary = info.get("summary", {})
+        summary = info.get("summary") or {}
         runs = contiguous_runs(missing)
         files.append(
             {
@@ -77,9 +80,13 @@ def main() -> int:
         )
         return 2
     try:
-        data = json.loads(path.read_text())
+        data = json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
         print(f"✗ {path} is not valid JSON: {exc}", file=sys.stderr)
+        return 2
+
+    if not isinstance(data, dict):
+        print(f"✗ {path} is not a coverage.py report (expected a JSON object)", file=sys.stderr)
         return 2
 
     print(json.dumps(build_report(data, args.limit), indent=2))
