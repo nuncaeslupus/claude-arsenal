@@ -20,7 +20,8 @@ import sys
 from pathlib import Path
 
 SECTION_RE = re.compile(r"^##\s+(\d+)\.\s+(.*\S)\s*$")
-PLACEHOLDER_RE = re.compile(r"^<.*>$")
+# A placeholder line, allowing a leading list/blockquote/ordinal marker: `- <x>`, `> <x>`, `1. <x>`.
+PLACEHOLDER_RE = re.compile(r"^(?:[-*+>]|\d+\.)?\s*<.*>$")
 REQUIRED = {1: "Problem statement", 2: "Systems & Impact", 3: "Options", 4: "Recommendation"}
 APPENDED = {5: "Contracts", 6: "Risks & Validation"}
 
@@ -59,7 +60,7 @@ def lint(text: str) -> tuple[list[str], list[str]]:
         elif is_unfilled(sections[num]):
             problems.append(f"section {num}. {name} is empty or still placeholder")
 
-    if not re.search(r"success criteria", text, re.IGNORECASE):
+    if not re.search(r"(?i)(?:##+|\*\*)\s*success criteria", text):
         problems.append("missing the measurable 'Success criteria' block (required)")
 
     for num, name in APPENDED.items():

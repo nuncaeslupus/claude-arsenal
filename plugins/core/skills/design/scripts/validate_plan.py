@@ -44,9 +44,14 @@ def table_rows(text: str) -> list[list[str]]:
 
 
 def find_table(rows: list[list[str]], marker: str) -> list[str] | None:
-    """The first table row containing the marker column (the header), else None."""
+    """The first table row whose cells include the marker column exactly (the header).
+
+    Exact match (not substring) mirrors run_gate.py's `"gate" in headers`, so the two
+    scripts agree on which table is the gate/evidence table and a stray body cell
+    containing the word is never mistaken for a header.
+    """
     for cells in rows:
-        if any(marker in c for c in cells):
+        if marker in cells:
             return cells
     return None
 
