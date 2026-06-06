@@ -49,6 +49,7 @@
 
 - [ ] Original objective is fully covered
 - [ ] Acceptance criteria satisfied
+- [ ] Every task gate recorded with complete evidence and met (`run_gate.py status/plan.md` exits 0; or the plan predates gates)
 - [ ] Known edge cases handled
 
 ### Compatibility

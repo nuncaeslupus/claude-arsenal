@@ -55,16 +55,17 @@ Remove the worktree with `git worktree remove <worktree-path>` once the PR is me
 - Identify patterns to follow (naming, structure, error handling)
 - Note any deviations from standard patterns and why
 
-### Step 2: Implement (red -> green -> refactor)
+### Step 2: Implement each task — RED → GREEN → RECORD
 
-For each task from the design:
+For each task from the design, work its **Gate** (the measurable acceptance condition in `status/plan.md`) through three motions: make the gate fail first (RED), implement until it passes (GREEN), then record the evidence (RECORD) before starting the next task.
 
-#### 2a. Write the failing test first
+#### 2a. Make the gate fail first (RED)
 
-Before changing production code, write the test that will prove the change works:
+Before changing production code, write the check that proves the task meets its Gate, and confirm it currently fails for the expected reason:
 
 - **Bug fix**: write a regression test that reproduces the failure first. Run it and confirm it fails for the expected reason — the bug itself, not an unrelated error.
 - **New feature**: write a test that specifies the contract or acceptance criterion the task must satisfy. Run it and confirm it fails because the behavior does not exist yet.
+- **Metric gate**: wire the measurement the gate names (latency benchmark, coverage run, error-rate probe) and confirm the current value misses the threshold — a measured value short of the gate is the RED for a metric, just as a failing test is the RED for behavior.
 - **Coverage**: unit tests for new functions and logic branches; integration tests for new endpoints, queries, or inter-service calls; edge cases for null/empty inputs, boundary values, and error conditions.
 
 Name each test with the convention `test_<what>_<condition>_<expected_result>`.
@@ -86,6 +87,10 @@ After each significant change:
 - Run linting (use the host repo's lint command — e.g. `make lint`, `ruff check`, `eslint`)
 - Run relevant tests (use the host repo's test command — e.g. `make test`, `pytest <path>`)
 - Fix issues before proceeding
+
+#### 2c. Record the gate evidence (RECORD)
+
+Once the task is green, record its gate evidence in `status/plan.md`'s **Evidence log** before starting the next task: the measured value, the exact command that produced it, the commit SHA, and the environment provenance (which machine or runner — `ci`, `local`, or a project tag). Confirm the measured value meets the gate; the `gate-check` skill's `run_gate.py status/plan.md --id <task> <measured>` reports PASS/FAIL with the numbers and flags an incomplete row. A task is not done until its gate passes and its evidence is recorded — that recorded trail is what `review` and `ship` audit. (For a plan with no Gate column — predating this convention — keep the green-tests bar from Step 2b and skip the record.)
 
 ### Step 3: Verify and refactor
 
@@ -114,4 +119,4 @@ Before creating the PR, verify:
 
 ## Abbreviation
 
-**Abbreviated execution** = Step 2a + Step 2b + Step 4 (tests are not optional in abbreviation). Whether abbreviation is allowed depends on project conventions documented in the host repo's `CLAUDE.md`; that same file can declare `<!-- test-discipline: test-after -->` to fall back to write-tests-after (see Step 2a).
+**Abbreviated execution** = Step 2a + Step 2b + Step 2c + Step 4 (tests and gate evidence are not optional in abbreviation). Whether abbreviation is allowed depends on project conventions documented in the host repo's `CLAUDE.md`; that same file can declare `<!-- test-discipline: test-after -->` to fall back to write-tests-after (see Step 2a).

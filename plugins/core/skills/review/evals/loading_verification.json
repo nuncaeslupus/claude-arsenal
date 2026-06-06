@@ -7,12 +7,14 @@
     "Second opinion on this diff: am I missing a regression?",
     "Critique the design doc for the auth-middleware swap.",
     "Review the proposal: is the scope right? Is the risk register complete?",
-    "Look at the tests on this PR — are they covering the failure modes?"
+    "Look at the tests on this PR — are they covering the failure modes?",
+    "Review this PR — flag risks, test gaps, and any unrecorded or unmet task gates."
   ],
   "no_load_prompts": [
     "Implement the change described in this ticket.",
     "Design the solution for the portfolio refactor.",
     "Investigate why the import job is failing in production.",
-    "Confirm release readiness before merging."
+    "Confirm release readiness before merging.",
+    "Just run the gate audit on status/plan.md and give me the numbers."
   ]
 }
