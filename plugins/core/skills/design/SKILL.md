@@ -1,6 +1,6 @@
 ---
 name: design
-description: When the user is defining the technical solution after discovery — contracts, task split, risk register, sequencing. Do NOT use for problem investigation (see specify), implementation (see execution), or PR review (see review).
+description: When the user is defining the technical solution after discovery — contracts, task split, risk register, sequencing. Owns scripts — validate_plan. Do NOT use for problem investigation (see specify), implementation (see execution), or PR review (see review).
 metadata:
   type: workflow
 ---
@@ -68,6 +68,14 @@ Pay special attention to:
 ### Step 5: Produce design output
 
 Load `references/template-specification-tail.md` when appending contracts and risks (sections 5–6) to `status/specification.md`. Load `references/template-plan.md` when creating `status/plan.md`.
+
+After writing the files, confirm the plan's structure:
+
+```bash
+python3 "${CLAUDE_SKILL_DIR}/scripts/validate_plan.py" --input status/plan.md
+```
+
+It checks the plan has the required sections (Technical solution, Implementation tasks, Evidence log, Sign-off) and that the task table carries the required columns including the measurable Gate — shape only. The `gate-check` skill's `run_gate.py` then audits the gate values and evidence themselves (add `--strict` there to require a gate on every task).
 
 ---
 
