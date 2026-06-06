@@ -63,11 +63,16 @@ def parse_tables(text: str) -> list[dict]:
     i = 0
     while i < len(lines):
         line = lines[i]
-        if "|" in line and i + 1 < len(lines) and DELIM_RE.match(lines[i + 1]):
+        if (
+            "|" in line
+            and i + 1 < len(lines)
+            and "|" in lines[i + 1]
+            and DELIM_RE.match(lines[i + 1])
+        ):
             headers = [_norm(c) for c in _split_row(line)]
             rows: list[dict] = []
             j = i + 2
-            while j < len(lines) and lines[j].strip().startswith("|"):
+            while j < len(lines) and "|" in lines[j]:
                 cells = _split_row(lines[j])
                 cells += [""] * (len(headers) - len(cells))
                 rows.append({headers[k]: cells[k] for k in range(len(headers))})
@@ -128,6 +133,8 @@ def parse_gate(gate_text: str) -> tuple[str, str, float] | None:
 
 def evaluate(gate_text: str, measured: float | None) -> dict:
     """Build a verdict dict for one gate against an optional measured value."""
+    if not gate_text or _looks_templated(gate_text):
+        return {"gate": gate_text, "kind": "none", "verdict": "NONE"}
     parsed = parse_gate(gate_text)
     if parsed is None:
         return {"gate": gate_text, "kind": "manual", "verdict": "MANUAL"}
@@ -225,7 +232,9 @@ def _focus(tid: str, tasks: dict, evidence: dict, measured: float | None, as_jso
     if measured is None:
         measured = _measured_from_row(row)
     verdict = evaluate(gate_text, measured)
-    missing = missing_evidence(row)
+    has_gate = bool(gate_text and not _looks_templated(gate_text))
+    check_ev = parse_gate(gate_text) is not None or measured is not None
+    missing = missing_evidence(row) if check_ev else []
     result = {
         "task": tid,
         "command": (row or {}).get("command", "").strip().strip("`") or None,
@@ -239,7 +248,7 @@ def _focus(tid: str, tasks: dict, evidence: dict, measured: float | None, as_jso
         print(json.dumps(result, indent=2))
     else:
         print(f"Task {tid}")
-        print(f"  gate:     {gate_text or '(none defined — grandfathered)'}")
+        print(f"  gate:     {gate_text if has_gate else '(none defined — grandfathered)'}")
         if result["command"]:
             print(f"  command:  {result['command']}")
         if verdict["kind"] == "numeric" and measured is not None:
@@ -251,11 +260,12 @@ def _focus(tid: str, tasks: dict, evidence: dict, measured: float | None, as_jso
             print(f"  threshold: {verdict['op']} {verdict['threshold']} (no measured value given)")
         elif verdict["kind"] == "manual":
             print("  verdict:  non-numeric gate — verify manually")
-        if missing:
-            print(f"  evidence: INCOMPLETE — missing {', '.join(missing)}")
-        else:
-            print("  evidence: complete")
-    failed = verdict["verdict"] == "FAIL" or (gate_text and missing)
+        if has_gate and verdict["kind"] != "manual":
+            if missing:
+                print(f"  evidence: INCOMPLETE — missing {', '.join(missing)}")
+            else:
+                print("  evidence: complete")
+    failed = has_gate and (verdict["verdict"] == "FAIL" or bool(missing))
     return 1 if failed else 0
 
 
