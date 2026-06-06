@@ -25,6 +25,10 @@ Clarify what is actually being asked. Separate symptoms from root causes.
 
 Output: a clear, one-paragraph **problem statement**.
 
+Then capture **measurable success criteria** — the objective, observable conditions that will mean the work is done, each as a metric and threshold where one exists (e.g. `p95_latency_ms <= 200`, `error_rate < 0.01`, `zero data loss on replay`). These goals are what `design` turns into a per-task **Gate** and what `review` / `ship` later verify; favor numbers over "it works." Where a condition genuinely cannot be reduced to a number, state how it will be judged.
+
+Output: a short list of **success criteria (measurable)** alongside the problem statement.
+
 ### Step 2: Identify affected systems
 
 Map which parts of the codebase and infrastructure are involved.

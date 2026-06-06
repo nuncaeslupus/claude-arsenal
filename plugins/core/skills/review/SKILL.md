@@ -45,6 +45,8 @@ If engineering standards exist in the host repo (a project-level `engineering-co
 - Do tests actually assert meaningful behavior (not just "it doesn't crash")?
 - If no tests exist and the change is non-trivial → flag as blocker
 
+**Gate evidence**: for a plan with task Gates (`status/plan.md`), verify each task's gate is recorded and met — the Evidence log row is complete (measured value, command, commit SHA, environment provenance) and the measured value satisfies the gate. The `gate-check` skill audits this mechanically: `run_gate.py status/plan.md` exits 0 when every gated task passes with complete evidence, 1 when a gate fails or lacks evidence. A failing or unrecorded gate on a gated task is a blocker. A plan with no Gate column predates this convention (the script exits 2) — note it as a should-flag, not a blocker.
+
 **Hard blocker rule**: production code changes with zero test companions in the diff are Request Changes — except config-only, docs-only, or refactor with existing green tests covering the touched paths. When waiving on the refactor exception, the reviewer states the exception applied and asserts the green-test evidence explicitly (CI link or local test run).
 
 ### Step 5: Check operational readiness

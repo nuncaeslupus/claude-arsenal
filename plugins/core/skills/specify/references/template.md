@@ -15,6 +15,12 @@
 
 <One clear paragraph describing what is happening, what should happen, and why it matters.>
 
+**Success criteria (measurable)** — the objective conditions that define "done"; each seeds a task **Gate** in the plan (`design`), and `review` / `ship` verify them:
+
+- [ ] `<metric> <op> <threshold>` (e.g. `p95_latency_ms <= 200`, `line_coverage >= 0.90`)
+- [ ] `<metric> <op> <threshold>`
+- [ ] <condition that cannot be reduced to a number — state how it will be judged>
+
 ## 2. Systems & Impact
 
 | System | Type | Role | Needs changes? | Impact | Severity |

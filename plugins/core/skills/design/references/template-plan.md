@@ -41,17 +41,27 @@
 
 ## Implementation tasks
 
-| T# | Description | Service | Size | Depends | Tests |
-|----|-------------|---------|------|---------|-------|
-| T1 | <description> | <service> | S/M/L | — | <files + testability statement> |
-| T2 | <description> | <service> | S/M/L | T1 | <files + testability statement> |
-| T3 | <description> | <service> | S/M/L | T1 | <files + testability statement> |
-| T4 | <description> | <service> | S/M/L | T2, T3 | <files + testability statement> |
+The **Gate** column is required: a measurable acceptance condition `<metric> <op> <threshold>` (ops `< <= > >= == !=`), derived from the spec's success criteria — the objective pass/fail for the task, not just "tests pass." The `gate-check` skill defines the grammar.
+
+| T# | Description | Service | Size | Depends | Gate | Tests |
+|----|-------------|---------|------|---------|------|-------|
+| T1 | <description> | <service> | S/M/L | — | `<metric> <op> <threshold>` | <files + testability statement> |
+| T2 | <description> | <service> | S/M/L | T1 | `<metric> <op> <threshold>` | <files + testability statement> |
+| T3 | <description> | <service> | S/M/L | T1 | `<metric> <op> <threshold>` | <files + testability statement> |
+| T4 | <description> | <service> | S/M/L | T2, T3 | `<metric> <op> <threshold>` | <files + testability statement> |
 
 **Status legend**: ☐ not started · ◐ in progress · ☑ merged
 
 **Merge order**: T1 first, then T2/T3 (parallel), then T4
 **Branch pattern**: `<ticket-id>-T<N>-description` from the default branch
+
+## Evidence log
+
+`execution` appends one row per task as it lands (RED → GREEN → RECORD): the measured value, the exact command that produced it, the commit SHA, and the environment provenance. `review` / `ship` audit this table; `gate-check`'s `run_gate.py` reads it. A gated task is not "done" until its row is complete and the measured value meets the gate.
+
+| T# | Gate | Measured | Command | SHA | Env | Date |
+|----|------|----------|---------|-----|-----|------|
+| T1 | `<metric> <op> <threshold>` | <number> | `<command run>` | <sha> | <ci / local / [HERE]> | YYYY-MM-DD |
 
 ### Dependency graph
 

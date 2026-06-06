@@ -42,10 +42,13 @@ For each task:
 - **What**: specific deliverable
 - **Where**: which files/services
 - **Dependencies**: what must be done first
+- **Gate (measurable acceptance condition)**: the objective metric and threshold that proves this task is done — written `<metric> <op> <threshold>` (e.g. `p95_latency_ms <= 200`, `line_coverage >= 0.90`), not just "tests pass." Derive it from the spec's success criteria. The `gate-check` skill defines the grammar the gate must follow so it can be checked mechanically; reserve a non-numeric gate for a condition that genuinely cannot be reduced to a number.
 - **Tests**: file paths the task creates or modifies, plus a one-sentence testability statement (what assertion proves the task is done).
 - **Estimated effort**: Small (< 1h) / Medium (1-4h) / Large (4h+)
 
 Recommended: tasks should be small enough to be a single commit.
+
+Every task carries a Gate. As `execution` finishes a task it records the gate's **evidence** — measured value, command run, commit SHA, environment provenance — in the plan's **Evidence log**; that record is what `review` and `ship` audit. The Gate column is required for new plans; plans predating this convention are tolerated (the `gate-check` engine and `review` / `ship` degrade gracefully when a plan has no Gate column).
 
 ### Step 4: Anticipate risks
 

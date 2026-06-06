@@ -10,11 +10,22 @@
 
 ---
 
-## Failing test (red)
+## Gate & failing check (RED)
 
-- Test: `<path>::<test_name>`
-- Asserts: <what assertion proves this task is done>
+- Gate (from `status/plan.md`): `<metric> <op> <threshold>`
+- Test / measurement: `<path>::<test_name>` or `<command>`
+- Asserts: <what assertion or measured value proves this task meets the gate>
 - Confirmed failing for the expected reason: yes / no
+
+## Gate evidence (RECORD)
+
+Copy into `status/plan.md`'s Evidence log once green:
+
+- Measured value: <number>
+- Command run: `<command>`
+- Commit SHA: <sha>
+- Environment provenance: <ci / local / project tag>
+- Gate met (`run_gate.py --id <task> <measured>` → PASS): yes / no
 
 ## Decisions & deviations
 
@@ -29,6 +40,7 @@
 ## Before opening the PR
 
 - [ ] Red test from above now passes (green)
+- [ ] Gate met and evidence recorded in `status/plan.md`'s Evidence log
 - [ ] Lint + full test suite pass
 - [ ] `status/plan.md` task status updated
 - [ ] No debug code, commented-out blocks, or secrets left behind
