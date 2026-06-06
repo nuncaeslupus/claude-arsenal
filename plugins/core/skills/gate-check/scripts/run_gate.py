@@ -19,7 +19,8 @@ thin wrapper that runs its own measurement, then passes the number here.
 Human-readable on stdout by default (`--json` for machine use); errors on stderr.
 Exit 0 = every gated task passes with complete evidence; 1 = a gate fails, lacks
 evidence, or the focused task fails; 2 = usage error (plan missing, no tables, bad id).
-A task with no gate defined is grandfathered (reported, never fails the run).
+A task with no gate defined is grandfathered (reported, never fails the run) unless
+--strict is set, which makes a missing gate a failure (new plans require one).
 """
 
 import argparse
@@ -167,7 +168,7 @@ def _measured_from_row(row: dict | None) -> float | None:
     return float(raw.group()) if raw else None
 
 
-def build_report(tasks: dict[str, str], evidence: dict[str, dict]) -> dict:
+def build_report(tasks: dict[str, str], evidence: dict[str, dict], strict: bool = False) -> dict:
     items = []
     for tid in sorted(tasks, key=lambda t: (len(t), t)):
         gate_text = tasks[tid]
@@ -187,22 +188,32 @@ def build_report(tasks: dict[str, str], evidence: dict[str, dict]) -> dict:
                 **{k: v for k, v in verdict.items() if k != "gate"},
             }
         )
-    failing = [
-        i for i in items if i["has_gate"] and (i["verdict"] == "FAIL" or i["missing_evidence"])
-    ]
+
+    def _failing(i: dict) -> bool:
+        if i["has_gate"]:
+            return i["verdict"] == "FAIL" or bool(i["missing_evidence"])
+        return strict  # an ungated task is a failure only under --strict
+
+    failing = [i for i in items if _failing(i)]
     return {
         "tasks": len(items),
         "gated": sum(1 for i in items if i["has_gate"]),
+        "ungated": sum(1 for i in items if not i["has_gate"]),
         "passing": sum(1 for i in items if i["verdict"] == "PASS"),
         "failing": len(failing),
+        "strict": strict,
         "items": items,
     }
 
 
 def _print_human(report: dict) -> None:
+    strict = report.get("strict", False)
     for i in report["items"]:
         if not i["has_gate"]:
-            mark, detail = "·", "no gate defined (grandfathered)"
+            if strict:
+                mark, detail = "✗", "no gate defined — required under --strict"
+            else:
+                mark, detail = "·", "no gate defined (grandfathered)"
         elif i["missing_evidence"]:
             mark, detail = "✗", f"evidence incomplete — missing {', '.join(i['missing_evidence'])}"
         elif i["verdict"] == "FAIL":
@@ -222,7 +233,14 @@ def _print_human(report: dict) -> None:
     )
 
 
-def _focus(tid: str, tasks: dict, evidence: dict, measured: float | None, as_json: bool) -> int:
+def _focus(
+    tid: str,
+    tasks: dict,
+    evidence: dict,
+    measured: float | None,
+    as_json: bool,
+    strict: bool = False,
+) -> int:
     tid = tid.strip().strip("`").upper()
     if tid not in tasks and tid not in evidence:
         print(f"✗ task {tid} not found in the plan's task or evidence tables", file=sys.stderr)
@@ -247,8 +265,14 @@ def _focus(tid: str, tasks: dict, evidence: dict, measured: float | None, as_jso
     if as_json:
         print(json.dumps(result, indent=2))
     else:
+        if has_gate:
+            gate_disp = gate_text
+        elif strict:
+            gate_disp = "(none defined — required under --strict)"
+        else:
+            gate_disp = "(none defined — grandfathered)"
         print(f"Task {tid}")
-        print(f"  gate:     {gate_text if has_gate else '(none defined — grandfathered)'}")
+        print(f"  gate:     {gate_disp}")
         if result["command"]:
             print(f"  command:  {result['command']}")
         if verdict["kind"] == "numeric" and measured is not None:
@@ -265,7 +289,9 @@ def _focus(tid: str, tasks: dict, evidence: dict, measured: float | None, as_jso
                 print(f"  evidence: INCOMPLETE — missing {', '.join(missing)}")
             else:
                 print("  evidence: complete")
-    failed = has_gate and (verdict["verdict"] == "FAIL" or bool(missing))
+    failed = (not has_gate and strict) or (
+        has_gate and (verdict["verdict"] == "FAIL" or bool(missing))
+    )
     return 1 if failed else 0
 
 
@@ -282,6 +308,11 @@ def main() -> int:
         help="measured value to compare to the focused task's threshold",
     )
     parser.add_argument("--json", action="store_true", help="emit JSON instead of text")
+    parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="treat a task with no gate as a failure (new plans require a gate)",
+    )
     args = parser.parse_args()
 
     path = Path(args.input)
@@ -300,9 +331,9 @@ def main() -> int:
         return 2
 
     if args.id:
-        return _focus(args.id, tasks, evidence, args.measured, args.json)
+        return _focus(args.id, tasks, evidence, args.measured, args.json, args.strict)
 
-    report = build_report(tasks, evidence)
+    report = build_report(tasks, evidence, args.strict)
     if args.json:
         print(json.dumps(report, indent=2))
     else:

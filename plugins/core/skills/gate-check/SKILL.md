@@ -56,6 +56,10 @@ Prints one line per task — gate, whether its evidence is complete, and PASS/FA
 then a summary. Exit 0 when every gated task passes with complete evidence; exit 1
 when any gate fails or lacks evidence. This is the line `review` and `ship` run.
 
+Add `--strict` to also fail tasks that have no gate at all — new plans should gate
+every task, so `--strict` is the "is this plan fully gated?" check; without it,
+ungated tasks are grandfathered (the older behavior, for plans predating gates).
+
 ### Focus one task, compare a measured value
 
 ```bash

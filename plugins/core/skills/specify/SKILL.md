@@ -88,3 +88,11 @@ Output: a clear **recommendation with action item**.
 **Abbreviated specify** = Steps 1 + 2 (one paragraph each). Whether abbreviation is allowed depends on project conventions documented in the host repo's `CLAUDE.md`.
 
 Load `references/template.md` when creating or updating `status/specification.md` (sections 1–4).
+
+After writing the file, confirm its structure:
+
+```bash
+python3 "${CLAUDE_SKILL_DIR}/scripts/validate_spec.py" --input status/specification.md
+```
+
+It checks that the required sections (1–4) and the measurable Success criteria block are present and filled — shape only, not content quality. Sections 5–6 are reported as pending until `design` appends them. Exit 0 clean, 1 on a missing or unfilled required section.

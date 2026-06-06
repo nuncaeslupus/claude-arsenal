@@ -93,6 +93,10 @@ Exit 2 on a plan with no `Gate` column is the **grandfathered** signal — a pla
 predating the gate kernel. `review` / `ship` treat it as a should-flag (note that
 the plan has no gates), not a hard blocker.
 
+With `--strict`, a task that has no gate of its own is also a failure (exit 1) —
+use it on new plans, where every task is expected to carry a measurable gate. The
+default (no `--strict`) grandfathers ungated tasks so older plans keep passing.
+
 ## Worked examples
 
 ```bash
