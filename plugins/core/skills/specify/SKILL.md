@@ -1,6 +1,6 @@
 ---
 name: specify
-description: When the user is investigating a problem or scoping a new feature with unclear impact — analyzes it and proposes options. Do NOT use for already-scoped work (see design), implementation (see execution), or routine code edits.
+description: When the user is investigating a problem or scoping a new feature with unclear impact — analyzes it and proposes options. Owns scripts — validate_spec. Do NOT use for already-scoped work (see design), implementation (see execution), or routine code edits.
 metadata:
   type: workflow
 ---
