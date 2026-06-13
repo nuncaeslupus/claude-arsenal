@@ -40,6 +40,7 @@ def add_task(
     deps: list[str],
     queue_path: Path,
     workspace: str | None = None,
+    tags: list[str] | None = None,
 ) -> str:
     rows = _load_queue(queue_path)
     existing_ids = {r["id"] for r in rows}
@@ -73,6 +74,18 @@ def add_task(
     if workspace is not None:
         row["workspace"] = workspace
 
+    # Normalise tags: drop blanks, de-duplicate, preserve first-seen order.
+    if tags:
+        seen: set[str] = set()
+        clean_tags = []
+        for tag in tags:
+            tag = tag.strip()
+            if tag and tag not in seen:
+                seen.add(tag)
+                clean_tags.append(tag)
+        if clean_tags:
+            row["tags"] = clean_tags
+
     queue_path.parent.mkdir(parents=True, exist_ok=True)
     with queue_path.open("a", encoding="utf-8") as f:
         f.write(json.dumps(row, separators=(",", ":")) + "\n")
@@ -94,12 +107,16 @@ def main() -> None:
     )
     p.add_argument("--workspace", default=None, metavar="NAME",
                    help="Workspace this task belongs to (used by LOOP_WORKSPACE filtering).")
+    p.add_argument(
+        "--tag", action="append", default=[], metavar="TAG",
+        help="Free-form label for /continue tag scoping (used by LOOP_TAGS). Repeatable.",
+    )
     p.add_argument("--queue", default=QUEUE_FILE, help="Path to queue.jsonl")
     args = p.parse_args()
 
     task_id = add_task(
         args.title, args.priority, args.requires, args.deps,
-        Path(args.queue), args.workspace
+        Path(args.queue), args.workspace, args.tag
     )
     print(task_id)
 

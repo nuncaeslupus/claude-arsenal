@@ -1,7 +1,10 @@
 # Worker Agent
 
 Task-tool subagent spawned by the orchestrator for each claimed task.
-Runs in an isolated worktree (`isolation: worktree`).
+Runs in an isolated worktree (`isolation: worktree`). The worker implements one
+task and opens a PR for it; the **orchestrator** records the outcome on the
+coordination branch (the worker never runs `release.sh` — it is on a feature
+branch, and `release.sh` guards on `arsenal-queue`).
 
 ## Launch parameters
 
@@ -10,7 +13,7 @@ isolation: worktree
 env:
   CLAUDE_CODE_DISABLE_1M_CONTEXT: "1"
   CLAUDE_CODE_DISABLE_FAST_MODE: "1"
-  CLAUDE_CODE_SUBAGENT_MODEL: "claude-haiku-4-5-20251001"
+  CLAUDE_CODE_SUBAGENT_MODEL: "claude-sonnet-4-6"
 ```
 
 ## Relative-path directive (required)
@@ -21,28 +24,51 @@ Verify `pwd` at the start of the task if unsure.
 
 ## Task execution protocol
 
-1. Read the task payload: `claude-arsenal/queue/<task_id>.md`
-   — the payload describes the task, acceptance gate, and any constraints.
-2. Implement the work described in the payload.
-3. Run `claude-arsenal/bin/gate_run.sh <task_id>`.
-   - Exit 0 → gate passed; proceed to step 4.
-   - Exit 1 → gate failed; run `claude-arsenal/bin/release.sh <task_id> open`, append a
-     `## Failure notes` section to the payload with the failure details,
-     then exit.
-4. Run `claude-arsenal/bin/release.sh <task_id> done`.
-5. Exit — do not pick up the next task; the orchestrator handles dispatch.
+The worktree starts on the orchestrator's `arsenal-queue` HEAD, so the queue
+payload is present **now** but disappears once you branch off the default
+branch. Capture it first.
+
+1. **Cache the payload before switching branches.** Read
+   `claude-arsenal/queue/<task_id>.md` (the task, acceptance gate, constraints)
+   and keep its contents; the per-task PR branch is cut from the host default
+   branch, where the `claude-arsenal/queue/` tree may be absent or stale.
+2. **Implement the work** described in the payload. Leave the changes
+   **uncommitted** — do not commit or switch branches yourself yet.
+3. **Run the gates while the payload is still present:** the host lint gate if
+   one exists (`make lint`, `npm run lint`, …), then
+   `claude-arsenal/bin/gate_run.sh <task_id>`.
+   - **Gate fails** (lint or `gate_run.sh` exit non-zero) → **open no PR.**
+     Return outcome `open` to the orchestrator with concise failure-note text
+     (what failed and why) for it to append under `## Failure notes`. Exit.
+4. **Gate passes** → open the PR with the thin helper. Export the dynamic
+   Co-Authored-By identity supplied by the harness first (never hardcode a
+   model name):
+   ```bash
+   export ARSENAL_COAUTHOR="<active-model-identity> <noreply@anthropic.com>"
+   claude-arsenal/bin/open_task_pr.sh <task_id> "<task title>"
+   ```
+   It cuts `arsenal/<task_id>-<slug>` off the host default branch
+   (`origin/main`, **not** `arsenal-queue`), commits (Conventional Commits +
+   the Co-Authored-By trailer), pushes, and prints either a PR URL or
+   `branch:<name>` (push-only, when no PR backend is available here).
+5. **Return the outcome to the orchestrator** — status `done`, plus the PR URL
+   or `branch:<name>` line from step 4. Do **not** call `release.sh`; the
+   orchestrator records the result on `arsenal-queue`. Exit; do not pick up the
+   next task.
 
 ## On failure
 
-If implementation cannot be completed for any other reason:
-
-- Run `claude-arsenal/bin/release.sh <task_id> open` to requeue the task.
-- Write a brief failure note to `claude-arsenal/queue/<task_id>.md` under a
-  `## Failure notes` heading for the next session to read.
+If implementation cannot be completed for any other reason, return outcome
+`open` to the orchestrator with a brief failure note (what blocked you) for the
+`## Failure notes` section. Do not open a PR.
 
 ## What not to do
 
 - Do not run `claim.sh` — the orchestrator already claimed the task.
+- Do not run `release.sh` — you are on a feature-branch worktree; `release.sh`
+  guards on `arsenal-queue`. The orchestrator records the outcome.
+- Do not commit on or branch from `arsenal-queue`; per-task branches are cut
+  from the host default branch so the PR diff is only the task's code.
 - Do not access files outside the worktree root using absolute paths.
 - Do not spawn additional subagents (one worker per task).
-- Do not modify `claude-arsenal/queue/tasks.jsonl` directly — use `release.sh`.
+- Do not modify `claude-arsenal/queue/tasks.jsonl` directly.
