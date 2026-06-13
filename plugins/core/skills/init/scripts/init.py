@@ -232,9 +232,11 @@ def init_workspace(
     plan: str,
     bundle_override: Path | None = None,
 ) -> None:
-    # The workspace name becomes a directory under claude-arsenal/project/;
-    # reject separators and traversal sequences so it cannot escape that root.
-    if not workspace or workspace in (".", "..") or "/" in workspace or "\\" in workspace:
+    # The workspace name becomes a directory under claude-arsenal/project/.
+    # Strip Windows-style trailing dots/spaces before checking (they normalize
+    # to ".." on NTFS) and retain the substring ".." guard for defence-in-depth.
+    normalized = workspace.rstrip(". ")
+    if not normalized or normalized in (".", "..") or ".." in workspace or "/" in workspace or "\\" in workspace:
         sys.exit(f"init: invalid workspace name {workspace!r}")
 
     arsenal = repo_path / "claude-arsenal"
