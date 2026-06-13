@@ -28,7 +28,9 @@ for line in queue.read_text().splitlines():
     line = line.strip()
     if line:
         try:
-            rows.append(json.loads(line))
+            data = json.loads(line)
+            if isinstance(data, dict):
+                rows.append(data)
         except json.JSONDecodeError:
             pass
 

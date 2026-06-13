@@ -25,7 +25,7 @@ main() {
     caps=("\"surface:${surface}\"")
 
     if command -v pg_isready &>/dev/null 2>&1; then
-        if timeout 2 pg_isready -q 2>/dev/null; then
+        if pg_isready -t 2 -q 2>/dev/null; then
             caps+=("\"services:postgres\"")
         fi
     fi

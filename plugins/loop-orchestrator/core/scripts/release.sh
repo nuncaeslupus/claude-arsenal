@@ -24,7 +24,9 @@ for line in path.read_text().splitlines():
     line = line.strip()
     if line:
         try:
-            rows.append(json.loads(line))
+            data = json.loads(line)
+            if isinstance(data, dict):
+                rows.append(data)
         except json.JSONDecodeError:
             pass
 
@@ -54,7 +56,7 @@ for attempt in 1 2 3; do
     if git push 2>/dev/null; then
         exit 0
     fi
-    git pull --rebase 2>/dev/null || true
+    git pull --rebase 2>/dev/null || git rebase --abort 2>/dev/null || true
     sleep "${delay}"
     delay=$((delay * 2))
 done

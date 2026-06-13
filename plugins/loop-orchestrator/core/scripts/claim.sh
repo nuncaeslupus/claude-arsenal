@@ -24,7 +24,9 @@ for line in path.read_text().splitlines():
     line = line.strip()
     if line:
         try:
-            rows.append(json.loads(line))
+            data = json.loads(line)
+            if isinstance(data, dict):
+                rows.append(data)
         except json.JSONDecodeError:
             pass
 
@@ -71,8 +73,10 @@ if git push >/dev/null 2>&1; then
     echo "${task_json}"
 else
     # Push rejected — another session already pushed a claim.
-    git reset --hard HEAD~1 >/dev/null 2>&1 || true
-    git pull --rebase >/dev/null 2>&1 || true
+    # Mixed reset (not --hard) to preserve any uncommitted user files.
+    git reset HEAD~1 >/dev/null 2>&1 || true
+    git checkout -- "${QUEUE_FILE}" >/dev/null 2>&1 || true
+    git pull --rebase >/dev/null 2>&1 || git rebase --abort >/dev/null 2>&1 || true
     echo "lost"
 fi
 
