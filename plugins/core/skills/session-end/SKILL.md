@@ -69,3 +69,7 @@ Stop-hook setup (so this skill fires at conversation close without an explicit `
 - [handoff-mode](references/handoff-mode.md) — CLAUDE.md marker syntax, `status/handoff.md` template, ticket-mode alternative (load when Step 1 runs).
 - [retrospective-rubric](references/retrospective-rubric.md) — pain-signal catalog, judgment rubric, IMPROVEMENTS.md block format (load when Step 2 surfaces proposals).
 - [auto-fire-setup](references/auto-fire-setup.md) — Stop-hook config snippet + skip-override sentinel (load when wiring auto-fire).
+
+## Workspace-aware paths
+
+When `claude-arsenal/project/<WORKSPACE>/` exists, write the Step 1 handoff to `claude-arsenal/project/<WORKSPACE>/handover.md` and refresh the cross-workspace `claude-arsenal/session/handover.md` instead of `status/handoff.md`. Otherwise use `status/handoff.md` as above. The handoff opt-in marker still governs whether Step 1 runs at all.

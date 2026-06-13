@@ -1,6 +1,6 @@
 ---
 name: continue
-description: When the user wants to resume work or run the worker loop — picks the next unblocked task from the queue, optionally scoped to a workspace or fuzzy-matched task title. Use /continue [workspace|text]. Do NOT use before running init.
+description: When the user wants to resume work or run the worker loop — picks the next unblocked task, optionally scoped to a workspace or matched by title text. Use /continue [workspace|text]. Do NOT use before running init.
 user-invocable: true
 argument-hint: "[WORKSPACE | search-text]"
 ---
@@ -23,13 +23,13 @@ Load this skill when:
 
 ```bash
 # Pick globally best unblocked task
-python3 .claude/skills/continue/scripts/pick_task.py
+python3 .claude/skills/continue/scripts/query_task.py
 
 # Scope to a workspace
-python3 .claude/skills/continue/scripts/pick_task.py --workspace FRONTEND
+python3 .claude/skills/continue/scripts/query_task.py --workspace FRONTEND
 
 # Fuzzy-match a task title
-python3 .claude/skills/continue/scripts/pick_task.py --search "implement login"
+python3 .claude/skills/continue/scripts/query_task.py --search "implement login"
 ```
 
 Then proceed with the **Worker loop algorithm** from `claude-arsenal/AGENTS.md`:

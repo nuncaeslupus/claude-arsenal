@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""pick_task.py - Pick the next task or report status for /continue."""
+"""query_task.py - Query the next eligible task or report status for /continue."""
 import argparse
 import json
 import subprocess

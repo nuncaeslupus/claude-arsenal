@@ -82,3 +82,7 @@ It checks the plan has the required sections (Technical solution, Implementation
 ## Abbreviation
 
 **Abbreviated design** = Step 1 (solution overview, 1 paragraph) + Step 3 (task list only). Whether abbreviation is allowed depends on project conventions documented in the host repo's `CLAUDE.md`.
+
+## Workspace-aware paths
+
+When `claude-arsenal/project/<WORKSPACE>/` exists, write the plan to `claude-arsenal/project/<WORKSPACE>/plan.md` (and the contracts/risks tail to the workspace's `spec.md`) instead of `status/plan.md`. Otherwise use `status/` as above. The validator takes the path via `--input`; point it at whichever file was written.
