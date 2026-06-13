@@ -45,21 +45,23 @@ if isinstance(rl, dict) and rl:
         "five_hour": rl.get("five_hour", {}),
         "seven_day": rl.get("seven_day", {}),
     }
+    tmp_name = None
     try:
         out.parent.mkdir(parents=True, exist_ok=True)
         with tempfile.NamedTemporaryFile(
             "w", dir=str(out.parent), delete=False, encoding="utf-8"
         ) as tmp:
+            tmp_name = tmp.name
             json.dump(snapshot, tmp)
             tmp.flush()
             os.fsync(tmp.fileno())
-            tmp_name = tmp.name
         os.replace(tmp_name, out)
     except Exception:
-        try:
-            os.unlink(tmp_name)  # noqa: F821 — only set if NamedTemporaryFile ran
-        except (OSError, NameError):
-            pass
+        if tmp_name:
+            try:
+                os.unlink(tmp_name)
+            except OSError:
+                pass
 
 # Short status line: model + the two windows when known.
 five, seven = _pct("five_hour"), _pct("seven_day")

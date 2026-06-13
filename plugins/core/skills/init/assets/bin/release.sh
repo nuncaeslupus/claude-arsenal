@@ -77,8 +77,13 @@ PY
 
 # Stage the queue row AND the task payload: a release may carry ## Failure notes
 # or a PR URL written into claude-arsenal/queue/<id>.md that must travel with the
-# state commit rather than being lost on worktree cleanup.
-git add "${QUEUE_FILE}" "claude-arsenal/queue/${TASK_ID}.md" 2>/dev/null
+# state commit rather than being lost on worktree cleanup. Stage them separately
+# — a single `git add` with a non-existent payload pathspec fails atomically and
+# would leave the queue change unstaged (a task may have no payload file).
+git add "${QUEUE_FILE}" 2>/dev/null
+if [[ -f "claude-arsenal/queue/${TASK_ID}.md" ]]; then
+    git add "claude-arsenal/queue/${TASK_ID}.md" 2>/dev/null
+fi
 git commit -m "release: ${TASK_ID} → ${NEW_STATUS}" 2>/dev/null || true
 
 # Push to the coordination ref with exponential backoff retry (up to 3

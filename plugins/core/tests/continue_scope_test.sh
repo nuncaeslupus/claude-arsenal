@@ -61,6 +61,13 @@ if [[ "${OUT}" != "${A}" ]]; then
 fi
 echo "PASS: unknown token falls back to title search"
 
+# Gate 4b: token matching is case-insensitive (lowercase resolves to FRONTEND/CLI).
+OUT=$(python3 "${QUERY_PY}" cli frontend --queue "${Q}" | id_of)
+if [[ "${OUT}" != "${A}" ]]; then
+    echo "FAIL: lowercase 'cli frontend' should resolve to ${A}, got ${OUT}" >&2; exit 1
+fi
+echo "PASS: token matching is case-insensitive"
+
 # Gate 5: two distinct workspaces in one invocation is an error.
 if python3 "${QUERY_PY}" FRONTEND BACKEND --queue "${Q}" >/dev/null 2>&1; then
     echo "FAIL: two workspaces should error" >&2; exit 1

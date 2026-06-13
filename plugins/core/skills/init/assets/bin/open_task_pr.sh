@@ -31,11 +31,19 @@ slug="$(printf '%s' "${TITLE}" | tr '[:upper:]' '[:lower:]' \
 [[ -z "${slug}" ]] && slug="task"
 BRANCH="arsenal/${TASK_ID}-${slug}"
 
-# Resolve the host default branch. Prefer the remote's published HEAD; fall back
-# to <remote>/main. Strip the remote prefix for the PR base name.
-default_ref="$(git symbolic-ref --quiet --short "refs/remotes/${REMOTE}/HEAD" 2>/dev/null || true)"
-[[ -z "${default_ref}" ]] && default_ref="${REMOTE}/main"
-default_base="${default_ref#"${REMOTE}/"}"
+# Resolve the host default branch from the remote's published HEAD symref, then
+# fetch it so we branch off its real tip. NEVER fall back to the current HEAD:
+# the worker runs on arsenal-queue, and branching off it would drag the entire
+# queue-coordination history into the PR. Fail fast instead.
+default_branch="$(git ls-remote --symref "${REMOTE}" HEAD 2>/dev/null \
+    | sed -n 's|^ref:[[:space:]]*refs/heads/\([^[:space:]]*\).*|\1|p')"
+[[ -z "${default_branch}" ]] && default_branch="main"
+if git fetch "${REMOTE}" "${default_branch}" >/dev/null 2>&1; then
+    default_ref="FETCH_HEAD"
+else
+    default_ref="${REMOTE}/${default_branch}"
+fi
+default_base="${default_branch}"
 
 # Cut (or switch to) the feature branch off the default branch. Uncommitted
 # worktree changes from the worker carry across the checkout.
@@ -44,8 +52,8 @@ if [[ "${current}" != "${BRANCH}" ]]; then
     if git rev-parse --verify --quiet "${BRANCH}" >/dev/null 2>&1; then
         git checkout "${BRANCH}" >/dev/null 2>&1 || { echo "open_task_pr: cannot switch to ${BRANCH}" >&2; exit 1; }
     elif ! git checkout -b "${BRANCH}" "${default_ref}" >/dev/null 2>&1; then
-        # Default ref may be unfetched locally — branch off HEAD as a fallback.
-        git checkout -b "${BRANCH}" >/dev/null 2>&1 || { echo "open_task_pr: cannot create ${BRANCH}" >&2; exit 1; }
+        echo "open_task_pr: cannot resolve default branch '${default_branch}' (ref '${default_ref}') to branch off" >&2
+        exit 1
     fi
 fi
 

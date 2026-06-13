@@ -67,21 +67,28 @@ def _resolve_tokens(
     is only produced when *every* token is unknown.
     """
     workspaces, tags = _known_axes(rows)
+    # Match case-insensitively but resolve to the canonical stored value so the
+    # downstream LOOP_WORKSPACE/LOOP_TAGS filters compare exactly.
+    ws_map = {w.lower(): w for w in workspaces}
+    tag_map = {t.lower(): t for t in tags}
     workspace: str | None = None
     chosen_tags: list[str] = []
     unknown: list[str] = []
 
     for tok in tokens:
-        if tok in workspaces:
-            if workspace is not None and workspace != tok:
+        key = tok.lower()
+        if key in ws_map:
+            resolved = ws_map[key]
+            if workspace is not None and workspace != resolved:
                 sys.exit(
-                    f"query_task: two workspaces given ({workspace!r}, {tok!r}); "
+                    f"query_task: two workspaces given ({workspace!r}, {resolved!r}); "
                     "a /continue invocation scopes to at most one workspace"
                 )
-            workspace = tok
-        elif tok in tags:
-            if tok not in chosen_tags:
-                chosen_tags.append(tok)
+            workspace = resolved
+        elif key in tag_map:
+            resolved = tag_map[key]
+            if resolved not in chosen_tags:
+                chosen_tags.append(resolved)
         else:
             unknown.append(tok)
 
