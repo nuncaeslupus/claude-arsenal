@@ -8,6 +8,7 @@
 #       (wrong branch / protected branch / no upstream).
 
 QUEUE_BRANCH="${ARSENAL_QUEUE_BRANCH:-arsenal-queue}"
+REMOTE="${ARSENAL_QUEUE_REMOTE:-origin}"
 QUEUE_FILE="claude-arsenal/queue/tasks.jsonl"
 TASK_ID="${1:?release.sh requires <task_id>}"
 NEW_STATUS="${2:?release.sh requires <status>: done|open|blocked|in_progress}"
@@ -69,14 +70,15 @@ git commit -m "release: ${TASK_ID} → ${NEW_STATUS}" 2>/dev/null || true
 # race — fail loud immediately instead of burning all three attempts.
 delay=1
 for attempt in 1 2 3; do
-    if push_err="$(git push origin "HEAD:refs/heads/${QUEUE_BRANCH}" 2>&1)"; then
+    # LANG=C keeps error messages in English so the grep below is locale-safe.
+    if push_err="$(LANG=C git push "${REMOTE}" "HEAD:refs/heads/${QUEUE_BRANCH}" 2>&1)"; then
         exit 0
     fi
     if ! printf '%s' "${push_err}" | grep -qiE 'non-fast-forward|fetch first|cannot lock ref|but expected|failed to update ref'; then
         echo "release.sh: push to '${QUEUE_BRANCH}' failed (not a race): ${push_err}" >&2
         exit 2
     fi
-    git pull --rebase --autostash origin "${QUEUE_BRANCH}" 2>/dev/null \
+    git pull --rebase --autostash "${REMOTE}" "${QUEUE_BRANCH}" 2>/dev/null \
         || git rebase --abort 2>/dev/null || true
     sleep "${delay}"
     delay=$((delay * 2))

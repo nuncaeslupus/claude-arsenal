@@ -18,10 +18,13 @@
 #   2 — error (loud failure, kept distinct from a lost race).
 
 QUEUE_BRANCH="${ARSENAL_QUEUE_BRANCH:-arsenal-queue}"
+REMOTE="${ARSENAL_QUEUE_REMOTE:-origin}"
 QUEUE_FILE="claude-arsenal/queue/tasks.jsonl"
 TASK_ID="${1:?claim.sh requires <task_id>}"
 SESSION_ID="${2:-${CLAUDE_SESSION_ID:-"session-$$"}}"
 
+# _fail writes to stdout (not stderr) — callers check stdout for the
+# "error: " prefix as part of the won/lost/error protocol.
 _fail() { echo "error: $1"; exit 2; }
 
 # Guard: must be on the coordination branch. Off it, HEAD diverges from the
@@ -93,7 +96,8 @@ fi
 
 # Push the local claim commit to the shared coordination ref. Exactly one
 # racer fast-forwards; the rest are rejected non-fast-forward.
-if push_err="$(git push origin "HEAD:refs/heads/${QUEUE_BRANCH}" 2>&1)"; then
+# LANG=C keeps error messages in English so the grep below is locale-safe.
+if push_err="$(LANG=C git push "${REMOTE}" "HEAD:refs/heads/${QUEUE_BRANCH}" 2>&1)"; then
     echo "won"
     echo "${task_json}"
     exit 0
@@ -110,8 +114,8 @@ if printf '%s' "${push_err}" | grep -qiE 'non-fast-forward|fetch first|cannot lo
     # The local claim was already unwound above, so there is nothing to rebase:
     # just resync to the new remote tip (robust against unrelated unstaged
     # files) so the next loop iteration re-evaluates against fresh queue state.
-    git fetch origin "${QUEUE_BRANCH}" >/dev/null 2>&1 || true
-    git reset "origin/${QUEUE_BRANCH}" >/dev/null 2>&1 || true
+    git fetch "${REMOTE}" "${QUEUE_BRANCH}" >/dev/null 2>&1 || true
+    git reset "${REMOTE}/${QUEUE_BRANCH}" >/dev/null 2>&1 || true
     git checkout -- "${QUEUE_FILE}" >/dev/null 2>&1 || true
     echo "lost"
     exit 0
