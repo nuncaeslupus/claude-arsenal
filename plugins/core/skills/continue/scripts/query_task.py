@@ -2,6 +2,7 @@
 """query_task.py - Query the next eligible task or report status for /continue."""
 import argparse
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -30,7 +31,7 @@ def _fuzzy_match(rows: list[dict], search: str) -> dict | None:
     search_lower = search.lower()
     open_rows = [r for r in rows if r.get("status") == "open"]
     for row in open_rows:
-        if search_lower in row.get("title", "").lower():
+        if search_lower in (row.get("title") or "").lower():
             return row
     return None
 
@@ -55,13 +56,17 @@ def main() -> None:
             sys.exit(1)
         return
 
-    # Run queue_eval.sh with optional workspace scope
-    env_prefix = f"LOOP_WORKSPACE={args.workspace} " if args.workspace else ""
+    # Run queue_eval.sh with optional workspace scope. Pass the workspace via
+    # the environment, never interpolated into a shell string — a workspace
+    # name with shell metacharacters would otherwise inject commands.
+    env = os.environ.copy()
+    if args.workspace:
+        env["LOOP_WORKSPACE"] = args.workspace
     result = subprocess.run(
-        f"{env_prefix}bash {QUEUE_EVAL}",
-        shell=True,
+        ["bash", QUEUE_EVAL],
         capture_output=True,
         text=True,
+        env=env,
     )
     output = result.stdout.strip()
     if output:

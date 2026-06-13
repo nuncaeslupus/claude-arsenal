@@ -155,12 +155,25 @@ def _upsert_overview(repo_path: Path, workspace: str, root: str, spec: str, plan
         overview.write_text(OVERVIEW_HEADER, encoding="utf-8")
     content = overview.read_text(encoding="utf-8")
     row = f"| {workspace} | {root} | {spec} | {plan} |"
-    if row not in content:
-        content = content.rstrip("\n") + f"\n{row}\n"
-        overview.write_text(content, encoding="utf-8")
-        print(f"  overview.md: added workspace {workspace}")
-    else:
-        print(f"  overview.md: workspace {workspace} already listed")
+
+    # Match an existing row by workspace name (the first table cell) so a
+    # re-run with changed root/spec/plan updates in place instead of appending
+    # a duplicate.
+    lines = content.splitlines()
+    for i, line in enumerate(lines):
+        cells = [c.strip() for c in line.split("|")[1:-1]]
+        if len(cells) == 4 and cells[0] == workspace:
+            if line == row:
+                print(f"  overview.md: workspace {workspace} already listed")
+            else:
+                lines[i] = row
+                overview.write_text("\n".join(lines) + "\n", encoding="utf-8")
+                print(f"  overview.md: updated workspace {workspace}")
+            return
+
+    content = content.rstrip("\n") + f"\n{row}\n"
+    overview.write_text(content, encoding="utf-8")
+    print(f"  overview.md: added workspace {workspace}")
 
 
 def init_base(repo_path: Path, bundle_override: Path | None = None) -> None:
@@ -217,6 +230,11 @@ def init_workspace(
     plan: str,
     bundle_override: Path | None = None,
 ) -> None:
+    # The workspace name becomes a directory under claude-arsenal/project/;
+    # reject separators and traversal sequences so it cannot escape that root.
+    if not workspace or "/" in workspace or "\\" in workspace or ".." in workspace:
+        sys.exit(f"init: invalid workspace name {workspace!r}")
+
     arsenal = repo_path / "claude-arsenal"
 
     # Ensure base exists first

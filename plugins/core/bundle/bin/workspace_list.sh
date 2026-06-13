@@ -4,6 +4,7 @@
 PROJECT_DIR="claude-arsenal/project"
 [[ -d "${PROJECT_DIR}" ]] || exit 0
 for dir in "${PROJECT_DIR}"/*/; do
+    [[ -d "${dir}" ]] || continue
     name="$(basename "${dir}")"
     if [[ -f "${dir}spec.md" || -f "${dir}plan.md" ]]; then
         echo "${name}"
