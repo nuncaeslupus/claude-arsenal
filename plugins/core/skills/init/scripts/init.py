@@ -88,8 +88,10 @@ OVERVIEW_HEADER = """\
 |------|------|------|------|
 """
 
-# Bundle is at: skills/init/scripts -> skills/init -> skills -> core -> bundle
-_BUNDLE_DIR = Path(__file__).resolve().parent.parent.parent.parent / "bundle"
+# Bundle lives in this skill's assets/ so it travels with the skill when the
+# skill folder is flattened into a consumer's .claude/skills/ (Claude Code web).
+# skills/init/scripts/init.py -> skills/init -> skills/init/assets
+_BUNDLE_DIR = Path(__file__).resolve().parent.parent / "assets"
 
 
 def _bundle_dir(override: Path | None = None) -> Path:
