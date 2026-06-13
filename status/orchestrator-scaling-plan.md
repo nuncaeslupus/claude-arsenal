@@ -72,25 +72,39 @@ pushed, and opened as a PR; gate runs before the PR; failures requeue cleanly.
 
 **Changes:**
 - **`agents/worker.md`** — extend the task-execution protocol (currently steps 1–5). New flow:
-  1. Read payload `claude-arsenal/queue/<id>.md`.
+  1. **Read and cache the payload BEFORE switching branches** — copy
+     `claude-arsenal/queue/<id>.md` to a temp path outside the repo (e.g. `/tmp/<id>.md`), or read it
+     via `git show arsenal-queue:claude-arsenal/queue/<id>.md`. The `claude-arsenal/queue/` tree may be
+     absent or stale on the default branch, so the payload must be captured first (review: line 80).
   2. Create a feature branch **from the host default branch** inside the worktree:
      `DEFAULT=$(git symbolic-ref --short refs/remotes/origin/HEAD || echo origin/main)`;
      `git checkout -b arsenal/<task-id>-<slug> "$DEFAULT"` (slug derived from title).
      *(Branch off `origin/main`, NOT `arsenal-queue`, so the PR diff is only the task's code.)*
-  3. Implement the work.
+  3. Implement the work using the cached payload.
   4. Run host lint gate if present (`make lint`/`npm run lint`) then `gate_run.sh <id>` —
-     **gate failure → `release.sh <id> open` + append `## Failure notes`, do NOT open a PR, exit.**
+     **gate failure → release `open` (which must commit+push the updated payload, incl. `## Failure
+     notes`, back to `arsenal-queue`), do NOT open a PR, exit.**
   5. Commit (Conventional Commits + dynamic `Co-Authored-By`, per `github` skill — never hardcode model),
      `git push -u origin <branch>`, open PR via the `github` skill conventions (`## Summary` / `## Test plan` body).
-  6. `release.sh <id> done`; record the PR URL in a new `pr` field on the queue row (see below) and/or
-     append it to the payload. Exit.
+  6. Release `done --pr <url>` — records the PR URL on the queue row **and** commits+pushes the
+     payload/queue changes back to `arsenal-queue`; worktree edits to the payload are otherwise lost on
+     cleanup (review: line 86). Exit.
+  > **Design tension (line 80/86 ⇒ resolve in execution):** steps 4/6 update queue/payload state on
+  > `arsenal-queue`, but the worktree is now on a feature branch, and `release.sh` *guards* on being on
+  > the coordination branch. The two cannot both hold in one checkout. **Recommended resolution:** the
+  > **orchestrator** (already on `arsenal-queue`) performs release + payload-writeback after the worker
+  > subagent returns its outcome (`done|open`, PR URL, failure notes) — instead of the worker calling
+  > `release.sh` from its feature-branch worktree. Alternatively, make release/writeback branch-agnostic
+  > (operate on the coordination ref via a temp index / dedicated worktree). **See open question below.**
 - **New helper `bin/open_task_pr.sh <task_id> <title>`** (thin, reused by worker): derive slug + branch,
   commit (Conventional + Co-Authored-By placeholder resolved by harness), push, create the PR, print the URL.
   Keeps `worker.md` declarative and the git/PR mechanics testable in isolation. Mirror `release.sh`
   conventions (`LANG=C`, explicit remote via `ARSENAL_QUEUE_REMOTE`/origin, backoff).
 - **Queue schema** — add optional `"pr": "<url|number>"` to the row (append-compatible; older readers ignore).
-  Update `release.sh` to accept an optional `--pr <url>` and persist it, or have the worker write it via a
-  small `set_field` path. Reflect in `AGENTS.md` "Queue format".
+  Update `release.sh` to accept an optional `--pr <url>` and persist it. `release.sh` must also stage the
+  **payload file** `claude-arsenal/queue/<id>.md` (not only `tasks.jsonl`) so `## Failure notes` / PR-URL
+  edits are committed+pushed to `arsenal-queue` rather than lost (review: line 86). Reflect in `AGENTS.md`
+  "Queue format".
 - **`worker.md` "What not to do"** — keep "don't touch tasks.jsonl directly / don't claim"; add
   "branch from the default branch, never from `arsenal-queue`."
 
@@ -136,6 +150,13 @@ Only **selection** (one→N) and **loop shape** change.
 **Note:** workers are isolated by worktree, so they won't clobber each other; file-level conflicts between
 two independent tasks surface at PR/merge time (acceptable, same as human parallel branches).
 
+**Release contention (review: line 138):** concurrent worker completions trigger concurrent queue-state
+pushes to `arsenal-queue`. `release.sh` **already** implements a `LANG=C` fetch–rebase(`--autostash`)–push
+retry with backoff and race-vs-config error classification (built in #52/#53 follow-up), which serializes
+these. Keep `ARSENAL_MAX_WORKERS` small (default 2 — the validated git-push concurrency ceiling); the
+retry count may need raising if N grows. If release moves to the orchestrator (see Deliverable 2 design
+tension), contention collapses to a single writer and this is moot.
+
 ---
 
 ## Deliverable 4 — Token-budget stop
@@ -144,9 +165,11 @@ two independent tasks surface at PR/merge time (acceptable, same as human parall
 
 **Mechanism (the only viable one — `rate_limits` is statusLine-stdin only):**
 - **New `bin/statusline_capture.sh`** — reads statusLine stdin JSON, writes
-  `claude-arsenal/session/rate_limits.json` (gitignored, like `surface_profile.json`) with
-  `five_hour.used_percentage` + `seven_day.used_percentage` + `resets_at`, and still prints a short
-  status line. Registered in host `.claude/settings.json` under `statusLine` with a `refreshInterval`.
+  `claude-arsenal/session/rate_limits.json` **atomically** (write to `…/rate_limits.json.tmp` in the same
+  dir, then `mv` into place) so a concurrent `budget_check.sh` read never sees a partial/corrupt file
+  (review: line 149). Gitignored like `surface_profile.json`; contains `five_hour.used_percentage` +
+  `seven_day.used_percentage` + `resets_at`. Still prints a short status line. Registered in host
+  `.claude/settings.json` under `statusLine` with a `refreshInterval`.
 - **New `bin/budget_check.sh`** — reads `rate_limits.json`; exit 0 if both windows are **under**
   `ARSENAL_QUOTA_STOP_PCT` (default **90**, set to 80 per preference), exit 3 if over (loud, distinct).
   If the file is absent/stale or data missing (non-Pro/Max, pre-first-response, old CC), exit 0 with a
@@ -185,7 +208,8 @@ A task must carry **every** requested tag (AND) and, if a workspace is given, ma
   1. matches a known **workspace** (distinct `workspace` values in the queue / `project/overview.md`)
      → set `LOOP_WORKSPACE` (error if two different workspaces given);
   2. else matches a known **tag** (distinct `tags` values in the queue) → add to `LOOP_TAGS`;
-  3. else → fall back to existing fuzzy `--search` on title.
+  3. else → fall back to existing fuzzy `--search` on title; **multiple unknown tokens are joined with
+     spaces into a single search query** (review: line 190).
   Update `argument-hint` to `"[TAG | WORKSPACE | search-text] …"` and document the inferred multi-token form
   + the AND semantics in "How to use"/Gotchas.
 - **`AGENTS.md`:** document `tags` in Queue format and tag×workspace scoping in the worker loop and seeding.
@@ -249,6 +273,22 @@ and a tag → resolve as workspace first (documented).
 - `ARSENAL_MAX_WORKERS=2` (validated concurrency ceiling), `ARSENAL_QUOTA_STOP_PCT=90`.
 - Gate runs **before** the PR; gate failure requeues and opens **no** PR.
 - Budget check **fails open** when quota isn't observable.
+
+## Open design decision (surfaced by PR #53 review)
+
+**Who performs release + payload-writeback under per-task PRs?** Because the worker switches its
+worktree to a feature branch (off `main`) while queue/payload state lives on `arsenal-queue` (and
+`release.sh` guards on that branch), the worker cannot both hold a feature checkout and run `release.sh`.
+
+- **Option A (recommended):** the **orchestrator** runs release + payload-writeback on `arsenal-queue`
+  after the worker returns its outcome. Cleaner contract, single queue-writer (kills release contention),
+  matches the original "orchestrator dispatches/releases" intent. Cost: worker must return structured
+  outcome (status, PR URL, failure notes) instead of self-releasing.
+- **Option B:** make `release.sh` branch-agnostic (write the queue/payload commit onto the coordination
+  ref via a temp index or a dedicated `arsenal-queue` worktree), so the worker can still self-release
+  from its feature checkout. Keeps the current worker contract; more git plumbing.
+
+Defaulting to **A** in the execution session unless decided otherwise.
 
 ## Out of scope (note as follow-ons)
 
