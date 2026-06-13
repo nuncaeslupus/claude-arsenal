@@ -1,0 +1,6 @@
+{
+  "name": "loop-orchestrator",
+  "version": "0.1.0",
+  "description": "Git-backed DAG task queue with subscription-pool worker loops, a cloud Routine reviewer, and per-session memory bootstrap — one CLAUDE.md line to adopt.",
+  "author": { "name": "nuncaeslupus" }
+}
