@@ -237,7 +237,7 @@ def init_workspace(
     # to ".." on NTFS) and retain the substring ".." guard for defence-in-depth.
     normalized = workspace.rstrip(". ")
     bad = (not normalized or normalized in (".", "..") or ".." in workspace
-           or "/" in workspace or "\\" in workspace)
+           or "/" in workspace or "\\" in workspace or "|" in workspace)
     if bad:
         sys.exit(f"init: invalid workspace name {workspace!r}")
 

@@ -43,7 +43,7 @@ block_match = re.search(r'```(?:bash|sh)\s*\n(.*?)```', section, re.DOTALL)
 if not block_match:
     sys.exit(0)  # prose-only gate — deferred to worker judgment
 
-cmd = block_match.group(1).strip()
+cmd = block_match.group(1).strip().replace('\r', '')
 if not cmd:
     sys.exit(0)
 
