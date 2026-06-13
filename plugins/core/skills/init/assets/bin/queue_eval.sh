@@ -15,7 +15,7 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-python3 - "${QUEUE_FILE}" "${PROFILE}" "${WORKSPACE}" <<'PY' 2>/dev/null || true
+python3 - "${QUEUE_FILE}" "${PROFILE}" "${WORKSPACE}" <<'PY' || true
 import sys, json, pathlib, os
 
 queue_path, profile_path, workspace_filter = sys.argv[1], sys.argv[2], sys.argv[3]
