@@ -107,9 +107,12 @@ git checkout -- "${QUEUE_FILE}" >/dev/null 2>&1 || true
 if printf '%s' "${push_err}" | grep -qiE 'non-fast-forward|fetch first|cannot lock ref|but expected|failed to update ref'; then
     # Remote ref advanced — a genuine race (a plain non-fast-forward, or an
     # atomic ref-update CAS loss: "cannot lock ref … is at X but expected Y").
-    # Resync and report the loss.
-    git pull --rebase origin "${QUEUE_BRANCH}" >/dev/null 2>&1 \
-        || git rebase --abort >/dev/null 2>&1 || true
+    # The local claim was already unwound above, so there is nothing to rebase:
+    # just resync to the new remote tip (robust against unrelated unstaged
+    # files) so the next loop iteration re-evaluates against fresh queue state.
+    git fetch origin "${QUEUE_BRANCH}" >/dev/null 2>&1 || true
+    git reset "origin/${QUEUE_BRANCH}" >/dev/null 2>&1 || true
+    git checkout -- "${QUEUE_FILE}" >/dev/null 2>&1 || true
     echo "lost"
     exit 0
 fi

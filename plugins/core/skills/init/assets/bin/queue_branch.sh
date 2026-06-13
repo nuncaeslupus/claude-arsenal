@@ -37,9 +37,11 @@ if [[ "${current}" == "${QUEUE_BRANCH}" ]]; then
     exit 0
 fi
 
-# Refuse to switch branches with a dirty tree — we'd risk clobbering work.
-if [[ -n "$(git status --porcelain 2>/dev/null)" ]]; then
-    echo "queue_branch.sh: working tree is dirty; commit or stash before switching to '${QUEUE_BRANCH}'" >&2
+# Refuse to switch only when tracked files are modified — those risk being
+# clobbered. Untracked files (-uno excludes them) don't block a checkout and
+# shouldn't block session start-up.
+if [[ -n "$(git status --porcelain -uno 2>/dev/null)" ]]; then
+    echo "queue_branch.sh: tracked files have uncommitted changes; commit or stash before switching to '${QUEUE_BRANCH}'" >&2
     exit 1
 fi
 
@@ -49,6 +51,9 @@ if [[ ${has_remote} -eq 1 ]] \
     git fetch "${REMOTE}" "${QUEUE_BRANCH}" >/dev/null 2>&1 || true
     if git rev-parse --verify --quiet "${QUEUE_BRANCH}" >/dev/null 2>&1; then
         git checkout "${QUEUE_BRANCH}" >/dev/null 2>&1
+        # checkout of an existing local branch does not (re)set upstream — wire
+        # it now so status/ahead-behind is correct without a second run.
+        git branch --set-upstream-to="${REMOTE}/${QUEUE_BRANCH}" >/dev/null 2>&1 || true
     else
         git checkout -b "${QUEUE_BRANCH}" --track "${REMOTE}/${QUEUE_BRANCH}" >/dev/null 2>&1
     fi

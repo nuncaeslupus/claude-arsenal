@@ -76,7 +76,7 @@ for attempt in 1 2 3; do
         echo "release.sh: push to '${QUEUE_BRANCH}' failed (not a race): ${push_err}" >&2
         exit 2
     fi
-    git pull --rebase origin "${QUEUE_BRANCH}" 2>/dev/null \
+    git pull --rebase --autostash origin "${QUEUE_BRANCH}" 2>/dev/null \
         || git rebase --abort 2>/dev/null || true
     sleep "${delay}"
     delay=$((delay * 2))
