@@ -7,8 +7,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INIT_PY="${SCRIPT_DIR}/../skills/init/scripts/init.py"
 ADD_PY="${SCRIPT_DIR}/../skills/queue-add/scripts/create_task.py"
-LIST_SH="${SCRIPT_DIR}/../bundle/bin/workspace_list.sh"
-EVAL_SH="${SCRIPT_DIR}/../bundle/bin/queue_eval.sh"
+LIST_SH="${SCRIPT_DIR}/../skills/init/assets/bin/workspace_list.sh"
+EVAL_SH="${SCRIPT_DIR}/../skills/init/assets/bin/queue_eval.sh"
 
 for f in "${INIT_PY}" "${ADD_PY}" "${LIST_SH}" "${EVAL_SH}"; do
     if [[ ! -f "${f}" ]]; then
@@ -23,14 +23,14 @@ cd "${tmpdir}"
 
 # Gate 1: init creates claude-arsenal/ structure
 echo "# Test repo" > CLAUDE.md
-python3 "${INIT_PY}" --repo-path "${tmpdir}" --bundle-dir "${SCRIPT_DIR}/../bundle"
+python3 "${INIT_PY}" --repo-path "${tmpdir}" --bundle-dir "${SCRIPT_DIR}/../skills/init/assets"
 
 [[ -d "claude-arsenal/bin" ]] || { echo "FAIL: claude-arsenal/bin missing" >&2; exit 1; }
 [[ -f "claude-arsenal/queue/tasks.jsonl" ]] || { echo "FAIL: tasks.jsonl missing" >&2; exit 1; }
 [[ -f "claude-arsenal/session/handover.md" ]] || { echo "FAIL: session/handover.md missing" >&2; exit 1; }
 
 # Gate 2: init --workspace creates workspace dirs
-python3 "${INIT_PY}" --repo-path "${tmpdir}" --workspace FRONTEND --bundle-dir "${SCRIPT_DIR}/../bundle"
+python3 "${INIT_PY}" --repo-path "${tmpdir}" --workspace FRONTEND --bundle-dir "${SCRIPT_DIR}/../skills/init/assets"
 
 [[ -f "claude-arsenal/project/FRONTEND/spec.md" ]] || { echo "FAIL: FRONTEND/spec.md missing" >&2; exit 1; }
 [[ -f "claude-arsenal/project/FRONTEND/plan.md" ]] || { echo "FAIL: FRONTEND/plan.md missing" >&2; exit 1; }
@@ -49,7 +49,7 @@ if ! grep -qF "${MARKER}" CLAUDE.md; then
 fi
 
 # Gate 5: idempotency — second full init does not duplicate marker
-python3 "${INIT_PY}" --repo-path "${tmpdir}" --bundle-dir "${SCRIPT_DIR}/../bundle"
+python3 "${INIT_PY}" --repo-path "${tmpdir}" --bundle-dir "${SCRIPT_DIR}/../skills/init/assets"
 MARKER_COUNT=$(grep -cF "${MARKER}" CLAUDE.md || true)
 if [[ "${MARKER_COUNT}" -ne 1 ]]; then
     echo "FAIL: marker duplicated after second init (count=${MARKER_COUNT})" >&2; exit 1

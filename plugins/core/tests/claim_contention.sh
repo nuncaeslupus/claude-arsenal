@@ -9,7 +9,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CLAIM="${SCRIPT_DIR}/../bundle/bin/claim.sh"
+CLAIM="${SCRIPT_DIR}/../skills/init/assets/bin/claim.sh"
 
 if [[ ! -f "${CLAIM}" ]]; then
     echo "SKIP: claim.sh not found at ${CLAIM}" >&2

@@ -9,7 +9,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INIT_PY="${SCRIPT_DIR}/../skills/init/scripts/init.py"
-BUNDLE_DIR="${SCRIPT_DIR}/../bundle"
+BUNDLE_DIR="${SCRIPT_DIR}/../skills/init/assets"
 
 if [[ ! -f "${INIT_PY}" ]]; then
     echo "SKIP: init.py not found at ${INIT_PY}" >&2

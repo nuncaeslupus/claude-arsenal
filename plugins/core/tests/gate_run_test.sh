@@ -5,7 +5,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-GATE_RUN="${SCRIPT_DIR}/../bundle/bin/gate_run.sh"
+GATE_RUN="${SCRIPT_DIR}/../skills/init/assets/bin/gate_run.sh"
 
 if [[ ! -f "${GATE_RUN}" ]]; then
     echo "SKIP: gate_run.sh not found at ${GATE_RUN}" >&2

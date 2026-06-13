@@ -8,7 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 QUERY_PY="${SCRIPT_DIR}/../skills/continue/scripts/query_task.py"
 ADD_PY="${SCRIPT_DIR}/../skills/queue-add/scripts/create_task.py"
 INIT_PY="${SCRIPT_DIR}/../skills/init/scripts/init.py"
-BUNDLE_DIR="${SCRIPT_DIR}/../bundle"
+BUNDLE_DIR="${SCRIPT_DIR}/../skills/init/assets"
 
 for f in "${QUERY_PY}" "${ADD_PY}" "${INIT_PY}"; do
     if [[ ! -f "${f}" ]]; then

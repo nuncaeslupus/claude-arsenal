@@ -121,6 +121,51 @@ the marketplace layout into the flat layout web expects and tags each copy
 with a `.arsenal-vendored` marker (so re-runs clean up renamed/removed skills
 without touching skills you authored yourself).
 
+### Agent playbook — set up or update for the web
+
+When the user says *"install/update claude-arsenal from its repo to be used
+in Claude Code web"*, run these steps from the consuming project root. They
+are identical for first-time install and for updates — every step is
+idempotent.
+
+1. **Clone the marketplace** at the ref you want (a release tag, or `main`
+   for the latest):
+
+   ```bash
+   git clone --depth 1 https://github.com/nuncaeslupus/claude-arsenal.git /tmp/arsenal
+   ```
+
+2. **Flatten the skills** into `.claude/skills/`. Re-runs prune skills the
+   marketplace has since dropped or renamed and never touch skills you
+   authored yourself:
+
+   ```bash
+   bash /tmp/arsenal/scripts/vendor-skills.sh --src /tmp/arsenal --dest .claude/skills --plugins core
+   ```
+
+3. **Bootstrap the task queue.** The `init` skill ships its own bundle under
+   `assets/`, so this resolves with no plugin tree present — the key reason
+   the queue works on the web at all:
+
+   ```bash
+   python3 .claude/skills/init/scripts/init.py --repo-path .
+   ```
+
+   This creates `claude-arsenal/` (queue, `bin/` scripts, `AGENTS.md`) and
+   injects the session-protocol block into `CLAUDE.md`. Re-running only
+   refreshes stale `claude-arsenal/bin/` files; your queue and project data
+   are left untouched.
+
+4. **Commit both trees** so the next web session sees them:
+
+   ```bash
+   git add .claude/skills claude-arsenal CLAUDE.md .gitignore
+   git commit -m "chore: vendor + bootstrap claude-arsenal for web"
+   ```
+
+The `make update-skills` target below wraps step 2 for repeatability; steps 3
+and 4 stay explicit because they write into your repo.
+
 Add this target to the **consuming project's** Makefile:
 
 ```make
