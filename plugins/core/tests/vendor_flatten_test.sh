@@ -17,11 +17,12 @@ if [[ ! -f "${VENDOR}" ]]; then
 fi
 
 tmpdir=$(mktemp -d)
-cleanup() { rm -rf "${tmpdir}"; }
+cleanup() { cd "${REPO}"; rm -rf "${tmpdir}"; }
 trap cleanup EXIT
 
 # Flatten core skills the way a consumer would for Claude Code web.
-bash "${VENDOR}" --src "${REPO}" --dest "${tmpdir}/.claude/skills" --plugins core >/dev/null 2>&1
+# Keep stderr visible so a vendor failure surfaces in CI logs.
+bash "${VENDOR}" --src "${REPO}" --dest "${tmpdir}/.claude/skills" --plugins core >/dev/null
 
 # Gate 1: the init skill carries its bundle along (assets/ rode with the copy).
 if [[ ! -f "${tmpdir}/.claude/skills/init/assets/bin/queue_eval.sh" ]]; then
@@ -32,7 +33,7 @@ fi
 # resolve the bundle relative to its own location.
 cd "${tmpdir}"
 echo "# Test repo" > CLAUDE.md
-python3 .claude/skills/init/scripts/init.py --repo-path "${tmpdir}" >/dev/null 2>&1
+python3 .claude/skills/init/scripts/init.py --repo-path "${tmpdir}" >/dev/null
 
 # Gate 3: claude-arsenal/ was bootstrapped from the flattened bundle.
 for f in claude-arsenal/bin/queue_eval.sh claude-arsenal/AGENTS.md \

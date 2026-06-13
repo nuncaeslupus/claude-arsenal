@@ -132,7 +132,7 @@ idempotent.
    for the latest):
 
    ```bash
-   git clone --depth 1 https://github.com/nuncaeslupus/claude-arsenal.git /tmp/arsenal
+   rm -rf /tmp/arsenal && git clone --depth 1 https://github.com/nuncaeslupus/claude-arsenal.git /tmp/arsenal
    ```
 
 2. **Flatten the skills** into `.claude/skills/`. Re-runs prune skills the
