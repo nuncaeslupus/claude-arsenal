@@ -96,3 +96,7 @@ python3 "${CLAUDE_SKILL_DIR}/scripts/validate_spec.py" --input status/specificat
 ```
 
 It checks that the required sections (1–4) and the measurable Success criteria block are present and filled — shape only, not content quality. Sections 5–6 are reported as pending until `design` appends them. Exit 0 clean, 1 on a missing or unfilled required section.
+
+## Workspace-aware paths
+
+When `claude-arsenal/project/<WORKSPACE>/` exists, write the spec to `claude-arsenal/project/<WORKSPACE>/spec.md` instead of `status/specification.md`, and in the same pass generate a ≤200-word worker brief at `claude-arsenal/project/<WORKSPACE>/context.md` (the orientation a queue worker reads before touching the task). Otherwise use `status/` as above. The validator takes the path via `--input`; point it at whichever spec file was written.

@@ -120,3 +120,7 @@ Before creating the PR, verify:
 ## Abbreviation
 
 **Abbreviated execution** = Step 2a + Step 2b + Step 2c + Step 4 (tests and gate evidence are not optional in abbreviation). Whether abbreviation is allowed depends on project conventions documented in the host repo's `CLAUDE.md`; that same file can declare `<!-- test-discipline: test-after -->` to fall back to write-tests-after (see Step 2a).
+
+## Workspace-aware paths
+
+When `claude-arsenal/project/<WORKSPACE>/` exists, read the spec and plan from there (`spec.md`, `plan.md`, `context.md`) and record gate evidence in the workspace's `plan.md` instead of `status/`. Otherwise read `status/specification.md` and `status/plan.md` as above. When running under the task queue, the claimed task's payload at `claude-arsenal/queue/<id>.md` carries the acceptance gate, which the queue's gate runner executes before the task is released.

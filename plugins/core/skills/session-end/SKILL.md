@@ -1,6 +1,6 @@
 ---
 name: session-end
-description: Use whenever the user signals end-of-job, invokes /session-end, or a Stop hook fires at conversation close — produces an end-of-job artifact in two steps. Step 1 writes status/handoff.md from current session state if the host repo's CLAUDE.md opts in via the session-end marker; otherwise skips. Step 2 always runs the retrospective — scans recent session transcripts under the project's ~/.claude/projects/ tree for repeated tool errors, throwaway scripts in tmp/, repeated user corrections, and unexpected tool behavior — then surfaces proposed skill updates (to IMPROVEMENTS.md next to the affected skill inside the marketplace repo, otherwise to ~/.claude/proposed-skill-improvements/). Triggers — "wrap up", "we're done", "/session-end", "save the session", "end-of-job retrospective". Owns scripts — query_session_history.py, create_handoff.py. Do NOT use mid-job, for cross-session memory writes (use the auto-memory directory), or to summarize someone else's session.
+description: Use whenever the user signals end-of-job, invokes /session-end, or a Stop hook fires at conversation close — produces an end-of-job artifact in two steps. Step 1 writes status/handoff.md from current session state if the host repo's CLAUDE.md opts in via the session-end marker; otherwise skips. Step 2 always runs the retrospective — scans recent session transcripts under ~/.claude/projects/ for repeated tool errors, throwaway scripts in tmp/, repeated user corrections, and unexpected tool behavior — then surfaces proposed skill updates. Triggers — "wrap up", "we're done", "/session-end", "save the session", "end-of-job retrospective". Do NOT use mid-job, for cross-session memory writes (use the auto-memory directory), or to summarize someone else's session.
 metadata:
   type: workflow
 ---
@@ -69,3 +69,7 @@ Stop-hook setup (so this skill fires at conversation close without an explicit `
 - [handoff-mode](references/handoff-mode.md) — CLAUDE.md marker syntax, `status/handoff.md` template, ticket-mode alternative (load when Step 1 runs).
 - [retrospective-rubric](references/retrospective-rubric.md) — pain-signal catalog, judgment rubric, IMPROVEMENTS.md block format (load when Step 2 surfaces proposals).
 - [auto-fire-setup](references/auto-fire-setup.md) — Stop-hook config snippet + skip-override sentinel (load when wiring auto-fire).
+
+## Workspace-aware paths
+
+When `claude-arsenal/project/<WORKSPACE>/` exists, write the Step 1 handoff to `claude-arsenal/project/<WORKSPACE>/handover.md` and refresh the cross-workspace `claude-arsenal/session/handover.md` instead of `status/handoff.md`. Otherwise use `status/handoff.md` as above. The handoff opt-in marker still governs whether Step 1 runs at all.

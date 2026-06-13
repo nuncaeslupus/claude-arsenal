@@ -1,6 +1,6 @@
 {
   "name": "core",
-  "version": "0.1.0",
-  "description": "Generic engineering workflows for Claude Code: specify, design, execution, review, ship.",
-  "author": { "name": "nuncaeslupus" }
+  "version": "0.2.0",
+  "author": "nuncaeslupus",
+  "description": "Generic engineering workflows plus task queue orchestration: specify, design, execution, review, ship, github, lsp-setup, session-end, and the Python toolchain skills; plus init, continue, queue-add, and queue-status for git-backed DAG queue management."
 }
