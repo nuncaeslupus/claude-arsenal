@@ -76,10 +76,10 @@ def init_loop(repo_path: Path, force: bool = False, bundle_override: Path | None
             claude_md.write_text(content.rstrip("\n") + f"\n\n{CLAUDE_MD_IMPORT}\n")
             print(f"init_loop: added {CLAUDE_MD_IMPORT!r} to CLAUDE.md")
         else:
-            print(f"init_loop: CLAUDE.md already contains import — skipping")
+            print("init_loop: CLAUDE.md already contains import — skipping")
     else:
         claude_md.write_text(f"{CLAUDE_MD_IMPORT}\n")
-        print(f"init_loop: created CLAUDE.md with import")
+        print("init_loop: created CLAUDE.md with import")
 
     print(f"init_loop: .loop/ initialized at {repo_path}")
 
@@ -87,7 +87,7 @@ def init_loop(repo_path: Path, force: bool = False, bundle_override: Path | None
 def main() -> None:
     p = argparse.ArgumentParser(description="Bootstrap .loop/ in a host repository.")
     p.add_argument("--repo-path", default=".", help="Path to the host repository root.")
-    p.add_argument("--force", action="store_true", help="Force re-copy even if core/ already exists.")
+    p.add_argument("--force", action="store_true", help="Force re-copy even if core/ exists.")
     p.add_argument("--bundle-core", help="Override path to plugin bundle core/ (for testing).")
     args = p.parse_args()
     bundle_override = Path(args.bundle_core) if args.bundle_core else None
