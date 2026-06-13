@@ -237,9 +237,10 @@ def init_workspace(
     # to ".." on NTFS) and retain the substring ".." guard for defence-in-depth.
     normalized = workspace.rstrip(". ")
     bad = (not normalized or normalized in (".", "..") or ".." in workspace
-           or "/" in workspace or "\\" in workspace or "|" in workspace)
-    if bad:
-        sys.exit(f"init: invalid workspace name {workspace!r}")
+           or "/" in workspace or "\\" in workspace or "|" in workspace
+           or "\n" in workspace or "\r" in workspace)
+    if bad or any(c in p for p in (root, spec, plan) for c in ("|", "\n", "\r")):
+        sys.exit("init: invalid workspace name or paths (must not contain '|' or newlines)")
 
     arsenal = repo_path / "claude-arsenal"
 
