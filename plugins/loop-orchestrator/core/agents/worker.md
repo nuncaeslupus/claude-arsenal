@@ -26,7 +26,7 @@ Verify `pwd` at the start of the task if unsure.
 2. Implement the work described in the payload.
 3. Run `.loop/core/scripts/gate_run.sh <task_id>`.
    - Exit 0 → gate passed; proceed to step 4.
-   - Exit 1 → gate failed; run `release.sh <task_id> open`, append a
+   - Exit 1 → gate failed; run `.loop/core/scripts/release.sh <task_id> open`, append a
      `## Failure notes` section to the payload with the failure details,
      then exit.
 4. Run `.loop/core/scripts/release.sh <task_id> done`.

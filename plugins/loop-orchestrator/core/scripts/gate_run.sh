@@ -39,7 +39,7 @@ if not section_match:
 section = section_match.group(1)
 
 # Find first ```bash or ```sh code block inside the section.
-block_match = re.search(r'```(?:bash|sh)\n(.*?)```', section, re.DOTALL)
+block_match = re.search(r'```(?:bash|sh)\s*\n(.*?)```', section, re.DOTALL)
 if not block_match:
     sys.exit(0)  # prose-only gate — deferred to worker judgment
 
@@ -55,7 +55,7 @@ with tempfile.NamedTemporaryFile(mode='w', suffix='.sh', delete=False) as f:
 try:
     os.chmod(tmp, 0o700)
     result = subprocess.run(['bash', tmp])
-    sys.exit(result.returncode)
+    sys.exit(1 if result.returncode != 0 else 0)
 finally:
     os.unlink(tmp)
 PY
