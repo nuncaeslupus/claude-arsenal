@@ -1,13 +1,35 @@
 #!/usr/bin/env bash
 # claim.sh <task_id> [<session_id>]
 # Attempts to claim an open task with optimistic git-push concurrency.
-# Stdout on success : "won" then the task JSON on the next line.
-# Stdout on race loss: "lost"
-# Exit: 0 always.
+#
+# The queue lives on a dedicated coordination branch (default: arsenal-queue,
+# override with ARSENAL_QUEUE_BRANCH). All orchestrator sessions MUST run on
+# that branch so its remote ref is the shared lock: two sessions race to
+# fast-forward the same ref and Git lets exactly one win. Per-task code work
+# happens in worktrees on feature branches, never on this branch.
+#
+# Stdout:
+#   "won" + task JSON   — claim landed on the remote.
+#   "lost"              — another session won the race (remote ref moved on).
+#   "error: <reason>"   — misconfiguration (wrong branch, protected branch,
+#                         no upstream/remote). NOT a race; the loop must stop.
+# Exit:
+#   0 — won or lost.
+#   2 — error (loud failure, kept distinct from a lost race).
 
+QUEUE_BRANCH="${ARSENAL_QUEUE_BRANCH:-arsenal-queue}"
 QUEUE_FILE="claude-arsenal/queue/tasks.jsonl"
 TASK_ID="${1:?claim.sh requires <task_id>}"
 SESSION_ID="${2:-${CLAUDE_SESSION_ID:-"session-$$"}}"
+
+_fail() { echo "error: $1"; exit 2; }
+
+# Guard: must be on the coordination branch. Off it, HEAD diverges from the
+# push target and every claim silently looks "lost" — fail loud instead.
+current_branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+if [[ "${current_branch}" != "${QUEUE_BRANCH}" ]]; then
+    _fail "not on coordination branch '${QUEUE_BRANCH}' (HEAD=${current_branch:-unknown}); run queue_branch.sh first"
+fi
 
 _claim_json() {
     python3 - "${TASK_ID}" "${SESSION_ID}" "${QUEUE_FILE}" <<'PY'
@@ -59,7 +81,7 @@ fi
 
 task_json="${result#ok$'\n'}"
 
-# Stage, commit, and push.
+# Stage, commit, and push to the coordination branch.
 git add "${QUEUE_FILE}" 2>/dev/null || { echo "lost"; exit 0; }
 
 if ! git commit -m "claim: ${TASK_ID} → in_progress [${SESSION_ID}]" >/dev/null 2>&1; then
@@ -69,16 +91,30 @@ if ! git commit -m "claim: ${TASK_ID} → in_progress [${SESSION_ID}]" >/dev/nul
     exit 0
 fi
 
-if git push >/dev/null 2>&1; then
+# Push the local claim commit to the shared coordination ref. Exactly one
+# racer fast-forwards; the rest are rejected non-fast-forward.
+if push_err="$(git push origin "HEAD:refs/heads/${QUEUE_BRANCH}" 2>&1)"; then
     echo "won"
     echo "${task_json}"
-else
-    # Push rejected — another session already pushed a claim.
-    # Mixed reset (not --hard) to preserve any uncommitted user files.
-    git reset HEAD~1 >/dev/null 2>&1 || true
-    git checkout -- "${QUEUE_FILE}" >/dev/null 2>&1 || true
-    git pull --rebase >/dev/null 2>&1 || git rebase --abort >/dev/null 2>&1 || true
-    echo "lost"
+    exit 0
 fi
 
-exit 0
+# Push failed. Unwind the local claim either way: mixed reset (not --hard)
+# preserves any uncommitted user files.
+git reset HEAD~1 >/dev/null 2>&1 || true
+git checkout -- "${QUEUE_FILE}" >/dev/null 2>&1 || true
+
+if printf '%s' "${push_err}" | grep -qiE 'non-fast-forward|fetch first|cannot lock ref|but expected|failed to update ref'; then
+    # Remote ref advanced — a genuine race (a plain non-fast-forward, or an
+    # atomic ref-update CAS loss: "cannot lock ref … is at X but expected Y").
+    # Resync and report the loss.
+    git pull --rebase origin "${QUEUE_BRANCH}" >/dev/null 2>&1 \
+        || git rebase --abort >/dev/null 2>&1 || true
+    echo "lost"
+    exit 0
+fi
+
+# Anything else (protected branch, permission denied, no remote/upstream) is a
+# misconfiguration, not a race. Fail loud so the loop stops instead of spinning
+# on a deadlock that looks like an endless lost race.
+_fail "push to '${QUEUE_BRANCH}' failed (not a race): ${push_err}"
