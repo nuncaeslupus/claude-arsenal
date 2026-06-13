@@ -40,7 +40,7 @@ The payload is the first thing a worker reads; include a gate line and one refer
 anchor per spec section, decision record, or sibling pattern needed to start —
 spare them the grep.
 
-Load `references/payload-template.md` when writing the payload file for a new task.
+Load `.claude/skills/queue-add/references/payload-template.md` when writing the payload file for a new task.
 
 Example:
 
