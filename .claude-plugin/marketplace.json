@@ -10,12 +10,7 @@
     {
       "name": "core",
       "source": "./plugins/core",
-      "description": "Generic engineering workflows for Claude Code: specify, design, execution, review, ship, plus github, lsp-setup, session-end, and the Python toolchain skills python-bootstrap, pypi-release, coverage-gaps, dep-upgrade, and mutmut-report."
-    },
-    {
-      "name": "loop-orchestrator",
-      "source": "./plugins/loop-orchestrator",
-      "description": "Git-backed DAG task queue with subscription-pool worker loops, a cloud Routine reviewer, and per-session memory bootstrap — one CLAUDE.md line to adopt."
+      "description": "Generic engineering workflows plus task queue orchestration: specify, design, execution, review, ship, github, lsp-setup, session-end, and the Python toolchain skills; plus init, continue, queue-add, and queue-status for git-backed DAG queue management."
     }
   ]
 }
