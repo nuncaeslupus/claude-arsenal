@@ -22,16 +22,19 @@ Verify `pwd` at the start of the task if unsure.
 ## Task execution protocol
 
 1. Read the task payload: `.loop/state/tasks/<task_id>.md`
-   — the payload is a REASONS Canvas describing the task, acceptance
-   criteria, and any constraints.
+   — the payload describes the task, acceptance gate, and any constraints.
 2. Implement the work described in the payload.
-3. Run tests; verify the acceptance gate from the payload passes.
+3. Run `.loop/core/scripts/gate_run.sh <task_id>`.
+   - Exit 0 → gate passed; proceed to step 4.
+   - Exit 1 → gate failed; run `.loop/core/scripts/release.sh <task_id> open`, append a
+     `## Failure notes` section to the payload with the failure details,
+     then exit.
 4. Run `.loop/core/scripts/release.sh <task_id> done`.
 5. Exit — do not pick up the next task; the orchestrator handles dispatch.
 
 ## On failure
 
-If implementation cannot be completed:
+If implementation cannot be completed for any other reason:
 
 - Run `.loop/core/scripts/release.sh <task_id> open` to requeue the task.
 - Write a brief failure note to `.loop/state/tasks/<task_id>.md` under a
