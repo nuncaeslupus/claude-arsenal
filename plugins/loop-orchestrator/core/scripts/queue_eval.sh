@@ -34,8 +34,10 @@ for line in queue.read_text().splitlines():
         except json.JSONDecodeError:
             pass
 
-# Load surface capabilities (empty set → match tasks with no requirements).
-capabilities: set[str] = set()
+# Load surface capabilities.
+# None = no profile file → no capability filtering (match all tasks).
+# This allows CC Web sessions without hooks and fresh inits to pick up any task.
+capabilities = None
 profile = pathlib.Path(profile_path)
 if profile.exists():
     try:
@@ -55,10 +57,11 @@ for row in rows:
     deps = [d["id"] for d in row.get("deps", []) if d.get("type") == "blocks"]
     if any(dep not in done_ids for dep in deps):
         continue
-    # Check surface / service requirements.
-    requires = row.get("requires", [])
-    if requires and not all(r in capabilities for r in requires):
-        continue
+    # Check surface / service requirements only when a profile is present.
+    if capabilities is not None:
+        requires = row.get("requires", [])
+        if requires and not all(r in capabilities for r in requires):
+            continue
     candidates.append(row)
 
 if not candidates:

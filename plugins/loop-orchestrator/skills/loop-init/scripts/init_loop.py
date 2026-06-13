@@ -3,11 +3,39 @@
 Bootstrap .loop/ in a host repository from the plugin-bundled core/.
 """
 import argparse
+import json
 import shutil
 import sys
 from pathlib import Path
 
-CLAUDE_MD_IMPORT = "@.loop/core/AGENTS.md"
+# Marker used to detect whether the session-protocol block is already present.
+CLAUDE_MD_MARKER = "<!-- loop-orchestrator: auto-managed -->"
+
+# Full block injected into CLAUDE.md — includes proactive session-start instructions
+# and the @import for AGENTS.md mechanics.
+CLAUDE_MD_BLOCK = """\
+<!-- loop-orchestrator: auto-managed -->
+## Task queue — automatic session protocol
+
+This project uses loop-orchestrator. Every session, without waiting to be asked:
+
+1. Check `.loop/state/handover.md` — read it if it has content beyond the template
+   placeholder (look for filled-in "Last task" and "What was done" sections).
+2. Run `.loop/core/scripts/queue_eval.sh`.
+   - **Open tasks exist** → start the worker loop (see `@.loop/core/AGENTS.md`).
+   - **Queue empty and `status/plan.md` exists** → seed the queue from the plan
+     table then start workers (see "Queue seeding from plan.md" in AGENTS.md).
+   - **Queue empty, no plan** → ask what to work on.
+3. Before ending any session where tasks remain open: fill in `.loop/state/handover.md`.
+
+@.loop/core/AGENTS.md"""
+
+# Default surface profile written on init — permits all tasks when detect_surface.sh
+# has not run (CC Web without hooks, or first CLI session before hook fires).
+DEFAULT_SURFACE_PROFILE = {
+    "surface": "unknown",
+    "capabilities": ["surface:cli", "surface:web"],
+}
 
 # Bundle core/ is three levels up from this script:
 # skills/loop-init/scripts -> skills/loop-init -> skills -> loop-orchestrator -> core
@@ -54,33 +82,42 @@ def init_loop(repo_path: Path, force: bool = False, bundle_override: Path | None
 
     queue_file = target_state / "queue.jsonl"
     if not queue_file.exists():
-        queue_file.write_text("")
+        queue_file.write_text("", encoding="utf-8")
         print(f"init_loop: created {queue_file}")
 
     handover_file = target_state / "handover.md"
     if not handover_file.exists():
-        template = (target_core / "handover.md")
+        template = target_core / "handover.md"
         if template.exists():
             shutil.copy(template, handover_file)
         else:
             handover_file.write_text(
-                "<!-- handover.md — written by /loop-start when a session ends mid-queue -->\n"
+                "<!-- handover.md — written by loop-start when a session ends mid-queue -->\n",
+                encoding="utf-8",
             )
         print(f"init_loop: created {handover_file}")
 
-    # Wire CLAUDE.md
+    # Default surface profile — permits all tasks until detect_surface.sh overwrites it.
+    profile_file = target_state / "surface_profile.json"
+    if not profile_file.exists():
+        profile_file.write_text(
+            json.dumps(DEFAULT_SURFACE_PROFILE, indent=2) + "\n", encoding="utf-8"
+        )
+        print(f"init_loop: created default {profile_file}")
+
+    # Wire CLAUDE.md with proactive session-start block + @import
     claude_md = repo_path / "CLAUDE.md"
     if claude_md.exists():
         content = claude_md.read_text(encoding="utf-8")
-        if CLAUDE_MD_IMPORT not in content:
-            new_content = content.rstrip("\n") + f"\n\n{CLAUDE_MD_IMPORT}\n"
+        if CLAUDE_MD_MARKER not in content:
+            new_content = content.rstrip("\n") + f"\n\n{CLAUDE_MD_BLOCK}\n"
             claude_md.write_text(new_content, encoding="utf-8")
-            print(f"init_loop: added {CLAUDE_MD_IMPORT!r} to CLAUDE.md")
+            print("init_loop: injected session-protocol block into CLAUDE.md")
         else:
-            print("init_loop: CLAUDE.md already contains import — skipping")
+            print("init_loop: CLAUDE.md already contains session-protocol block — skipping")
     else:
-        claude_md.write_text(f"{CLAUDE_MD_IMPORT}\n", encoding="utf-8")
-        print("init_loop: created CLAUDE.md with import")
+        claude_md.write_text(f"{CLAUDE_MD_BLOCK}\n", encoding="utf-8")
+        print("init_loop: created CLAUDE.md with session-protocol block")
 
     print(f"init_loop: .loop/ initialized at {repo_path}")
 
