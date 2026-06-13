@@ -33,6 +33,26 @@ python3 .claude/skills/queue-add/scripts/create_task.py \
 The script generates a `lo-XXXX` hash ID, writes the row, and prints the assigned ID.
 Use the printed ID as a `--deps` argument when adding dependent tasks.
 
+## Writing the payload file
+
+After `create_task.py` prints the new ID, create `claude-arsenal/queue/<id>.md`.
+The payload is the first thing a worker reads; include a gate line and one reference
+anchor per spec section, decision record, or sibling pattern needed to start —
+spare them the grep.
+
+Load `references/payload-template.md` when writing the payload file for a new task.
+
+Example:
+
+```markdown
+**Gate**: metric_name ≥ threshold on held-out test set
+
+## References
+- Spec: `spec.md §7.3` — table defining the gate formula
+- Decision: `DECISIONS.md #1` — rationale for approach chosen in design
+- Sibling: `<subproject>/path/to/sibling.py` — pattern to reuse for implementation
+```
+
 ## Gotchas
 
 - **Deps must already exist in the queue.** The script rejects `--deps` values that do not match an existing task ID.
