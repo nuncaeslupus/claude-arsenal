@@ -53,11 +53,19 @@ The table columns are: `T# | Description | Location | Size | Depends | Gate | Te
    ```
 
 3. For each task, create its payload file at `.loop/state/tasks/<id>.md`:
+
    ```markdown
    # T1: <Description>
 
    ## Acceptance gate
-   <Gate column content>
+   <Gate column content — prose describing what must be true.>
+
+   If the check is mechanically runnable, also add a bash block:
+   ```bash
+   bash tests/my_feature_test.sh
+   ```
+   gate_run.sh executes this block automatically before release.sh done.
+   Prose-only gates are verified by worker judgment with no script run.
 
    ## Tests
    <Tests column content>
