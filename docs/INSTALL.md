@@ -7,7 +7,7 @@ project three plugins:
   editing change to a skill, plus the validator/auditor/scaffolder
   scripts everything else is checked against.
 - **`core`** — generic engineering workflow skills (`specify`,
-  `design`, `execution`, `review`, `ship`, `github`,
+  `design`, `execution`, `review`, `ship`, `github`, `gate-check`,
   `lsp-setup`, `session-end`) plus the Python toolchain skills
   (`python-bootstrap`, `pypi-release`, `coverage-gaps`, `dep-upgrade`,
   `mutmut-report`).
