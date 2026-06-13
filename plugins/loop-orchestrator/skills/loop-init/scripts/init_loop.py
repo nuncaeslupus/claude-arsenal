@@ -110,7 +110,13 @@ def init_loop(repo_path: Path, force: bool = False, bundle_override: Path | None
     if claude_md.exists():
         content = claude_md.read_text(encoding="utf-8")
         if CLAUDE_MD_MARKER not in content:
-            new_content = content.rstrip("\n") + f"\n\n{CLAUDE_MD_BLOCK}\n"
+            # Migrate repos that have the old standalone import (pre-protocol-block init).
+            # Replace it in-place to avoid a duplicate @.loop/core/AGENTS.md line.
+            old_import = "@.loop/core/AGENTS.md"
+            if old_import in content:
+                new_content = content.replace(old_import, CLAUDE_MD_BLOCK)
+            else:
+                new_content = content.rstrip("\n") + f"\n\n{CLAUDE_MD_BLOCK}\n"
             claude_md.write_text(new_content, encoding="utf-8")
             print("init_loop: injected session-protocol block into CLAUDE.md")
         else:

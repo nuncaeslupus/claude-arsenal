@@ -68,6 +68,22 @@ if [[ "${SURFACE}" != "unknown" ]]; then
     echo "FAIL: surface_profile.json surface is '${SURFACE}', expected 'unknown'" >&2; exit 1
 fi
 
+# Gate 4c: migration — repo with old standalone import gets replaced, no duplicate
+tmpdir2=$(mktemp -d)
+trap "rm -rf '${tmpdir2}'" EXIT
+printf "# Old repo\n@.loop/core/AGENTS.md\n" > "${tmpdir2}/CLAUDE.md"
+python3 "${INIT_PY}" \
+    --repo-path "${tmpdir2}" \
+    --bundle-core "${BUNDLE_CORE}" 2>/dev/null
+IMPORT_COUNT=$(grep -c "@.loop/core/AGENTS.md" "${tmpdir2}/CLAUDE.md" || true)
+MARKER_COUNT2=$(grep -cF "${MARKER}" "${tmpdir2}/CLAUDE.md" || true)
+if [[ "${IMPORT_COUNT}" -gt 2 ]]; then
+    echo "FAIL: migration produced duplicate imports (${IMPORT_COUNT} occurrences)" >&2; exit 1
+fi
+if [[ "${MARKER_COUNT2}" -ne 1 ]]; then
+    echo "FAIL: migration did not inject session-protocol block" >&2; exit 1
+fi
+
 # Gate 5: .loop/state/tasks/ directory exists
 if [[ ! -d "${tmpdir}/.loop/state/tasks" ]]; then
     echo "FAIL: .loop/state/tasks/ directory missing" >&2; exit 1

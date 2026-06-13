@@ -33,11 +33,12 @@ The table columns are: `T# | Description | Location | Size | Depends | Gate | Te
 
 **Steps:**
 
-1. Add tasks with no dependencies first, capturing each printed ID:
+1. Add tasks with no dependencies first, capturing each printed ID
+   (priority: S=10, M=5, L=1):
    ```bash
    python3 .claude/skills/loop-add/scripts/create_task.py \
      --title "T1: <Description>" \
-     --priority <10=S, 5=M, 1=L> \
+     --priority 10 \
      --queue .loop/state/queue.jsonl
    # → prints e.g. lo-a3f8
    ```
