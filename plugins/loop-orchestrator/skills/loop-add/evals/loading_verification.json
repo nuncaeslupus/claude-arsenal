@@ -1,0 +1,11 @@
+{
+  "skill": "loop-add",
+  "canary": "loop-add-loaded-2026-06-13-fb78d23e-07a0eca4c9e64e67",
+  "negative_control": "this-fact-is-false-and-must-not-appear-in-the-skill-body",
+  "load_prompts": [
+    "Use the loop-add skill to ..."
+  ],
+  "no_load_prompts": [
+    "Generic prompt that should NOT activate loop-add"
+  ]
+}

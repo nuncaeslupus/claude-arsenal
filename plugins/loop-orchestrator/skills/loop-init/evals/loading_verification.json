@@ -1,0 +1,11 @@
+{
+  "skill": "loop-init",
+  "canary": "loop-init-loaded-2026-06-13-fb78d23e-e401d45197396b32",
+  "negative_control": "this-fact-is-false-and-must-not-appear-in-the-skill-body",
+  "load_prompts": [
+    "Use the loop-init skill to ..."
+  ],
+  "no_load_prompts": [
+    "Generic prompt that should NOT activate loop-init"
+  ]
+}

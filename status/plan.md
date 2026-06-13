@@ -109,7 +109,8 @@ PR opened
 
 | T# | Gate | Measured | Command | SHA | Env | Date |
 |----|------|----------|---------|-----|-----|------|
-| (pending) | | | | | | |
+| T1 | make audit exits 0 | PASS — 7948/8000 chars (52 remaining, 0% headroom); 0 FAILs across 20 skills | `make audit && make validate` | (see commit) | linux/uv | 2026-06-13 |
+| T1 | listing-budget headroom ≥ 50% | DEVIATION — budget is 0% headroom. Core grew to 14 skills (7155 chars) before T1; impossible to meet 50% target without trimming existing descriptions. make audit exits 0 (under hard cap). | n/a | n/a | n/a | 2026-06-13 |
 
 ### Dependency graph
 
