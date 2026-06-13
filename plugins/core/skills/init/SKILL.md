@@ -40,8 +40,9 @@ The script:
 2. Copies bundle scripts from the plugin into `claude-arsenal/bin/` (checksum-based; refreshes stale files only).
 3. Creates empty `claude-arsenal/queue/tasks.jsonl` and `claude-arsenal/session/handover.md`.
 4. Writes a permissive `surface_profile.json` (gitignored) so all tasks are eligible on any surface.
-5. Adds `.gitignore` entry for `claude-arsenal/session/surface_profile.json`.
-6. Injects the session-start protocol block + `@claude-arsenal/AGENTS.md` import into `CLAUDE.md`.
+5. Adds `.gitignore` entries for `surface_profile.json` and the statusLine-written `rate_limits.json`.
+6. Registers `statusline_capture.sh` as the host `statusLine` command (skipped if one already exists) so `budget_check.sh` can read quota.
+7. Injects the session-start protocol block + `@claude-arsenal/AGENTS.md` import into `CLAUDE.md`.
 
 With `--workspace NAME`, additionally:
 - Creates `claude-arsenal/project/<NAME>/` with `spec.md`, `plan.md`, `context.md`, `handover.md` stubs.

@@ -2,7 +2,7 @@
 name: queue-add
 description: When the user wants to add a task to the claude-arsenal queue. Do NOT use to update or remove existing tasks.
 user-invocable: true
-argument-hint: "--title TITLE [--priority N] [--workspace NAME] [--requires surface:X] [--deps lo-XXXX]"
+argument-hint: "--title TITLE [--priority N] [--workspace NAME] [--tag TAG] [--requires surface:X] [--deps lo-XXXX]"
 ---
 
 # queue-add
@@ -26,6 +26,7 @@ python3 .claude/skills/queue-add/scripts/create_task.py \
   --title "Implement claim.sh" \
   --priority 10 \
   --workspace BACKEND \
+  --tag CLI \
   --requires "surface:cli" \
   --deps lo-a1b2
 ```
@@ -58,3 +59,4 @@ Example:
 - **Deps must already exist in the queue.** The script rejects `--deps` values that do not match an existing task ID.
 - **`requires` values are exact strings.** Use `surface:cli` or `surface:web`; unrecognised values pass through but will never match a worker's surface profile.
 - **`--workspace` scopes the task.** When set, `queue_eval.sh` with `LOOP_WORKSPACE=X` will only return tasks for that workspace.
+- **`--tag` (repeatable) adds free-form labels.** `/continue CLI` scopes the loop to tasks carrying tag `CLI` (multiple tags AND together via `LOOP_TAGS`). Tags are orthogonal to `--workspace` and `--requires`.

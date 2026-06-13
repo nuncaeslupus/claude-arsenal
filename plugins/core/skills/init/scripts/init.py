@@ -123,6 +123,38 @@ def _refresh_bundle(bundle: Path, target: Path) -> None:
             print(f"  refreshed:  {rel}")
 
 
+def _register_statusline(repo_path: Path) -> None:
+    """Register statusline_capture.sh as the host statusLine command.
+
+    Writes/merges .claude/settings.json. A user's existing statusLine is never
+    clobbered — the budget guard is best-effort and must not override a custom
+    status line the user already configured.
+    """
+    settings_path = repo_path / ".claude" / "settings.json"
+    block = {
+        "type": "command",
+        "command": "bash claude-arsenal/bin/statusline_capture.sh",
+    }
+    if settings_path.exists():
+        try:
+            settings = json.loads(settings_path.read_text(encoding="utf-8"))
+            if not isinstance(settings, dict):
+                settings = {}
+        except json.JSONDecodeError:
+            print("  settings.json: unparseable — skipping statusLine registration")
+            return
+        if "statusLine" in settings:
+            print("  settings.json: statusLine already set — skipping")
+            return
+        settings["statusLine"] = block
+    else:
+        settings = {"statusLine": block}
+
+    settings_path.parent.mkdir(parents=True, exist_ok=True)
+    settings_path.write_text(json.dumps(settings, indent=2) + "\n", encoding="utf-8")
+    print("  settings.json: registered statusLine (statusline_capture.sh)")
+
+
 def _add_gitignore_entry(repo_path: Path, entry: str) -> None:
     gitignore = repo_path / ".gitignore"
     if gitignore.exists():
@@ -215,8 +247,12 @@ def init_base(repo_path: Path, bundle_override: Path | None = None) -> None:
         )
         print(f"  created: {profile.relative_to(repo_path)}")
 
-    # .gitignore
+    # .gitignore — surface profile + the statusLine-written rate-limit snapshot
     _add_gitignore_entry(repo_path, "claude-arsenal/session/surface_profile.json")
+    _add_gitignore_entry(repo_path, "claude-arsenal/session/rate_limits.json")
+
+    # statusLine command feeding budget_check.sh (token-budget stop)
+    _register_statusline(repo_path)
 
     # CLAUDE.md
     _inject_claude_md(repo_path)

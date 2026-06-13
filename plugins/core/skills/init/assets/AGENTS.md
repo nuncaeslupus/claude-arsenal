@@ -145,26 +145,98 @@ The table columns are: `T# | Description | Location | Size | Depends | Gate | Te
 
 ---
 
-## Worker loop algorithm
+## Worker loop algorithm (parallel fan-out)
 
-Run when the queue has open tasks:
+One orchestrator claims up to `ARSENAL_MAX_WORKERS` independent tasks and
+dispatches that many workers at once. Run when the queue has open tasks:
 
 1. Apply credit guards (see below) if not already set this session.
-2. Run `claude-arsenal/bin/queue_eval.sh` → task JSON on stdout, empty if exhausted.
-3. If empty → loop done; report summary and write handover.md.
-4. Run `claude-arsenal/bin/claim.sh <task_id> <session_id>`.
-   - `won` → proceed to step 5.
-   - `lost` → another worker claimed it; return to step 2.
-   - `error: …` (exit 2) → **stop the loop and surface to the user.** This is a
+2. **Budget check** — `claude-arsenal/bin/budget_check.sh`.
+   - exit `0` → under quota (or quota unobservable; fail-open). Continue.
+   - exit `3` → at/above `ARSENAL_QUOTA_STOP_PCT`. **Stop the loop**, write
+     `handover.md`, and report the remaining % + reset time. Do not dispatch.
+3. `claude-arsenal/bin/queue_batch.sh --max "${ARSENAL_MAX_WORKERS:-2}"` → up to
+   N task JSON lines (JSONL), respecting `LOOP_WORKSPACE` / `LOOP_TAGS` scope and
+   excluding any task that blocks another in the same batch.
+   - Empty → loop done; report summary and write `handover.md`.
+4. For each task line, `claude-arsenal/bin/claim.sh <task_id> <session_id>`
+   (sequential — each push is atomic):
+   - `won` → keep the task in the dispatch set.
+   - `lost` → another session claimed it; drop it from this batch.
+   - `error: …` (exit 2) → **stop the loop and surface to the user.** A
      misconfiguration, not a race (wrong branch, protected coordination branch,
-     no upstream). Do **not** return to step 2 — retrying spins forever on a
-     deadlock. Re-run `queue_branch.sh` or fix the branch protection, then
-     resume.
-5. Spawn **Task-tool worker subagent** (see `agents/worker.md`):
+     no upstream). Do **not** retry — it spins forever on a deadlock. Re-run
+     `queue_branch.sh` or fix the branch protection, then resume.
+5. **Spawn every won task as a Task-tool worker subagent in ONE message**
+   (see `agents/worker.md`) so they run concurrently:
    - `isolation: worktree`
-   - Inject relative-path directive and task payload path.
-6. Worker completes → `claude-arsenal/bin/release.sh <task_id> done` (called by worker).
+   - Inject the relative-path directive and the task payload path.
+6. **Wait for all workers**, then for each returned outcome, record it on
+   `arsenal-queue` yourself (the worker is on a feature branch and cannot run
+   `release.sh` — see **Per-task PRs** below):
+   - `done` + PR URL/branch → `claude-arsenal/bin/release.sh <task_id> done --pr <url|branch>`.
+   - `open` + failure notes → append a `## Failure notes` section to
+     `claude-arsenal/queue/<task_id>.md`, then `claude-arsenal/bin/release.sh <task_id> open`
+     (which commits the payload edit too).
 7. Return to step 2.
+
+---
+
+## Per-task PRs
+
+Each worker implements its task in an isolated worktree, cuts a feature branch
+off the **host default branch** (`origin/main`, never `arsenal-queue`) via
+`claude-arsenal/bin/open_task_pr.sh`, runs the host lint gate + `gate_run.sh`,
+and — only if the gate passes — commits (Conventional Commits + the dynamic
+`Co-Authored-By` from the `github` skill, never a hardcoded model), pushes, and
+opens a PR. The PR diff is just that task's code.
+
+Workers do **not** run `release.sh`: they are on a feature-branch worktree and
+`release.sh` guards on `arsenal-queue`. Instead a worker **returns its outcome**
+(status, PR URL or `branch:<name>`, failure notes) and the orchestrator — the
+single writer on `arsenal-queue` — records it (loop step 6). This keeps one
+queue writer and collapses release contention.
+
+The queue row carries an optional `"pr"` field once recorded.
+`release.sh … --pr <url>` sets it and also stages the payload file so
+`## Failure notes` / PR-URL edits land on the coordination ref.
+
+> **Web caveat:** Claude Code on the web may route git through a proxy that
+> restricts pushes to the session's designated branch (feature-branch pushes can
+> return HTTP 403). Per-task PRs are **CLI-first** — verify a feature-branch
+> push succeeds on the web before relying on it there. On the CLI it is
+> unrestricted.
+
+---
+
+## Quota governance — token-budget stop
+
+`statusline_capture.sh` (registered by `/init` as the host `statusLine` command)
+writes `claude-arsenal/session/rate_limits.json` (gitignored) from the
+`rate_limits` block Claude Code feeds a statusLine on stdin — the only channel
+that data arrives on. Before every dispatch, the loop runs `budget_check.sh`:
+
+- Either window (`five_hour` / `seven_day`) at/above `ARSENAL_QUOTA_STOP_PCT`
+  (default 90) → exit `3`: stop, write `handover.md`, report the reset time.
+- File missing / fields absent (non-Pro/Max plan, before the first response,
+  older Claude Code) → exit `0`, **fail-open**: the loop runs where quota is not
+  observable.
+
+`rate_limits` is a snapshot at the last message and is **Pro/Max only**; on
+API/metered usage the budget check always fails open.
+
+---
+
+## Tuning knobs
+
+| Env var | Default | Effect |
+|---------|---------|--------|
+| `ARSENAL_MAX_WORKERS` | `2` | Workers per batch. `2` is the validated git-push concurrency ceiling; higher N raises claim-race churn and PR/merge-conflict surface. |
+| `ARSENAL_QUOTA_STOP_PCT` | `90` | Stop the loop before dispatch at/above this used-percentage on either window. |
+| `LOOP_WORKSPACE` | _(unset)_ | Workspace scope; set by `/continue` token inference. |
+| `LOOP_TAGS` | _(unset)_ | Comma/space-separated tag scope (ANDed); set by `/continue` token inference. |
+| `ARSENAL_QUEUE_BRANCH` | `arsenal-queue` | Coordination branch (must stay unprotected + pushable). |
+| `ARSENAL_QUEUE_REMOTE` | `origin` | Remote for queue + per-task pushes. |
 
 ---
 
@@ -205,7 +277,7 @@ queue-state commits live on the coordination branch.
 ```
 CLAUDE_CODE_DISABLE_1M_CONTEXT=1
 CLAUDE_CODE_DISABLE_FAST_MODE=1
-CLAUDE_CODE_SUBAGENT_MODEL=claude-haiku-4-5-20251001
+CLAUDE_CODE_SUBAGENT_MODEL=claude-sonnet-4-6
 ```
 
 **Version requirement**: Claude Code ≥ v2.1.172. Check with `claude --version`
@@ -235,9 +307,17 @@ Each line of `claude-arsenal/queue/tasks.jsonl` is a JSON object:
   "deps": [{"id": "lo-b2c1", "type": "blocks"}],
   "assignee": null,
   "workspace": "FRONTEND",
+  "tags": ["CLI"],
+  "pr": "https://github.com/owner/repo/pull/123",
   "payload": "lo-a3f8.md"
 }
 ```
+
+`workspace`, `tags`, and `pr` are optional and append-compatible — older readers
+ignore them. `tags` is a free-form label axis (`/queue-add --tag CLI`) that
+`/continue` scopes on via `LOOP_TAGS` (ANDed), orthogonal to `workspace` and the
+surface-capability `requires` filter. `pr` is set by `release.sh … --pr <url>`
+when a per-task PR is opened.
 
 ---
 
@@ -250,10 +330,14 @@ claude-arsenal/
     worker.md         ← worker subagent definition
   bin/                ← shell scripts; refreshed by /init on re-run
     queue_branch.sh   ← ensures the shared coordination branch is checked out
-    queue_eval.sh
+    queue_eval.sh     ← next single task (thin wrapper over queue_batch.sh)
+    queue_batch.sh    ← up to N independent tasks (parallel fan-out)
     claim.sh
-    release.sh
+    release.sh        ← orchestrator-side; accepts --pr, stages the payload
+    open_task_pr.sh   ← worker-side; branch off default → commit → push → PR
     gate_run.sh
+    budget_check.sh   ← token-budget stop (exit 3 over ARSENAL_QUOTA_STOP_PCT)
+    statusline_capture.sh ← host statusLine; writes rate_limits.json
     detect_surface.sh
     workspace_list.sh
   project/            ← host-owned; never touched by /init re-run
@@ -269,4 +353,5 @@ claude-arsenal/
   session/            ← host-owned; never touched by /init re-run
     handover.md       ← live; updated each session
     surface_profile.json  ← gitignored; written by detect_surface.sh hook
+    rate_limits.json      ← gitignored; written by statusline_capture.sh
 ```

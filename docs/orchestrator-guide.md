@@ -1,0 +1,190 @@
+# Orchestrator guide
+
+How to operate the `claude-arsenal` task queue: one **orchestrator** session
+fans out work to many **worker** subagents, each task lands as a reviewable
+PR, and the loop throttles itself before exhausting your token quota.
+
+This guide assumes the host repo has already been bootstrapped with
+[`/init`](INSTALL.md). The mechanics it describes live in
+`claude-arsenal/AGENTS.md` (imported into the host `CLAUDE.md`) and the scripts
+under `claude-arsenal/bin/`.
+
+---
+
+## Mental model: orchestrator vs worker
+
+There are two roles, and they run on two different kinds of git ref:
+
+| | Orchestrator | Worker |
+|---|---|---|
+| **Count** | one per session | up to `ARSENAL_MAX_WORKERS` at a time |
+| **Runs on** | the coordination branch (`arsenal-queue`) | an isolated `git worktree` on a feature branch off `origin/main` |
+| **Owns** | the queue: claim, dispatch, release | one task: implement, gate, push, open a PR |
+| **Spawned by** | you (`continue` / `/continue`) | the orchestrator, via the Task tool (`isolation: worktree`) |
+
+The **orchestrator** lives on the `arsenal-queue` branch for its entire life.
+That branch is the cross-session lock: every claim is a one-line commit to
+`claude-arsenal/queue/tasks.jsonl` pushed to the shared `arsenal-queue` ref, and
+git lets exactly one racing session fast-forward it. **The remote ref is the
+lock — there is no other channel between sessions.**
+
+Each **worker** runs in its own throwaway worktree on a feature branch cut from
+the host default branch (`origin/main`), so its PR diff contains only that
+task's code. Workers never touch `tasks.jsonl` and never run on `arsenal-queue`.
+A worker reports its outcome (done / failed, PR URL, failure notes) back to the
+orchestrator, which is the single writer that records it on `arsenal-queue`.
+
+### The one invariant you must preserve
+
+**`arsenal-queue` must be unprotected and pushable, and the session must run on
+it.** If you protect it (required PRs/reviews), every claim push is rejected and
+the loop stops with an `error:` from `claim.sh`. `queue_branch.sh` puts the
+session on the branch at start-up; `claim.sh` / `release.sh` refuse to run off
+it. The branch is never merged into `main` — it is a disposable, append-only
+ledger of `claim:` / `release:` commits.
+
+---
+
+## Starting an orchestrator session
+
+### Claude Code on the web
+
+1. Open the repo and start a new session.
+2. Type **`continue`** (the natural-language form; the web surface has no slash
+   commands). This loads the `continue` skill, runs `queue_branch.sh` to enter
+   `arsenal-queue`, and starts the worker loop on the next unblocked task.
+
+The session-start protocol in the host `CLAUDE.md` also fires `continue`
+behaviour automatically, so even a bare "pick up where we left off" works.
+
+### Claude Code CLI / desktop / IDE
+
+1. Launch `claude` in the repo.
+2. Run **`/continue`**. Same flow as above, with slash-command scoping
+   available (see [Scoping](#scoping-which-tasks-to-run)).
+
+### First time in a repo
+
+If `claude-arsenal/` does not exist yet, run **`/init`** once to scaffold it,
+then seed the queue (from `status/plan.md`, from per-workspace plans, or with
+`/queue-add`) and `continue`. See [`docs/INSTALL.md`](INSTALL.md).
+
+---
+
+## Scoping: which tasks to run
+
+`/continue` accepts any number of **bare-word, order-independent** tokens. Each
+token is resolved by membership against the live queue:
+
+1. **Workspace** (matches a `workspace` value) → sets the workspace filter.
+   At most one workspace per invocation; two distinct workspaces is an error.
+2. **Tag** (matches a `tags` value) → added to the tag filter. Multiple tags
+   are **ANDed** — a task must carry every requested tag.
+3. **Neither** → treated as fuzzy title search text (multiple unknown tokens are
+   joined into one search string).
+
+A name that is both a workspace and a tag resolves as the **workspace** first.
+
+```text
+/continue                 # global: next unblocked task, no scoping
+/continue FRONTEND        # workspace FRONTEND only
+/continue CLI             # tag CLI only
+/continue CLI WEB         # tag CLI AND tag WEB (no workspace)
+/continue CLI FRONTEND    # tag CLI AND workspace FRONTEND
+/continue FRONTEND CLI    # identical to the line above (order-independent)
+/continue implement login # no match → fuzzy title search
+```
+
+Tags are a free-form label axis you attach with `/queue-add --tag CLI --tag WEB`
+(repeatable). They are orthogonal to `workspace` and to the automatic
+surface-capability filter (`requires` / `surface_profile.json`).
+
+---
+
+## Following the workers
+
+While the loop runs, you can watch progress several ways:
+
+- **Inline Task output** — each worker is a Task subagent; its transcript
+  streams in the orchestrator session as it implements and opens its PR.
+- **`git worktree list`** — shows the live worker worktrees and the feature
+  branch each one is on.
+- **`git log <arsenal-queue>`** — the `claim:` / `release:` ledger; one
+  `claim:` and one `release:` commit per completed task. Lost claim races leave
+  nothing, so this is a clean audit trail of what was picked up and finished.
+- **The PRs** — each finished task opens a PR off `origin/main`. `release.sh`
+  records the URL on the queue row (`"pr"` field); `git log` on `arsenal-queue`
+  and `/queue-status` surface it.
+- **`## Failure notes`** — a task whose gate fails is released back to `open`
+  with a `## Failure notes` section appended to `claude-arsenal/queue/<id>.md`,
+  written back to `arsenal-queue` so the next session can read why.
+
+---
+
+## Capabilities and config knobs
+
+| Knob | Default | What it does |
+|---|---|---|
+| `ARSENAL_MAX_WORKERS` | `2` | Max workers dispatched per batch. `2` is the validated git-push concurrency ceiling; higher N increases claim-race churn and PR/merge-conflict surface. |
+| `ARSENAL_QUOTA_STOP_PCT` | `90` | Stop the loop before dispatch when either rate-limit window is at/above this used-percentage. |
+| `ARSENAL_QUEUE_BRANCH` | `arsenal-queue` | The coordination branch. Must stay unprotected and pushable. |
+| `ARSENAL_QUEUE_REMOTE` | `origin` | Remote the queue branch is pushed to. |
+| `LOOP_WORKSPACE` | _(unset)_ | Workspace filter; normally set by `/continue` token inference. |
+| `LOOP_TAGS` | _(unset)_ | Comma/space-separated tag filter (ANDed); set by `/continue` token inference. |
+
+### Parallel fan-out
+
+The loop budget-checks, calls `queue_batch.sh --max $ARSENAL_MAX_WORKERS` for up
+to N independent tasks (no task in the batch blocks another), claims each, then
+spawns **all won workers in a single message** so they run concurrently. It
+waits for the batch, releases each, and loops. Keep `ARSENAL_MAX_WORKERS` small;
+release contention on `arsenal-queue` is serialised by `release.sh`'s
+fetch–rebase–push retry, but churn grows with N.
+
+### Token-budget stop
+
+`statusline_capture.sh` (registered as the host `statusLine` command by `/init`)
+writes `claude-arsenal/session/rate_limits.json` (gitignored) from the
+`rate_limits` block Claude Code feeds a statusLine on stdin. Before every
+dispatch, the loop runs `budget_check.sh`:
+
+- Either window at/above `ARSENAL_QUOTA_STOP_PCT` → **exit 3**: the loop stops,
+  writes `handover.md`, and reports the reset time.
+- Data missing (non-Pro/Max plan, before the first response, or older Claude
+  Code) → **exit 0, fail-open**: the loop runs where quota isn't observable.
+
+Caveats: `rate_limits` is **Pro/Max subscription only** and is a snapshot at the
+last message (a `refreshInterval` on the statusLine keeps it fresh). On
+API/metered usage or older Claude Code the budget check fails open.
+
+### Per-task PRs
+
+Each worker branches off `origin/main` (never `arsenal-queue`), implements,
+runs the host lint gate plus `gate_run.sh`, then:
+
+- **Gate fails** → no PR; the orchestrator releases the task back to `open` and
+  writes `## Failure notes` to the payload on `arsenal-queue`.
+- **Gate passes** → the worker commits (Conventional Commits + the dynamic
+  `Co-Authored-By` from the `github` skill — never a hardcoded model name),
+  pushes, and opens a PR via `open_task_pr.sh`. The orchestrator records the URL
+  with `release.sh done --pr <url>`.
+
+> **Web caveat:** Claude Code on the web routes git through a proxy that may
+> restrict pushes to the session's designated branch (feature-branch pushes can
+> return HTTP 403). Per-task PRs are therefore a **CLI-first** capability —
+> verify a feature-branch push succeeds on the web before relying on it there.
+> On the CLI this is unrestricted.
+
+---
+
+## Troubleshooting
+
+- **`claim.sh` returns `error:` and the loop stops** — you are off
+  `arsenal-queue`, or it is protected, or it has no upstream. Re-run
+  `queue_branch.sh` or remove the branch protection. This is a misconfiguration,
+  not a race; the loop is right to stop rather than spin.
+- **`queue_batch.sh` returns nothing** — no unblocked task matches the current
+  `LOOP_WORKSPACE` / `LOOP_TAGS` scope. Drop the scope or seed more tasks.
+- **The loop stops immediately with a quota message** — `budget_check.sh` hit
+  the threshold. Wait for the reported reset, raise `ARSENAL_QUOTA_STOP_PCT`, or
+  clear `claude-arsenal/session/rate_limits.json` to fail open.

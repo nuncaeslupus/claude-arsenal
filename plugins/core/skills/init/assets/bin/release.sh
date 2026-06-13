@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
-# release.sh <task_id> <status>
-# Updates a task's status in queue.jsonl, commits, and pushes to the dedicated
-# coordination branch (default: arsenal-queue, override ARSENAL_QUEUE_BRANCH).
-# Must run on that branch — see claim.sh for why the shared ref is the lock.
+# release.sh <task_id> <status> [--pr <url>]
+# Updates a task's status in queue.jsonl, commits (the queue row AND the task
+# payload, so any ## Failure notes / PR-URL edits land too), and pushes to the
+# dedicated coordination branch (default: arsenal-queue, override
+# ARSENAL_QUEUE_BRANCH). Must run on that branch — see claim.sh for why the
+# shared ref is the lock.
 # <status>: done | open | blocked | in_progress
+# --pr <url>: optional; records the per-task PR URL/number on the queue row.
 # Exit: 0 on success, 1 after 3 failed push attempts, 2 on misconfiguration
 #       (wrong branch / protected branch / no upstream).
 
@@ -12,6 +15,15 @@ REMOTE="${ARSENAL_QUEUE_REMOTE:-origin}"
 QUEUE_FILE="claude-arsenal/queue/tasks.jsonl"
 TASK_ID="${1:?release.sh requires <task_id>}"
 NEW_STATUS="${2:?release.sh requires <status>: done|open|blocked|in_progress}"
+shift 2 || true
+
+PR_URL=""
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --pr) PR_URL="${2:-}"; shift 2 ;;
+        *) shift ;;
+    esac
+done
 
 case "${NEW_STATUS}" in
     done|open|blocked|in_progress) ;;
@@ -26,10 +38,10 @@ if [[ "${current_branch}" != "${QUEUE_BRANCH}" ]]; then
     exit 2
 fi
 
-python3 - "${TASK_ID}" "${NEW_STATUS}" "${QUEUE_FILE}" <<'PY' || exit 1
+python3 - "${TASK_ID}" "${NEW_STATUS}" "${QUEUE_FILE}" "${PR_URL}" <<'PY' || exit 1
 import sys, json, pathlib
 
-task_id, new_status, queue_path = sys.argv[1:]
+task_id, new_status, queue_path, pr_url = sys.argv[1:5]
 path = pathlib.Path(queue_path)
 
 rows = []
@@ -49,6 +61,8 @@ for row in rows:
         row["status"] = new_status
         if new_status not in ("in_progress",):
             row["assignee"] = None
+        if pr_url:
+            row["pr"] = pr_url
         updated = True
 
 if not updated:
@@ -61,7 +75,15 @@ path.write_text(
 )
 PY
 
+# Stage the queue row AND the task payload: a release may carry ## Failure notes
+# or a PR URL written into claude-arsenal/queue/<id>.md that must travel with the
+# state commit rather than being lost on worktree cleanup. Stage them separately
+# — a single `git add` with a non-existent payload pathspec fails atomically and
+# would leave the queue change unstaged (a task may have no payload file).
 git add "${QUEUE_FILE}" 2>/dev/null
+if [[ -f "claude-arsenal/queue/${TASK_ID}.md" ]]; then
+    git add "claude-arsenal/queue/${TASK_ID}.md" 2>/dev/null
+fi
 git commit -m "release: ${TASK_ID} → ${NEW_STATUS}" 2>/dev/null || true
 
 # Push to the coordination ref with exponential backoff retry (up to 3
