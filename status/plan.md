@@ -66,7 +66,7 @@ PR opened
 | Task-tool subagents (not `claude -p`) | R-WORKER-1 VALIDATED: CLI+Web parity; metered pool avoided |
 | `isolation: worktree` + prompt-injected relative-path directive | R-SCOPING-1 VALIDATED: worktree alone leaks absolute paths (Issue #56137) |
 | Cloud Routine for reviewer | R-REVIEW-1: durable, subscription pool, CLI+Web parity |
-| `CLAUDE_CODE_DISABLE_1M_CONTEXT=1` + `DISABLE_FAST_MODE=1` | R-CREDITS-3: blocks both credit gates before any worker launches |
+| `CLAUDE_CODE_DISABLE_1M_CONTEXT=1` + `CLAUDE_CODE_DISABLE_FAST_MODE=1` | R-CREDITS-3: blocks both credit gates before any worker launches |
 | `CLAUDE_CODE_REMOTE` as surface discriminator | R-ROUTING-2 VALIDATED: best-available Tier-2 evidence |
 
 ### Out of scope
@@ -96,7 +96,7 @@ PR opened
 | T9 | Write `/loop-upgrade` skill + upgrade script with semver gate | `plugins/loop-orchestrator/skills/loop-upgrade/`, `.loop/core/scripts/upgrade.sh` | M | T1 | Round-trip test: plant sentinel file in `state/`, run upgrade, verify `core/` refreshed and sentinel intact | `tests/upgrade_roundtrip.sh` |
 | T10 | Write `handover.md` template + cold-start directive in AGENTS.md | `.loop/core/` | S | T4 | A session started from `handover.md` alone can resume the last known task without additional context | Manual session test |
 | T11 | Validate spec and plan | `status/` | S | T1 | `validate_spec.py` exits 0; `validate_plan.py` exits 0 | Run scripts |
-| T12 | Register env-hardening in AGENTS.md launch block: `CLAUDE_CODE_DISABLE_1M_CONTEXT=1`, `DISABLE_FAST_MODE=1`, `CLAUDE_CODE_SUBAGENT_MODEL` pin, v2.1.172+ version check | `.loop/core/AGENTS.md` | S | T4 | Code audit: all three env vars + model pin present in worker launch stanza | `grep` audit + integration env dump test |
+| T12 | Register env-hardening in AGENTS.md launch block: `CLAUDE_CODE_DISABLE_1M_CONTEXT=1`, `CLAUDE_CODE_DISABLE_FAST_MODE=1`, `CLAUDE_CODE_SUBAGENT_MODEL` pin, v2.1.172+ version check | `.loop/core/AGENTS.md` | S | T4 | Code audit: all three env vars + model pin present in worker launch stanza | `grep` audit + integration env dump test |
 
 **Status legend**: ☐ not started · ◐ in progress · ☑ merged
 
@@ -114,14 +114,13 @@ PR opened
 ### Dependency graph
 
 ```
-T1 ──┬─> T2 ──┬─> T4 ──┬─> T6
-     └─> T3 ──┘         ├─> T7
-                         ├─> T8
-                         ├─> T9
-                         ├─> T10
-                    T5 ──┘
-T1 ──────────────────────────> T11
-T4 ──────────────────────────> T12
+T1 ──┬─> T2 ──┐
+     │         └─> T4 ──┬─> T5 ──> T6 (T4,T5→T6)
+     ├─> T3 ─────────> T4 ├─> T7 (T3,T4→T7)
+     │    ├─> T7           ├─> T10
+     │    └─> T8           └─> T12
+     ├─> T9
+     └─> T11
 ```
 
 ---

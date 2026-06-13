@@ -177,7 +177,7 @@ None (no relational DB). `queue.jsonl` schema evolves via append-compatible JSON
 | Risk | Likelihood | Impact | Mitigation | Validation |
 |------|-----------|--------|------------|------------|
 | Claude Code Web `git push` proxy rejects push to shared queue branch if session not started on it | Med | High | R-CLAIM-1: start Web session on queue branch; document in AGENTS.md | Manual test: open Web session on queue branch, run claim, verify push succeeds |
-| `CLAUDE_CODE_DISABLE_1M_CONTEXT` or `DISABLE_FAST_MODE` not propagated to subagents | Med | High | Set at orchestrator env level + `CLAUDE_CODE_SUBAGENT_MODEL` pin per R-CREDITS-3 | Code audit; add integration test that reads worker env dump |
+| `CLAUDE_CODE_DISABLE_1M_CONTEXT` or `CLAUDE_CODE_DISABLE_FAST_MODE` not propagated to subagents | Med | High | Set at orchestrator env level + `CLAUDE_CODE_SUBAGENT_MODEL` pin per R-CREDITS-3 | Code audit; add integration test that reads worker env dump |
 | Upgrade script `rsync` overwrites a user file mistakenly placed in `core/` | Low | High | Validate: no file under `core/` is owned by the host; README warns; upgrade shows diff first | Round-trip test: plant dummy file in `core/`, run upgrade, verify it is replaced; `state/` unchanged |
 | SessionStart `detect_surface.sh` times out on Web (5-min hard cap) | Low | Med | Keep script fast (< 30s); service probes are async fire-and-forget; defer heavy init | Time the script on a cold Web VM via setup-script instrumentation |
 | Listing-budget cap exceeded after adding new plugin | Low | Med | Stub entry first; run `make audit`; trim description if needed | `make audit` in CI |
