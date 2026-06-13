@@ -1,6 +1,6 @@
 ---
 name: loop-init
-description: When the user needs .loop/ bootstrapped in a host repo — copies core/, sets up state/, wires CLAUDE.md.
+description: When the user needs .loop/ set up in a host repo. Not for repos where .loop/core/ exists — use loop-upgrade instead.
 user-invocable: true
 argument-hint: "[--repo-path PATH]"
 ---

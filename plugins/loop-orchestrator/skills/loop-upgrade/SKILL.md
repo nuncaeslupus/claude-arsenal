@@ -1,6 +1,6 @@
 ---
 name: loop-upgrade
-description: When the user wants to upgrade .loop/core/ — semver gate, leaves .loop/state/ untouched.
+description: When the user wants to upgrade .loop/core/. Avoid if already at the current plugin version.
 user-invocable: true
 argument-hint: "[--dry-run] [--apply]"
 ---

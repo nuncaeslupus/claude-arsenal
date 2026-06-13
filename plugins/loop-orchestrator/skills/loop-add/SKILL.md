@@ -1,6 +1,6 @@
 ---
 name: loop-add
-description: When the user wants to add a task to the loop queue — appends a row to queue.jsonl.
+description: When the user wants to add a task to the loop queue. Do NOT use to update or remove existing tasks.
 user-invocable: true
 argument-hint: "--title TITLE [--priority N] [--requires surface:X] [--deps lo-XXXX]"
 ---
@@ -22,7 +22,7 @@ Load this skill when:
 ## How to use
 
 ```bash
-python3 .claude/skills/loop-add/scripts/add_task.py \
+python3 .claude/skills/loop-add/scripts/create_task.py \
   --title "Implement claim.sh" \
   --priority 10 \
   --requires "surface:cli" \
