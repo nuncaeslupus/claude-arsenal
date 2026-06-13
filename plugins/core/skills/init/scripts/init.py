@@ -236,7 +236,9 @@ def init_workspace(
     # Strip Windows-style trailing dots/spaces before checking (they normalize
     # to ".." on NTFS) and retain the substring ".." guard for defence-in-depth.
     normalized = workspace.rstrip(". ")
-    if not normalized or normalized in (".", "..") or ".." in workspace or "/" in workspace or "\\" in workspace:
+    bad = (not normalized or normalized in (".", "..") or ".." in workspace
+           or "/" in workspace or "\\" in workspace)
+    if bad:
         sys.exit(f"init: invalid workspace name {workspace!r}")
 
     arsenal = repo_path / "claude-arsenal"
