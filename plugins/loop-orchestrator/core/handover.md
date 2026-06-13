@@ -32,4 +32,4 @@
 
 ## Queue snapshot at handover
 
-<!-- Output of: python3 .claude/skills/loop-status/scripts/queue_status.py --detail -->
+<!-- Output of: python3 .claude/skills/loop-status/scripts/query_status.py --detail -->

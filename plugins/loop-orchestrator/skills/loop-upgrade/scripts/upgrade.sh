@@ -94,6 +94,8 @@ if "${DRY_RUN}"; then
     exit 0
 fi
 
+rm -rf "${TARGET_CORE}.tmp"
+cp -r "${BUNDLE_CORE}" "${TARGET_CORE}.tmp"
 rm -rf "${TARGET_CORE}"
-cp -r "${BUNDLE_CORE}" "${TARGET_CORE}"
+mv "${TARGET_CORE}.tmp" "${TARGET_CORE}"
 echo "upgrade.sh: .loop/core/ upgraded to ${UPSTREAM}"

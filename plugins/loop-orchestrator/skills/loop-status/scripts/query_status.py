@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""queue_status.py - Report task counts from .loop/state/queue.jsonl.
+"""query_status.py - Report task counts from .loop/state/queue.jsonl.
 Exits 0. Exits 1 if queue file is absent.
 """
 import argparse
@@ -12,7 +12,7 @@ QUEUE_FILE = ".loop/state/queue.jsonl"
 
 def _load_queue(path: Path) -> list[dict]:
     rows: list[dict] = []
-    for line in path.read_text().splitlines():
+    for line in path.read_text(encoding="utf-8").splitlines():
         line = line.strip()
         if line:
             try:

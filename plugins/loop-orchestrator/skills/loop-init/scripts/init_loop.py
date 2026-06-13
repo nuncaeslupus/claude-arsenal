@@ -23,7 +23,7 @@ def _bundle_core(override: Path | None = None) -> Path:
 
 def init_loop(repo_path: Path, force: bool = False, bundle_override: Path | None = None) -> None:
     bundle = _bundle_core(bundle_override)
-    bundle_version = (bundle / "VERSION").read_text().strip()
+    bundle_version = (bundle / "VERSION").read_text(encoding="utf-8").strip()
 
     target_core = repo_path / ".loop" / "core"
     target_state = repo_path / ".loop" / "state"
@@ -32,7 +32,7 @@ def init_loop(repo_path: Path, force: bool = False, bundle_override: Path | None
     if target_core.exists():
         version_file = target_core / "VERSION"
         if version_file.exists():
-            existing = version_file.read_text().strip()
+            existing = version_file.read_text(encoding="utf-8").strip()
             if existing != bundle_version and not force:
                 sys.exit(
                     f"init_loop: .loop/core/VERSION={existing!r} differs from plugin "
@@ -71,14 +71,15 @@ def init_loop(repo_path: Path, force: bool = False, bundle_override: Path | None
     # Wire CLAUDE.md
     claude_md = repo_path / "CLAUDE.md"
     if claude_md.exists():
-        content = claude_md.read_text()
+        content = claude_md.read_text(encoding="utf-8")
         if CLAUDE_MD_IMPORT not in content:
-            claude_md.write_text(content.rstrip("\n") + f"\n\n{CLAUDE_MD_IMPORT}\n")
+            new_content = content.rstrip("\n") + f"\n\n{CLAUDE_MD_IMPORT}\n"
+            claude_md.write_text(new_content, encoding="utf-8")
             print(f"init_loop: added {CLAUDE_MD_IMPORT!r} to CLAUDE.md")
         else:
             print("init_loop: CLAUDE.md already contains import — skipping")
     else:
-        claude_md.write_text(f"{CLAUDE_MD_IMPORT}\n")
+        claude_md.write_text(f"{CLAUDE_MD_IMPORT}\n", encoding="utf-8")
         print("init_loop: created CLAUDE.md with import")
 
     print(f"init_loop: .loop/ initialized at {repo_path}")

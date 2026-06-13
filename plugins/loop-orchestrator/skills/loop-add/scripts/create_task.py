@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""add_task.py - Append a new task to .loop/state/queue.jsonl.
+"""create_task.py - Append a new task to .loop/state/queue.jsonl.
 Validates schema and dependency edges before writing.
 """
 import argparse
@@ -16,7 +16,7 @@ def _load_queue(path: Path) -> list[dict]:
     rows: list[dict] = []
     if not path.exists():
         return rows
-    for line in path.read_text().splitlines():
+    for line in path.read_text(encoding="utf-8").splitlines():
         line = line.strip()
         if line:
             try:
@@ -70,7 +70,7 @@ def add_task(
     }
 
     queue_path.parent.mkdir(parents=True, exist_ok=True)
-    with queue_path.open("a") as f:
+    with queue_path.open("a", encoding="utf-8") as f:
         f.write(json.dumps(row, separators=(",", ":")) + "\n")
 
     return task_id
