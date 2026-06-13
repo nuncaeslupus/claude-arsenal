@@ -47,7 +47,7 @@ cmd = block_match.group(1).strip()
 if not cmd:
     sys.exit(0)
 
-with tempfile.NamedTemporaryFile(mode='w', suffix='.sh', delete=False) as f:
+with tempfile.NamedTemporaryFile(mode='w', suffix='.sh', delete=False, encoding='utf-8') as f:
     f.write('#!/usr/bin/env bash\nset -euo pipefail\n')
     f.write(cmd + '\n')
     tmp = f.name

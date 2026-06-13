@@ -25,7 +25,7 @@ if not queue.exists():
     sys.exit(0)
 
 rows = []
-for line in queue.read_text().splitlines():
+for line in queue.read_text(encoding="utf-8").splitlines():
     line = line.strip()
     if line:
         try:
@@ -42,7 +42,7 @@ capabilities = None
 profile = pathlib.Path(profile_path)
 if profile.exists():
     try:
-        data = json.loads(profile.read_text())
+        data = json.loads(profile.read_text(encoding="utf-8"))
         capabilities = set(data.get("capabilities", []))
     except Exception:
         pass
