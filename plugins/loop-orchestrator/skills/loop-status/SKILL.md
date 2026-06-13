@@ -31,5 +31,5 @@ python3 .claude/skills/loop-status/scripts/queue_status.py --detail
 
 ## Gotchas
 
-- **`in_progress` tasks with no active assignee signal a crashed session.** An `in_progress` row whose `assignee` session is gone means the claim was never released; run `release.sh <task-id> open` to reset it.
+- **`in_progress` tasks with no active assignee signal a crashed session.** An `in_progress` row whose `assignee` session is gone means the claim was never released; run `.loop/core/scripts/release.sh <task-id> open` to reset it.
 - **`blocked` does not mean failed.** A task is `blocked` only when its `deps[]` list contains IDs that are not yet `done`. It will become eligible automatically once dependencies complete.

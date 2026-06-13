@@ -27,17 +27,17 @@ Before starting, verify prerequisites:
 ls .loop/core/AGENTS.md .loop/state/queue.jsonl
 
 # Check open task count
-uv run python .claude/skills/loop-status/scripts/queue_status.py
+python3 .claude/skills/loop-status/scripts/queue_status.py
 ```
 
 Then start the orchestrator loop:
 
 1. Set credit guard env vars: `CLAUDE_CODE_DISABLE_1M_CONTEXT=1` and `CLAUDE_CODE_DISABLE_FAST_MODE=1`.
-2. Run `queue_eval.sh` to pick the next unblocked task matching surface capabilities.
-3. Run `claim.sh <task-id>` — on `won`, launch a Task-tool worker subagent with `isolation: worktree`.
-4. On `lost`, re-run `queue_eval.sh` immediately (another session won the race).
-5. Worker completes → `release.sh <task-id> done` → loop back to step 2.
-6. Loop exits when `queue_eval.sh` returns no eligible task.
+2. Run `.loop/core/scripts/queue_eval.sh` to pick the next unblocked task matching surface capabilities.
+3. Run `.loop/core/scripts/claim.sh <task-id>` — on `won`, launch a Task-tool worker subagent with `isolation: worktree`.
+4. On `lost`, re-run `.loop/core/scripts/queue_eval.sh` immediately (another session won the race).
+5. Worker completes → `.loop/core/scripts/release.sh <task-id> done` → loop back to step 2.
+6. Loop exits when `.loop/core/scripts/queue_eval.sh` returns no eligible task.
 
 ## Gotchas
 
