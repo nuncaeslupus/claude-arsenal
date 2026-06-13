@@ -1,22 +1,20 @@
 # Installing claude-arsenal
 
 `claude-arsenal` is a Claude Code marketplace. Installing it gives any
-project three plugins:
+project two plugins:
 
 - **`skill-creator`** — the meta-skill that gates every authoring or
   editing change to a skill, plus the validator/auditor/scaffolder
   scripts everything else is checked against.
 - **`core`** — generic engineering workflow skills (`specify`,
   `design`, `execution`, `review`, `ship`, `github`, `gate-check`,
-  `lsp-setup`, `session-end`) plus the Python toolchain skills
+  `lsp-setup`, `session-end`), the Python toolchain skills
   (`python-bootstrap`, `pypi-release`, `coverage-gaps`, `dep-upgrade`,
-  `mutmut-report`).
-- **`loop-orchestrator`** — git-backed DAG task queue with worker loops
-  (`loop-init`, `loop-start`, `loop-add`, `loop-status`,
-  `loop-upgrade`). Injects a proactive session-protocol block into
-  `CLAUDE.md` so Claude auto-seeds the queue from a plan and auto-starts
-  workers every session without any commands. Works on CC Web (no hooks
-  needed).
+  `mutmut-report`), and the git-backed DAG task queue (`init`,
+  `continue`, `queue-add`, `queue-status`). `init` injects a proactive
+  session-protocol block into `CLAUDE.md` so Claude auto-seeds the queue
+  from workspace plans and auto-starts workers every session without any
+  commands. Works on CC Web (no hooks needed).
 
 Both plugins are pure-data (markdown + Python helpers + shell hooks).
 No background daemons; nothing runs unless Claude loads a skill or a
@@ -57,11 +55,10 @@ the meta-skill is loaded — install it before `core` so the gate covers
 ```text
 /plugin install skill-creator@claude-arsenal
 /plugin install core@claude-arsenal
-/plugin install loop-orchestrator@claude-arsenal
 ```
 
-After installing `loop-orchestrator`, run `/loop-init` once in any
-project where you want the task queue bootstrapped.
+After installing `core`, run `/init` once in any project where you
+want the task queue bootstrapped.
 
 ## 4. Verify
 
@@ -69,7 +66,7 @@ project where you want the task queue bootstrapped.
 |---|---|
 | Type `Help me create a new skill` | The `skill-creator` skill loads. Body contains the canary line `CANARY: skill-creator-loaded-2026-05-17-35c7fe06977dd6f1`. |
 | Type `Investigate why login is slow` | `core:specify` loads. |
-| Type `Set up the task queue in this repo` | `loop-orchestrator:loop-init` loads. |
+| Type `Set up the task queue in this repo` | `core:init` loads. |
 | (local checkout) `make audit` | Per-plugin listing-budget breakdown prints; `PASS — under cap.` |
 
 The canary is the cheapest signal that the plugin loaded the *correct*
@@ -129,7 +126,7 @@ Add this target to the **consuming project's** Makefile:
 ```make
 ARSENAL_REPO    ?= https://github.com/nuncaeslupus/claude-arsenal.git
 ARSENAL_REF     ?= v0.3.0            # pin to a tag — upgrade deliberately
-ARSENAL_PLUGINS ?= core,loop-orchestrator  # comma list, or "all" to include skill-creator
+ARSENAL_PLUGINS ?= core  # comma list, or "all" to include skill-creator
 
 update-skills:  ## vendor claude-arsenal skills into .claude/skills (for CC web)
 	@tmp=$$(mktemp -d); trap 'rm -rf $$tmp' EXIT; \
@@ -145,13 +142,8 @@ git add .claude/skills      # commit so the next web session sees them
 git commit -m "chore: vendor claude-arsenal skills @ v0.3.0"
 ```
 
-To vendor only `core` (without the loop-orchestrator task queue):
-
-```make
-ARSENAL_PLUGINS ?= core
-```
-
-To vendor everything including `skill-creator`:
+`core` is already the default. To vendor everything including
+`skill-creator`:
 
 ```make
 ARSENAL_PLUGINS ?= all
@@ -185,7 +177,7 @@ make smoke
 
 `make smoke` runs the validator on every shipped skill, audits the
 listing budget, and walks `tests/skills_smoke.sh`. A clean run exits
-0 with `20 clean skills` and a budget summary.
+0 with `19 clean skills` and a budget summary.
 
 ### Audit your installed cache
 
