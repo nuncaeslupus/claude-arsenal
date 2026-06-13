@@ -111,6 +111,8 @@ PR opened
 |----|------|----------|---------|-----|-----|------|
 | T1 | make audit exits 0 | PASS — 7948/8000 chars (52 remaining, 0% headroom); 0 FAILs across 20 skills | `make audit && make validate` | (see commit) | linux/uv | 2026-06-13 |
 | T1 | listing-budget headroom ≥ 50% | DEVIATION — budget is 0% headroom. Core grew to 14 skills (7155 chars) before T1; impossible to meet 50% target without trimming existing descriptions. make audit exits 0 (under hard cap). | n/a | n/a | n/a | 2026-06-13 |
+| T2 | detect_surface.sh exits 0 on CLI and Web; surface_profile.json correct | PASS — CLI: surface=cli caps=["surface:cli"]; Web (CLAUDE_CODE_REMOTE=true): surface=web caps=["surface:web"]; no-op when .loop/state absent | bash detect_surface.sh (with/without CLAUDE_CODE_REMOTE=true) | (see commit) | linux | 2026-06-13 |
+| T3 | Two-process contention: exactly one won, one lost | PASS — tests/claim_contention.sh: session-b won, session-a lost | bash tests/claim_contention.sh | (see commit) | linux | 2026-06-13 |
 
 ### Dependency graph
 
