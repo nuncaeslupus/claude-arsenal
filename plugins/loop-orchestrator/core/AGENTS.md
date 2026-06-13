@@ -22,6 +22,27 @@ The full loop state is in `.loop/state/`; the session's in-progress task
 
 ---
 
+## Cold-start from handover.md
+
+If starting a **fresh session** with only `.loop/state/handover.md` available
+(e.g., after a VM restart or a context that was never warmed up):
+
+1. Read `.loop/state/handover.md` — it records the last task ID, what was done,
+   what remains, and the queue snapshot at handover.
+2. Read `.loop/core/AGENTS.md` (this file) to load the full framework context.
+3. Check the last task's current status:
+   ```bash
+   python3 .claude/skills/loop-status/scripts/query_status.py --detail
+   ```
+4. If the last task is still `in_progress` with no active assignee, requeue it:
+   ```bash
+   .loop/core/scripts/release.sh <task_id> open
+   ```
+5. Resume the standard worker loop from step 2 of the **Worker loop algorithm**
+   section below.
+
+---
+
 ## Credit guards — apply before any Task-tool dispatch
 
 Set these variables in the orchestrator session before spawning any worker:

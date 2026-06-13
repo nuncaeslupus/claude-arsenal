@@ -1,6 +1,6 @@
 ---
 name: loop-status
-description: When the user wants queue progress — open/in-progress/done/blocked counts from queue.jsonl.
+description: When the user wants queue progress counts by status. Do NOT use to modify task status.
 user-invocable: true
 argument-hint: "[--detail]"
 ---
@@ -23,10 +23,10 @@ Load this skill when:
 
 ```bash
 # Summary counts
-python3 .claude/skills/loop-status/scripts/queue_status.py
+python3 .claude/skills/loop-status/scripts/query_status.py
 
 # Full task list
-python3 .claude/skills/loop-status/scripts/queue_status.py --detail
+python3 .claude/skills/loop-status/scripts/query_status.py --detail
 ```
 
 ## Gotchas

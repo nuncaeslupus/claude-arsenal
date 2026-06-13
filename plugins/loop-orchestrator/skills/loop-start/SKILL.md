@@ -1,7 +1,9 @@
 ---
 name: loop-start
-description: When the user wants to start the worker loop over .loop/state/queue.jsonl.
+description: When the user wants to run the worker loop over queue.jsonl. Do NOT start before running loop-init.
 user-invocable: true
+metadata:
+  type: workflow
 ---
 
 # loop-start
@@ -27,7 +29,7 @@ Before starting, verify prerequisites:
 ls .loop/core/AGENTS.md .loop/state/queue.jsonl
 
 # Check open task count
-python3 .claude/skills/loop-status/scripts/queue_status.py
+python3 .claude/skills/loop-status/scripts/query_status.py
 ```
 
 Then start the orchestrator loop:
