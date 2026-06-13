@@ -20,7 +20,7 @@ task_id, new_status, queue_path = sys.argv[1:]
 path = pathlib.Path(queue_path)
 
 rows = []
-for line in path.read_text().splitlines():
+for line in path.read_text(encoding="utf-8").splitlines():
     line = line.strip()
     if line:
         try:
@@ -43,7 +43,8 @@ if not updated:
     sys.exit(1)
 
 path.write_text(
-    "\n".join(json.dumps(r, separators=(",", ":")) for r in rows) + "\n"
+    "\n".join(json.dumps(r, separators=(",", ":")) for r in rows) + "\n",
+    encoding="utf-8",
 )
 PY
 

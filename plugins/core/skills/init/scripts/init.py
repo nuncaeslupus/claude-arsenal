@@ -234,7 +234,7 @@ def init_workspace(
 ) -> None:
     # The workspace name becomes a directory under claude-arsenal/project/;
     # reject separators and traversal sequences so it cannot escape that root.
-    if not workspace or "/" in workspace or "\\" in workspace or ".." in workspace:
+    if not workspace or workspace in (".", "..") or "/" in workspace or "\\" in workspace:
         sys.exit(f"init: invalid workspace name {workspace!r}")
 
     arsenal = repo_path / "claude-arsenal"

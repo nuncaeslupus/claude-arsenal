@@ -20,7 +20,7 @@ if not path.exists():
     sys.exit(0)
 
 rows = []
-for line in path.read_text().splitlines():
+for line in path.read_text(encoding="utf-8").splitlines():
     line = line.strip()
     if line:
         try:
@@ -41,7 +41,8 @@ if target is None:
 target["status"] = "in_progress"
 target["assignee"] = session_id
 path.write_text(
-    "\n".join(json.dumps(r, separators=(",", ":")) for r in rows) + "\n"
+    "\n".join(json.dumps(r, separators=(",", ":")) for r in rows) + "\n",
+    encoding="utf-8",
 )
 print("ok")
 print(json.dumps(target))

@@ -68,6 +68,9 @@ def main() -> None:
         text=True,
         env=env,
     )
+    if result.returncode != 0:
+        print(result.stderr, file=sys.stderr)
+        sys.exit(result.returncode)
     output = result.stdout.strip()
     if output:
         print(output)
