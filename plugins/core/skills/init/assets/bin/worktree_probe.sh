@@ -32,13 +32,17 @@ git rev-parse --is-inside-work-tree >/dev/null 2>&1 || verdict unavailable
 git worktree list >/dev/null 2>&1 || verdict unavailable
 
 # Functional probe: actually create and remove a throwaway detached worktree.
-# `git worktree add` needs a non-existent path, so derive a name without
-# pre-creating the directory; clean it up no matter how we exit.
-probe_dir="${TMPDIR:-/tmp}/arsenal-wt-probe.$$"
+# Use mktemp -d for a private, unpredictable parent (avoids CWE-377 symlink /
+# pre-creation attacks in a shared /tmp), then point the worktree at a child
+# path inside it — `git worktree add` requires a non-existent target. Clean both
+# up no matter how we exit.
+tmp_parent="$(mktemp -d "${TMPDIR:-/tmp}/arsenal-wt-probe.XXXXXX")" || verdict unavailable
+probe_dir="${tmp_parent}/wt"
 cleanup() {
     git worktree remove --force "${probe_dir}" >/dev/null 2>&1 \
         || rm -rf "${probe_dir}"
     git worktree prune >/dev/null 2>&1 || true
+    rm -rf "${tmp_parent}"
 }
 trap cleanup EXIT
 
