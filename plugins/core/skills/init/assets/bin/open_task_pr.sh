@@ -63,8 +63,10 @@ commit_args=(-m "${TYPE}: ${TITLE}")
 if [[ -n "${ARSENAL_COAUTHOR:-}" ]]; then
     commit_args+=(-m "Co-Authored-By: ${ARSENAL_COAUTHOR}")
 fi
-git commit "${commit_args[@]}" >/dev/null 2>&1 \
-    || echo "open_task_pr: nothing to commit for ${TASK_ID} (empty diff)" >&2
+if ! git commit "${commit_args[@]}" >/dev/null 2>&1; then
+    echo "open_task_pr: nothing to commit for ${TASK_ID} (empty diff); return outcome 'open' with failure notes" >&2
+    exit 1
+fi
 
 # Push with exponential backoff (network-transient retry only).
 delay=1
