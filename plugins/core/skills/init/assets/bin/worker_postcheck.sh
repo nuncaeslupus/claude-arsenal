@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+# worker_postcheck.sh
+# Run by the orchestrator after EVERY worker returns and BEFORE release.sh.
+# Restores and asserts the one invariant the coordination protocol depends on:
+# HEAD is back on the queue branch and the working tree is clean.
+#
+# Why: a worker is supposed to run in its own `isolation: worktree`. When that
+# isolation is silently unavailable (observed on some web sessions), the worker
+# runs in the orchestrator's shared tree instead: open_task_pr.sh checks out a
+# feature branch (moving the orchestrator's HEAD off the coordination branch),
+# and a gate-failed worker can leave uncommitted edits sitting on the
+# append-only ledger. release.sh then refuses to run (it guards on the queue
+# branch), and a stray `git commit -a` could sweep task code onto the queue
+# branch. This script makes the post-worker state safe either way:
+#   - In a real worktree the orchestrator's HEAD never moved → cheap no-op that
+#     just confirms the invariant (prints `ok`).
+#   - In the silent in-place case it discards the worker's residual tree state
+#     (its code is already committed+pushed on the feature branch for a `done`,
+#     or deliberately abandoned for a gate failure) and returns to the queue
+#     branch (prints `restored`).
+#
+# A `restored` result is the orchestrator's signal that worktree isolation is
+# NOT in effect this session: it must clamp ARSENAL_MAX_WORKERS=1 and stay in
+# serialized in-place mode for the rest of the loop.
+#
+# Stdout: `ok` | `restored`.
+# Exit:   0 invariant holds (possibly after restore); 2 could not restore.
+
+set -uo pipefail
+
+QUEUE_BRANCH="${ARSENAL_QUEUE_BRANCH:-arsenal-queue}"
+
+current="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+dirty="$(git status --porcelain 2>/dev/null)"
+
+if [[ "${current}" == "${QUEUE_BRANCH}" && -z "${dirty}" ]]; then
+    echo "ok"
+    exit 0
+fi
+
+# Recover. Discard any uncommitted worktree changes — the worker's code lives on
+# its pushed feature branch (a `done`) or is an abandoned gate failure, exactly
+# what a real worktree's cleanup would have thrown away. `reset --hard` leaves
+# gitignored session files (rate_limits.json, surface_profile.json) untouched;
+# `clean -fdq` removes untracked files but NOT ignored ones (no -x).
+git reset -q --hard >/dev/null 2>&1 || true
+git clean -fdq >/dev/null 2>&1 || true
+if [[ "${current}" != "${QUEUE_BRANCH}" ]]; then
+    git checkout -f "${QUEUE_BRANCH}" >/dev/null 2>&1 || true
+fi
+
+current="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+dirty="$(git status --porcelain 2>/dev/null)"
+if [[ "${current}" != "${QUEUE_BRANCH}" || -n "${dirty}" ]]; then
+    echo "worker_postcheck: could not restore HEAD to '${QUEUE_BRANCH}' / clean tree (HEAD=${current:-unknown})" >&2
+    exit 2
+fi
+
+echo "restored"
+exit 0

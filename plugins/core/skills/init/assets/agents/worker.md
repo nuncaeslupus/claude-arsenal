@@ -1,10 +1,20 @@
 # Worker Agent
 
 Task-tool subagent spawned by the orchestrator for each claimed task.
-Runs in an isolated worktree (`isolation: worktree`). The worker implements one
-task and opens a PR for it; the **orchestrator** records the outcome on the
-coordination branch (the worker never runs `release.sh` — it is on a feature
-branch, and `release.sh` guards on `arsenal-queue`).
+Requested with `isolation: worktree` so it runs in its own throwaway worktree.
+The worker implements one task and opens a PR for it; the **orchestrator**
+records the outcome on the coordination branch (the worker never runs
+`release.sh` — it is on a feature branch, and `release.sh` guards on
+`arsenal-queue`).
+
+> **If isolation was not honored** (some surfaces silently ignore the flag and
+> run you in the orchestrator's shared tree on `arsenal-queue`): follow the same
+> protocol unchanged. `open_task_pr.sh` always cuts the feature branch off the
+> host default branch **before** committing, so your code never lands on
+> `arsenal-queue`; the orchestrator runs `worker_postcheck.sh` after you return
+> to restore its HEAD and clean the tree. **Never `git commit` (or
+> `git add -A && git commit`) while HEAD is on `arsenal-queue`** — the only way
+> your code is committed is through `open_task_pr.sh`.
 
 ## Launch parameters
 
