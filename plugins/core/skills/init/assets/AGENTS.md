@@ -1,6 +1,6 @@
 # Claude Arsenal
 
-<!-- claude-arsenal v0.2.0 — imported via @claude-arsenal/AGENTS.md -->
+<!-- claude-arsenal v0.3.0 — imported via @claude-arsenal/AGENTS.md -->
 
 This file is imported by the host repo's `CLAUDE.md` via the session-protocol block
 that `/init` injects. It provides the mechanics behind the proactive directives
@@ -167,6 +167,12 @@ dispatches that many workers at once. Run when the queue has open tasks:
      misconfiguration, not a race (wrong branch, protected coordination branch,
      no upstream). Do **not** retry — it spins forever on a deadlock. Re-run
      `queue_branch.sh` or fix the branch protection, then resume.
+   - **Never work around a `lost` or `error` by creating an upstream, pushing
+     `-u`, or re-claiming on a different ref.** A `lost` means another session
+     legitimately owns the task; an `error` means the lock is misconfigured.
+     "Recovering" the claim by giving your branch its own pushable ref defeats
+     the shared-ref lock entirely and lets two sessions both win the same task —
+     the precise double-claim failure this protocol prevents. Obey the result.
 5. **Spawn every won task as a Task-tool worker subagent in ONE message**
    (see `agents/worker.md`) so they run concurrently:
    - `isolation: worktree`

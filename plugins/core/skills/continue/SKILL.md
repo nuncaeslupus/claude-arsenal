@@ -40,9 +40,21 @@ python3 .claude/skills/continue/scripts/query_task.py --search "implement login"
 
 `/continue CLI FRONTEND` and `/continue FRONTEND CLI` resolve to the same scope. A task qualifies only if it carries **every** requested tag and matches the workspace when one is given. The scope is plumbed to the loop as `LOOP_TAGS` (comma-separated) and `LOOP_WORKSPACE`, which `queue_eval.sh` / `queue_batch.sh` apply on top of the surface-capability filter.
 
+**Before claiming anything, enter the coordination branch** —
+`claude-arsenal/bin/queue_branch.sh`. It is idempotent (safe to run every
+session) and puts you on the shared `arsenal-queue` ref so claims actually
+coordinate across sessions. **If it exits non-zero (e.g. a dirty working tree),
+or warns that it could not publish/track the shared ref (no remote, or a
+push rejected — the web-proxy case), stop and surface to the user instead of
+claiming.** A claim made before the shared ref is reached cannot coordinate.
+Skip it or ignore a failure, and `claim.sh` runs on the wrong branch: it
+either exits `error` (the off-branch guard) or — on an older bundle without the
+guard — pushes the claim to a private branch where it can never race anyone, so
+every session "wins" the same task and duplicates work. Run it first.
+
 Then proceed with the **Worker loop algorithm** from `claude-arsenal/AGENTS.md`:
 1. Read workspace context: `claude-arsenal/project/<workspace>/context.md` and `handover.md`.
-2. Claim the task using the bundle claim script (see `claude-arsenal/AGENTS.md` § Worker loop algorithm).
+2. Claim the task using the bundle claim script (see `claude-arsenal/AGENTS.md` § Worker loop algorithm). **Obey the result verbatim:** `won` → proceed; `lost` → another session owns it, drop it and pick the next; `error` (exit 2) → misconfiguration (off the coordination branch, protected ref, or no upstream) — **stop and surface to the user**. Never "recover" a `lost` or `error` by creating an upstream, pushing `-u`, or re-claiming on another ref: that bypasses the lock and causes the exact double-claims this protocol exists to prevent.
 3. Spawn worker subagent.
 4. Release on completion using the bundle release script.
 5. Loop back to step 1.
