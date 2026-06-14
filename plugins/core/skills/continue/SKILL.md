@@ -43,7 +43,11 @@ python3 .claude/skills/continue/scripts/query_task.py --search "implement login"
 **Before claiming anything, enter the coordination branch** —
 `claude-arsenal/bin/queue_branch.sh`. It is idempotent (safe to run every
 session) and puts you on the shared `arsenal-queue` ref so claims actually
-coordinate across sessions. Skip it and `claim.sh` runs on the wrong branch: it
+coordinate across sessions. **If it exits non-zero (e.g. a dirty working tree),
+or warns that it could not publish/track the shared ref (no remote, or a
+push rejected — the web-proxy case), stop and surface to the user instead of
+claiming.** A claim made before the shared ref is reached cannot coordinate.
+Skip it or ignore a failure, and `claim.sh` runs on the wrong branch: it
 either exits `error` (the off-branch guard) or — on an older bundle without the
 guard — pushes the claim to a private branch where it can never race anyone, so
 every session "wins" the same task and duplicates work. Run it first.
