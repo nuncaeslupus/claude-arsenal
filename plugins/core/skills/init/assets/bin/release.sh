@@ -75,6 +75,15 @@ path.write_text(
 )
 PY
 
+# Guard: never let a worker's residual staged changes ride onto the append-only
+# coordination ledger. An in-place worker (one whose `isolation: worktree` was
+# silently ignored) may have left other paths staged in the index; a plain
+# `git commit` would sweep them onto the queue branch. A mixed reset clears the
+# index without touching the working tree, so only the queue row + payload we
+# stage below get committed. (worker_postcheck.sh should already have cleaned
+# the tree; this guards the index regardless.)
+git reset -q >/dev/null 2>&1 || true
+
 # Stage the queue row AND the task payload: a release may carry ## Failure notes
 # or a PR URL written into claude-arsenal/queue/<id>.md that must travel with the
 # state commit rather than being lost on worktree cleanup. Stage them separately

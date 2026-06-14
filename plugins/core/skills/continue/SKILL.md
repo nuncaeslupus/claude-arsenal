@@ -40,9 +40,9 @@ python3 .claude/skills/continue/scripts/query_task.py --search "implement login"
 
 `/continue CLI FRONTEND` and `/continue FRONTEND CLI` resolve to the same scope. A task qualifies only if it carries **every** requested tag and matches the workspace when one is given. The scope is plumbed to the loop as `LOOP_TAGS` (comma-separated) and `LOOP_WORKSPACE`, which `queue_eval.sh` / `queue_batch.sh` apply on top of the surface-capability filter.
 
-**Before claiming anything, enter the coordination branch** —
-`claude-arsenal/bin/queue_branch.sh`. It is idempotent (safe to run every
-session) and puts you on the shared `arsenal-queue` ref so claims actually
+**Before claiming anything, enter the coordination branch** — run
+`queue_branch.sh` (in `claude-arsenal/bin/`). It is idempotent (safe to run every
+session) and puts the session on the shared `arsenal-queue` ref so claims actually
 coordinate across sessions. **If it exits non-zero (e.g. a dirty working tree),
 or warns that it could not publish/track the shared ref (no remote, or a
 push rejected — the web-proxy case), stop and surface to the user instead of

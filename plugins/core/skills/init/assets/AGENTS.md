@@ -1,6 +1,6 @@
 # Claude Arsenal
 
-<!-- claude-arsenal v0.3.0 — imported via @claude-arsenal/AGENTS.md -->
+<!-- claude-arsenal v0.3.1 — imported via @claude-arsenal/AGENTS.md -->
 
 This file is imported by the host repo's `CLAUDE.md` via the session-protocol block
 that `/init` injects. It provides the mechanics behind the proactive directives
@@ -150,6 +150,26 @@ The table columns are: `T# | Description | Location | Size | Depends | Gate | Te
 One orchestrator claims up to `ARSENAL_MAX_WORKERS` independent tasks and
 dispatches that many workers at once. Run when the queue has open tasks:
 
+0. **Establish worker isolation (once per session).** Parallel fan-out is only
+   safe when each worker runs in its own `git worktree`; without it, concurrent
+   workers share one tree and clobber each other, and any worker moves the
+   orchestrator's HEAD off the coordination branch. The Task tool's
+   `isolation: worktree` flag is **silently ignored on some surfaces** (observed
+   on Claude Code on the web), so the orchestrator must establish isolation
+   empirically, not assume it:
+   - Run `claude-arsenal/bin/worktree_probe.sh`. If it prints `unavailable`
+     (exit 1), git worktrees do not work here at all → set
+     `ARSENAL_MAX_WORKERS=1` and run **serialized in-place mode** for the whole
+     session (one worker at a time; `worker_postcheck.sh` keeps the branch clean
+     between them).
+   - If it prints `available`, dispatch the **first batch as a single worker**
+     regardless of `ARSENAL_MAX_WORKERS`, then inspect the post-worker assertion
+     (step 6): if it reports `restored` rather than `ok`, the Task tool did
+     **not** honor `isolation: worktree` (it ran in-place and the orchestrator's
+     HEAD had to be recovered) → clamp `ARSENAL_MAX_WORKERS=1` and stay in
+     serialized in-place mode for the rest of the session. Only ramp to the
+     configured `ARSENAL_MAX_WORKERS` once a worker has returned with `ok`,
+     confirming real worktrees are in effect.
 1. Apply credit guards (see below) if not already set this session.
 2. **Budget check** — `claude-arsenal/bin/budget_check.sh`.
    - exit `0` → under quota (or quota unobservable; fail-open). Continue.
@@ -177,13 +197,20 @@ dispatches that many workers at once. Run when the queue has open tasks:
    (see `agents/worker.md`) so they run concurrently:
    - `isolation: worktree`
    - Inject the relative-path directive and the task payload path.
-6. **Wait for all workers**, then for each returned outcome, record it on
-   `arsenal-queue` yourself (the worker is on a feature branch and cannot run
-   `release.sh` — see **Per-task PRs** below):
-   - `done` + PR URL/branch → `claude-arsenal/bin/release.sh <task_id> done --pr <url|branch>`.
-   - `open` + failure notes → append a `## Failure notes` section to
-     `claude-arsenal/queue/<task_id>.md`, then `claude-arsenal/bin/release.sh <task_id> open`
-     (which commits the payload edit too).
+6. **Wait for all workers.** Then, for each returned outcome:
+   - **Assert the coordination-branch invariant first** —
+     `claude-arsenal/bin/worker_postcheck.sh`. It guarantees HEAD is back on
+     `arsenal-queue` and the tree is clean **before** `release.sh` runs (which
+     otherwise exits 2 off-branch). In a real worktree this is a no-op (`ok`);
+     if it prints `restored`, the worker ran in-place — clamp
+     `ARSENAL_MAX_WORKERS=1` per step 0. Exit 2 (could not restore) → stop the
+     loop and surface to the user.
+   - Then record the outcome on `arsenal-queue` yourself (the worker is on a
+     feature branch and cannot run `release.sh` — see **Per-task PRs** below):
+     - `done` + PR URL/branch → `claude-arsenal/bin/release.sh <task_id> done --pr <url|branch>`.
+     - `open` + failure notes → append a `## Failure notes` section to
+       `claude-arsenal/queue/<task_id>.md`, then `claude-arsenal/bin/release.sh <task_id> open`
+       (which commits the payload edit too).
 7. Return to step 2.
 
 ---
@@ -207,11 +234,27 @@ The queue row carries an optional `"pr"` field once recorded.
 `release.sh … --pr <url>` sets it and also stages the payload file so
 `## Failure notes` / PR-URL edits land on the coordination ref.
 
-> **Web caveat:** Claude Code on the web may route git through a proxy that
-> restricts pushes to the session's designated branch (feature-branch pushes can
-> return HTTP 403). Per-task PRs are **CLI-first** — verify a feature-branch
-> push succeeds on the web before relying on it there. On the CLI it is
-> unrestricted.
+> **Web caveat:** Claude Code on the web differs from the CLI in two ways that
+> matter here, so per-task PRs and parallel fan-out are **CLI-first** — verify
+> both on the web before relying on them there:
+>
+> 1. **Restricted pushes.** Git may be routed through a proxy that restricts
+>    pushes to the session's designated branch (feature-branch pushes can return
+>    HTTP 403).
+> 2. **Silent worktree fallback.** The Task tool's `isolation: worktree` flag
+>    may be **silently ignored** — no worktree is created and the worker runs in
+>    the orchestrator's shared tree on `arsenal-queue`, moving the orchestrator's
+>    HEAD onto the worker's feature branch and leaving the worker's pre-PR edits
+>    transiently on the append-only ledger (tripping host Stop hooks). This
+>    breaks parallelism (concurrent workers clobber one tree) and can make
+>    `release.sh` fail until HEAD is back on `arsenal-queue`. The loop guards
+>    against it: it probes with `worktree_probe.sh`, dispatches a lone first
+>    worker, and runs `worker_postcheck.sh` after every worker to restore the
+>    invariant; when isolation turns out to be unavailable it forces
+>    `ARSENAL_MAX_WORKERS=1` and runs serialized in-place (loop step 0).
+>
+> On the CLI both behaviours are unrestricted: pushes are unproxied and
+> `isolation: worktree` is honored.
 
 ---
 
@@ -237,7 +280,7 @@ API/metered usage the budget check always fails open.
 
 | Env var | Default | Effect |
 |---------|---------|--------|
-| `ARSENAL_MAX_WORKERS` | `2` | Workers per batch. `2` is the validated git-push concurrency ceiling; higher N raises claim-race churn and PR/merge-conflict surface. |
+| `ARSENAL_MAX_WORKERS` | `2` | Workers per batch. `2` is the validated git-push concurrency ceiling; higher N raises claim-race churn and PR/merge-conflict surface. **Forced to `1` when worktree isolation is unavailable** (loop step 0): parallel workers are unsafe sharing one tree. |
 | `ARSENAL_QUOTA_STOP_PCT` | `90` | Stop the loop before dispatch at/above this used-percentage on either window. |
 | `LOOP_WORKSPACE` | _(unset)_ | Workspace scope; set by `/continue` token inference. |
 | `LOOP_TAGS` | _(unset)_ | Comma/space-separated tag scope (ANDed); set by `/continue` token inference. |
@@ -338,8 +381,10 @@ claude-arsenal/
     queue_branch.sh   ← ensures the shared coordination branch is checked out
     queue_eval.sh     ← next single task (thin wrapper over queue_batch.sh)
     queue_batch.sh    ← up to N independent tasks (parallel fan-out)
+    worktree_probe.sh ← probes whether git worktrees work here (fan-out safety)
     claim.sh
     release.sh        ← orchestrator-side; accepts --pr, stages the payload
+    worker_postcheck.sh ← orchestrator-side; restores HEAD→queue branch + clean tree post-worker
     open_task_pr.sh   ← worker-side; branch off default → commit → push → PR
     gate_run.sh
     budget_check.sh   ← token-budget stop (exit 3 over ARSENAL_QUOTA_STOP_PCT)

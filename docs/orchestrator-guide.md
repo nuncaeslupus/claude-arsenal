@@ -137,9 +137,19 @@ While the loop runs, you can watch progress several ways:
 The loop budget-checks, calls `queue_batch.sh --max $ARSENAL_MAX_WORKERS` for up
 to N independent tasks (no task in the batch blocks another), claims each, then
 spawns **all won workers in a single message** so they run concurrently. It
-waits for the batch, releases each, and loops. Keep `ARSENAL_MAX_WORKERS` small;
-release contention on `arsenal-queue` is serialised by `release.sh`'s
-fetch–rebase–push retry, but churn grows with N.
+waits for the batch, runs `worker_postcheck.sh` + `release.sh` for each, and
+loops. Keep `ARSENAL_MAX_WORKERS` small; release contention on `arsenal-queue`
+is serialised by `release.sh`'s fetch–rebase–push retry, but churn grows with N.
+
+Fan-out is only safe when each worker runs in its own `git worktree`. The Task
+tool's `isolation: worktree` flag is **silently ignored on some surfaces** (see
+the Web caveat), so the loop establishes isolation empirically: it runs
+`worktree_probe.sh`, dispatches a lone first worker, and checks the post-worker
+assertion (`worker_postcheck.sh`). If isolation turns out to be unavailable, it
+**forces `ARSENAL_MAX_WORKERS=1` and runs serialized in-place** — one worker at
+a time, with `worker_postcheck.sh` restoring HEAD to `arsenal-queue` and
+cleaning the tree between tasks so the coordination ledger never carries a
+worker's code. See `claude-arsenal/AGENTS.md` → *Worker loop algorithm* step 0.
 
 ### Token-budget stop
 
@@ -169,11 +179,22 @@ runs the host lint gate plus `gate_run.sh`, then:
   pushes, and opens a PR via `open_task_pr.sh`. The orchestrator records the URL
   with `release.sh done --pr <url>`.
 
-> **Web caveat:** Claude Code on the web routes git through a proxy that may
-> restrict pushes to the session's designated branch (feature-branch pushes can
-> return HTTP 403). Per-task PRs are therefore a **CLI-first** capability —
-> verify a feature-branch push succeeds on the web before relying on it there.
-> On the CLI this is unrestricted.
+> **Web caveat:** Claude Code on the web differs from the CLI in two ways, so
+> per-task PRs **and** parallel fan-out are **CLI-first** — verify both on the
+> web before relying on them there:
+>
+> 1. **Restricted pushes.** Git may be routed through a proxy that restricts
+>    pushes to the session's designated branch (feature-branch pushes can return
+>    HTTP 403).
+> 2. **Silent worktree fallback.** The Task tool's `isolation: worktree` flag
+>    may be silently ignored: the worker then runs in the orchestrator's shared
+>    tree on `arsenal-queue`, moving its HEAD onto the feature branch and
+>    leaving pre-PR edits transiently on the ledger. The loop detects this
+>    (`worktree_probe.sh` + a lone first worker + `worker_postcheck.sh`) and
+>    falls back to serialized `ARSENAL_MAX_WORKERS=1` in-place mode.
+>
+> On the CLI both are unrestricted: pushes are unproxied and `isolation:
+> worktree` is honored.
 
 ---
 
@@ -188,3 +209,10 @@ runs the host lint gate plus `gate_run.sh`, then:
 - **The loop stops immediately with a quota message** — `budget_check.sh` hit
   the threshold. Wait for the reported reset, raise `ARSENAL_QUOTA_STOP_PCT`, or
   clear `claude-arsenal/session/rate_limits.json` to fail open.
+- **`git worktree list` shows one checkout and the orchestrator's HEAD jumped to
+  a worker's feature branch** — worktree isolation was silently ignored (common
+  on the web). This is expected and handled: the loop forces
+  `ARSENAL_MAX_WORKERS=1` and `worker_postcheck.sh` restores HEAD to
+  `arsenal-queue` between tasks. If `worker_postcheck.sh` exits 2 (could not
+  restore), the tree has uncommittable state — inspect `git status`, return to
+  `arsenal-queue` manually, then resume.
