@@ -83,7 +83,7 @@ for row in rows:
     if row.get("status") != "open":
         continue
     # Check all blocking deps are done.
-    deps = [d["id"] for d in row.get("deps", []) if d.get("type") == "blocks"]
+    deps = [d["id"] for d in (row.get("deps") or []) if d.get("type") == "blocks"]
     if any(dep not in done_ids for dep in deps):
         continue
     # Check surface / service requirements only when a profile is present.
@@ -95,7 +95,7 @@ for row in rows:
     if workspace_filter and row.get("workspace", "") != workspace_filter:
         continue
     # Tag filter (AND) if LOOP_TAGS is set.
-    if requested_tags and not requested_tags.issubset(set(row.get("tags", []))):
+    if requested_tags and not requested_tags.issubset(set(row.get("tags") or [])):
         continue
     candidates.append(row)
 
@@ -111,11 +111,11 @@ for row in candidates:
     if len(batch) >= max_n:
         break
     row_id = row.get("id")
-    dep_ids = {d["id"] for d in row.get("deps", []) if d.get("type") == "blocks"}
+    dep_ids = {d["id"] for d in (row.get("deps") or []) if d.get("type") == "blocks"}
     if dep_ids & batch_ids:
         continue  # this task blocks on one already in the batch
     if any(
-        row_id in {d["id"] for d in b.get("deps", []) if d.get("type") == "blocks"}
+        row_id in {d["id"] for d in (b.get("deps") or []) if d.get("type") == "blocks"}
         for b in batch
     ):
         continue  # this task blocks one already in the batch

@@ -29,7 +29,9 @@ except Exception:
 if not isinstance(data, dict):
     data = {}
 
-rl = data.get("rate_limits") or {}
+rl = data.get("rate_limits")
+if not isinstance(rl, dict):
+    rl = {}
 
 
 def _pct(window):

@@ -32,8 +32,10 @@ if not file.exists():
 
 try:
     data = json.loads(file.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError("not a dict")
 except Exception:
-    print("budget_check: rate_limits.json unparseable — failing open", file=sys.stderr)
+    print("budget_check: rate_limits.json unparseable or invalid — failing open", file=sys.stderr)
     sys.exit(0)
 
 worst = None
