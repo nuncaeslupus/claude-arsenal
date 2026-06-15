@@ -257,17 +257,23 @@ dispatches that many workers at once. Run when the queue has open tasks:
    check exited 3. For every workspace that had at least one task reach `done` or
    `merged` status during this session:
    a. **Update the workspace handover.** Prepend a new status block to
-      `claude-arsenal/project/<WORKSPACE>/handover.md` with today's date, what
-      was completed, what (if anything) remains open or blocked, and the next
-      recommended action. Keep it to ≤ 10 lines — enough for a cold-start worker
-      to orient without reading the full queue.
+      `claude-arsenal/project/<WORKSPACE>/handover.md` with today's date in ISO
+      8601 format (`YYYY-MM-DD`), what was completed, what (if anything) remains
+      open or blocked, and the next recommended action. Keep it to ≤ 10 lines —
+      enough for a cold-start worker to orient without reading the full queue.
    b. **Update the status doc.** Reflect completed work in
       `docs/status/<part>.md` (or wherever the host project tracks board
       fragments). Mark finished items done; update the "remaining" count.
-   c. **Bundle and commit.** Include all handover and status edits in a single
+   c. **Switch to the default branch first.** The orchestrator runs on
+      `arsenal-queue`; housekeeping commits must land on the host default branch
+      (`main`), not the coordination ledger. Run
+      `git checkout main && git pull origin main` before staging the edits.
+   d. **Bundle and commit.** Include all handover and status edits in a single
       `chore: update workspace handovers and status docs` commit on the default
       branch (or open a small housekeeping PR if main is protected). Do **not**
       batch this with task code — keep it separate so the diff is reviewable.
+      After committing, return to the coordination branch:
+      `git checkout "${ARSENAL_QUEUE_BRANCH:-arsenal-queue}"`.
 
    > **Why this step exists.** The queue ledger (`tasks.jsonl`) tracks machine
    > state; `handover.md` and `docs/status/*.md` are the human-readable
