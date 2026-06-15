@@ -1,6 +1,6 @@
 {
   "skill": "ship",
-  "canary": "ship-loaded-2026-06-01-969928a90f431ecb",
+  "canary": "ship-loaded-2026-06-15-3b7e91c2d84fa056",
   "negative_control": "this skill rolls back the last production deploy automatically when a check fails",
   "load_prompts": [
     "Is this PR ready to merge? Run the ship check.",

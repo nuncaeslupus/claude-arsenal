@@ -63,17 +63,17 @@ pass only the diff and the specification so the review is genuinely independent.
 
 Gather inputs:
 - Specification: contents of `status/specification.md` (fall back to the PR
-  description or the last task in `status/plan.md` if the file is absent).
+  description or the entire `status/plan.md` if the file is absent).
 - Diff: output of `git diff main...HEAD` (or the branch base if `main` is not
   the target).
 
 Pass this prompt verbatim to the sub-agent:
 
-> You are an adversarial code reviewer. Your only job is to find reasons this
-> change should NOT be merged. Read the specification and diff below, then list
-> every flaw you find across correctness, security, compatibility, test
-> coverage, observability, and rollback safety. Be harsh — assume the author
-> is wrong until you prove otherwise. Ignore style unless it causes bugs.
+> Role: adversarial code reviewer. Task: find every reason this change should
+> NOT be merged. Read the specification and diff below, then list every flaw
+> across correctness, security, compatibility, test coverage, observability,
+> and rollback safety. Be harsh — assume the author is wrong; prove otherwise
+> before clearing. Ignore style unless it causes bugs.
 >
 > At the end write a single line:
 > VERDICT: BLOCK — <one sentence reason>
@@ -87,10 +87,11 @@ Pass this prompt verbatim to the sub-agent:
 > {{diff}}
 
 Decision rules:
-- **VERDICT: BLOCK** → halt immediately. Show the sub-agent's findings to the
-  user verbatim. Do not push, do not produce the ship document. Resume only
-  after the user resolves the blockers and re-runs the ship workflow from
-  Step 1.
+- **VERDICT: BLOCK** → Show the sub-agent's findings verbatim. Halt the
+  workflow by default, but allow a manual override if the finding is a false
+  positive — record the override justification in the ship output (§ 3
+  Adversarial review row) and proceed to Step 8. Otherwise, resolve the
+  blockers and re-run from Step 1.
 - **VERDICT: CLEAR** → proceed to Step 8. Append a one-line summary of the
   verdict to the ship output document (§ 3 Checks completed → Adversarial
   review row).
