@@ -42,14 +42,30 @@ branch. Capture it first.
    `claude-arsenal/queue/<task_id>.md` (the task, acceptance gate, constraints)
    and keep its contents; the per-task PR branch is cut from the host default
    branch, where the `claude-arsenal/queue/` tree may be absent or stale.
+   If the payload already contains `## Attempt N failure` sections, read them
+   before implementing — they record what prior approaches were tried and why
+   they failed.
 2. **Implement the work** described in the payload. Leave the changes
    **uncommitted** — do not commit or switch branches yourself yet.
 3. **Run the gates while the payload is still present:** the host lint gate if
    one exists (`make lint`, `npm run lint`, …), then
    `claude-arsenal/bin/gate_run.sh <task_id>`.
    - **Gate fails** (lint or `gate_run.sh` exit non-zero) → **open no PR.**
-     Return outcome `open` to the orchestrator with concise failure-note text
-     (what failed and why) for it to append under `## Failure notes`. Exit.
+     Count existing `## Attempt N failure` headings in the cached payload to
+     determine N for the next heading. Return outcome `open` to the orchestrator
+     with failure notes structured as follows, for it to append under
+     `## Failure notes`:
+
+     ```
+     ## Attempt N failure
+     Gate: exited with code X (or: lint failed)
+     Output (first 20 lines):
+       <gate_run.sh stdout/stderr>
+     Tried: <one sentence on implementation approach taken>
+     Hypothesis: <optional: what to try differently next time>
+     ```
+
+     Exit.
 4. **Gate passes** → open the PR with the thin helper. Export the dynamic
    Co-Authored-By identity supplied by the harness first (never hardcode a
    model name):
@@ -69,8 +85,8 @@ branch. Capture it first.
 ## On failure
 
 If implementation cannot be completed for any other reason, return outcome
-`open` to the orchestrator with a brief failure note (what blocked you) for the
-`## Failure notes` section. Do not open a PR.
+`open` to the orchestrator with a structured failure note (see step 3 format)
+for the `## Failure notes` section. Do not open a PR.
 
 ## What not to do
 

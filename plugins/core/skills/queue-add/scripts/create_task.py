@@ -41,6 +41,7 @@ def add_task(
     queue_path: Path,
     workspace: str | None = None,
     tags: list[str] | None = None,
+    max_attempts: int = 3,
 ) -> str:
     rows = _load_queue(queue_path)
     existing_ids = {r["id"] for r in rows}
@@ -53,11 +54,11 @@ def add_task(
             )
 
     task_id = _generate_id(title)
-    attempts = 0
+    _attempt_counter = 0
     while task_id in existing_ids:
-        task_id = _generate_id(title + str(attempts))
-        attempts += 1
-        if attempts > 100:
+        task_id = _generate_id(title + str(_attempt_counter))
+        _attempt_counter += 1
+        if _attempt_counter > 100:
             sys.exit("add_task: could not generate a unique ID after 100 attempts")
 
     row: dict = {
@@ -69,6 +70,8 @@ def add_task(
         "deps": [{"id": d, "type": "blocks"} for d in deps],
         "assignee": None,
         "payload": f"{task_id}.md",
+        "max_attempts": max_attempts,
+        "attempts": 0,
     }
 
     if workspace is not None:
@@ -111,12 +114,17 @@ def main() -> None:
         "--tag", action="append", default=[], metavar="TAG",
         help="Free-form label for /continue tag scoping (used by LOOP_TAGS). Repeatable.",
     )
+    p.add_argument(
+        "--max-attempts", type=int, default=3, metavar="N",
+        help="Maximum gate-failure attempts before auto-escalation (default: 3).",
+    )
     p.add_argument("--queue", default=QUEUE_FILE, help="Path to queue.jsonl")
     args = p.parse_args()
 
     task_id = add_task(
         args.title, args.priority, args.requires, args.deps,
-        Path(args.queue), args.workspace, args.tag
+        Path(args.queue), args.workspace, args.tag,
+        args.max_attempts,
     )
     print(task_id)
 

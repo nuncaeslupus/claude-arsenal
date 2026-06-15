@@ -114,7 +114,7 @@ def _has_shebang(path: Path) -> bool:
         return False
 
 
-def _refresh_bundle(bundle: Path, target: Path) -> None:
+def _refresh_bundle(bundle: Path, target: Path, silent: bool = False) -> None:
     """Copy bundle files into target, refreshing only stale files."""
     for src in bundle.rglob("*"):
         if src.is_dir():
@@ -123,7 +123,8 @@ def _refresh_bundle(bundle: Path, target: Path) -> None:
         dst = target / rel
         dst.parent.mkdir(parents=True, exist_ok=True)
         if dst.exists() and _sha256(src) == _sha256(dst):
-            print(f"  up to date: {rel}")
+            if not silent:
+                print(f"  up to date: {rel}")
         else:
             shutil.copy2(src, dst)
             # copy2 already mirrors the source mode; restore +x only for files
@@ -133,6 +134,24 @@ def _refresh_bundle(bundle: Path, target: Path) -> None:
             if _has_shebang(src):
                 dst.chmod(dst.stat().st_mode | 0o111)
             print(f"  refreshed:  {rel}")
+
+
+def _check_bundle_version(bundle: Path, arsenal: Path) -> None:
+    """Print an upgrade banner when the installed bundle version is behind the plugin source."""
+    bundle_ver_path = bundle / ".bundle-version"
+    installed_ver_path = arsenal / ".bundle-version"
+    if not bundle_ver_path.exists():
+        return
+    bundle_ver = bundle_ver_path.read_text(encoding="utf-8").strip()
+    installed_ver = (
+        installed_ver_path.read_text(encoding="utf-8").strip()
+        if installed_ver_path.exists()
+        else "unknown"
+    )
+    if installed_ver != bundle_ver:
+        print(
+            f"Upgrading claude-arsenal bundle: {installed_ver} → {bundle_ver}"
+        )
 
 
 def _register_statusline(repo_path: Path) -> None:
@@ -222,19 +241,28 @@ def _upsert_overview(repo_path: Path, workspace: str, root: str, spec: str, plan
     print(f"  overview.md: added workspace {workspace}")
 
 
-def init_base(repo_path: Path, bundle_override: Path | None = None) -> None:
+def init_base(
+    repo_path: Path,
+    bundle_override: Path | None = None,
+    silent: bool = False,
+) -> None:
     bundle = _bundle_dir(bundle_override)
     arsenal = repo_path / "claude-arsenal"
 
-    print("Initializing claude-arsenal/...")
+    if not silent:
+        print("Initializing claude-arsenal/...")
+
+    # Version check — prints upgrade banner when behind the plugin source
+    _check_bundle_version(bundle, arsenal)
 
     # Scaffold directories
     for d in ["bin", "project", "queue", "session", "agents"]:
         (arsenal / d).mkdir(parents=True, exist_ok=True)
 
     # Refresh bundle files
-    print("Refreshing bundle files:")
-    _refresh_bundle(bundle, arsenal)
+    if not silent:
+        print("Refreshing bundle files:")
+    _refresh_bundle(bundle, arsenal, silent=silent)
 
     # Create empty queue
     queue_file = arsenal / "queue" / "tasks.jsonl"
@@ -271,7 +299,12 @@ def init_base(repo_path: Path, bundle_override: Path | None = None) -> None:
     # CLAUDE.md
     _inject_claude_md(repo_path)
 
-    print(f"\ninit: claude-arsenal/ ready at {repo_path}")
+    ver_path = arsenal / ".bundle-version"
+    if silent:
+        if ver_path.exists():
+            print(f"claude-arsenal {ver_path.read_text(encoding='utf-8').strip()}")
+    else:
+        print(f"\ninit: claude-arsenal/ ready at {repo_path}")
 
 
 def init_workspace(
@@ -328,6 +361,10 @@ def main() -> None:
     p.add_argument("--spec", default=None, help="Spec file path override.")
     p.add_argument("--plan", default=None, help="Plan file path override.")
     p.add_argument("--bundle-dir", help="Override path to plugin bundle/ (for testing).")
+    p.add_argument(
+        "--silent", action="store_true",
+        help="Suppress 'up to date' lines; only print refreshed files and version banner.",
+    )
     args = p.parse_args()
 
     repo_path = Path(args.repo_path).resolve()
@@ -340,7 +377,7 @@ def main() -> None:
         plan = args.plan or f"claude-arsenal/project/{name}/plan.md"
         init_workspace(repo_path, name, root, spec, plan, bundle_override)
     else:
-        init_base(repo_path, bundle_override)
+        init_base(repo_path, bundle_override, silent=args.silent)
 
 
 if __name__ == "__main__":

@@ -16,3 +16,21 @@ Format: `<file> §<section or anchor>` — <one-line explanation of why this mat
 ## Context
 
 <Optional: one short paragraph for anything that does not fit in a reference line.>
+
+## Failure notes
+
+<!-- This section is appended by the orchestrator after each failed worker attempt.
+     The next worker MUST read all Attempt N failure entries before implementing. -->
+
+<!-- Example of accumulated entries:
+
+## Attempt 1 failure
+Gate: exited with code 1
+Output (first 20 lines):
+  ruff check src/
+  E501 Line too long (102 > 88 characters) — line 12
+  Found 1 error.
+Tried: Added the feature inline without adjusting line length.
+Hypothesis: Wrap the long expression across two lines and re-run ruff.
+
+-->

@@ -39,7 +39,7 @@ def main() -> None:
 
     rows = _load_queue(queue_path)
     if not rows:
-        print("total=0  open=0  in_progress=0  done=0  blocked=0")
+        print("total=0  open=0  in_progress=0  done=0  merged=0  blocked=0  escalated=0")
         return
 
     counts: dict[str, int] = {}
@@ -55,6 +55,7 @@ def main() -> None:
         f"  done={counts.get('done', 0)}"
         f"  merged={counts.get('merged', 0)}"
         f"  blocked={counts.get('blocked', 0)}"
+        f"  escalated={counts.get('escalated', 0)}"
     )
 
     if args.detail:
@@ -67,11 +68,17 @@ def main() -> None:
                 d["id"] for d in row.get("deps", [])
                 if d.get("type") == "blocks" and d["id"] not in done_ids
             ]
-            assignee = row.get("assignee") or "-"
-            unmet_str = f"  unmet_deps={unmet}" if unmet else ""
-            title = row.get("title", "")[:50]
             status = row.get("status", "?")
-            print(f"  {row['id']}  [{status:12s}]  assignee={assignee:<20}  {title}{unmet_str}")
+            title = row.get("title", "")[:50]
+            unmet_str = f"  unmet_deps={unmet}" if unmet else ""
+            if status == "escalated":
+                att = row.get("attempts", 0)
+                cap = row.get("max_attempts", 3)
+                extra = f"attempts={att}/{cap} — needs human reset"
+            else:
+                assignee = row.get("assignee") or "-"
+                extra = f"assignee={assignee:<20}"
+            print(f"  {row['id']}  [{status:12s}]  {extra}  {title}{unmet_str}")
 
 
 if __name__ == "__main__":

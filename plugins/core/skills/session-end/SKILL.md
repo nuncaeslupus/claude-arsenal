@@ -1,16 +1,17 @@
 ---
 name: session-end
-description: Use whenever the user signals end-of-job, invokes /session-end, or a Stop hook fires at conversation close — produces an end-of-job artifact in two steps. Step 1 writes status/handoff.md from current session state if the host repo's CLAUDE.md opts in via the session-end marker; otherwise skips. Step 2 always runs the retrospective — scans recent session transcripts under ~/.claude/projects/ for repeated tool errors, throwaway scripts in tmp/, repeated user corrections, and unexpected tool behavior — then surfaces proposed skill updates. Triggers — "wrap up", "we're done", "/session-end", "save the session", "end-of-job retrospective". Do NOT use mid-job, for cross-session memory writes (use the auto-memory directory), or to summarize someone else's session.
+description: Use whenever the user signals end-of-job, invokes /session-end, or a Stop hook fires at conversation close — three steps. (1) write status/handoff.md if host repo opts in; (2) retrospective scan for repeated errors and proposed skill updates; (3) PR audit — checks CI, review comments, and merge conflicts on session PRs, prints a review table. Triggers — "wrap up", "we're done", "/session-end", "end-of-job". Do NOT use mid-job or for cross-session memory.
 metadata:
   type: workflow
 ---
 
 # session-end
 
-End-of-job ritual. Two steps, both run unconditionally when this skill is invoked:
+End-of-job ritual. Three steps run unconditionally when this skill is invoked:
 
 1. **Handoff** (opt-in per-project): if the host repo's `CLAUDE.md` has the marker `<!-- session-end: handoff=yes -->`, write/update `status/handoff.md` from the current session state and stage it so it lands in the next PR.
 2. **Retrospective** (always): scan the last N session transcripts for pain signals (repeated errors, throwaway scripts, repeated user corrections, unexpected tool behavior), then surface concrete skill-update proposals.
+3. **PR audit** (always, when a queue exists): collect every `done`/`in_progress` task that carries a PR URL, check CI status + review comments + merge-conflict state for each, and print a review table for human approval.
 
 CANARY: session-end-loaded-2026-05-20-4896c0a5-8ca7505c91dc34e6
 
@@ -59,6 +60,42 @@ For each accepted proposal, Claude writes a YAML+MD block to the right location:
 | Anywhere else (consumer install, cache is volatile) | `~/.claude/proposed-skill-improvements/<YYYY-MM-DD>.md` (appended; user reviews offline) |
 
 Format and rubric for the proposal block live in [retrospective-rubric](references/retrospective-rubric.md).
+
+## Step 3 — PR audit (always when queue exists)
+
+Collect every task in `done` or `in_progress` status from `claude-arsenal/queue/tasks.jsonl`
+that carries a `pr` field, then check each PR for CI, review comments, and merge conflicts.
+
+**When `gh` CLI is available:**
+```bash
+gh pr view <pr-url> --json title,state,mergeable,reviewDecision,statusCheckRollup \
+  --jq '{title,state,mergeable,reviewDecision,ci:(.statusCheckRollup|map(.conclusion)|unique)}'
+```
+
+Run this for each PR URL, then print a summary table:
+
+| Task | PR | CI | Reviews | Mergeable | Action needed |
+|---|---|---|---|---|---|
+| lo-a3f8 | #42 | ✓ passing | approved | yes | — |
+| lo-b2c1 | #43 | ✗ failing | changes_requested | yes | Fix CI + respond to review |
+| lo-c3d4 | #44 | pending | — | CONFLICTING | Rebase required |
+
+Mark any PR as **BLOCKED** if: CI is failing, there are `CHANGES_REQUESTED` reviews, or the branch has merge conflicts. Print this table to stdout so the user can review and approve before the session closes.
+
+**When `gh` is not available** (web, or no GitHub CLI):
+Print the PR URL list directly from the queue, with task IDs and titles, so the user can check them manually:
+```
+PRs from this session requiring human review:
+  lo-a3f8  #42  https://github.com/…/pull/42  — T1: Implement claim.sh
+  lo-b2c1  #43  https://github.com/…/pull/43  — T2: Auth gate
+```
+
+**Always include escalated tasks** in the summary (they need human reset, not PR review):
+```
+Escalated tasks (exhausted retry cap — no PR opened):
+  lo-c3d4  attempts=3/3  T3: Data migration
+  → Recovery: release.sh lo-c3d4 open --reset-attempts  (from claude-arsenal/bin/)
+```
 
 ## Auto-fire (opt-in)
 

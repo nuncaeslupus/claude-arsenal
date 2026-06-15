@@ -29,6 +29,14 @@ Load this skill when:
 python3 .claude/skills/init/scripts/init.py --repo-path .
 ```
 
+**Auto-refresh (session start — silent):**
+```bash
+python3 .claude/skills/init/scripts/init.py --repo-path . --silent
+```
+Refreshes stale bundle scripts without the "up to date" noise. Prints an upgrade
+banner when the installed bundle version is behind the plugin source, and reports
+any files it refreshed. The session-start protocol runs this automatically.
+
 **Register a workspace:**
 ```bash
 python3 .claude/skills/init/scripts/init.py --workspace FRONTEND
@@ -53,3 +61,4 @@ With `--workspace NAME`, additionally:
 - **Bundle scripts are authoritative.** Re-running `init` refreshes any `claude-arsenal/bin/` file whose checksum differs from the plugin bundle. Project data (`project/`, `queue/`, `session/handover.md`) is never touched on re-run.
 - **CC Web without hooks**: `detect_surface.sh` won't auto-run on web, but init writes a permissive `surface_profile.json` so all tasks remain eligible.
 - **CLAUDE.md block must be at root.** The injected block appears in the host root `CLAUDE.md`, not a nested file.
+- **Auto-refresh on session start.** The session-start protocol (AGENTS.md step 0) runs `init.py --silent` automatically. When the plugin is updated to a new version, the next session start detects the version mismatch, refreshes the stale scripts, and reports what changed. No manual `/init` is required for bundle-script updates — only for new workspace registration or major changes to `CLAUDE.md`.

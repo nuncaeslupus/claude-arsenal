@@ -12,6 +12,13 @@ in that block: queue seeding, worker dispatch, credit guards, and state layout.
 
 At the start of every session (fresh start, context compaction, or cold restart):
 
+0. **Auto-refresh bundle** — `python3 .claude/skills/init/scripts/init.py --repo-path . --silent`.
+   Silently refreshes any `claude-arsenal/bin/` or other bundle script whose
+   checksum differs from the plugin source, and prints an upgrade banner when the
+   installed bundle version (`claude-arsenal/.bundle-version`) is behind the plugin.
+   If anything is refreshed, report it to the user before continuing. Skip this
+   step when `.claude/skills/init/scripts/init.py` is not present (the skill is
+   not installed).
 1. **Enter the coordination branch** — `claude-arsenal/bin/queue_branch.sh`. This
    checks out the shared queue branch (default `arsenal-queue`) and sets its
    upstream. The orchestrator session runs here for its whole life; all
@@ -29,8 +36,16 @@ At the start of every session (fresh start, context compaction, or cold restart)
    `claude-arsenal/bin/reconcile_merged.sh`. Flips every `done` task whose PR has
    landed to the terminal `merged` status, so the board distinguishes
    opened-but-unmerged from merged. Safe to skip when offline / no `gh`.
-5. **After any session with open tasks**: write `claude-arsenal/session/handover.md` using
-   the template at `claude-arsenal/session/handover.md` before ending the session.
+5. **After any session with open tasks**: before ending the session —
+   a. **PR audit**: collect every `done`/`in_progress` task carrying a `pr` URL from
+      `claude-arsenal/queue/tasks.jsonl`. For each URL, check CI status, review comments,
+      and merge-conflict state (use `gh pr view <url> --json title,state,mergeable,reviewDecision,statusCheckRollup`
+      when `gh` is available; otherwise print the URL list). Print a review table with
+      CI / reviews / mergeability for human approval. Also list any `escalated` tasks
+      with their attempt counts and recovery command. The `/session-end` skill (Step 3)
+      runs this audit in full; when loaded, defer to it.
+   b. **Write handover**: write `claude-arsenal/session/handover.md` using the template
+      in that file, including the PR audit summary.
 
 ---
 
@@ -223,9 +238,14 @@ dispatches that many workers at once. Run when the queue has open tasks:
      - `done` + PR URL/branch → `claude-arsenal/bin/release.sh <task_id> done --pr <url|branch>`.
        `done` means "PR opened + gate passed", NOT "merged" — `reconcile_merged.sh`
        later flips it to the terminal `merged` once the PR lands.
-     - `open` + failure notes → append a `## Failure notes` section to
-       `claude-arsenal/queue/<task_id>.md`, then `claude-arsenal/bin/release.sh <task_id> open`
-       (which commits the payload edit too).
+     - `open` + failure notes → append the structured `## Attempt N failure`
+       section (see `agents/worker.md` step 3 format) under `## Failure notes`
+       in `claude-arsenal/queue/<task_id>.md`, then
+       `claude-arsenal/bin/release.sh <task_id> open` (which commits the payload
+       edit too). `release.sh` increments `attempts` and auto-escalates to
+       `escalated` when the cap is reached — check `queue-status` after; an
+       `escalated` task needs human recovery
+       (`release.sh <id> open --reset-attempts`).
 7. Return to step 2.
 
 ---
@@ -372,7 +392,7 @@ Each line of `claude-arsenal/queue/tasks.jsonl` is a JSON object:
 {
   "id": "lo-a3f8",
   "title": "T1: ...",
-  "status": "open|in_progress|done|merged|blocked",
+  "status": "open|in_progress|done|merged|blocked|escalated",
   "priority": 0,
   "requires": [],
   "deps": [{"id": "lo-b2c1", "type": "blocks"}],
@@ -380,7 +400,9 @@ Each line of `claude-arsenal/queue/tasks.jsonl` is a JSON object:
   "workspace": "FRONTEND",
   "tags": ["CLI"],
   "pr": "https://github.com/owner/repo/pull/123",
-  "payload": "lo-a3f8.md"
+  "payload": "lo-a3f8.md",
+  "max_attempts": 3,
+  "attempts": 0
 }
 ```
 
@@ -390,10 +412,31 @@ ignore them. `tags` is a free-form label axis (`/queue-add --tag CLI`) that
 surface-capability `requires` filter. `pr` is set by `release.sh … --pr <url>`
 when a per-task PR is opened.
 
+`max_attempts` (default 3) and `attempts` (default 0) control the per-task retry
+cap. `release.sh` increments `attempts` on each `open` release (worker gate
+failure); when `attempts >= max_attempts` the status is auto-overridden to
+`escalated`. Rows written before this field was added are treated as
+`max_attempts=3, attempts=0`. Set a custom cap with `/queue-add --max-attempts N`.
+
 `done` and `merged` are both **terminal** and both satisfy blocking deps:
 `done` = PR opened + gate passed; `merged` = that PR landed on the default
 branch. `reconcile_merged.sh` performs the `done`→`merged` flip by querying
 `gh pr view <pr> --json state` for each `done` task carrying a `pr` URL.
+
+`escalated` is a non-terminal failure state: the task has exhausted its attempt
+cap and needs human intervention. It does **not** satisfy blocking deps. It is
+skipped by `queue_batch.sh` (status is not `open`) and visible in `queue-status`
+with attempt counts. Recover with:
+`claude-arsenal/bin/release.sh <id> open --reset-attempts` then `/continue`.
+
+### Task lifecycle states
+
+```
+open → (claimed) → in_progress → (gate pass) → done → (PR merged) → merged
+in_progress → (gate fail, attempts < max_attempts) → open
+in_progress → (gate fail, attempts >= max_attempts) → escalated
+escalated → (human resets: release.sh <id> open --reset-attempts) → open
+```
 
 ---
 
