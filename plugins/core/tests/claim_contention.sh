@@ -87,6 +87,37 @@ if [[ ${wins} -ne 1 || ${losts} -ne 1 ]]; then
 fi
 echo "PASS: exactly one session won, one lost"
 
+# -- Part 1b (CA-03): a claim must not publish non-queue commits to the ledger --
+# Seed a fresh open task, then put a task-code commit on the branch. Claiming it
+# would push 2 commits (the leaked code + the claim) via `HEAD:refs/heads/...`,
+# so claim.sh must refuse loud rather than leak code onto the coordination ref.
+cd "${tmpdir_a}"
+git fetch -q origin "${QUEUE_BRANCH}"
+git reset -q --hard "origin/${QUEUE_BRANCH}"
+printf '%s\n' \
+    '{"id":"lo-c001","title":"Contention task","status":"in_progress","priority":0,"requires":[],"deps":[],"assignee":"session-a","payload":"lo-c001.md"}' \
+    '{"id":"lo-c002","title":"Guard task","status":"open","priority":0,"requires":[],"deps":[],"assignee":null,"payload":"lo-c002.md"}' \
+    > claude-arsenal/queue/tasks.jsonl
+git add claude-arsenal/queue/tasks.jsonl
+git commit -q -m "seed: add open task lo-c002"
+git push -q origin "HEAD:refs/heads/${QUEUE_BRANCH}"
+echo "leaked task code" > leaked.txt
+git add leaked.txt
+git commit -q -m "feat: task work that must NOT reach the ledger"
+before_tip=$(git rev-parse "origin/${QUEUE_BRANCH}")
+set +e
+out_g=$(bash "${CLAIM}" lo-c002 session-a 2>&1); rc_g=$?
+set -e
+git fetch -q origin "${QUEUE_BRANCH}"
+if [[ "${rc_g}" -ne 2 ]] || ! printf '%s' "${out_g}" | grep -q "refusing to push"; then
+    echo "FAIL: claim with extra commits should error (exit 2, 'refusing to push'), got exit ${rc_g}: ${out_g}" >&2
+    exit 1
+fi
+if [[ "$(git rev-parse "origin/${QUEUE_BRANCH}")" != "${before_tip}" ]]; then
+    echo "FAIL: refused claim must not advance the ledger" >&2; exit 1
+fi
+echo "PASS: claim refuses to leak non-queue commits onto the ledger (CA-03)"
+
 # -- Part 2: a session on the wrong branch must fail loud, not look "lost" --
 cd "${tmpdir_b}"
 git checkout -q -b some-feature-branch

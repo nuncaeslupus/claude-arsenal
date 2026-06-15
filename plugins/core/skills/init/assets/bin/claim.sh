@@ -94,6 +94,28 @@ if ! git commit -m "claim: ${TASK_ID} → in_progress [${SESSION_ID}]" >/dev/nul
     exit 0
 fi
 
+# Guard: only this single claim commit may reach the coordination ledger.
+# `git push HEAD:refs/heads/<branch>` publishes EVERY local commit ahead of the
+# remote, so on a shared tree (no worktree isolation) task code committed on
+# this branch would leak onto the queue. Fetch the published tip and confirm
+# exactly one commit (our claim) sits on top of it before pushing. A genuine
+# race (remote advanced) still shows our one local commit on top of the old tip
+# and is handled by the push rejection below; more than one means non-queue
+# commits are present, so fail loud instead of leaking them onto the ledger.
+git fetch "${REMOTE}" "${QUEUE_BRANCH}" >/dev/null 2>&1 || true
+queue_tip="$(git rev-parse --verify --quiet "refs/remotes/${REMOTE}/${QUEUE_BRANCH}" 2>/dev/null \
+    || git rev-parse --verify --quiet FETCH_HEAD 2>/dev/null || true)"
+if [[ -n "${queue_tip}" ]]; then
+    # The parent of our claim commit must already be on the published tip — then
+    # only the claim commit is new. If HEAD~1 is NOT an ancestor of the tip, this
+    # branch carries non-queue commits; refuse rather than leak them.
+    if ! git merge-base --is-ancestor "HEAD~1" "${queue_tip}" 2>/dev/null; then
+        git reset --soft "HEAD~1" >/dev/null 2>&1 || true
+        git checkout -- "${QUEUE_FILE}" >/dev/null 2>&1 || true
+        _fail "refusing to push local commits to '${QUEUE_BRANCH}' — only single claim/release commits may land on the coordination ledger; non-queue commits are present on this branch"
+    fi
+fi
+
 # Push the local claim commit to the shared coordination ref. Exactly one
 # racer fast-forwards; the rest are rejected non-fast-forward.
 # LANG=C keeps error messages in English so the grep below is locale-safe.
@@ -108,9 +130,11 @@ fi
 git reset HEAD~1 >/dev/null 2>&1 || true
 git checkout -- "${QUEUE_FILE}" >/dev/null 2>&1 || true
 
-if printf '%s' "${push_err}" | grep -qiE 'non-fast-forward|fetch first|cannot lock ref|but expected|failed to update ref'; then
+if printf '%s' "${push_err}" | grep -qiE 'non-fast-forward|fetch first|cannot lock ref|but expected|failed to update ref|incorrect old value'; then
     # Remote ref advanced — a genuine race (a plain non-fast-forward, or an
-    # atomic ref-update CAS loss: "cannot lock ref … is at X but expected Y").
+    # atomic ref-update CAS loss: "cannot lock ref … is at X but expected Y",
+    # or "remote rejected … (incorrect old value provided)" when two pushes
+    # hit the same ref concurrently).
     # The local claim was already unwound above, so there is nothing to rebase:
     # just resync to the new remote tip (robust against unrelated unstaged
     # files) so the next loop iteration re-evaluates against fresh queue state.

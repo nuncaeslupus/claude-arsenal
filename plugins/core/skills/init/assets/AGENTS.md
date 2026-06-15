@@ -1,6 +1,6 @@
 # Claude Arsenal
 
-<!-- claude-arsenal v0.3.1 — imported via @claude-arsenal/AGENTS.md -->
+<!-- claude-arsenal v0.4.0 — imported via @claude-arsenal/AGENTS.md -->
 
 This file is imported by the host repo's `CLAUDE.md` via the session-protocol block
 that `/init` injects. It provides the mechanics behind the proactive directives
@@ -25,7 +25,11 @@ At the start of every session (fresh start, context compaction, or cold restart)
    - Returns empty + workspace plans exist → go to **Queue seeding from workspace plans**.
    - Returns empty + `status/plan.md` exists → go to **Queue seeding from plan.md**.
    - Returns empty + no plan → report done or ask user.
-4. **After any session with open tasks**: write `claude-arsenal/session/handover.md` using
+4. **Reconcile merged PRs** (when `gh` is available) —
+   `claude-arsenal/bin/reconcile_merged.sh`. Flips every `done` task whose PR has
+   landed to the terminal `merged` status, so the board distinguishes
+   opened-but-unmerged from merged. Safe to skip when offline / no `gh`.
+5. **After any session with open tasks**: write `claude-arsenal/session/handover.md` using
    the template at `claude-arsenal/session/handover.md` before ending the session.
 
 ---
@@ -86,6 +90,12 @@ The table columns are: `T# | Description | Location | Size | Depends | Gate | Te
    ## Location
    <Location column content>
    ```
+
+   > **Gate blocks run verbatim.** `gate_run.sh` executes the bash block as
+   > code in the worker's tree (hardened by default: throwaway HOME + a PATH
+   > without `$HOME` shims; `ARSENAL_GATE_INHERIT_ENV=1` opts back in). Treat a
+   > gate block from an untrusted plan/payload as you would any code to run —
+   > review it.
 
 4. Proceed to the **Worker loop algorithm**.
 
@@ -172,9 +182,12 @@ dispatches that many workers at once. Run when the queue has open tasks:
      confirming real worktrees are in effect.
 1. Apply credit guards (see below) if not already set this session.
 2. **Budget check** — `claude-arsenal/bin/budget_check.sh`.
-   - exit `0` → under quota (or quota unobservable; fail-open). Continue.
-   - exit `3` → at/above `ARSENAL_QUOTA_STOP_PCT`. **Stop the loop**, write
-     `handover.md`, and report the remaining % + reset time. Do not dispatch.
+   - exit `0` → under quota (or quota unobservable; fail-open) AND under the
+     per-session dispatch-round cap. Continue.
+   - exit `3` → at/above `ARSENAL_QUOTA_STOP_PCT`, OR the session has dispatched
+     `ARSENAL_MAX_ITERATIONS` rounds (the always-available cap). **Stop the
+     loop**, write `handover.md`, and report the reason (remaining % + reset
+     time, or the round cap). Do not dispatch.
 3. `claude-arsenal/bin/queue_batch.sh --max "${ARSENAL_MAX_WORKERS:-2}"` → up to
    N task JSON lines (JSONL), respecting `LOOP_WORKSPACE` / `LOOP_TAGS` scope and
    excluding any task that blocks another in the same batch.
@@ -208,6 +221,8 @@ dispatches that many workers at once. Run when the queue has open tasks:
    - Then record the outcome on `arsenal-queue` yourself (the worker is on a
      feature branch and cannot run `release.sh` — see **Per-task PRs** below):
      - `done` + PR URL/branch → `claude-arsenal/bin/release.sh <task_id> done --pr <url|branch>`.
+       `done` means "PR opened + gate passed", NOT "merged" — `reconcile_merged.sh`
+       later flips it to the terminal `merged` once the PR lands.
      - `open` + failure notes → append a `## Failure notes` section to
        `claude-arsenal/queue/<task_id>.md`, then `claude-arsenal/bin/release.sh <task_id> open`
        (which commits the payload edit too).
@@ -272,7 +287,12 @@ that data arrives on. Before every dispatch, the loop runs `budget_check.sh`:
   observable.
 
 `rate_limits` is a snapshot at the last message and is **Pro/Max only**; on
-API/metered usage the budget check always fails open.
+API/metered usage the quota check always fails open. So `budget_check.sh` also
+enforces an **always-available** per-session dispatch-round cap
+(`ARSENAL_MAX_ITERATIONS`, default 50; `0` disables) that does not depend on
+observable quota — the real ceiling for an auto-dispatching loop on metered
+billing. The counter resets per `CLAUDE_SESSION_ID` and lives in the gitignored
+`claude-arsenal/session/budget_iterations.json`.
 
 ---
 
@@ -282,6 +302,8 @@ API/metered usage the budget check always fails open.
 |---------|---------|--------|
 | `ARSENAL_MAX_WORKERS` | `2` | Workers per batch. `2` is the validated git-push concurrency ceiling; higher N raises claim-race churn and PR/merge-conflict surface. **Forced to `1` when worktree isolation is unavailable** (loop step 0): parallel workers are unsafe sharing one tree. |
 | `ARSENAL_QUOTA_STOP_PCT` | `90` | Stop the loop before dispatch at/above this used-percentage on either window. |
+| `ARSENAL_MAX_ITERATIONS` | `50` | Always-available per-session dispatch-round cap (quota-independent). `0` disables it. |
+| `ARSENAL_GATE_INHERIT_ENV` | _(unset)_ | Set `1` to run gate blocks with the caller's full environment instead of the hardened throwaway HOME + restricted PATH. |
 | `LOOP_WORKSPACE` | _(unset)_ | Workspace scope; set by `/continue` token inference. |
 | `LOOP_TAGS` | _(unset)_ | Comma/space-separated tag scope (ANDed); set by `/continue` token inference. |
 | `ARSENAL_QUEUE_BRANCH` | `arsenal-queue` | Coordination branch (must stay unprotected + pushable). |
@@ -350,7 +372,7 @@ Each line of `claude-arsenal/queue/tasks.jsonl` is a JSON object:
 {
   "id": "lo-a3f8",
   "title": "T1: ...",
-  "status": "open|in_progress|done|blocked",
+  "status": "open|in_progress|done|merged|blocked",
   "priority": 0,
   "requires": [],
   "deps": [{"id": "lo-b2c1", "type": "blocks"}],
@@ -367,6 +389,11 @@ ignore them. `tags` is a free-form label axis (`/queue-add --tag CLI`) that
 `/continue` scopes on via `LOOP_TAGS` (ANDed), orthogonal to `workspace` and the
 surface-capability `requires` filter. `pr` is set by `release.sh … --pr <url>`
 when a per-task PR is opened.
+
+`done` and `merged` are both **terminal** and both satisfy blocking deps:
+`done` = PR opened + gate passed; `merged` = that PR landed on the default
+branch. `reconcile_merged.sh` performs the `done`→`merged` flip by querying
+`gh pr view <pr> --json state` for each `done` task carrying a `pr` URL.
 
 ---
 
@@ -385,9 +412,10 @@ claude-arsenal/
     claim.sh
     release.sh        ← orchestrator-side; accepts --pr, stages the payload
     worker_postcheck.sh ← orchestrator-side; restores HEAD→queue branch + clean tree post-worker
+    reconcile_merged.sh ← done→merged flip via `gh` PR merge-state check
     open_task_pr.sh   ← worker-side; branch off default → commit → push → PR
     gate_run.sh
-    budget_check.sh   ← token-budget stop (exit 3 over ARSENAL_QUOTA_STOP_PCT)
+    budget_check.sh   ← quota stop + always-available per-session round cap
     statusline_capture.sh ← host statusLine; writes rate_limits.json
     detect_surface.sh
     workspace_list.sh
@@ -405,4 +433,5 @@ claude-arsenal/
     handover.md       ← live; updated each session
     surface_profile.json  ← gitignored; written by detect_surface.sh hook
     rate_limits.json      ← gitignored; written by statusline_capture.sh
+    budget_iterations.json ← gitignored; per-session dispatch-round counter
 ```

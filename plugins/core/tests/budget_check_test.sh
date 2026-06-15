@@ -18,12 +18,17 @@ cleanup() { rm -rf "${tmpdir}"; }
 trap cleanup EXIT
 
 FILE="${tmpdir}/rate_limits.json"
+ITER="${tmpdir}/budget_iterations.json"
 
 # rc <expected> <description>; runs budget_check.sh with ARSENAL_RATE_LIMITS_FILE.
+# The dispatch-round cap is disabled here (ARSENAL_MAX_ITERATIONS=0) so these
+# gates isolate the quota check; the cap has its own gates below. The iter-state
+# file is kept inside tmpdir so the test never writes into the repo.
 expect_rc() {
     local want="$1" desc="$2"; shift 2
     set +e
     ARSENAL_RATE_LIMITS_FILE="${FILE}" ARSENAL_QUOTA_STOP_PCT=90 \
+        ARSENAL_MAX_ITERATIONS=0 ARSENAL_ITER_STATE_FILE="${ITER}" \
         bash "${BUDGET}" >/dev/null 2>&1
     local got=$?
     set -e
@@ -70,6 +75,40 @@ expect_rc 0 "absent percentages fail open"
 # Gate 7: unparseable file → fail-open.
 printf 'not json' > "${FILE}"
 expect_rc 0 "unparseable file fails open"
+
+# --- Dispatch-round cap (CA-08): always-available, quota-independent ---
+# No rate_limits.json at all, so the quota check fails open — only the cap can
+# stop the loop here. Cap of 3 with a fresh state file: rounds 1-3 pass, 4 stops.
+rm -f "${FILE}" "${ITER}"
+cap_rc() {
+    set +e
+    ARSENAL_RATE_LIMITS_FILE="${FILE}" ARSENAL_MAX_ITERATIONS=3 \
+        ARSENAL_ITER_STATE_FILE="${ITER}" CLAUDE_SESSION_ID="sess-cap" \
+        bash "${BUDGET}" >/dev/null 2>&1
+    local got=$?
+    set -e
+    echo "${got}"
+}
+for round in 1 2 3; do
+    got=$(cap_rc)
+    if [[ "${got}" -ne 0 ]]; then
+        echo "FAIL: round ${round} under cap should exit 0, got ${got}" >&2; exit 1
+    fi
+done
+got=$(cap_rc)
+if [[ "${got}" -ne 3 ]]; then
+    echo "FAIL: round 4 over cap should exit 3, got ${got}" >&2; exit 1
+fi
+echo "PASS: dispatch-round cap stops the loop past ARSENAL_MAX_ITERATIONS"
+
+# A different session resets the counter (fresh round 1 passes despite the file).
+got=$(set +e; ARSENAL_RATE_LIMITS_FILE="${FILE}" ARSENAL_MAX_ITERATIONS=3 \
+    ARSENAL_ITER_STATE_FILE="${ITER}" CLAUDE_SESSION_ID="sess-other" \
+    bash "${BUDGET}" >/dev/null 2>&1; echo $?)
+if [[ "${got}" -ne 0 ]]; then
+    echo "FAIL: new session should reset the cap counter, got exit ${got}" >&2; exit 1
+fi
+echo "PASS: cap counter resets per CLAUDE_SESSION_ID"
 
 echo "PASS: budget_check_test — all gates passed"
 exit 0

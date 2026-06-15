@@ -105,6 +105,15 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _has_shebang(path: Path) -> bool:
+    """True when the file begins with a #! shebang (i.e. it is a script)."""
+    try:
+        with path.open("rb") as fh:
+            return fh.read(2) == b"#!"
+    except OSError:
+        return False
+
+
 def _refresh_bundle(bundle: Path, target: Path) -> None:
     """Copy bundle files into target, refreshing only stale files."""
     for src in bundle.rglob("*"):
@@ -117,8 +126,11 @@ def _refresh_bundle(bundle: Path, target: Path) -> None:
             print(f"  up to date: {rel}")
         else:
             shutil.copy2(src, dst)
-            # Preserve executable bit for shell scripts
-            if src.suffix in (".sh",) or not src.suffix:
+            # copy2 already mirrors the source mode; restore +x only for files
+            # that are actually scripts (a #! shebang) in case the checkout
+            # dropped the bit. Keying off a missing suffix would make arbitrary
+            # extensionless data files executable.
+            if _has_shebang(src):
                 dst.chmod(dst.stat().st_mode | 0o111)
             print(f"  refreshed:  {rel}")
 
@@ -247,9 +259,11 @@ def init_base(repo_path: Path, bundle_override: Path | None = None) -> None:
         )
         print(f"  created: {profile.relative_to(repo_path)}")
 
-    # .gitignore — surface profile + the statusLine-written rate-limit snapshot
+    # .gitignore — surface profile, the statusLine-written rate-limit snapshot,
+    # and the per-session dispatch-round counter (all live, machine-local state)
     _add_gitignore_entry(repo_path, "claude-arsenal/session/surface_profile.json")
     _add_gitignore_entry(repo_path, "claude-arsenal/session/rate_limits.json")
+    _add_gitignore_entry(repo_path, "claude-arsenal/session/budget_iterations.json")
 
     # statusLine command feeding budget_check.sh (token-budget stop)
     _register_statusline(repo_path)

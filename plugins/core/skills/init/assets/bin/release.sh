@@ -5,7 +5,10 @@
 # dedicated coordination branch (default: arsenal-queue, override
 # ARSENAL_QUEUE_BRANCH). Must run on that branch — see claim.sh for why the
 # shared ref is the lock.
-# <status>: done | open | blocked | in_progress
+# <status>: done | merged | open | blocked | in_progress
+#   done   = PR opened + gate passed (the worker's terminal state).
+#   merged = that PR later landed on the default branch; set by
+#            reconcile_merged.sh after a `gh` merge-state check.
 # --pr <url>: optional; records the per-task PR URL/number on the queue row.
 # Exit: 0 on success, 1 after 3 failed push attempts, 2 on misconfiguration
 #       (wrong branch / protected branch / no upstream).
@@ -26,7 +29,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 case "${NEW_STATUS}" in
-    done|open|blocked|in_progress) ;;
+    done|merged|open|blocked|in_progress) ;;
     *) echo "release.sh: invalid status '${NEW_STATUS}'" >&2; exit 1 ;;
 esac
 
@@ -93,7 +96,40 @@ git add "${QUEUE_FILE}" 2>/dev/null
 if [[ -f "claude-arsenal/queue/${TASK_ID}.md" ]]; then
     git add "claude-arsenal/queue/${TASK_ID}.md" 2>/dev/null
 fi
-git commit -m "release: ${TASK_ID} → ${NEW_STATUS}" 2>/dev/null || true
+
+# Distinguish "already at target" from a real commit failure. The Python step
+# above always sets the row to ${NEW_STATUS} (updated=True), so an empty staged
+# diff means the ledger already reflects the target — an idempotent no-op, not
+# a recorded change. Swallowing the commit exit and pushing unchanged HEAD would
+# otherwise report success when no ledger commit landed (and would push extra
+# local commits — see the single-commit guard below).
+if git diff --cached --quiet -- 2>/dev/null; then
+    echo "release.sh: ${TASK_ID} already at ${NEW_STATUS}; no new ledger commit to push" >&2
+    exit 0
+fi
+if ! git commit -m "release: ${TASK_ID} → ${NEW_STATUS}" >/dev/null 2>&1; then
+    echo "release.sh: commit failed for ${TASK_ID} → ${NEW_STATUS} (status NOT recorded)" >&2
+    exit 1
+fi
+
+# Guard: only this single release commit may reach the coordination ledger.
+# `git push HEAD:refs/heads/<branch>` publishes EVERY local commit ahead of the
+# remote, so non-queue commits on a shared tree would leak onto the queue. Fetch
+# the published tip and confirm exactly one commit (our release) sits on top of
+# it. A rebase in the retry loop below replays only this one queue commit, so
+# the invariant holds across retries; checking once here is sufficient.
+git fetch "${REMOTE}" "${QUEUE_BRANCH}" >/dev/null 2>&1 || true
+queue_tip="$(git rev-parse --verify --quiet "refs/remotes/${REMOTE}/${QUEUE_BRANCH}" 2>/dev/null \
+    || git rev-parse --verify --quiet FETCH_HEAD 2>/dev/null || true)"
+if [[ -n "${queue_tip}" ]]; then
+    # The parent of our release commit must already be on the published tip — then
+    # only the release commit is new. If HEAD~1 is NOT an ancestor of the tip, this
+    # branch carries non-queue commits; refuse rather than leak them.
+    if ! git merge-base --is-ancestor "HEAD~1" "${queue_tip}" 2>/dev/null; then
+        echo "release.sh: refusing to push local commits to '${QUEUE_BRANCH}' — only single claim/release commits may land on the coordination ledger; non-queue commits are present on this branch" >&2
+        exit 2
+    fi
+fi
 
 # Push to the coordination ref with exponential backoff retry (up to 3
 # attempts). A non-fast-forward means a concurrent claim/release landed first:
@@ -105,7 +141,7 @@ for attempt in 1 2 3; do
     if push_err="$(LANG=C git push "${REMOTE}" "HEAD:refs/heads/${QUEUE_BRANCH}" 2>&1)"; then
         exit 0
     fi
-    if ! printf '%s' "${push_err}" | grep -qiE 'non-fast-forward|fetch first|cannot lock ref|but expected|failed to update ref'; then
+    if ! printf '%s' "${push_err}" | grep -qiE 'non-fast-forward|fetch first|cannot lock ref|but expected|failed to update ref|incorrect old value'; then
         echo "release.sh: push to '${QUEUE_BRANCH}' failed (not a race): ${push_err}" >&2
         exit 2
     fi

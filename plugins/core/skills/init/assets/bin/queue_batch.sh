@@ -75,8 +75,9 @@ if profile.exists():
 requested_tags = {t for t in tags_filter.replace(",", " ").split() if t}
 workspace_filter = workspace_filter.strip()
 
-# IDs of tasks that satisfy dep edges.
-done_ids = {r["id"] for r in rows if r.get("status") == "done"}
+# IDs of tasks that satisfy dep edges. `merged` is terminal too (a done task
+# whose PR landed), so it satisfies blocking deps exactly like `done`.
+done_ids = {r["id"] for r in rows if r.get("status") in ("done", "merged")}
 
 candidates = []
 for row in rows:
