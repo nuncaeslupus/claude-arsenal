@@ -69,6 +69,10 @@
 - [ ] All existing tests still green
 - [ ] CI checks passing
 
+### Adversarial review
+
+- [ ] Adversarial reviewer gate passed — VERDICT: CLEAR (<one-line reason from sub-agent>)
+
 ### Observability
 
 - [ ] Tracing instrumented (if applicable)
