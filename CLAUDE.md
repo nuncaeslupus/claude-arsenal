@@ -70,6 +70,25 @@ GitHub Settings UI (preserves history and sets up redirects); no
 
 ---
 
+## Versioning — mandatory on every PR
+
+Every PR that ships user-visible changes **must** bump
+`plugins/core/skills/init/assets/.bundle-version` before merging.
+The `tag-release` workflow reads this file on every push to `main` and
+creates a new git tag (`v<version>`) automatically if it does not already
+exist. Consumer projects pin to these tags to re-vendor the marketplace.
+
+Bump rules:
+- **Patch** (`x.y.Z`) — bug fixes, doc corrections, validator tweaks.
+- **Minor** (`x.Y.0`) — new skills, new workflow steps, new hooks, new flags.
+- **Major** (`X.0.0`) — breaking changes to skill interfaces or plugin layout.
+
+PRs that only touch `CLAUDE.md`, `docs/`, CI config, or `pyproject.toml`
+dev tooling may skip the bump. All other PRs must include the bump commit
+or the reviewer should request it before merging.
+
+---
+
 ## What lives where (and what does not)
 
 - **Global preferences** (Python defaults, Makefile policy, "don't add

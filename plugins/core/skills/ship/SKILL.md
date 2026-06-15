@@ -7,7 +7,7 @@ metadata:
 
 # Ship Workflow
 
-CANARY: ship-loaded-2026-06-01-969928a90f431ecb
+CANARY: ship-loaded-2026-06-15-3b7e91c2d84fa056
 
 Reads `status/specification.md` to know what should be shipping. Confirms scope coverage, compatibility, tests, observability, and rollback before the merge.
 
@@ -55,7 +55,48 @@ Reads `status/specification.md` to know what should be shipping. Confirms scope 
 - [ ] Rollback plan documented
 - [ ] On-call team aware (if high-risk)
 
-### Step 7: Produce ship output
+### Step 7: Adversarial reviewer gate
+
+Spawn a sub-agent as an independent adversarial reviewer **before** pushing
+or producing the ship document. The sub-agent receives no conversation history —
+pass only the diff and the specification so the review is genuinely independent.
+
+Gather inputs:
+- Specification: contents of `status/specification.md` (fall back to the PR
+  description or the entire `status/plan.md` if the file is absent).
+- Diff: output of `git diff main...HEAD` (or the branch base if `main` is not
+  the target).
+
+Pass this prompt verbatim to the sub-agent:
+
+> Role: adversarial code reviewer. Task: find every reason this change should
+> NOT be merged. Read the specification and diff below, then list every flaw
+> across correctness, security, compatibility, test coverage, observability,
+> and rollback safety. Be harsh — assume the author is wrong; prove otherwise
+> before clearing. Ignore style unless it causes bugs.
+>
+> At the end write a single line:
+> VERDICT: BLOCK — <one sentence reason>
+> or
+> VERDICT: CLEAR — <one sentence reason>
+>
+> Specification:
+> {{specification}}
+>
+> Diff:
+> {{diff}}
+
+Decision rules:
+- **VERDICT: BLOCK** → Show the sub-agent's findings verbatim. Halt the
+  workflow by default, but allow a manual override if the finding is a false
+  positive — record the override justification in the ship output (§ 3
+  Adversarial review row) and proceed to Step 8. Otherwise, resolve the
+  blockers and re-run from Step 1.
+- **VERDICT: CLEAR** → proceed to Step 8. Append a one-line summary of the
+  verdict to the ship output document (§ 3 Checks completed → Adversarial
+  review row).
+
+### Step 8: Produce ship output
 
 Load `references/template.md` when producing the ship output document.
 
@@ -63,4 +104,11 @@ Load `references/template.md` when producing the ship output document.
 
 ## Abbreviation
 
-**Abbreviated ship** = Steps 2 + 4 + Go/No-Go. Whether abbreviation is allowed depends on project conventions documented in the host repo's `CLAUDE.md`.
+**Abbreviated ship** = Steps 2 + 4 + Go/No-Go. Whether abbreviation is allowed
+depends on project conventions documented in the host repo's `CLAUDE.md`.
+
+The adversarial reviewer gate (Step 7) runs even in abbreviated mode unless
+the host repo's `CLAUDE.md` carries the marker
+`<!-- ship: adversarial-review=skip -->` **and** the change is docs-only or
+config-only. For all code changes the gate is mandatory regardless of
+abbreviation.
