@@ -1,6 +1,6 @@
 # Claude Arsenal
 
-<!-- claude-arsenal v0.4.0 — imported via @claude-arsenal/AGENTS.md -->
+<!-- claude-arsenal v0.5.0 — imported via @claude-arsenal/AGENTS.md -->
 
 This file is imported by the host repo's `CLAUDE.md` via the session-protocol block
 that `/init` injects. It provides the mechanics behind the proactive directives
@@ -12,13 +12,18 @@ in that block: queue seeding, worker dispatch, credit guards, and state layout.
 
 At the start of every session (fresh start, context compaction, or cold restart):
 
-0. **Auto-refresh bundle** — `python3 .claude/skills/init/scripts/init.py --repo-path . --silent`.
-   Silently refreshes any `claude-arsenal/bin/` or other bundle script whose
-   checksum differs from the plugin source, and prints an upgrade banner when the
-   installed bundle version (`claude-arsenal/.bundle-version`) is behind the plugin.
-   If anything is refreshed, report it to the user before continuing. Skip this
-   step when `.claude/skills/init/scripts/init.py` is not present (the skill is
-   not installed).
+0. **Check for upstream updates then refresh bundle**:
+   a. If `claude-arsenal/bin/check_update.sh` exists, run `bash claude-arsenal/bin/check_update.sh`.
+      This compares the installed bundle version against the latest version tag on the
+      `arsenal` remote (if configured). When behind, it pulls the updated subtree automatically.
+      It is a no-op when no `arsenal` remote is configured or the bundle is already current.
+   b. Run `python3 .claude/skills/init/scripts/init.py --repo-path . --silent`.
+      Silently refreshes any `claude-arsenal/bin/` or other bundle script whose
+      checksum differs from the plugin source, and prints an upgrade banner when the
+      installed bundle version (`claude-arsenal/.bundle-version`) is behind the plugin.
+      If anything is refreshed, report it to the user before continuing. Skip steps (a)
+      and (b) when `.claude/skills/init/scripts/init.py` is not present (the skill is
+      not installed).
 1. **Enter the coordination branch** — `claude-arsenal/bin/queue_branch.sh`. This
    checks out the shared queue branch (default `arsenal-queue`) and sets its
    upstream. The orchestrator session runs here for its whole life; all

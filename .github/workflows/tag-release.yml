@@ -1,0 +1,33 @@
+name: tag-release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  tag:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create version tag from .bundle-version
+        run: |
+          version=$(cat plugins/core/skills/init/assets/.bundle-version 2>/dev/null || echo "")
+          if [[ -z "${version}" ]]; then
+            echo "No .bundle-version file found, skipping tag." ; exit 0
+          fi
+          tag="v${version}"
+          if git rev-parse "${tag}" >/dev/null 2>&1; then
+            echo "Tag ${tag} already exists, skipping."
+          else
+            git config user.email "noreply@github.com"
+            git config user.name "github-actions[bot]"
+            git tag "${tag}" -m "Release ${tag}"
+            git push origin "${tag}"
+            echo "Created tag ${tag}"
+          fi
