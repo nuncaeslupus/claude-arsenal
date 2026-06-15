@@ -33,24 +33,34 @@ def update_task_row(
         if line:
             try:
                 data = json.loads(line)
-                if isinstance(data, dict):
-                    rows.append(data)
-            except json.JSONDecodeError:
-                pass
+                if not isinstance(data, dict):
+                    raise ValueError(f"expected JSON object, got {type(data).__name__}")
+                rows.append(data)
+            except (json.JSONDecodeError, ValueError) as e:
+                print(
+                    f"update_task_row: invalid line in queue file: {line!r} ({e})",
+                    file=sys.stderr,
+                )
+                sys.exit(1)
 
     updated = False
     final_status = new_status
     for row in rows:
         if row.get("id") == task_id:
+            current_status = row.get("status")
             if new_status == "open":
                 if reset_attempts == "1":
                     row["attempts"] = 0
                     final_status = "open"
-                else:
+                elif current_status == "in_progress":
                     current = row.get("attempts", 0) + 1
                     cap = row.get("max_attempts", 3)
                     row["attempts"] = current
                     final_status = "escalated" if current >= cap else "open"
+                elif current_status == "escalated":
+                    final_status = "escalated"
+                else:
+                    final_status = "open"
             row["status"] = final_status
             if final_status not in ("in_progress",):
                 row["assignee"] = None

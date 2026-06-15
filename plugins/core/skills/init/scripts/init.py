@@ -142,12 +142,10 @@ def _check_bundle_version(bundle: Path, arsenal: Path) -> None:
     installed_ver_path = arsenal / ".bundle-version"
     if not bundle_ver_path.exists():
         return
+    if not bundle_ver_path.exists() or not installed_ver_path.exists():
+        return
     bundle_ver = bundle_ver_path.read_text(encoding="utf-8").strip()
-    installed_ver = (
-        installed_ver_path.read_text(encoding="utf-8").strip()
-        if installed_ver_path.exists()
-        else "unknown"
-    )
+    installed_ver = installed_ver_path.read_text(encoding="utf-8").strip()
     if installed_ver != bundle_ver:
         print(
             f"Upgrading claude-arsenal bundle: {installed_ver} → {bundle_ver}"

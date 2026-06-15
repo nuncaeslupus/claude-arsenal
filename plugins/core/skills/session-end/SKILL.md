@@ -69,7 +69,7 @@ that carries a `pr` field, then check each PR for CI, review comments, and merge
 **When `gh` CLI is available:**
 ```bash
 gh pr view <pr-url> --json title,state,mergeable,reviewDecision,statusCheckRollup \
-  --jq '{title,state,mergeable,reviewDecision,ci:(.statusCheckRollup|map(.conclusion)|unique)}'
+  --jq '{title,state,mergeable,reviewDecision,ci:([.statusCheckRollup[]?|.conclusion]|unique)}'
 ```
 
 Run this for each PR URL, then print a summary table:
