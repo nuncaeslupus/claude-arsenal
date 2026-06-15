@@ -64,6 +64,8 @@ def update_task_row(
             row["status"] = final_status
             if final_status not in ("in_progress",):
                 row["assignee"] = None
+            if final_status in ("done", "merged"):
+                row["attempts"] = 0
             if pr_url:
                 row["pr"] = pr_url
             updated = True

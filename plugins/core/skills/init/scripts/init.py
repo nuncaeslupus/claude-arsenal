@@ -140,8 +140,6 @@ def _check_bundle_version(bundle: Path, arsenal: Path) -> None:
     """Print an upgrade banner when the installed bundle version is behind the plugin source."""
     bundle_ver_path = bundle / ".bundle-version"
     installed_ver_path = arsenal / ".bundle-version"
-    if not bundle_ver_path.exists():
-        return
     if not bundle_ver_path.exists() or not installed_ver_path.exists():
         return
     bundle_ver = bundle_ver_path.read_text(encoding="utf-8").strip()
