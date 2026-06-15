@@ -53,11 +53,14 @@ def main() -> None:
         f"  open={counts.get('open', 0)}"
         f"  in_progress={counts.get('in_progress', 0)}"
         f"  done={counts.get('done', 0)}"
+        f"  merged={counts.get('merged', 0)}"
         f"  blocked={counts.get('blocked', 0)}"
     )
 
     if args.detail:
-        done_ids = {r["id"] for r in rows if r.get("status") == "done"}
+        # `merged` is terminal too (a done task whose PR landed) and satisfies
+        # blocking deps exactly like `done`.
+        done_ids = {r["id"] for r in rows if r.get("status") in ("done", "merged")}
         print()
         for row in rows:
             unmet = [

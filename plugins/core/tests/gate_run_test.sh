@@ -102,5 +102,42 @@ if [[ ! -f "${tmpdir}/.gate_sentinel" ]]; then
     echo "FAIL: multi-line gate did not create sentinel" >&2; exit 1
 fi
 
+# Gate 7: hardened-by-default env (CA-02) — the gate's $HOME is a throwaway dir,
+# not the caller's real HOME. The gate writes its HOME to a file we inspect.
+cat > "${tmpdir}/claude-arsenal/queue/lo-home.md" <<'EOF'
+# T6: HOME isolation
+
+## Acceptance gate
+Records the gate's HOME.
+
+```bash
+printf '%s' "${HOME}" > home_seen.txt
+```
+EOF
+run_gate "lo-home"
+SEEN_HOME=$(cat "${tmpdir}/home_seen.txt" 2>/dev/null || echo "")
+if [[ "${SEEN_HOME}" == "${HOME}" || -z "${SEEN_HOME}" ]]; then
+    echo "FAIL: gate HOME should be a throwaway dir, got '${SEEN_HOME}'" >&2; exit 1
+fi
+echo "PASS: gate runs under a throwaway HOME by default"
+
+# Gate 8: ARSENAL_GATE_INHERIT_ENV=1 restores the caller's real HOME.
+rm -f "${tmpdir}/home_seen.txt"
+(cd "${tmpdir}" && ARSENAL_GATE_INHERIT_ENV=1 bash "${GATE_RUN}" "lo-home")
+SEEN_HOME=$(cat "${tmpdir}/home_seen.txt" 2>/dev/null || echo "")
+if [[ "${SEEN_HOME}" != "${HOME}" ]]; then
+    echo "FAIL: INHERIT_ENV gate HOME should equal '${HOME}', got '${SEEN_HOME}'" >&2; exit 1
+fi
+echo "PASS: ARSENAL_GATE_INHERIT_ENV=1 restores the caller environment"
+
+# Gate 9: no persisted gate script orphaned in TMPDIR (CA-09 — piped via stdin).
+before=$(find "${TMPDIR:-/tmp}" -maxdepth 1 -name 'arsenal-gate*' 2>/dev/null | wc -l)
+run_gate "lo-pass"
+after=$(find "${TMPDIR:-/tmp}" -maxdepth 1 -name 'arsenal-gate*' 2>/dev/null | wc -l)
+if [[ "${after}" -gt "${before}" ]]; then
+    echo "FAIL: gate left orphaned temp artifacts in TMPDIR" >&2; exit 1
+fi
+echo "PASS: no orphaned gate script left behind"
+
 echo "PASS: gate_run_test — all gates passed"
 exit 0

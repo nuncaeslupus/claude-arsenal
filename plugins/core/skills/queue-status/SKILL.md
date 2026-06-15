@@ -7,7 +7,7 @@ argument-hint: "[--detail]"
 
 # queue-status
 
-Reports task counts by status from `claude-arsenal/queue/tasks.jsonl`: total, open, in-progress, done, and blocked. With `--detail`, lists each task's ID, title, status, assignee, and unmet dependency IDs.
+Reports task counts by status from `claude-arsenal/queue/tasks.jsonl`: total, open, in-progress, done, merged, and blocked. With `--detail`, lists each task's ID, title, status, assignee, and unmet dependency IDs.
 
 CANARY: queue-status-loaded-2026-06-13-fb78d23e-d4e5f6a7b8c9d0e1
 
