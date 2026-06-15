@@ -2,7 +2,7 @@
 name: queue-add
 description: When the user wants to add a task to the claude-arsenal queue. Do NOT use to update or remove existing tasks.
 user-invocable: true
-argument-hint: "--title TITLE [--priority N] [--workspace NAME] [--tag TAG] [--requires surface:X] [--deps lo-XXXX]"
+argument-hint: "--title TITLE [--priority N] [--workspace NAME] [--tag TAG] [--requires surface:X] [--deps lo-XXXX] [--max-attempts N]"
 ---
 
 # queue-add
@@ -28,7 +28,8 @@ python3 .claude/skills/queue-add/scripts/create_task.py \
   --workspace BACKEND \
   --tag CLI \
   --requires "surface:cli" \
-  --deps lo-a1b2
+  --deps lo-a1b2 \
+  --max-attempts 3
 ```
 
 The script generates a `lo-XXXX` hash ID, writes the row, and prints the assigned ID.
@@ -60,3 +61,4 @@ Example:
 - **`requires` values are exact strings.** Use `surface:cli` or `surface:web`; unrecognised values pass through but will never match a worker's surface profile.
 - **`--workspace` scopes the task.** When set, `queue_eval.sh` with `LOOP_WORKSPACE=X` will only return tasks for that workspace.
 - **`--tag` (repeatable) adds free-form labels.** `/continue CLI` scopes the loop to tasks carrying tag `CLI` (multiple tags AND together via `LOOP_TAGS`). Tags are orthogonal to `--workspace` and `--requires`.
+- **`--max-attempts N` (default 3) sets the per-task retry cap.** After N consecutive gate failures the task auto-escalates to `escalated` status and leaves the eligible pool. Set higher for tasks known to be environment-sensitive; set to 1 for tasks that need manual review after any failure. `queue-status` shows escalated counts and per-task attempt budget in `--detail`.

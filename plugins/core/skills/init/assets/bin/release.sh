@@ -1,15 +1,19 @@
 #!/usr/bin/env bash
-# release.sh <task_id> <status> [--pr <url>]
+# release.sh <task_id> <status> [--pr <url>] [--reset-attempts]
 # Updates a task's status in queue.jsonl, commits (the queue row AND the task
 # payload, so any ## Failure notes / PR-URL edits land too), and pushes to the
 # dedicated coordination branch (default: arsenal-queue, override
 # ARSENAL_QUEUE_BRANCH). Must run on that branch — see claim.sh for why the
 # shared ref is the lock.
-# <status>: done | merged | open | blocked | in_progress
-#   done   = PR opened + gate passed (the worker's terminal state).
-#   merged = that PR later landed on the default branch; set by
-#            reconcile_merged.sh after a `gh` merge-state check.
+# <status>: done | merged | open | blocked | in_progress | escalated
+#   done       = PR opened + gate passed (the worker's terminal state).
+#   merged     = that PR later landed on the default branch; set by
+#                reconcile_merged.sh after a `gh` merge-state check.
+#   escalated  = task auto-set when attempts >= max_attempts (see update_task_row.py).
 # --pr <url>: optional; records the per-task PR URL/number on the queue row.
+# --reset-attempts: clear the attempts counter and return the task to open,
+#                   bypassing the auto-escalation cap check. Only meaningful
+#                   with status open; silently ignored for other statuses.
 # Exit: 0 on success, 1 after 3 failed push attempts, 2 on misconfiguration
 #       (wrong branch / protected branch / no upstream).
 
@@ -17,19 +21,21 @@ QUEUE_BRANCH="${ARSENAL_QUEUE_BRANCH:-arsenal-queue}"
 REMOTE="${ARSENAL_QUEUE_REMOTE:-origin}"
 QUEUE_FILE="claude-arsenal/queue/tasks.jsonl"
 TASK_ID="${1:?release.sh requires <task_id>}"
-NEW_STATUS="${2:?release.sh requires <status>: done|open|blocked|in_progress}"
+NEW_STATUS="${2:?release.sh requires <status>: done|open|blocked|in_progress|escalated}"
 shift 2 || true
 
 PR_URL=""
+RESET_ATTEMPTS=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --pr) PR_URL="${2:-}"; shift 2 ;;
+        --reset-attempts) RESET_ATTEMPTS="1"; shift ;;
         *) shift ;;
     esac
 done
 
 case "${NEW_STATUS}" in
-    done|merged|open|blocked|in_progress) ;;
+    done|merged|open|blocked|in_progress|escalated) ;;
     *) echo "release.sh: invalid status '${NEW_STATUS}'" >&2; exit 1 ;;
 esac
 
@@ -41,42 +47,16 @@ if [[ "${current_branch}" != "${QUEUE_BRANCH}" ]]; then
     exit 2
 fi
 
-python3 - "${TASK_ID}" "${NEW_STATUS}" "${QUEUE_FILE}" "${PR_URL}" <<'PY' || exit 1
-import sys, json, pathlib
+# Locate update_task_row.py relative to this script's directory.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+UPDATE_PY="${SCRIPT_DIR}/../scripts/update_task_row.py"
 
-task_id, new_status, queue_path, pr_url = sys.argv[1:5]
-path = pathlib.Path(queue_path)
+final_status="$(python3 "${UPDATE_PY}" "${TASK_ID}" "${NEW_STATUS}" "${QUEUE_FILE}" "${PR_URL}" "${RESET_ATTEMPTS}")" || exit 1
 
-rows = []
-for line in path.read_text(encoding="utf-8").splitlines():
-    line = line.strip()
-    if line:
-        try:
-            data = json.loads(line)
-            if isinstance(data, dict):
-                rows.append(data)
-        except json.JSONDecodeError:
-            pass
-
-updated = False
-for row in rows:
-    if row.get("id") == task_id:
-        row["status"] = new_status
-        if new_status not in ("in_progress",):
-            row["assignee"] = None
-        if pr_url:
-            row["pr"] = pr_url
-        updated = True
-
-if not updated:
-    print(f"release.sh: task {task_id} not found", file=sys.stderr)
-    sys.exit(1)
-
-path.write_text(
-    "\n".join(json.dumps(r, separators=(",", ":")) for r in rows) + "\n",
-    encoding="utf-8",
-)
-PY
+if [[ -z "${final_status}" ]]; then
+    echo "release.sh: update_task_row.py returned empty status for ${TASK_ID}" >&2
+    exit 1
+fi
 
 # Guard: never let a worker's residual staged changes ride onto the append-only
 # coordination ledger. An in-place worker (one whose `isolation: worktree` was
@@ -98,17 +78,17 @@ if [[ -f "claude-arsenal/queue/${TASK_ID}.md" ]]; then
 fi
 
 # Distinguish "already at target" from a real commit failure. The Python step
-# above always sets the row to ${NEW_STATUS} (updated=True), so an empty staged
+# above always sets the row to ${final_status} (updated=True), so an empty staged
 # diff means the ledger already reflects the target — an idempotent no-op, not
 # a recorded change. Swallowing the commit exit and pushing unchanged HEAD would
 # otherwise report success when no ledger commit landed (and would push extra
 # local commits — see the single-commit guard below).
 if git diff --cached --quiet -- 2>/dev/null; then
-    echo "release.sh: ${TASK_ID} already at ${NEW_STATUS}; no new ledger commit to push" >&2
+    echo "release.sh: ${TASK_ID} already at ${final_status}; no new ledger commit to push" >&2
     exit 0
 fi
-if ! git commit -m "release: ${TASK_ID} → ${NEW_STATUS}" >/dev/null 2>&1; then
-    echo "release.sh: commit failed for ${TASK_ID} → ${NEW_STATUS} (status NOT recorded)" >&2
+if ! git commit -m "release: ${TASK_ID} → ${final_status}" >/dev/null 2>&1; then
+    echo "release.sh: commit failed for ${TASK_ID} → ${final_status} (status NOT recorded)" >&2
     exit 1
 fi
 
