@@ -132,12 +132,13 @@ fi
 current_main="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
 if [[ "${current_main}" == "${QUEUE_BRANCH}" ]]; then
     if [[ -n "$(git status --porcelain -uno 2>/dev/null)" ]]; then
-        echo "queue_branch.sh: WARNING — main tree is on '${QUEUE_BRANCH}' with uncommitted changes; cannot auto-switch to '${DEFAULT_BRANCH}'" >&2
+        echo "queue_branch.sh: ERROR — main tree is on '${QUEUE_BRANCH}' with uncommitted changes; cannot auto-switch to '${DEFAULT_BRANCH}'. Please commit, stash, or discard your changes, then switch the main tree to '${DEFAULT_BRANCH}' manually." >&2
+        exit 1
     else
         git checkout "${DEFAULT_BRANCH}" >/dev/null 2>&1 \
             || { git fetch "${REMOTE}" "${DEFAULT_BRANCH}" >/dev/null 2>&1 || true; \
                  git checkout -b "${DEFAULT_BRANCH}" "${REMOTE}/${DEFAULT_BRANCH}" >/dev/null 2>&1; } \
-            || echo "queue_branch.sh: WARNING — could not switch main tree from '${QUEUE_BRANCH}' to '${DEFAULT_BRANCH}'" >&2
+            || { echo "queue_branch.sh: ERROR — could not switch main tree from '${QUEUE_BRANCH}' to '${DEFAULT_BRANCH}'" >&2; exit 1; }
     fi
 fi
 
@@ -194,8 +195,13 @@ if [[ ${wt_registered} -eq 0 ]]; then
     fi
 fi
 
-# Verify the worktree is on the right branch.
+# Verify the worktree is on the right branch; try to recover via checkout
+# before giving up (handles the case of manual branch switches in the worktree).
 wt_branch="$(git -C "${QUEUE_WORKTREE}" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+if [[ "${wt_branch}" != "${QUEUE_BRANCH}" ]]; then
+    git -C "${QUEUE_WORKTREE}" checkout "${QUEUE_BRANCH}" >/dev/null 2>&1 || true
+    wt_branch="$(git -C "${QUEUE_WORKTREE}" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+fi
 if [[ "${wt_branch}" != "${QUEUE_BRANCH}" ]]; then
     echo "queue_branch.sh: ERROR — worktree '${QUEUE_WORKTREE}' is on '${wt_branch:-unknown}', expected '${QUEUE_BRANCH}'" >&2
     exit 1

@@ -30,10 +30,25 @@ set -uo pipefail
 
 QUEUE_BRANCH="${ARSENAL_QUEUE_BRANCH:-arsenal-queue}"
 
-# In worktree mode the main tree never changes branch — workers cannot
-# accidentally move the orchestrator's HEAD — so the branch-restoration
-# logic is unnecessary. Just verify the coordination worktree is intact.
+# In worktree mode the main tree SHOULD stay on the default branch, but if
+# the Task tool silently ignores isolation: worktree the worker runs in-place
+# and can move the main HEAD. Check and restore the main tree first so the
+# orchestrator can detect this (a `restored` result clamps ARSENAL_MAX_WORKERS=1).
 if [[ -n "${ARSENAL_QUEUE_DIR:-}" ]]; then
+    default_branch="${ARSENAL_DEFAULT_BRANCH:-main}"
+    current_main="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+    dirty_main="$(git status --porcelain 2>/dev/null)"
+
+    if [[ "${current_main}" != "${default_branch}" || -n "${dirty_main}" ]]; then
+        git reset -q --hard >/dev/null 2>&1 || true
+        git clean -fdq >/dev/null 2>&1 || true
+        if [[ "${current_main}" != "${default_branch}" ]]; then
+            git checkout -f "${default_branch}" >/dev/null 2>&1 || true
+        fi
+        echo "restored"
+        exit 0
+    fi
+
     wt_branch="$(git -C "${ARSENAL_QUEUE_DIR}" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
     if [[ "${wt_branch}" == "${QUEUE_BRANCH}" ]]; then
         echo "ok"

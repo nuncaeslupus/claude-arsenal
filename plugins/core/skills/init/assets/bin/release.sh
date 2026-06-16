@@ -46,7 +46,14 @@ esac
 
 # Operate from the coordination worktree when ARSENAL_QUEUE_DIR is set so the
 # main working tree never needs to change branch.
+# The orchestrator writes failure notes to the payload file in the main tree;
+# copy it into the worktree before cd-ing so the edits get committed.
 if [[ -n "${ARSENAL_QUEUE_DIR:-}" ]]; then
+    if [[ -f "claude-arsenal/queue/${TASK_ID}.md" ]]; then
+        mkdir -p "${ARSENAL_QUEUE_DIR}/claude-arsenal/queue"
+        cp "claude-arsenal/queue/${TASK_ID}.md" \
+            "${ARSENAL_QUEUE_DIR}/claude-arsenal/queue/${TASK_ID}.md"
+    fi
     cd "${ARSENAL_QUEUE_DIR}" \
         || { echo "release.sh: could not cd into queue worktree '${ARSENAL_QUEUE_DIR}'" >&2; exit 2; }
 fi
