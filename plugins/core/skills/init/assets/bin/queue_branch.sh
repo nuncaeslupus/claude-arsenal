@@ -35,8 +35,10 @@ sync_from_default() {
     [[ ${has_remote} -eq 0 ]] && return 0
     git fetch "${REMOTE}" "${DEFAULT_BRANCH}" >/dev/null 2>&1 || return 0
     git rev-parse --verify --quiet "${REMOTE}/${DEFAULT_BRANCH}" >/dev/null 2>&1 || return 0
-    git merge --no-edit "${REMOTE}/${DEFAULT_BRANCH}" >/dev/null 2>&1 || \
+    git merge --no-edit "${REMOTE}/${DEFAULT_BRANCH}" >/dev/null 2>&1 || {
+        git merge --abort >/dev/null 2>&1 || true
         echo "queue_branch.sh: WARNING — could not merge ${REMOTE}/${DEFAULT_BRANCH} into ${QUEUE_BRANCH}" >&2
+    }
 }
 
 # Already on the branch → wire upstream if missing, sync from default, exit.
