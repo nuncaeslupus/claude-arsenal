@@ -1,6 +1,6 @@
 # Claude Arsenal
 
-<!-- claude-arsenal v0.6.1 — imported via @claude-arsenal/AGENTS.md -->
+<!-- claude-arsenal v0.6.3 — imported via @claude-arsenal/AGENTS.md -->
 
 This file is imported by the host repo's `CLAUDE.md` via the session-protocol block
 that `/init` injects. It provides the mechanics behind the proactive directives
@@ -24,11 +24,14 @@ At the start of every session (fresh start, context compaction, or cold restart)
       If anything is refreshed, report it to the user before continuing. Skip steps (a)
       and (b) when `.claude/skills/init/scripts/init.py` is not present (the skill is
       not installed).
-1. **Enter the coordination branch** — `claude-arsenal/bin/queue_branch.sh`. This
-   checks out the shared queue branch (default `arsenal-queue`) and sets its
-   upstream. The orchestrator session runs here for its whole life; all
-   claim/release pushes target this one ref. See **Queue coordination branch**
-   below for why this is mandatory.
+1. **Set up the coordination worktree** —
+   `export ARSENAL_QUEUE_DIR="$(claude-arsenal/bin/queue_branch.sh)"`.
+   This creates (or reuses) a side git worktree checked out to `arsenal-queue`,
+   syncs it with the latest `main` merges, and returns its path. The **main
+   working tree never changes branch** — web servers, editors, and other
+   consumers always see the host default-branch content. Export `ARSENAL_QUEUE_DIR`
+   so every subsequent `claim.sh` and `release.sh` call inherits it.
+   See **Queue coordination branch** below for why a dedicated branch is mandatory.
 2. **Read handover.md** — if `claude-arsenal/session/handover.md` has content beyond the
    template placeholder, read it for the previous session's last task, queue
    snapshot, and continuation instructions.
@@ -212,14 +215,15 @@ dispatches that many workers at once. Run when the queue has open tasks:
    N task JSON lines (JSONL), respecting `LOOP_WORKSPACE` / `LOOP_TAGS` scope and
    excluding any task that blocks another in the same batch.
    - Empty → loop done; report summary and write `handover.md`.
-4. For each task line, `claude-arsenal/bin/claim.sh <task_id> <session_id>`
+4. For each task line, `ARSENAL_QUEUE_DIR="${ARSENAL_QUEUE_DIR}" claude-arsenal/bin/claim.sh <task_id> <session_id>`
    (sequential — each push is atomic):
    - `won` → keep the task in the dispatch set.
    - `lost` → another session claimed it; drop it from this batch.
    - `error: …` (exit 2) → **stop the loop and surface to the user.** A
      misconfiguration, not a race (wrong branch, protected coordination branch,
      no upstream). Do **not** retry — it spins forever on a deadlock. Re-run
-     `queue_branch.sh` or fix the branch protection, then resume.
+     `queue_branch.sh` to refresh `ARSENAL_QUEUE_DIR`, or fix the branch
+     protection, then resume.
    - **Never work around a `lost` or `error` by creating an upstream, pushing
      `-u`, or re-claiming on a different ref.** A `lost` means another session
      legitimately owns the task; an `error` means the lock is misconfigured.
@@ -240,22 +244,23 @@ dispatches that many workers at once. Run when the queue has open tasks:
      loop and surface to the user.
    - Then record the outcome on `arsenal-queue` yourself (the worker is on a
      feature branch and cannot run `release.sh` — see **Per-task PRs** below):
-     - `done` + PR URL/branch → `claude-arsenal/bin/release.sh <task_id> done --pr <url|branch>`.
+     - `done` + PR URL/branch → `ARSENAL_QUEUE_DIR="${ARSENAL_QUEUE_DIR}" claude-arsenal/bin/release.sh <task_id> done --pr <url|branch>`.
        `done` means "PR opened + gate passed", NOT "merged" — `reconcile_merged.sh`
        later flips it to the terminal `merged` once the PR lands.
      - `open` + failure notes → append the structured `## Attempt N failure`
        section (see `agents/worker.md` step 3 format) under `## Failure notes`
        in `claude-arsenal/queue/<task_id>.md`, then
-       `claude-arsenal/bin/release.sh <task_id> open` (which commits the payload
-       edit too). `release.sh` increments `attempts` and auto-escalates to
-       `escalated` when the cap is reached — check `queue-status` after; an
-       `escalated` task needs human recovery
-       (`release.sh <id> open --reset-attempts`).
-7. **Sync main, then return to step 2.** Run `claude-arsenal/bin/queue_branch.sh`
-   before looping back. Since the working tree is already on the coordination
-   branch, this is a no-op for the checkout itself but merges any PRs that
-   landed on `main` while the previous batch was running — so web servers,
-   config files, and other host content stay current across iterations.
+       `ARSENAL_QUEUE_DIR="${ARSENAL_QUEUE_DIR}" claude-arsenal/bin/release.sh <task_id> open`
+       (which commits the payload edit too). `release.sh` increments `attempts`
+       and auto-escalates to `escalated` when the cap is reached — check
+       `queue-status` after; an `escalated` task needs human recovery
+       (`ARSENAL_QUEUE_DIR="${ARSENAL_QUEUE_DIR}" release.sh <id> open --reset-attempts`).
+7. **Sync main, then return to step 2.** Run
+   `export ARSENAL_QUEUE_DIR="$(claude-arsenal/bin/queue_branch.sh)"` before
+   looping back. This merges any PRs that landed on `main` into the
+   coordination worktree while the main working tree stays untouched — web
+   servers, config files, and other host content always reflect the default
+   branch across iterations.
 8. **Post-loop housekeeping (mandatory).** Run once when the loop exits — either
    because step 3 returned empty (all open tasks exhausted) or step 2's budget
    check exited 3. For every workspace that had at least one task reach `done` or
@@ -268,16 +273,16 @@ dispatches that many workers at once. Run when the queue has open tasks:
    b. **Update the status doc.** Reflect completed work in
       `docs/status/<part>.md` (or wherever the host project tracks board
       fragments). Mark finished items done; update the "remaining" count.
-   c. **Switch to the default branch first.** The orchestrator runs on
-      `arsenal-queue`; housekeeping commits must land on the host default branch
-      (`main`), not the coordination ledger. Run
-      `git checkout main && git pull origin main` before staging the edits.
+   c. **Pull latest main.** The orchestrator's main working tree is already on
+      the default branch (the coordination branch lives in a side worktree, so
+      the main tree never moves). Just run `git pull origin main` before staging
+      the edits — no branch switch needed.
    d. **Bundle and commit.** Include all handover and status edits in a single
       `chore: update workspace handovers and status docs` commit on the default
       branch (or open a small housekeeping PR if main is protected). Do **not**
       batch this with task code — keep it separate so the diff is reviewable.
-      After committing, return to the coordination branch and sync:
-      `git checkout "${ARSENAL_QUEUE_BRANCH:-arsenal-queue}" && claude-arsenal/bin/queue_branch.sh`.
+      After committing, refresh the coordination worktree:
+      `export ARSENAL_QUEUE_DIR="$(claude-arsenal/bin/queue_branch.sh)"`.
 
    > **Why this step exists.** The queue ledger (`tasks.jsonl`) tracks machine
    > state; `handover.md` and `docs/status/*.md` are the human-readable
@@ -366,6 +371,8 @@ billing. The counter resets per `CLAUDE_SESSION_ID` and lives in the gitignored
 | `LOOP_TAGS` | _(unset)_ | Comma/space-separated tag scope (ANDed); set by `/continue` token inference. |
 | `ARSENAL_QUEUE_BRANCH` | `arsenal-queue` | Coordination branch (must stay unprotected + pushable). |
 | `ARSENAL_QUEUE_REMOTE` | `origin` | Remote for queue + per-task pushes. |
+| `ARSENAL_QUEUE_WORKTREE` | `<repo-root>/../arsenal-queue-wt` | Path for the side worktree that hosts the coordination branch. |
+| `ARSENAL_QUEUE_DIR` | _(set by `queue_branch.sh`)_ | Active worktree path; export once, then pass to `claim.sh`/`release.sh`. |
 
 ---
 
@@ -380,8 +387,10 @@ other is rejected non-fast-forward and reports `lost`, then re-evaluates. The
 
 That guarantee holds **only** when every orchestrator session pushes to **one
 shared, pushable ref**. So the queue lives on a dedicated branch
-(`ARSENAL_QUEUE_BRANCH`, default `arsenal-queue`), and `queue_branch.sh` puts
-the session on it at start-up. Requirements:
+(`ARSENAL_QUEUE_BRANCH`, default `arsenal-queue`). `queue_branch.sh` creates
+a side git worktree for it (path exported as `ARSENAL_QUEUE_DIR`); `claim.sh`
+and `release.sh` cd into that worktree when `ARSENAL_QUEUE_DIR` is set, so
+the main working tree never leaves the default branch. Requirements:
 
 - **Unprotected.** A protected branch (e.g. `main` with required PRs/reviews)
   rejects every claim push → `claim.sh` returns `error:` and the loop stops. It
@@ -486,7 +495,7 @@ claude-arsenal/
   agents/
     worker.md         ← worker subagent definition
   bin/                ← shell scripts; refreshed by /init on re-run
-    queue_branch.sh   ← ensures the shared coordination branch is checked out
+    queue_branch.sh   ← creates/reuses a side worktree for the coordination branch; main tree never moves
     queue_eval.sh     ← next single task (thin wrapper over queue_batch.sh)
     queue_batch.sh    ← up to N independent tasks (parallel fan-out)
     worktree_probe.sh ← probes whether git worktrees work here (fan-out safety)
