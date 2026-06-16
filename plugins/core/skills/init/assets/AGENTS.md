@@ -251,7 +251,11 @@ dispatches that many workers at once. Run when the queue has open tasks:
        `escalated` when the cap is reached — check `queue-status` after; an
        `escalated` task needs human recovery
        (`release.sh <id> open --reset-attempts`).
-7. Return to step 2.
+7. **Sync main, then return to step 2.** Run `claude-arsenal/bin/queue_branch.sh`
+   before looping back. Since the working tree is already on the coordination
+   branch, this is a no-op for the checkout itself but merges any PRs that
+   landed on `main` while the previous batch was running — so web servers,
+   config files, and other host content stay current across iterations.
 8. **Post-loop housekeeping (mandatory).** Run once when the loop exits — either
    because step 3 returned empty (all open tasks exhausted) or step 2's budget
    check exited 3. For every workspace that had at least one task reach `done` or
@@ -272,8 +276,8 @@ dispatches that many workers at once. Run when the queue has open tasks:
       `chore: update workspace handovers and status docs` commit on the default
       branch (or open a small housekeeping PR if main is protected). Do **not**
       batch this with task code — keep it separate so the diff is reviewable.
-      After committing, return to the coordination branch:
-      `git checkout "${ARSENAL_QUEUE_BRANCH:-arsenal-queue}"`.
+      After committing, return to the coordination branch and sync:
+      `git checkout "${ARSENAL_QUEUE_BRANCH:-arsenal-queue}" && claude-arsenal/bin/queue_branch.sh`.
 
    > **Why this step exists.** The queue ledger (`tasks.jsonl`) tracks machine
    > state; `handover.md` and `docs/status/*.md` are the human-readable

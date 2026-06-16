@@ -20,19 +20,33 @@ set -uo pipefail
 
 QUEUE_BRANCH="${ARSENAL_QUEUE_BRANCH:-arsenal-queue}"
 REMOTE="${ARSENAL_QUEUE_REMOTE:-origin}"
+DEFAULT_BRANCH="${ARSENAL_DEFAULT_BRANCH:-main}"
 
 current="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
 
 has_remote=0
 git remote get-url "${REMOTE}" >/dev/null 2>&1 && has_remote=1
 
-# Already on the branch → just make sure the upstream is wired, then exit.
+# Merge the host default branch into the queue branch so the working tree
+# always reflects PRs that landed since the last sync. No-ops when already
+# up-to-date. Called at every exit so session-start and inter-iteration
+# calls both stay current.
+sync_from_default() {
+    [[ ${has_remote} -eq 0 ]] && return 0
+    git fetch "${REMOTE}" "${DEFAULT_BRANCH}" >/dev/null 2>&1 || return 0
+    git rev-parse --verify --quiet "${REMOTE}/${DEFAULT_BRANCH}" >/dev/null 2>&1 || return 0
+    git merge --no-edit "${REMOTE}/${DEFAULT_BRANCH}" >/dev/null 2>&1 || \
+        echo "queue_branch.sh: WARNING — could not merge ${REMOTE}/${DEFAULT_BRANCH} into ${QUEUE_BRANCH}" >&2
+}
+
+# Already on the branch → wire upstream if missing, sync from default, exit.
 if [[ "${current}" == "${QUEUE_BRANCH}" ]]; then
     if [[ ${has_remote} -eq 1 ]] \
         && ! git rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1; then
         git fetch "${REMOTE}" "${QUEUE_BRANCH}" >/dev/null 2>&1 || true
         git branch --set-upstream-to="${REMOTE}/${QUEUE_BRANCH}" >/dev/null 2>&1 || true
     fi
+    sync_from_default
     echo "on coordination branch '${QUEUE_BRANCH}'"
     exit 0
 fi
@@ -57,6 +71,7 @@ if [[ ${has_remote} -eq 1 ]] \
     else
         git checkout -b "${QUEUE_BRANCH}" --track "${REMOTE}/${QUEUE_BRANCH}" >/dev/null 2>&1
     fi
+    sync_from_default
     echo "tracking existing '${REMOTE}/${QUEUE_BRANCH}'"
     exit 0
 fi
@@ -72,10 +87,12 @@ fi
 # Publish + set upstream so claim.sh / release.sh can push by ref.
 if [[ ${has_remote} -eq 1 ]]; then
     if git push -u "${REMOTE}" "${QUEUE_BRANCH}" >/dev/null 2>&1; then
+        sync_from_default
         echo "created and published '${QUEUE_BRANCH}'"
         exit 0
     fi
     echo "queue_branch.sh: WARNING — could not push '${QUEUE_BRANCH}' to '${REMOTE}'; cross-session locking will not work until it is published" >&2
+    sync_from_default
     exit 0
 fi
 
