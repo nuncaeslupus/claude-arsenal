@@ -30,6 +30,21 @@ set -uo pipefail
 
 QUEUE_BRANCH="${ARSENAL_QUEUE_BRANCH:-arsenal-queue}"
 
+# In worktree mode the main tree never changes branch — workers cannot
+# accidentally move the orchestrator's HEAD — so the branch-restoration
+# logic is unnecessary. Just verify the coordination worktree is intact.
+if [[ -n "${ARSENAL_QUEUE_DIR:-}" ]]; then
+    wt_branch="$(git -C "${ARSENAL_QUEUE_DIR}" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+    if [[ "${wt_branch}" == "${QUEUE_BRANCH}" ]]; then
+        echo "ok"
+        exit 0
+    fi
+    echo "worker_postcheck: queue worktree '${ARSENAL_QUEUE_DIR}' is on '${wt_branch:-unknown}', expected '${QUEUE_BRANCH}'; re-run queue_branch.sh" >&2
+    exit 2
+fi
+
+# Legacy (non-worktree) mode: ensure the main tree's HEAD is on the
+# coordination branch and the tree is clean before release.sh runs.
 current="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
 dirty="$(git status --porcelain 2>/dev/null)"
 

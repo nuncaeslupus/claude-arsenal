@@ -27,6 +27,13 @@ SESSION_ID="${2:-${CLAUDE_SESSION_ID:-"session-$$"}}"
 # "error: " prefix as part of the won/lost/error protocol.
 _fail() { echo "error: $1"; exit 2; }
 
+# Operate from the coordination worktree when ARSENAL_QUEUE_DIR is set so the
+# main working tree never needs to change branch.
+if [[ -n "${ARSENAL_QUEUE_DIR:-}" ]]; then
+    cd "${ARSENAL_QUEUE_DIR}" \
+        || _fail "could not cd into queue worktree '${ARSENAL_QUEUE_DIR}'"
+fi
+
 # Guard: must be on the coordination branch. Off it, HEAD diverges from the
 # push target and every claim silently looks "lost" — fail loud instead.
 current_branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"

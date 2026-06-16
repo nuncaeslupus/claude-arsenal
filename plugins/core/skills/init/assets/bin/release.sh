@@ -24,6 +24,11 @@ TASK_ID="${1:?release.sh requires <task_id>}"
 NEW_STATUS="${2:?release.sh requires <status>: done|open|blocked|in_progress|escalated}"
 shift 2 || true
 
+# Resolve script dir to an absolute path now, before any cd, so UPDATE_PY
+# stays valid even after we cd into the coordination worktree below.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+UPDATE_PY="${SCRIPT_DIR}/../scripts/update_task_row.py"
+
 PR_URL=""
 RESET_ATTEMPTS=""
 while [[ $# -gt 0 ]]; do
@@ -39,6 +44,13 @@ case "${NEW_STATUS}" in
     *) echo "release.sh: invalid status '${NEW_STATUS}'" >&2; exit 1 ;;
 esac
 
+# Operate from the coordination worktree when ARSENAL_QUEUE_DIR is set so the
+# main working tree never needs to change branch.
+if [[ -n "${ARSENAL_QUEUE_DIR:-}" ]]; then
+    cd "${ARSENAL_QUEUE_DIR}" \
+        || { echo "release.sh: could not cd into queue worktree '${ARSENAL_QUEUE_DIR}'" >&2; exit 2; }
+fi
+
 # Guard: a release pushed from the wrong branch diverges from the coordination
 # ref and never lands. Fail loud rather than retry into a dead end.
 current_branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
@@ -46,10 +58,6 @@ if [[ "${current_branch}" != "${QUEUE_BRANCH}" ]]; then
     echo "release.sh: not on coordination branch '${QUEUE_BRANCH}' (HEAD=${current_branch:-unknown}); run queue_branch.sh first" >&2
     exit 2
 fi
-
-# Locate update_task_row.py relative to this script's directory.
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-UPDATE_PY="${SCRIPT_DIR}/../scripts/update_task_row.py"
 
 final_status="$(python3 "${UPDATE_PY}" "${TASK_ID}" "${NEW_STATUS}" "${QUEUE_FILE}" "${PR_URL}" "${RESET_ATTEMPTS}")" || exit 1
 
