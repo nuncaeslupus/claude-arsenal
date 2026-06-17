@@ -39,12 +39,12 @@ if [[ -n "${ARSENAL_QUEUE_DIR:-}" ]]; then
     current_main="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
     dirty_main="$(git status --porcelain 2>/dev/null)"
 
-    if [[ "${current_main}" != "${default_branch}" || -n "${dirty_main}" ]]; then
+    # Only reset when the branch actually moved — a dirty-but-correct-branch
+    # state means the user has uncommitted edits, which must NOT be destroyed.
+    if [[ "${current_main}" != "${default_branch}" ]]; then
         git reset -q --hard >/dev/null 2>&1 || true
         git clean -fdq >/dev/null 2>&1 || true
-        if [[ "${current_main}" != "${default_branch}" ]]; then
-            git checkout -f "${default_branch}" >/dev/null 2>&1 || true
-        fi
+        git checkout -f "${default_branch}" >/dev/null 2>&1 || true
         echo "restored"
         exit 0
     fi

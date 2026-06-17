@@ -53,8 +53,8 @@ def update_task_row(
                     row["attempts"] = 0
                     final_status = "open"
                 elif current_status == "in_progress":
-                    current = row.get("attempts", 0) + 1
-                    cap = row.get("max_attempts", 3)
+                    current = int(row.get("attempts") or 0) + 1
+                    cap = int(row.get("max_attempts") or 3)
                     row["attempts"] = current
                     final_status = "escalated" if current >= cap else "open"
                 elif current_status == "escalated":

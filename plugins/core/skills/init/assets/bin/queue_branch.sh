@@ -174,20 +174,20 @@ if [[ ${wt_registered} -eq 0 ]]; then
         && git rev-parse --verify --quiet "${REMOTE}/${QUEUE_BRANCH}" >/dev/null 2>&1; then
         if git rev-parse --verify --quiet "${QUEUE_BRANCH}" >/dev/null 2>&1; then
             # Local branch exists; add worktree pointing at it, then wire upstream.
-            git worktree add "${QUEUE_WORKTREE}" "${QUEUE_BRANCH}" >/dev/null 2>&1 || true
+            git worktree add "${QUEUE_WORKTREE}" "${QUEUE_BRANCH}" >/dev/null || true
             git -C "${QUEUE_WORKTREE}" branch --set-upstream-to="${REMOTE}/${QUEUE_BRANCH}" \
                 >/dev/null 2>&1 || true
         else
             # Create local branch tracking the remote and add worktree.
             git worktree add -b "${QUEUE_BRANCH}" "${QUEUE_WORKTREE}" \
-                "${REMOTE}/${QUEUE_BRANCH}" >/dev/null 2>&1 || true
+                "${REMOTE}/${QUEUE_BRANCH}" >/dev/null || true
         fi
     elif git rev-parse --verify --quiet "${QUEUE_BRANCH}" >/dev/null 2>&1; then
         # Remote unavailable but local branch exists.
-        git worktree add "${QUEUE_WORKTREE}" "${QUEUE_BRANCH}" >/dev/null 2>&1 || true
+        git worktree add "${QUEUE_WORKTREE}" "${QUEUE_BRANCH}" >/dev/null || true
     else
         # Neither remote nor local branch — create from current HEAD.
-        git worktree add -b "${QUEUE_BRANCH}" "${QUEUE_WORKTREE}" >/dev/null 2>&1 || true
+        git worktree add -b "${QUEUE_BRANCH}" "${QUEUE_WORKTREE}" >/dev/null || true
         if [[ ${has_remote} -eq 1 ]]; then
             git -C "${QUEUE_WORKTREE}" push -u "${REMOTE}" "${QUEUE_BRANCH}" \
                 >/dev/null 2>&1 || true
