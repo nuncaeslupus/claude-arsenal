@@ -1,6 +1,6 @@
 # Claude Arsenal
 
-<!-- claude-arsenal v0.6.3 — imported via @claude-arsenal/AGENTS.md -->
+<!-- claude-arsenal v0.6.5 — imported via @claude-arsenal/AGENTS.md -->
 
 This file is imported by the host repo's `CLAUDE.md` via the session-protocol block
 that `/init` injects. It provides the mechanics behind the proactive directives
@@ -35,6 +35,30 @@ At the start of every session (fresh start, context compaction, or cold restart)
 2. **Read handover.md** — if `claude-arsenal/session/handover.md` has content beyond the
    template placeholder, read it for the previous session's last task, queue
    snapshot, and continuation instructions.
+   > **The handover is a snapshot at compaction time, not the current state.**
+   > Do NOT resume work on any task mentioned in the handover without first
+   > completing the post-compaction check (step 2a) and running `queue_eval.sh`
+   > (step 3).  The queue is always the source of truth.
+
+2a. **Post-compaction in-progress scan** — scan `claude-arsenal/queue/tasks.jsonl`
+    for any rows where `status == "in_progress"`. For each one, run:
+    ```bash
+    ARSENAL_QUEUE_DIR="${ARSENAL_QUEUE_DIR}" claude-arsenal/bin/verify_claim.sh <task_id>
+    ```
+    Act on the result:
+    - `done` — the queue already records the task as complete; skip it.
+    - `pushed:<ref>` — a prior context pushed the branch/PR but the orchestrator
+      did not record the release.  Close the gap immediately:
+      ```bash
+      ARSENAL_QUEUE_DIR="${ARSENAL_QUEUE_DIR}" claude-arsenal/bin/release.sh <task_id> done --pr <ref>
+      ```
+    - `in_progress` — no pushed branch found; the task is truly mid-flight.
+      Leave it for the worker loop; do not re-claim or re-do it — another
+      context or session may own it.
+    - `open` / `unknown` — no action needed.
+
+    This step is safe to skip when the queue has no `in_progress` rows.
+
 3. **Run queue_eval** — `claude-arsenal/bin/queue_eval.sh`.
    - Returns task JSON → go to **Worker loop algorithm**.
    - Returns empty + workspace plans exist → go to **Queue seeding from workspace plans**.
@@ -501,6 +525,7 @@ claude-arsenal/
     worktree_probe.sh ← probes whether git worktrees work here (fan-out safety)
     claim.sh
     release.sh        ← orchestrator-side; accepts --pr, stages the payload
+    verify_claim.sh   ← post-compaction probe: checks pushed branch vs queue state
     worker_postcheck.sh ← orchestrator-side; restores HEAD→queue branch + clean tree post-worker
     reconcile_merged.sh ← done→merged flip via `gh` PR merge-state check
     open_task_pr.sh   ← worker-side; branch off default → commit → push → PR
