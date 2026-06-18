@@ -27,7 +27,9 @@ if [[ -n "${ARSENAL_QUEUE_DIR:-}" && -d "${ARSENAL_QUEUE_DIR}" ]]; then
     _queue_path="${ARSENAL_QUEUE_DIR}/${QUEUE_FILE}"
 fi
 
-row="$(python3 - "${TASK_ID}" "${_queue_path}" <<'PY'
+# Single Python invocation: locate the task row and emit "<status> <pr_field>"
+# (space-separated; pr_field may be empty).
+read -r status pr_field <<< "$(python3 - "${TASK_ID}" "${_queue_path}" <<'PY'
 import sys, json, pathlib
 task_id, queue_path_str = sys.argv[1], sys.argv[2]
 queue_path = pathlib.Path(queue_path_str)
@@ -41,21 +43,13 @@ for line in queue_path.read_text(encoding="utf-8").splitlines():
     try:
         row = json.loads(line)
         if isinstance(row, dict) and row.get("id") == task_id:
-            print(json.dumps(row, separators=(",", ":")))
+            print(f"{row.get('status', 'unknown')} {row.get('pr', '')}")
             sys.exit(0)
     except json.JSONDecodeError:
         pass
 print("unknown")
 PY
 )"
-
-if [[ "${row}" == "unknown" ]]; then
-    echo "unknown"
-    exit 0
-fi
-
-status="$(python3 -c "import sys,json; r=json.loads(sys.argv[1]); print(r.get('status','unknown'))" "${row}")"
-pr_field="$(python3 -c "import sys,json; r=json.loads(sys.argv[1]); print(r.get('pr',''))" "${row}")"
 
 case "${status}" in
     done|merged)
