@@ -120,17 +120,55 @@ subprocess.run(["git", "-C", wt, "add"] + staged, check=True)
 msg = f"sync: port {len(missing)} task(s) from {remote}/{default} ({ids})"
 subprocess.run(["git", "-C", wt, "commit", "-m", msg], check=True)
 
-# Push; retry once on non-fast-forward.
+# Push; on non-fast-forward reset to remote and re-evaluate rather than
+# merging — tasks.jsonl is append-only and concurrent appends always
+# conflict at EOF, so merge is guaranteed to fail.
 push = subprocess.run(
     ["git", "-C", wt, "push", remote, f"HEAD:refs/heads/{branch}"],
     capture_output=True, text=True,
 )
 if push.returncode != 0:
     subprocess.run(["git", "-C", wt, "fetch", remote, branch], check=True)
-    subprocess.run(
-        ["git", "-C", wt, "merge", "--no-edit", f"{remote}/{branch}"],
-        check=True,
-    )
+    subprocess.run(["git", "-C", wt, "reset", "--hard", f"{remote}/{branch}"], check=True)
+
+    # Re-read coordination branch state — another session may have added some rows.
+    wt_ids_now: set[str] = set()
+    for line in queue_file.read_text().splitlines():
+        line = line.strip()
+        if line:
+            wt_ids_now.add(json.loads(line)["id"])
+    still_missing = [r for r in missing if r["id"] not in wt_ids_now]
+    if not still_missing:
+        sys.exit(0)
+
+    with open(queue_file, "a") as f:
+        for r in still_missing:
+            f.write(json.dumps(r, separators=(",", ":")) + "\n")
+
+    staged2 = [rel]
+    for r in still_missing:
+        payload = r.get("payload")
+        if not payload:
+            continue
+        pl_rel = f"claude-arsenal/queue/{payload}"
+        pl_dst = pathlib.Path(wt) / pl_rel
+        if pl_dst.exists():
+            staged2.append(pl_rel)
+            continue
+        pl_result = subprocess.run(
+            ["git", "show", f"{remote}/{default}:{pl_rel}"],
+            capture_output=True,
+        )
+        if pl_result.returncode == 0:
+            pl_dst.parent.mkdir(parents=True, exist_ok=True)
+            pl_dst.write_bytes(pl_result.stdout)
+            staged2.append(pl_rel)
+
+    ids2 = ", ".join(r["id"] for r in still_missing)
+    subprocess.run(["git", "-C", wt, "add"] + staged2, check=True)
+    subprocess.run(["git", "-C", wt, "commit", "-m",
+                    f"sync: port {len(still_missing)} task(s) from {remote}/{default} ({ids2})"],
+                   check=True)
     push2 = subprocess.run(
         ["git", "-C", wt, "push", remote, f"HEAD:refs/heads/{branch}"],
         capture_output=True, text=True,
