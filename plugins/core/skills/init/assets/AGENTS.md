@@ -1,6 +1,6 @@
 # Claude Arsenal
 
-<!-- claude-arsenal v0.6.5 — imported via @claude-arsenal/AGENTS.md -->
+<!-- claude-arsenal v0.7.0 — imported via @claude-arsenal/AGENTS.md -->
 
 This file is imported by the host repo's `CLAUDE.md` via the session-protocol block
 that `/init` injects. It provides the mechanics behind the proactive directives
@@ -32,6 +32,13 @@ At the start of every session (fresh start, context compaction, or cold restart)
    consumers always see the host default-branch content. Export `ARSENAL_QUEUE_DIR`
    so every subsequent `claim.sh` and `release.sh` call inherits it.
    See **Queue coordination branch** below for why a dedicated branch is mandatory.
+1b. **Sync tasks from the default branch** —
+    `ARSENAL_QUEUE_DIR="${ARSENAL_QUEUE_DIR}" claude-arsenal/bin/queue_sync.sh`.
+    Idempotently ports any task rows (and payload files) present on the default
+    branch but absent from `arsenal-queue`.  Tasks authored via `/queue-add` during
+    a feature-branch session (outside an orchestrator context) land on the default
+    branch — not on the coordination branch — and are invisible to the orchestrator
+    until this step runs.  Safe to skip when offline or when no remote is configured.
 2. **Read handover.md** — if `claude-arsenal/session/handover.md` has content beyond the
    template placeholder, read it for the previous session's last task, queue
    snapshot, and continuation instructions.
@@ -520,6 +527,7 @@ claude-arsenal/
     worker.md         ← worker subagent definition
   bin/                ← shell scripts; refreshed by /init on re-run
     queue_branch.sh   ← creates/reuses a side worktree for the coordination branch; main tree never moves
+    queue_sync.sh     ← ports task rows from the default branch to the coordination branch (idempotent)
     queue_eval.sh     ← next single task (thin wrapper over queue_batch.sh)
     queue_batch.sh    ← up to N independent tasks (parallel fan-out)
     worktree_probe.sh ← probes whether git worktrees work here (fan-out safety)
