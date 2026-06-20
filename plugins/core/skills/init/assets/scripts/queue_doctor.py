@@ -338,9 +338,12 @@ def _check_one_pr(item: tuple[str, str, str]) -> Finding | None:
             capture_output=True,
             text=True,
             check=False,
+            timeout=10,
         )
     except FileNotFoundError:
         return Finding("warn", "pr-unresolvable", tid, "gh not found — cannot resolve PR state")
+    except subprocess.TimeoutExpired:
+        return Finding("warn", "pr-unresolvable", tid, f"timeout resolving PR {pr} via gh")
     if proc.returncode != 0:
         return Finding("warn", "pr-unresolvable", tid, f"cannot resolve PR {pr} via gh")
     try:
@@ -392,9 +395,11 @@ def _check_one_issue(item: tuple[str, int, str | None]) -> Finding | None:
     if repo:
         cmd += ["--repo", repo]
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        proc = subprocess.run(cmd, capture_output=True, text=True, check=False, timeout=10)
     except FileNotFoundError:
         return Finding("info", "gh-missing", tid, "gh not found — skipped closed-issue check")
+    except subprocess.TimeoutExpired:
+        return Finding("warn", "issue-timeout", tid, f"timeout resolving issue #{issue} via gh")
     if proc.returncode != 0:
         return Finding("warn", "issue-unresolvable", tid, f"cannot resolve issue #{issue} via gh")
     try:
@@ -415,6 +420,10 @@ def check_closed_issues(rows: list[dict], repo: str | None) -> list[Finding]:
     """Flag open tasks whose linked GitHub issue (row's `issue` field) is closed."""
     targets: list[tuple[str, int, str | None]] = []
     for row in rows:
+        # A terminal task whose issue is closed is the normal end state, not a
+        # sync problem — only flag still-active tasks.
+        if row.get("status") in TERMINAL:
+            continue
         issue = row.get("issue")
         # bool is an int subclass — exclude it explicitly.
         if isinstance(issue, int) and not isinstance(issue, bool):
