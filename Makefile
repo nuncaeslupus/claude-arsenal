@@ -1,4 +1,4 @@
-.PHONY: help sync smoke test queue-doctor validate audit audit-rule-drift sync-dupes lint format dev new-skill update-skills clean
+.PHONY: help sync smoke test queue-doctor tag validate audit audit-rule-drift sync-dupes lint format dev new-skill update-skills clean
 
 PLUGIN_DIRS := $(wildcard plugins/*)
 PLUGIN_SKILL_LIBS := $(wildcard plugins/*/skills)
@@ -41,6 +41,16 @@ endif
 
 audit-rule-drift:  ## diff rule IDs in references/skill-rules.md vs docs/research/claude-skill-system_v1.17.md
 	uv run python $(AUDIT_DRIFT)
+
+tag:  ## create+push v<.bundle-version> tag from HEAD if missing — manual fallback for tag-release.yml
+	@v=$$(tr -d '[:space:]' < plugins/core/skills/init/assets/.bundle-version); t="v$$v"; \
+	if [ -z "$$v" ]; then echo "make tag: .bundle-version is empty" >&2; exit 1; fi; \
+	git fetch --tags --quiet; \
+	if git rev-parse "$$t" >/dev/null 2>&1; then echo "make tag: $$t already exists — nothing to release"; \
+	else latest=$$(git tag -l 'v*.*.*' --sort=v:refname | tail -1 | sed 's/^v//'); \
+		if [ -n "$$latest" ] && ! python3 -c "import sys; p=lambda x: list(map(int, x.split('.'))); sys.exit(0 if p(sys.argv[1]) >= p(sys.argv[2]) else 1)" "$$v" "$$latest"; then \
+			echo "make tag: $$t is lower than latest v$$latest — refusing" >&2; exit 1; fi; \
+		git tag -a "$$t" -m "Release $$t" && git push origin "$$t" && echo "make tag: created+pushed $$t"; fi
 
 test:  ## run the core plugin behaviour tests (plugins/core/tests/*.sh)
 	@set -e; for t in plugins/core/tests/*.sh; do \
