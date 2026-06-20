@@ -1,6 +1,6 @@
 # Claude Arsenal
 
-<!-- claude-arsenal v0.12.0 — imported via @claude-arsenal/AGENTS.md -->
+<!-- claude-arsenal v0.13.0 — imported via @claude-arsenal/AGENTS.md -->
 
 This file is imported by the host repo's `CLAUDE.md` via the session-protocol block
 that `/init` injects. It provides the mechanics behind the proactive directives
@@ -526,16 +526,19 @@ Each line of `claude-arsenal/queue/tasks.jsonl` is a JSON object:
   "tags": ["CLI"],
   "pr": "https://github.com/owner/repo/pull/123",
   "payload": "lo-a3f8.md",
+  "issue": 42,
   "max_attempts": 3,
   "attempts": 0
 }
 ```
 
-`workspace`, `tags`, and `pr` are optional and append-compatible — older readers
-ignore them. `tags` is a free-form label axis (`/queue-add --tag CLI`) that
+`workspace`, `tags`, `pr`, and `issue` are optional and append-compatible — older
+readers ignore them. `tags` is a free-form label axis (`/queue-add --tag CLI`) that
 `/continue` scopes on via `LOOP_TAGS` (ANDed), orthogonal to `workspace` and the
 surface-capability `requires` filter. `pr` is set by `release.sh … --pr <url>`
-when a per-task PR is opened.
+when a per-task PR is opened. `issue` links a task to a GitHub issue number; with
+`queue_doctor.sh --closed-issues` a task whose linked issue is already closed is
+flagged (prune it or mark it done) — useful when the backlog mirrors issues.
 
 `max_attempts` (default 3) and `attempts` (default 0) control the per-task retry
 cap. `release.sh` increments `attempts` on each `open` release (worker gate

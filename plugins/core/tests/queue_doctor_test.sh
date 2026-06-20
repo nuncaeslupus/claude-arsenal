@@ -88,5 +88,25 @@ fi
 printf '%s' "${cout}" | grep -q "0 error, 0 warn" || { echo "FAIL: clean queue had findings: ${cout}" >&2; exit 1; }
 echo "PASS: clean queue exits 0 with no findings"
 
+# --- --closed-issues: a task whose linked issue is closed is flagged. ---
+# Stub `gh` on PATH so the check is hermetic (no network / real issues).
+stub="${tmp}/stub"; mkdir -p "${stub}"
+cat > "${stub}/gh" <<'GH'
+#!/usr/bin/env bash
+echo '{"state":"CLOSED"}'
+GH
+chmod +x "${stub}/gh"
+idir="${tmp}/iss/claude-arsenal/queue"; mkdir -p "${idir}"
+printf '%s\n' '{"id":"iss-9","title":"linked","status":"open","deps":[],"payload":"iss-9.md","issue":9}' > "${idir}/tasks.jsonl"
+echo "# linked" > "${idir}/iss-9.md"
+iout="$(PATH="${stub}:${PATH}" python3 "${DOCTOR}" --queue "${idir}/tasks.jsonl" --closed-issues 2>&1)"
+printf '%s' "${iout}" | grep -q "\[closed-issue\]" || { echo "FAIL: closed linked issue not flagged: ${iout}" >&2; exit 1; }
+echo "PASS: --closed-issues flags a task whose linked issue is closed"
+
+# Without the issue field, --closed-issues makes no gh calls and finds nothing.
+nout="$(PATH="${stub}:${PATH}" python3 "${DOCTOR}" --queue "${cdir}/tasks.jsonl" --closed-issues 2>&1)"
+printf '%s' "${nout}" | grep -q "\[closed-issue\]" && { echo "FAIL: closed-issue fired with no issue field" >&2; exit 1; }
+echo "PASS: --closed-issues is a no-op for tasks without an issue field"
+
 echo "PASS: queue_doctor_test — all gates passed"
 exit 0

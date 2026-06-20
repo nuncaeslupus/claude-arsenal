@@ -38,7 +38,7 @@ fi
 
 args=(--queue "${QUEUE_PATH}" --remote "${REMOTE}" --default-branch "${DEFAULT_BRANCH}")
 if [[ "${ARSENAL_DOCTOR_OFFLINE:-}" != "1" ]]; then
-    command -v gh  >/dev/null 2>&1 && args+=(--online)
+    command -v gh  >/dev/null 2>&1 && args+=(--online --closed-issues)
     command -v git >/dev/null 2>&1 && args+=(--cross-branch)
 fi
 
