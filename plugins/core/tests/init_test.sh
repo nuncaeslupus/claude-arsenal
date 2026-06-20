@@ -73,6 +73,15 @@ if [[ ! -f "${tmpdir}/claude-arsenal/session/handover.md" ]]; then
     echo "FAIL: claude-arsenal/session/handover.md missing" >&2; exit 1
 fi
 
+# Gate 5b: a re-run must NOT overwrite host-owned session/handover.md (data loss).
+SENTINEL="REAL-HANDOVER-DO-NOT-CLOBBER-$$"
+echo "${SENTINEL}" > "${tmpdir}/claude-arsenal/session/handover.md"
+python3 "${INIT_PY}" --repo-path "${tmpdir}" --bundle-dir "${BUNDLE_DIR}" --silent
+if ! grep -qF "${SENTINEL}" "${tmpdir}/claude-arsenal/session/handover.md"; then
+    echo "FAIL: init re-run clobbered host-owned session/handover.md (data loss)" >&2; exit 1
+fi
+echo "PASS: re-run preserves host-owned session/handover.md (no data loss)"
+
 # Gate 6: .gitignore has surface_profile.json entry
 if ! grep -q "claude-arsenal/session/surface_profile.json" "${tmpdir}/.gitignore" 2>/dev/null; then
     echo "FAIL: .gitignore missing surface_profile.json entry" >&2; exit 1

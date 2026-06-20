@@ -114,13 +114,28 @@ def _has_shebang(path: Path) -> bool:
         return False
 
 
+# Host-owned bundle paths the init only SCAFFOLDS: the template is written once
+# when absent, but NEVER overwritten on re-run — these hold live host data
+# (AGENTS.md: "session/ ← host-owned; never touched by /init re-run"). Clobbering
+# them wipes the consumer's handover on every `init --silent` at session start.
+_SCAFFOLD_ONCE = ("session/",)
+
+
 def _refresh_bundle(bundle: Path, target: Path, silent: bool = False) -> None:
-    """Copy bundle files into target, refreshing only stale files."""
+    """Copy bundle files into target, refreshing only stale files.
+
+    Files under a _SCAFFOLD_ONCE prefix are written only when absent and left
+    untouched if they already exist (host-owned live data, not bundle content).
+    """
     for src in bundle.rglob("*"):
         if src.is_dir():
             continue
         rel = src.relative_to(bundle)
         dst = target / rel
+        if rel.as_posix().startswith(_SCAFFOLD_ONCE) and dst.exists():
+            if not silent:
+                print(f"  preserved (host-owned): {rel}")
+            continue
         dst.parent.mkdir(parents=True, exist_ok=True)
         if dst.exists() and _sha256(src) == _sha256(dst):
             if not silent:
