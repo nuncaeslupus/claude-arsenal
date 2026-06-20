@@ -58,3 +58,33 @@ jobs:
 
       - name: make test
         run: make test
+
+  version-bump:
+    name: version bump
+    runs-on: ubuntu-22.04
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Require a .bundle-version bump when shipped files change
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          VFILE: plugins/core/skills/init/assets/.bundle-version
+        run: |
+          changed=$(git diff --name-only "${BASE}...HEAD")
+          # "Shipped" = anything a consumer vendors: plugin skills + manifests.
+          # Dev-only paths (tests, docs, CI, pyproject) may skip the bump.
+          if ! printf '%s\n' "${changed}" | grep -qE '^(plugins/[^/]+/skills/|plugins/[^/]+/\.claude-plugin/|\.claude-plugin/)'; then
+            echo "No shipped files changed — bump not required."
+            exit 0
+          fi
+          base_v=$(git show "${BASE}:${VFILE}" 2>/dev/null | tr -d '[:space:]' || true)
+          head_v=$(tr -d '[:space:]' < "${VFILE}")
+          if [ "${base_v}" = "${head_v}" ]; then
+            echo "::error::Shipped files changed but ${VFILE} was not bumped (still ${head_v}). Bump it per CLAUDE.md."
+            exit 1
+          fi
+          echo "version bump OK: ${base_v:-none} -> ${head_v}"
