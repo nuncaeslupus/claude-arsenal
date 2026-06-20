@@ -1,4 +1,4 @@
-.PHONY: help sync smoke validate audit audit-rule-drift sync-dupes lint format dev new-skill update-skills clean
+.PHONY: help sync smoke test validate audit audit-rule-drift sync-dupes lint format dev new-skill update-skills clean
 
 PLUGIN_DIRS := $(wildcard plugins/*)
 PLUGIN_SKILL_LIBS := $(wildcard plugins/*/skills)
@@ -41,6 +41,11 @@ endif
 
 audit-rule-drift:  ## diff rule IDs in references/skill-rules.md vs docs/research/claude-skill-system_v1.17.md
 	uv run python $(AUDIT_DRIFT)
+
+test:  ## run the core plugin behaviour tests (plugins/core/tests/*.sh)
+	@set -e; for t in plugins/core/tests/*.sh; do \
+		echo "=== test: $$t ==="; bash "$$t"; \
+	done
 
 sync-dupes:  ## sync_duplicates.py --check across plugins/*/scripts/_shared/
 	uv run python $(SYNC_DUPES) --check
