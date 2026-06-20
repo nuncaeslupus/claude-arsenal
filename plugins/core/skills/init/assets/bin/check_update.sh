@@ -66,18 +66,21 @@ fi
 
 echo "claude-arsenal: installed=v${installed}, latest=v${latest} — pulling update…"
 
-# Ensure the working tree is clean before subtree pull
+# Ensure the working tree is clean before the subtree update
+_manual="git fetch ${REMOTE} refs/tags/v${latest}:refs/tags/v${latest} && git subtree merge --prefix=${PREFIX} \"v${latest}^{commit}\" --squash"
 if ! git diff --quiet 2>/dev/null || ! git diff --cached --quiet 2>/dev/null; then
-    _warn "working tree is dirty; skipping auto-update (run manually: git subtree pull --prefix=${PREFIX} ${REMOTE} v${latest} --squash)"
+    _warn "working tree is dirty; skipping auto-update (run manually: ${_manual})"
     exit 0
 fi
 
-# Pull the exact released tag (not the moving `main`) so the installed bundle
-# matches the version the latest-tag check gated on — otherwise tags are
-# decorative and `main` could carry unreleased drift.
-if ! git subtree pull --prefix="${PREFIX}" "${REMOTE}" "v${latest}" --squash \
+# Update to the exact released tag (not the moving `main`) so the installed
+# bundle matches the version the latest-tag check gated on. Fetch the tag ref
+# explicitly first — this creates the local tag and sidesteps `git subtree` not
+# dereferencing annotated tags — then merge its dereferenced commit.
+if ! git fetch "${REMOTE}" "refs/tags/v${latest}:refs/tags/v${latest}" 2>&1 \
+    || ! git subtree merge --prefix="${PREFIX}" "v${latest}^{commit}" --squash \
         -m "chore: update claude-arsenal to v${latest}" 2>&1; then
-    _warn "subtree pull failed — run manually: git subtree pull --prefix=${PREFIX} ${REMOTE} v${latest} --squash"
+    _warn "subtree update failed — run manually: ${_manual}"
     exit 0
 fi
 

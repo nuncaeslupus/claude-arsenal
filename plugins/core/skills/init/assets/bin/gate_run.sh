@@ -33,6 +33,16 @@ if [[ ! -f "${PAYLOAD}" ]]; then
     exit 2
 fi
 
+# Enforce a structured numeric evidence gate first, if the payload declares one.
+# A declared evidence gate can never pass vacuously (CA-12): a missing evidence
+# file or a measurement that violates the threshold fails the gate right here,
+# before the prose/bash-block path can let it through.
+GATE_EVIDENCE_PY="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../scripts/gate_evidence.py"
+if [[ -f "${GATE_EVIDENCE_PY}" ]] && ! python3 "${GATE_EVIDENCE_PY}" "${PAYLOAD}"; then
+    echo "gate_run: evidence gate failed for ${TASK_ID}" >&2
+    exit 1
+fi
+
 python3 - "${PAYLOAD}" <<'PY'
 import os
 import pathlib

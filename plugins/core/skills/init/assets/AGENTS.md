@@ -1,6 +1,6 @@
 # Claude Arsenal
 
-<!-- claude-arsenal v0.9.0 — imported via @claude-arsenal/AGENTS.md -->
+<!-- claude-arsenal v0.12.0 — imported via @claude-arsenal/AGENTS.md -->
 
 This file is imported by the host repo's `CLAUDE.md` via the session-protocol block
 that `/init` injects. It provides the mechanics behind the proactive directives
@@ -223,6 +223,31 @@ The table columns are: `T# | Description | Location | Size | Depends | Gate | Te
    ```
 
 4. Proceed to the **Worker loop algorithm**.
+
+---
+
+## Evidence gates (numeric acceptance)
+
+A numeric gate — a Sharpe floor, a coverage floor, a latency ceiling — must be
+backed by a **committed measurement**, not a worker's word. Declare it in the
+payload's `## Acceptance gate` section as a fenced `gate` block:
+
+````markdown
+```gate
+line_coverage >= 0.90
+evidence: coverage.json
+key: totals.percent_covered
+```
+````
+
+Line 1 is the gate in `<metric> <op> <threshold>` grammar (the same grammar the
+`gate-check` skill uses); `evidence` is a committed JSON file; `key` is a dotted
+path to the measured number inside it. `gate_run.sh` asserts `measured <op>
+threshold` over that file: a declared evidence gate with **no** evidence file, or
+evidence that **violates** the threshold, is a hard failure — it can never pass
+vacuously. This is the machine-checkable half of "`done` means the gate passed"
+(closes the false-`done` hole for `[LAPTOP]`/science gates); the release-side
+half is that `release.sh` refuses `done` without an opened PR.
 
 ---
 
