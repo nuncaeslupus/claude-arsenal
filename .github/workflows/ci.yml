@@ -88,3 +88,13 @@ jobs:
             exit 1
           fi
           echo "version bump OK: ${base_v:-none} -> ${head_v}"
+
+  queue-doctor:
+    name: queue doctor (dogfood)
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: make queue-doctor
+        run: make queue-doctor
