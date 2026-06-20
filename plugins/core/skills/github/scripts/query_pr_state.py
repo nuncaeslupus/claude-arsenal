@@ -2,6 +2,7 @@
 """Snapshot the review state of a GitHub PR.
 
 Returns one of:
+  - conflicts     — PR has merge conflicts with the base (needs a rebase/merge)
   - waiting       — no review-bot signal, CI not green yet
   - bot_eyeing    — watched bot reacted :eyes:, no review submitted
   - bot_commented — watched bot left unaddressed line-level comments
@@ -13,7 +14,7 @@ Returns one of:
 Exit codes:
   0 — bot_commented (unaddressed) OR ready_to_merge (actionable)
   1 — waiting / bot_eyeing / ci_running / bot_approved (loop continues)
-  2 — ci_failed (Claude action) or error (surface to user)
+  2 — conflicts / ci_failed (Claude action) or error (surface to user)
 """
 
 from __future__ import annotations
@@ -169,6 +170,7 @@ def _classify(
     reviews: list[dict],
     line_comments: list[dict],
     addressed_count: int = 0,
+    mergeable: str = "UNKNOWN",
 ) -> dict:
     watched = {_norm_user(b) for b in args.watch_bots}
     bot_eye = bot_thumb = bot_changes_requested = bot_approved_review = bot_commented_review = False
@@ -248,7 +250,11 @@ def _classify(
     # or human-replied. The bot's stale :eyes: can no longer block ready_to_merge.
     everything_addressed = addressed_count > 0 and not bot_comments and bot_engaged
 
-    if ci == "failure":
+    if mergeable == "CONFLICTING":
+        # A conflicted PR cannot merge no matter how clean CI/reviews are — surface
+        # it first as a Claude action (rebase / resolve), like a CI failure.
+        state, exit_code = "conflicts", 2
+    elif ci == "failure":
         state, exit_code = "ci_failed", 2
     elif bot_comments:
         state, exit_code = "bot_commented", 0
@@ -285,6 +291,7 @@ def _classify(
         "state": state,
         "exit_code": exit_code,
         "ci": ci,
+        "mergeable": mergeable,
         "head_commit_at": head_ts.isoformat(),
         "bot_reactions": {"eyes": bot_eye, "thumb_or_approved": bot_thumb or bot_approved_review},
         "bot_reviews": {
@@ -334,7 +341,7 @@ def main() -> int:
         "--repo",
         repo,
         "--json",
-        "state,mergedAt,closedAt,statusCheckRollup,headRefOid,reviews,commits",
+        "state,mergedAt,closedAt,mergeable,statusCheckRollup,headRefOid,reviews,commits",
     )
     if not pr:
         sys.stderr.write(f"PR #{args.pr} not found in {repo}\n")
@@ -387,7 +394,10 @@ def main() -> int:
     else:
         addressed_count = 0
 
-    result = _classify(args, head_ts, ci, reactions, reviews, line_comments, addressed_count)
+    mergeable = (pr.get("mergeable") or "UNKNOWN").upper()
+    result = _classify(
+        args, head_ts, ci, reactions, reviews, line_comments, addressed_count, mergeable
+    )
     json.dump(result, sys.stdout, indent=2)
     sys.stdout.write("\n")
     return int(result["exit_code"])
