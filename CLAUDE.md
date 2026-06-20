@@ -88,6 +88,12 @@ The `tag-release` workflow reads this file on every push to `main` and
 creates a new git tag (`v<version>`) automatically if it does not already
 exist. Consumer projects pin to these tags to re-vendor the marketplace.
 
+Tagging is automatic via that workflow. **If GitHub Actions is unavailable**
+(an outage), the tag will not be created until Actions resume — run `make tag`
+from `main` as a one-command fallback (it creates+pushes `v<.bundle-version>`,
+skips if it exists, and refuses a version lower than the latest tag, mirroring
+the workflow).
+
 Bump rules:
 - **Patch** (`x.y.Z`) — bug fixes, doc corrections, validator tweaks.
 - **Minor** (`x.Y.0`) — new skills, new workflow steps, new hooks, new flags.
