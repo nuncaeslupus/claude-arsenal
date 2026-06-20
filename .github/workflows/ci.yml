@@ -88,3 +88,24 @@ jobs:
             exit 1
           fi
           echo "version bump OK: ${base_v:-none} -> ${head_v}"
+
+  queue-doctor:
+    name: queue doctor (dogfood)
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: make queue-doctor
+        run: make queue-doctor

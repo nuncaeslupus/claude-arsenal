@@ -1,4 +1,4 @@
-.PHONY: help sync smoke test validate audit audit-rule-drift sync-dupes lint format dev new-skill update-skills clean
+.PHONY: help sync smoke test queue-doctor validate audit audit-rule-drift sync-dupes lint format dev new-skill update-skills clean
 
 PLUGIN_DIRS := $(wildcard plugins/*)
 PLUGIN_SKILL_LIBS := $(wildcard plugins/*/skills)
@@ -47,6 +47,10 @@ test:  ## run the core plugin behaviour tests (plugins/core/tests/*.sh)
 		[ -f "$$t" ] || continue; \
 		echo "=== test: $$t ==="; bash "$$t"; \
 	done
+
+queue-doctor:  ## dogfood: run the queue consistency check on this repo's own backlog (status/queue)
+	uv run python plugins/core/skills/init/assets/scripts/queue_doctor.py \
+		--queue status/queue/tasks.jsonl --fail-on warn
 
 sync-dupes:  ## sync_duplicates.py --check across plugins/*/scripts/_shared/
 	uv run python $(SYNC_DUPES) --check

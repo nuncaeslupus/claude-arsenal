@@ -31,10 +31,20 @@ cutover).
 | Touching a SKILL.md / references / scripts inside a plugin | The pre-edit hook blocks unless `skill-creator` is loaded. |
 | Adding a new plugin | Scaffold `plugins/<name>/.claude-plugin/plugin.json`, then add the entry to `.claude-plugin/marketplace.json`. |
 | Running the rule-drift check | `make audit-rule-drift` — diffs `references/skill-rules.md` against `docs/research/claude-skill-system_v1.17.md`. |
+| Checking this repo's own queue health | `make queue-doctor` — runs the queue consistency checker on `status/queue/` (dogfood). |
 | Updating dependencies | `uv sync`, then commit `uv.lock`. |
 
 The Makefile is the entry point for every routine action. Run `make help`
 to list targets.
+
+### Dogfooding the queue
+
+This repo tracks its own review backlog as a real queue at `status/queue/`
+(`tasks.jsonl` + per-task payloads, one per open review issue) so the queue
+tooling runs against this project, not only against consumers. `make
+queue-doctor` (and the `queue doctor` CI job) runs `queue_doctor.py` over it on
+every push — orphan payloads, broken deps, false-`done`, or a leaked secret in a
+payload fail the build. Keep the backlog and the GitHub issues in sync.
 
 ---
 
