@@ -20,8 +20,10 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import shutil
 import subprocess
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -98,7 +100,7 @@ def check_structure(rows: list[dict]) -> list[Finding]:
         tid = row.get("id")
         if not isinstance(tid, str) or not tid:
             findings.append(
-                Finding("error", "missing-id", row.get("id", "?"), "row has no string 'id'")
+                Finding("error", "missing-id", str(row.get("id") or "?"), "row has no string 'id'")
             )
             continue
         seen[tid] = seen.get(tid, 0) + 1
@@ -184,7 +186,7 @@ def check_invariants(rows: list[dict]) -> list[Finding]:
     """assignee ↔ in_progress, and attempts/escalation sanity."""
     findings: list[Finding] = []
     for row in rows:
-        tid = row.get("id", "?")
+        tid = str(row.get("id") or "?")
         status = row.get("status")
         assignee = row.get("assignee")
         if status == "in_progress" and not assignee:
@@ -211,7 +213,7 @@ def check_invariants(rows: list[dict]) -> list[Finding]:
 def check_pr_fields(rows: list[dict]) -> list[Finding]:
     findings: list[Finding] = []
     for row in rows:
-        tid = row.get("id", "?")
+        tid = str(row.get("id") or "?")
         status = row.get("status")
         pr = row.get("pr")
         if status in TERMINAL:
@@ -245,7 +247,7 @@ def check_payloads(rows: list[dict], queue_dir: Path) -> list[Finding]:
     findings: list[Finding] = []
     referenced: set[str] = set()
     for row in rows:
-        tid = row.get("id", "?")
+        tid = str(row.get("id") or "?")
         payload = row.get("payload")
         if not payload:
             continue
@@ -290,9 +292,11 @@ def scan_secrets(rows: list[dict], queue_dir: Path) -> list[Finding]:
 
 
 def _git(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        ["git", "-C", str(repo), *args], capture_output=True, text=True, check=False
-    )
+    cmd = ["git", "-C", str(repo), *args]
+    try:
+        return subprocess.run(cmd, capture_output=True, text=True, check=False)
+    except FileNotFoundError:
+        return subprocess.CompletedProcess(cmd, 127, "", "git not found")
 
 
 def check_cross_branch(
@@ -324,51 +328,60 @@ def check_cross_branch(
     return findings
 
 
-def check_online(rows: list[dict]) -> list[Finding]:
-    """Cross-check done/merged rows against real PR state via gh (false-'done')."""
-    findings: list[Finding] = []
-    for row in rows:
-        tid = row.get("id", "?")
-        status = row.get("status")
-        pr = row.get("pr")
-        if status not in TERMINAL or not isinstance(pr, str) or not pr.startswith("http"):
-            continue
+def _check_one_pr(item: tuple[str, str, str]) -> Finding | None:
+    tid, status, pr = item
+    try:
         proc = subprocess.run(
             ["gh", "pr", "view", pr, "--json", "state,mergedAt"],
             capture_output=True,
             text=True,
             check=False,
         )
-        if proc.returncode != 0:
-            findings.append(
-                Finding("warn", "pr-unresolvable", tid, f"cannot resolve PR {pr} via gh")
-            )
+    except FileNotFoundError:
+        return Finding("warn", "pr-unresolvable", tid, "gh not found — cannot resolve PR state")
+    if proc.returncode != 0:
+        return Finding("warn", "pr-unresolvable", tid, f"cannot resolve PR {pr} via gh")
+    try:
+        info = json.loads(proc.stdout)
+    except json.JSONDecodeError:
+        return None
+    state = info.get("state")
+    merged = bool(info.get("mergedAt"))
+    if status == "merged" and not merged:
+        return Finding(
+            "error",
+            "merged-not-merged",
+            tid,
+            f"status=merged but PR {pr} is {state} (mergedAt is null)",
+        )
+    if status == "done" and state == "CLOSED" and not merged:
+        return Finding(
+            "error",
+            "done-pr-closed",
+            tid,
+            f"status=done but PR {pr} is CLOSED and was never merged",
+        )
+    return None
+
+
+def check_online(rows: list[dict]) -> list[Finding]:
+    """Cross-check done/merged rows against real PR state via gh (false-'done')."""
+    targets: list[tuple[str, str, str]] = []
+    for row in rows:
+        status = row.get("status")
+        pr = row.get("pr")
+        if status not in TERMINAL or not isinstance(pr, str) or not pr.startswith("http"):
             continue
-        try:
-            info = json.loads(proc.stdout)
-        except json.JSONDecodeError:
-            continue
-        state = info.get("state")
-        merged = bool(info.get("mergedAt"))
-        if status == "merged" and not merged:
-            findings.append(
-                Finding(
-                    "error",
-                    "merged-not-merged",
-                    tid,
-                    f"status=merged but PR {pr} is {state} (mergedAt is null)",
-                )
-            )
-        elif status == "done" and state == "CLOSED" and not merged:
-            findings.append(
-                Finding(
-                    "error",
-                    "done-pr-closed",
-                    tid,
-                    f"status=done but PR {pr} is CLOSED and was never merged",
-                )
-            )
-    return findings
+        targets.append((str(row.get("id") or "?"), str(status), pr))
+    if not targets:
+        return []
+    if shutil.which("gh") is None:
+        return [
+            Finding("warn", "gh-missing", "online", "gh not on PATH — skipped online PR checks")
+        ]
+    # Network-bound; run the per-PR queries concurrently to keep large queues fast.
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        return [f for f in pool.map(_check_one_pr, targets) if f is not None]
 
 
 def _print_human(findings: list[Finding], queue_path: Path, total: int, fail_on: str) -> None:

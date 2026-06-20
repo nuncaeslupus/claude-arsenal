@@ -44,6 +44,7 @@ audit-rule-drift:  ## diff rule IDs in references/skill-rules.md vs docs/researc
 
 test:  ## run the core plugin behaviour tests (plugins/core/tests/*.sh)
 	@set -e; for t in plugins/core/tests/*.sh; do \
+		[ -f "$$t" ] || continue; \
 		echo "=== test: $$t ==="; bash "$$t"; \
 	done
 
