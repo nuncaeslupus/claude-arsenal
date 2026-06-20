@@ -127,9 +127,9 @@ def _fetch_review_threads(owner: str, name: str, pr_number: int) -> list[dict]:
     )
     if not data:
         return []
-    return (
-        ((data.get("data") or {}).get("repository") or {}).get("pullRequest") or {}
-    ).get("reviewThreads", {}).get("nodes") or []
+    return (((data.get("data") or {}).get("repository") or {}).get("pullRequest") or {}).get(
+        "reviewThreads", {}
+    ).get("nodes") or []
 
 
 def _addressed_comment_ids(threads: list[dict]) -> set[int]:
@@ -238,10 +238,7 @@ def _classify(
     # said something we filtered (count is bot-scoped — see main()), so it's a third
     # engagement signal alongside review-submission states.
     bot_engaged = (
-        bot_commented_review
-        or bot_approved_review
-        or bot_changes_requested
-        or addressed_count > 0
+        bot_commented_review or bot_approved_review or bot_changes_requested or addressed_count > 0
     )
     # "Everything addressed" promotes a bot_eyeing case to bot_approved-equivalent:
     # --unresolved-only filtered at least one comment AND nothing remains AND the bot did
@@ -271,12 +268,16 @@ def _classify(
         # the loop has already resolved every bot-raised concern and the eyes lose their
         # blocking force.
         state, exit_code = "bot_eyeing", 1
-    elif ci == "success" and (
-        bot_thumb or bot_approved_review or everything_addressed or not watched
+    elif (
+        ci == "success"
+        and (bot_thumb or bot_approved_review or everything_addressed or not watched)
+        and mergeable == "MERGEABLE"
     ):
         # Explicit positive signal (thumb / approved review), "everything addressed"
         # equivalent, OR CI-only mode. Silent approval requires the bot to have left a
         # positive signal — not just to have once commented and then gone silent.
+        # mergeable must be explicitly MERGEABLE: while GitHub is still computing it
+        # (UNKNOWN) fall through to `waiting` so a pending conflict can't slip past.
         anchors = [t for t in (last_bot_event_ts, head_ts) if t is not None]
         quiet_anchor = max(anchors)
         now = datetime.now(UTC)
