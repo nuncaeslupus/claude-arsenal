@@ -52,6 +52,24 @@ python3 "${GE}" claude-arsenal/queue/lo-n.md >/dev/null 2>&1
 [[ "$?" == "0" ]] || { echo "FAIL: no gate block should exit 0" >&2; exit 1; }
 echo "PASS: no evidence gate declared → 0"
 
+# Scientific-notation threshold + quoted evidence/key values.
+cat > claude-arsenal/queue/lo-sci.md <<'MD'
+# SCI
+## Acceptance gate
+```gate
+p_value <= 1e-3
+evidence: "metrics.json"
+key: "stats.p"
+```
+MD
+echo '{"stats":{"p":0.0005}}' > metrics.json
+python3 "${GE}" claude-arsenal/queue/lo-sci.md >/dev/null 2>&1
+[[ "$?" == "0" ]] || { echo "FAIL: 0.0005 <= 1e-3 should pass (sci notation + quotes)" >&2; exit 1; }
+echo '{"stats":{"p":0.005}}' > metrics.json
+python3 "${GE}" claude-arsenal/queue/lo-sci.md >/dev/null 2>&1
+[[ "$?" == "1" ]] || { echo "FAIL: 0.005 <= 1e-3 should fail" >&2; exit 1; }
+echo "PASS: scientific-notation threshold + quoted values handled"
+
 # gate_run.sh integration: a failing evidence gate fails gate_run (CA-12).
 if [[ -f "${GR}" ]]; then
     echo '{"totals":{"percent_covered":0.50}}' > coverage.json

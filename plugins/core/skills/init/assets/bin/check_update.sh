@@ -67,7 +67,7 @@ fi
 echo "claude-arsenal: installed=v${installed}, latest=v${latest} — pulling update…"
 
 # Ensure the working tree is clean before the subtree update
-_manual="git fetch ${REMOTE} refs/tags/v${latest}:refs/tags/v${latest} && git subtree merge --prefix=${PREFIX} v${latest}^{commit} --squash"
+_manual="git fetch ${REMOTE} refs/tags/v${latest}:refs/tags/v${latest} && git subtree merge --prefix=${PREFIX} \"v${latest}^{commit}\" --squash"
 if ! git diff --quiet 2>/dev/null || ! git diff --cached --quiet 2>/dev/null; then
     _warn "working tree is dirty; skipping auto-update (run manually: ${_manual})"
     exit 0

@@ -41,7 +41,7 @@ OPS = {
     "<": lambda a, b: a < b,
     ">": lambda a, b: a > b,
 }
-GATE_RE = re.compile(r"(<=|>=|==|!=|<|>)\s*([+-]?\d+(?:\.\d+)?)")
+GATE_RE = re.compile(r"(<=|>=|==|!=|<|>)\s*([+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)")
 
 
 def _fail(msg: str, code: int) -> NoReturn:
@@ -91,7 +91,8 @@ def main() -> None:
             continue
         if ":" in line and not GATE_RE.search(line.split(":", 1)[0]):
             k, v = line.split(":", 1)
-            fields[k.strip().lower()] = v.strip()
+            # Tolerate quoted values (evidence: "coverage.json") — strip them.
+            fields[k.strip().lower()] = v.strip().strip("'\"")
         elif GATE_RE.search(line):
             gate_line = line
 
