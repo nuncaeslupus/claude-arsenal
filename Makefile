@@ -45,9 +45,10 @@ audit-rule-drift:  ## diff rule IDs in references/skill-rules.md vs docs/researc
 tag:  ## create+push v<.bundle-version> tag from HEAD if missing — manual fallback for tag-release.yml
 	@v=$$(tr -d '[:space:]' < plugins/core/skills/init/assets/.bundle-version); t="v$$v"; \
 	if [ -z "$$v" ]; then echo "make tag: .bundle-version is empty" >&2; exit 1; fi; \
+	git fetch --tags --quiet; \
 	if git rev-parse "$$t" >/dev/null 2>&1; then echo "make tag: $$t already exists — nothing to release"; \
-	else latest=$$(git tag -l 'v*.*.*' | sed 's/^v//' | sort -V | tail -1); \
-		if [ -n "$$latest" ] && [ "$$v" != "$$(printf '%s\n%s\n' "$$v" "$$latest" | sort -V | tail -1)" ]; then \
+	else latest=$$(git tag -l 'v*.*.*' --sort=v:refname | tail -1 | sed 's/^v//'); \
+		if [ -n "$$latest" ] && ! python3 -c "import sys; p=lambda x: list(map(int, x.split('.'))); sys.exit(0 if p(sys.argv[1]) >= p(sys.argv[2]) else 1)" "$$v" "$$latest"; then \
 			echo "make tag: $$t is lower than latest v$$latest — refusing" >&2; exit 1; fi; \
 		git tag -a "$$t" -m "Release $$t" && git push origin "$$t" && echo "make tag: created+pushed $$t"; fi
 
