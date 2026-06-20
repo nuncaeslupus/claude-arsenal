@@ -90,6 +90,13 @@ The `tag-release` workflow reads this file on every push to `main` and
 creates a new git tag (`v<version>`) automatically if it does not already
 exist. Consumer projects pin to these tags to re-vendor the marketplace.
 
+`.bundle-version` is the **single canonical version** for the whole repo.
+Both plugin manifests (`plugins/*/.claude-plugin/plugin.json`) and the
+vendored `AGENTS.md` header carry a copy of it that is **derived, never
+hand-edited**: after bumping `.bundle-version`, run `make sync-version` to
+propagate it. CI's `make sync-version-check` fails the build if any copy
+drifts. (Historically these drifted independently — issue #80.)
+
 Tagging is automatic via that workflow. **If GitHub Actions is unavailable**
 (an outage), the tag will not be created until Actions resume — run `make tag`
 from `main` as a one-command fallback (it creates+pushes `v<.bundle-version>`,
