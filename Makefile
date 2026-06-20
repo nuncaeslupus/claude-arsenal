@@ -49,7 +49,7 @@ test:  ## run the core plugin behaviour tests (plugins/core/tests/*.sh)
 	done
 
 queue-doctor:  ## dogfood: run the queue consistency check on this repo's own backlog (status/queue)
-	python3 plugins/core/skills/init/assets/scripts/queue_doctor.py \
+	uv run python plugins/core/skills/init/assets/scripts/queue_doctor.py \
 		--queue status/queue/tasks.jsonl --fail-on warn
 
 sync-dupes:  ## sync_duplicates.py --check across plugins/*/scripts/_shared/
