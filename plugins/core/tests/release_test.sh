@@ -65,6 +65,24 @@ if [[ "$(remote_tip)" == "${before}" ]]; then
 fi
 echo "PASS: a status change commits + pushes to the ledger"
 
+# --- Gate 1b (CA-11): refuse `done` from a branch ref or with no PR ---
+before=$(remote_tip)
+set +e
+out=$(bash "${RELEASE}" lo-r001 done --pr "branch:arsenal/lo-r001-x" 2>&1); rc=$?
+out2=$(bash "${RELEASE}" lo-r001 done 2>&1); rc2=$?
+set -e
+if [[ "${rc}" -ne 2 || "${rc2}" -ne 2 ]]; then
+    echo "FAIL: done from a branch ref / no PR should exit 2 (got ${rc}/${rc2})" >&2; exit 1
+fi
+if ! printf '%s' "${out}" | grep -q "refusing to mark"; then
+    echo "FAIL: expected 'refusing to mark ... done' refusal, got: ${out}" >&2; exit 1
+fi
+git fetch -q origin "${QUEUE_BRANCH}"
+if [[ "$(remote_tip)" != "${before}" ]]; then
+    echo "FAIL: a refused done must not advance the ledger" >&2; exit 1
+fi
+echo "PASS: refuses to mark done without an opened PR (CA-11)"
+
 # --- Gate 2 (CA-06): re-releasing the same status is an idempotent no-op ---
 before=$(remote_tip)
 out=$(bash "${RELEASE}" lo-r001 done --pr "https://example.com/pr/1" 2>&1); rc=$?

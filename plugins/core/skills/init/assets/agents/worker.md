@@ -78,9 +78,11 @@ branch. Capture it first.
    the Co-Authored-By trailer), pushes, and prints either a PR URL or
    `branch:<name>` (push-only, when no PR backend is available here).
 5. **Return the outcome to the orchestrator** — status `done`, plus the PR URL
-   or `branch:<name>` line from step 4. Do **not** call `release.sh`; the
-   orchestrator records the result on `arsenal-queue`. Exit; do not pick up the
-   next task.
+   or `branch:<name>` line from step 4. A `branch:<name>` means the branch was
+   pushed but **no PR was opened** (no PR backend in this worktree); it is not a
+   completed task on its own — the orchestrator opens the PR before recording
+   `done`. Do **not** call `release.sh`; the orchestrator records the result on
+   `arsenal-queue`. Exit; do not pick up the next task.
 
 ## On failure
 

@@ -44,6 +44,18 @@ case "${NEW_STATUS}" in
     *) echo "release.sh: invalid status '${NEW_STATUS}'" >&2; exit 1 ;;
 esac
 
+# Guard (CA-11): `done` means "PR opened + gate passed". Refuse to record it
+# from a bare branch ref (never PR'd) or with no PR at all — that is the
+# false-`done` vector: a pushed branch is not an opened PR. Open the PR first
+# and pass its URL, or release the task as open/in_progress. `merged` is set by
+# reconcile_merged.sh from a real merged PR, so it is exempt from this guard.
+if [[ "${NEW_STATUS}" == "done" ]]; then
+    if [[ -z "${PR_URL}" || "${PR_URL}" == branch:* ]]; then
+        echo "release.sh: refusing to mark ${TASK_ID} done without an opened PR (pr='${PR_URL:-none}'); open the PR and record done with its URL, or release as open/in_progress" >&2
+        exit 2
+    fi
+fi
+
 # Operate from the coordination worktree when ARSENAL_QUEUE_DIR is set so the
 # main working tree never needs to change branch.
 # The orchestrator writes failure notes to the payload file in the main tree;

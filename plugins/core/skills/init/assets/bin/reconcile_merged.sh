@@ -14,6 +14,12 @@
 set -uo pipefail
 
 QUEUE_FILE="claude-arsenal/queue/tasks.jsonl"
+# In worktree mode the live queue lives inside the coordination worktree (where
+# release.sh writes it); read it there, not the stale main-tree copy, or the
+# done→merged flip silently no-ops.
+if [[ -n "${ARSENAL_QUEUE_DIR:-}" && -d "${ARSENAL_QUEUE_DIR}" ]]; then
+    QUEUE_FILE="${ARSENAL_QUEUE_DIR}/${QUEUE_FILE}"
+fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RELEASE="${SCRIPT_DIR}/release.sh"
 
