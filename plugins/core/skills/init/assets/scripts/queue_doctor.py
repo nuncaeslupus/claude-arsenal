@@ -6,7 +6,9 @@ structural, dependency, invariant, PR-field, and secret inconsistencies. With
 ``--online`` (requires ``gh``) it cross-checks ``done``/``merged`` rows against
 real PR merge state — the false-"done" detector. With ``--cross-branch`` it
 compares the coordination branch against the default branch for orphaned
-payloads (a payload tracked on the default branch with no queue row).
+payloads (a payload tracked on the default branch with no queue row). With
+``--closed-issues`` (requires ``gh``) it flags tasks whose linked GitHub issue
+(the row's ``issue`` field) is already closed — for backlogs tracked as issues.
 
 The queue ledger and the payload files live in the same directory:
 ``claude-arsenal/queue/tasks.jsonl`` and ``claude-arsenal/queue/<id>.md``.
@@ -384,6 +386,51 @@ def check_online(rows: list[dict]) -> list[Finding]:
         return [f for f in pool.map(_check_one_pr, targets) if f is not None]
 
 
+def _check_one_issue(item: tuple[str, int, str | None]) -> Finding | None:
+    tid, issue, repo = item
+    cmd = ["gh", "issue", "view", str(issue), "--json", "state"]
+    if repo:
+        cmd += ["--repo", repo]
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    except FileNotFoundError:
+        return Finding("info", "gh-missing", tid, "gh not found — skipped closed-issue check")
+    if proc.returncode != 0:
+        return Finding("warn", "issue-unresolvable", tid, f"cannot resolve issue #{issue} via gh")
+    try:
+        state = json.loads(proc.stdout).get("state")
+    except json.JSONDecodeError:
+        return None
+    if state == "CLOSED":
+        return Finding(
+            "warn",
+            "closed-issue",
+            tid,
+            f"linked issue #{issue} is closed — prune the task or mark it done",
+        )
+    return None
+
+
+def check_closed_issues(rows: list[dict], repo: str | None) -> list[Finding]:
+    """Flag open tasks whose linked GitHub issue (row's `issue` field) is closed."""
+    targets: list[tuple[str, int, str | None]] = []
+    for row in rows:
+        issue = row.get("issue")
+        # bool is an int subclass — exclude it explicitly.
+        if isinstance(issue, int) and not isinstance(issue, bool):
+            targets.append((str(row.get("id") or "?"), issue, repo))
+    if not targets:
+        return []
+    if shutil.which("gh") is None:
+        return [
+            Finding(
+                "info", "gh-missing", "closed-issues", "gh not on PATH — skipped closed-issue check"
+            )
+        ]
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        return [f for f in pool.map(_check_one_issue, targets) if f is not None]
+
+
 def _print_human(findings: list[Finding], queue_path: Path, total: int, fail_on: str) -> None:
     counts = {"error": 0, "warn": 0, "info": 0}
     order = {"error": 0, "warn": 1, "info": 2}
@@ -412,6 +459,12 @@ def main() -> None:
         "--cross-branch", action="store_true", help="Compare payloads vs the default branch"
     )
     p.add_argument("--no-secret-scan", action="store_true", help="Skip the payload secret scan")
+    p.add_argument(
+        "--closed-issues",
+        action="store_true",
+        help="Flag tasks whose linked GitHub issue (row 'issue' field) is closed (needs gh)",
+    )
+    p.add_argument("--repo", default="", help="owner/name for --closed-issues (default: gh infers)")
     p.add_argument("--remote", default="origin", help="Remote for --cross-branch (default origin)")
     p.add_argument("--default-branch", default="main", help="Default branch for --cross-branch")
     p.add_argument(
@@ -440,6 +493,8 @@ def main() -> None:
         findings += check_cross_branch(rows, queue_dir, args.remote, args.default_branch)
     if args.online:
         findings += check_online(rows)
+    if args.closed_issues:
+        findings += check_closed_issues(rows, args.repo or None)
 
     if args.json:
         print(

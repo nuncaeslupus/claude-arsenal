@@ -44,7 +44,9 @@ This repo tracks its own review backlog as a real queue at `status/queue/`
 tooling runs against this project, not only against consumers. `make
 queue-doctor` (and the `queue doctor` CI job) runs `queue_doctor.py` over it on
 every push — orphan payloads, broken deps, false-`done`, or a leaked secret in a
-payload fail the build. Keep the backlog and the GitHub issues in sync.
+payload fail the build. Each task carries an `issue` field; `--closed-issues`
+flags any task whose linked GitHub issue is already closed, so the backlog and
+the issues stay in sync (prune the task when its issue closes).
 
 ---
 
