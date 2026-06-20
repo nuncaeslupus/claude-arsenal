@@ -114,11 +114,14 @@ def _has_shebang(path: Path) -> bool:
         return False
 
 
-# Host-owned bundle paths the init only SCAFFOLDS: the template is written once
+# Host-owned bundle paths the init only SCAFFOLDS: a template is written once
 # when absent, but NEVER overwritten on re-run — these hold live host data
-# (AGENTS.md: "session/ ← host-owned; never touched by /init re-run"). Clobbering
-# them wipes the consumer's handover on every `init --silent` at session start.
-_SCAFFOLD_ONCE = ("session/",)
+# (AGENTS.md marks session/, project/, and queue/ "host-owned; never touched by
+# /init re-run"). Clobbering them wipes the consumer's handover / plans / queue
+# on every `init --silent` at session start. Only session/ ships a template
+# today; project/ and queue/ are listed defensively so a future bundle file
+# under them can't introduce the same data loss.
+_SCAFFOLD_ONCE = ("session/", "project/", "queue/")
 
 
 def _refresh_bundle(bundle: Path, target: Path, silent: bool = False) -> None:
