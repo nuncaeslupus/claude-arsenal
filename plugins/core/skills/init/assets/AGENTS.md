@@ -1,6 +1,6 @@
 # Claude Arsenal
 
-<!-- claude-arsenal v0.7.0 — imported via @claude-arsenal/AGENTS.md -->
+<!-- claude-arsenal v0.8.0 — imported via @claude-arsenal/AGENTS.md -->
 
 This file is imported by the host repo's `CLAUDE.md` via the session-protocol block
 that `/init` injects. It provides the mechanics behind the proactive directives
@@ -75,6 +75,17 @@ At the start of every session (fresh start, context compaction, or cold restart)
    `claude-arsenal/bin/reconcile_merged.sh`. Flips every `done` task whose PR has
    landed to the terminal `merged` status, so the board distinguishes
    opened-but-unmerged from merged. Safe to skip when offline / no `gh`.
+4b. **Queue consistency check** —
+    `ARSENAL_QUEUE_DIR="${ARSENAL_QUEUE_DIR}" claude-arsenal/bin/queue_doctor.sh`.
+    Read-only audit of `tasks.jsonl` and its payloads: orphaned payloads,
+    broken / cyclic deps, crashed `in_progress` claims (no assignee), stale or
+    `branch:`-only `pr` fields, a payload secret-scan, and — when `gh` is
+    available — `done` / `merged` rows whose PR is closed-unmerged (the
+    false-`done` detector). **Report any ERROR / WARN findings to the user.** At
+    session start it is advisory and never halts the loop; run it standalone to
+    enforce it as a gate (CI / `make`), where a non-zero exit means findings
+    at/above `--fail-on` (default `warn`). Safe to skip when offline.
+
 5. **After any session with open tasks**: before ending the session —
    a. **PR audit**: collect every `done`/`in_progress` task carrying a `pr` URL from
       `claude-arsenal/queue/tasks.jsonl`. For each URL, check CI status, review comments,
@@ -536,6 +547,7 @@ claude-arsenal/
     verify_claim.sh   ← post-compaction probe: checks pushed branch vs queue state
     worker_postcheck.sh ← orchestrator-side; restores HEAD→queue branch + clean tree post-worker
     reconcile_merged.sh ← done→merged flip via `gh` PR merge-state check
+    queue_doctor.sh   ← read-only consistency audit (orphans, deps, false-done, secret-scan)
     open_task_pr.sh   ← worker-side; branch off default → commit → push → PR
     gate_run.sh
     budget_check.sh   ← quota stop + always-available per-session round cap

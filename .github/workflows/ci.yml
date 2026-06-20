@@ -43,3 +43,18 @@ jobs:
 
       - name: make audit-rule-drift
         run: make audit-rule-drift
+
+  test:
+    name: core tests
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure git identity (tests create temp repos)
+        run: |
+          git config --global user.email "ci@arsenal.example"
+          git config --global user.name "Arsenal CI"
+
+      - name: make test
+        run: make test

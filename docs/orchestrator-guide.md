@@ -198,6 +198,34 @@ runs the host lint gate plus `gate_run.sh`, then:
 
 ---
 
+## Queue health checks
+
+`queue_doctor.sh` is a read-only audit of the queue and its payloads. The
+orchestrator runs it at session start (advisory — it never halts the loop), and
+you can run it any time:
+
+```bash
+claude-arsenal/bin/queue_doctor.sh                   # full audit (auto-enables the gh/git layers)
+claude-arsenal/bin/queue_doctor.sh --fail-on error   # gate mode: non-zero exit on findings
+ARSENAL_DOCTOR_OFFLINE=1 claude-arsenal/bin/queue_doctor.sh   # structural only, no gh/git
+```
+
+It reports: orphaned payloads (a `tasks.jsonl` row with no payload file, or a
+payload file with no row — including one tracked only on the default branch),
+broken or cyclic `deps`, crashed `in_progress` claims (no assignee), stale or
+`branch:`-only `pr` fields, likely secrets committed into a payload, and — when
+`gh` is present — `done`/`merged` rows whose PR is closed-unmerged (the
+false-`done` case). Findings carry three severities (`error` > `warn` > `info`);
+`--fail-on` (default `warn`) sets the threshold that makes the exit code
+non-zero, so it doubles as a CI / `make` gate:
+
+```yaml
+# .github/workflows/queue-doctor.yml (consumer repo) — fail the build on a dirty queue
+- run: claude-arsenal/bin/queue_doctor.sh --fail-on error
+```
+
+---
+
 ## Troubleshooting
 
 - **`claim.sh` returns `error:` and the loop stops** — you are off
