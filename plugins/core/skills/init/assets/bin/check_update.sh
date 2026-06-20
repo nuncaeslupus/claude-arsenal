@@ -68,13 +68,16 @@ echo "claude-arsenal: installed=v${installed}, latest=v${latest} — pulling upd
 
 # Ensure the working tree is clean before subtree pull
 if ! git diff --quiet 2>/dev/null || ! git diff --cached --quiet 2>/dev/null; then
-    _warn "working tree is dirty; skipping auto-update (run manually: git subtree pull --prefix=${PREFIX} ${REMOTE} main --squash)"
+    _warn "working tree is dirty; skipping auto-update (run manually: git subtree pull --prefix=${PREFIX} ${REMOTE} v${latest} --squash)"
     exit 0
 fi
 
-if ! git subtree pull --prefix="${PREFIX}" "${REMOTE}" main --squash \
+# Pull the exact released tag (not the moving `main`) so the installed bundle
+# matches the version the latest-tag check gated on — otherwise tags are
+# decorative and `main` could carry unreleased drift.
+if ! git subtree pull --prefix="${PREFIX}" "${REMOTE}" "v${latest}" --squash \
         -m "chore: update claude-arsenal to v${latest}" 2>&1; then
-    _warn "subtree pull failed — run manually: git subtree pull --prefix=${PREFIX} ${REMOTE} main --squash"
+    _warn "subtree pull failed — run manually: git subtree pull --prefix=${PREFIX} ${REMOTE} v${latest} --squash"
     exit 0
 fi
 

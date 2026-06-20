@@ -7,6 +7,11 @@ on:
 permissions:
   contents: write
 
+# Serialize tag creation so two quick pushes to main can't race the same ref.
+concurrency:
+  group: tag-release
+  cancel-in-progress: false
+
 jobs:
   tag:
     runs-on: ubuntu-22.04
@@ -17,17 +22,34 @@ jobs:
 
       - name: Create version tag from .bundle-version
         run: |
-          version=$(cat plugins/core/skills/init/assets/.bundle-version 2>/dev/null || echo "")
+          set -euo pipefail
+          vfile=plugins/core/skills/init/assets/.bundle-version
+          if [[ ! -f "${vfile}" ]]; then
+            echo "::error::${vfile} is missing — cannot determine the release version." ; exit 1
+          fi
+          version=$(tr -d '[:space:]' < "${vfile}")
           if [[ -z "${version}" ]]; then
-            echo "No .bundle-version file found, skipping tag." ; exit 0
+            echo "::error::${vfile} is empty — cannot determine the release version." ; exit 1
           fi
           tag="v${version}"
+
           if git rev-parse "${tag}" >/dev/null 2>&1; then
-            echo "Tag ${tag} already exists, skipping."
-          else
-            git config user.email "noreply@github.com"
-            git config user.name "github-actions[bot]"
-            git tag "${tag}" -m "Release ${tag}"
-            git push origin "${tag}"
-            echo "Created tag ${tag}"
+            echo "Tag ${tag} already exists — nothing to release (version was not bumped)."
+            exit 0
           fi
+
+          # Monotonicity: refuse to publish a version that is not strictly greater
+          # than the latest existing tag (guards a lowered/rolled-back version).
+          latest=$(git tag -l 'v*.*.*' | sed 's/^v//' | sort -V | tail -1 || true)
+          if [[ -n "${latest}" ]]; then
+            highest=$(printf '%s\n%s\n' "${version}" "${latest}" | sort -V | tail -1)
+            if [[ "${version}" != "${highest}" ]]; then
+              echo "::error::.bundle-version ${version} is lower than the latest tag v${latest}; refusing to tag." ; exit 1
+            fi
+          fi
+
+          git config user.email "noreply@github.com"
+          git config user.name "github-actions[bot]"
+          git tag "${tag}" -m "Release ${tag}"
+          git push origin "${tag}"
+          echo "Created tag ${tag}"
