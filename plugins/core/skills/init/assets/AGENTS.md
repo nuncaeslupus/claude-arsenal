@@ -1,6 +1,6 @@
 # Claude Arsenal
 
-<!-- claude-arsenal v0.8.0 — imported via @claude-arsenal/AGENTS.md -->
+<!-- claude-arsenal v0.9.0 — imported via @claude-arsenal/AGENTS.md -->
 
 This file is imported by the host repo's `CLAUDE.md` via the session-protocol block
 that `/init` injects. It provides the mechanics behind the proactive directives
@@ -54,11 +54,17 @@ At the start of every session (fresh start, context compaction, or cold restart)
     ```
     Act on the result:
     - `done` — the queue already records the task as complete; skip it.
-    - `pushed:<ref>` — a prior context pushed the branch/PR but the orchestrator
-      did not record the release.  Close the gap immediately:
+    - `pushed:<ref>` — a prior context pushed work but the orchestrator did not
+      record the release. Close the gap, but **never mark `done` from a bare
+      branch ref** (a pushed branch is not an opened PR — that is the false-`done`
+      vector). If `<ref>` is a PR URL, record it:
       ```bash
-      ARSENAL_QUEUE_DIR="${ARSENAL_QUEUE_DIR}" claude-arsenal/bin/release.sh <task_id> done --pr <ref>
+      ARSENAL_QUEUE_DIR="${ARSENAL_QUEUE_DIR}" claude-arsenal/bin/release.sh <task_id> done --pr <pr-url>
       ```
+      If `<ref>` is `branch:<name>`, open the PR for that branch first (github
+      skill / MCP), then record `done` with the resulting URL. If you cannot open
+      a PR, leave the task `in_progress` — `release.sh` refuses `done` without a
+      PR URL.
     - `in_progress` — no pushed branch found; the task is truly mid-flight.
       Leave it for the worker loop; do not re-claim or re-do it — another
       context or session may own it.
@@ -286,9 +292,14 @@ dispatches that many workers at once. Run when the queue has open tasks:
      loop and surface to the user.
    - Then record the outcome on `arsenal-queue` yourself (the worker is on a
      feature branch and cannot run `release.sh` — see **Per-task PRs** below):
-     - `done` + PR URL/branch → `ARSENAL_QUEUE_DIR="${ARSENAL_QUEUE_DIR}" claude-arsenal/bin/release.sh <task_id> done --pr <url|branch>`.
+     - `done` + **PR URL** → `ARSENAL_QUEUE_DIR="${ARSENAL_QUEUE_DIR}" claude-arsenal/bin/release.sh <task_id> done --pr <pr-url>`.
        `done` means "PR opened + gate passed", NOT "merged" — `reconcile_merged.sh`
        later flips it to the terminal `merged` once the PR lands.
+       If the worker returned `branch:<name>` instead of a URL (no PR backend was
+       available in its worktree), **open the PR for that branch first** (github
+       skill / MCP), then record `done` with the URL. `release.sh` refuses `done`
+       without a PR URL, so a pushed-but-unopened branch is never recorded as
+       complete; if you cannot open the PR, leave the task `in_progress`.
      - `open` + failure notes → append the structured `## Attempt N failure`
        section (see `agents/worker.md` step 3 format) under `## Failure notes`
        in `claude-arsenal/queue/<task_id>.md`, then
