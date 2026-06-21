@@ -79,7 +79,7 @@ Consumers who vendor the skills for Claude Code on the web have two
 separate trees to keep up to date:
 
 - **`.claude/skills/`** — the flattened skill files; refreshed by
-  `make update-skills` (or directly with `scripts/vendor-skills.sh`).
+  `make update-skills` (or directly with `<clone>/scripts/vendor-skills.sh`).
 - **`claude-arsenal/`** — the queue runtime tree (`bin/`, `AGENTS.md`,
   `queue/`); refreshed by re-running `init.py`.
 
