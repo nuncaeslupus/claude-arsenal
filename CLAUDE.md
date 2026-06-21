@@ -80,6 +80,29 @@ The repo was renamed `my-skills` → `claude-arsenal` at v0.1.0 via the
 GitHub Settings UI (preserves history and sets up redirects); no
 `git mv` was performed on the working tree.
 
+### Multi-PR autonomous work — stacking rule
+
+When a plan produces **N PRs that will be merged in sequence**, branches
+**must be stacked** from the start: each branch based on the previous
+(`fix/iss-B` branched from `fix/iss-A`), not all branched from `main`.
+
+Rationale: every PR bumps `.bundle-version`. If branches share the same
+base, each merge creates a version conflict for every subsequent PR. With
+stacking, only the first PR ever conflicts with `main`; the rest inherit
+the correct version from their parent.
+
+**After each merge**, immediately rebase the next waiting branch onto
+`main` using `--onto` to skip the now-merged commits:
+
+```bash
+# After fix/iss-A merges into main:
+fork=$(git merge-base fix/iss-B origin/fix/iss-A)
+git rebase --onto origin/main "${fork}" fix/iss-B
+git push --force-with-lease origin fix/iss-B
+```
+
+Then cascade the same `--onto` rebase down the remaining stack.
+
 ---
 
 ## Versioning — mandatory on every PR
