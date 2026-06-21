@@ -1,11 +1,18 @@
 #!/usr/bin/env bash
-# detect_surface.sh — SessionStart hook: updates claude-arsenal/session/surface_profile.json.
+# detect_surface.sh — updates claude-arsenal/session/surface_profile.json.
+# Detects surface (cli/web) via CLAUDE_CODE_REMOTE and probes available services.
 # No-op if claude-arsenal/session/ does not exist (repo not initialized).
+#
+# DUPLICATED ACROSS SKILLS:
+# - plugins/core/skills/init/assets/bin/detect_surface.sh (canonical)
+# - plugins/core/hooks/detect_surface.sh
+# Keep both copies in sync. Update via skill-creator's sync_duplicates.py.
 
-PROFILE="claude-arsenal/session/surface_profile.json"
+STATE_DIR="claude-arsenal/session"
+PROFILE="${STATE_DIR}/surface_profile.json"
 
 main() {
-    [[ -d "claude-arsenal/session" ]] || return 0
+    [[ -d "${STATE_DIR}" ]] || return 0
 
     if [[ "${CLAUDE_CODE_REMOTE:-}" == "true" ]]; then
         surface="web"
