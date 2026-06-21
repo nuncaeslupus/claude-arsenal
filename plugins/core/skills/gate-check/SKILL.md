@@ -102,7 +102,7 @@ project-specific lookup stays in the wrapper.
 - **Exit 2 means no Gate column found or a usage error** (plan file missing, bad
   `--id`). Confirm the `--input` path is correct and the file exists before
   treating exit 2 as the grandfathered signal — a wrong invocation silently
-  produces the same code. Treat exit 2 as a should-flag (not a blocker) only
+  produces the same exit code. Treat exit 2 as a should-flag (not a blocker) only
   after confirming the plan genuinely predates the gate convention.
 - **Stale evidence after a re-run.** The Evidence log records one measurement at a
   point in time (its SHA + provenance say which). After re-measuring, update the
