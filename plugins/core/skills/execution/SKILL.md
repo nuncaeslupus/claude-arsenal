@@ -114,6 +114,7 @@ Before creating the PR, verify:
 - Write clear PR description linking to ticket/design
 - Add reviewers
 - Ensure CI passes
+- **When opening multiple PRs in a planned sequence**, follow the stacking rule in `github` — branches must stack, and only the last PR in the sequence bumps `.bundle-version`.
 
 ---
 

@@ -226,8 +226,9 @@ tmp/
 findings.md
 .findings/
 
-# Claude Code per-user settings (never committed)
+# Claude Code per-user settings and ephemeral agent worktrees (never committed)
 .claude/settings.local.json
+.claude/worktrees/
 
 # OS junk
 .DS_Store

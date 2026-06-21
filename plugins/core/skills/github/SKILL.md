@@ -74,6 +74,23 @@ Handle each state per the rubric in [pr-review-loop](references/pr-review-loop.m
 - `ready_to_merge` → exit the loop, tell the user "PR #N ready to merge".
 - `merged` / `closed` → exit the loop immediately. PR is no longer open; nothing to do.
 
+## Multi-PR stacking — autonomous sequential work
+
+When a plan produces **N PRs that will be merged in sequence**, stack the branches from the start: each branch based on the previous (`fix/iss-B` branched from `fix/iss-A`), not all branched from `main`.
+
+Rationale: if all branches share the same base, every PR that bumps `.bundle-version` creates a merge conflict for every subsequent PR — the three-way merge base is an ancestor commit that predates the previous PR's bump, so both sides appear to have changed the version. With stacking, only the first PR ever conflicts with `main`; the rest inherit the correct version from their parent.
+
+**Version bump rule**: only the **last** PR in a stack bumps `.bundle-version`. Intermediate PRs ship content at the current version; the bump rides on the final PR so there is exactly one version-bump commit per release, never one-per-PR.
+
+After each merge, immediately rebase the next waiting branch onto `main` to skip the now-merged commits:
+
+```bash
+# After fix/iss-A merges into main:
+bash "${CLAUDE_SKILL_DIR}/../../init/assets/bin/rebase_stack.sh" fix/iss-B fix/iss-A
+```
+
+`rebase_stack.sh <branch> <old-base>` computes the fork point, runs `git rebase --onto origin/main`, and force-pushes with lease in one step. Cascade it down the remaining stack (B→C, C→D, …) after each merge.
+
 ## Project type — Classic vs v2
 
 GitHub's Projects Classic silently breaks a few `gh` paths (notably `gh pr view --comments` and `gh pr edit --body`). On first use in a repo, run the detector:
