@@ -78,6 +78,48 @@ if [[ "${current_branch}" != "${QUEUE_BRANCH}" ]]; then
     exit 2
 fi
 
+# Guard (CA-15): scan the payload for secrets before modifying any local file.
+# Scanning first avoids the split-brain state where tasks.jsonl is updated by
+# update_task_row.py but the release is then refused — leaving the local ledger
+# out of sync with the remote. Matches the same patterns as queue_doctor.py.
+_scan_payload_secrets() {
+    python3 - "${1}" <<'PYEOF'
+import re, sys
+
+_PATTERNS = [
+    ("AWS access key id", re.compile(r"\bAKIA[0-9A-Z]{16}\b")),
+    ("private key block",
+     re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH |DSA |PGP )?PRIVATE KEY-----")),
+    ("GitHub token", re.compile(r"\bgh[pousr]_[A-Za-z0-9]{36,}\b")),
+    ("Slack token", re.compile(r"\bxox[abprs]-[A-Za-z0-9-]{10,}\b")),
+    ("credential assignment", re.compile(
+        r"(?i)\b(?:api[_-]?key|secret|token|password|passwd|access[_-]?key"
+        r"|client[_-]?secret|private[_-]?key|bearer)\b\s*[:=]\s*"
+        r"['\"]?([A-Za-z0-9/_+.\-]{16,})")),
+]
+
+path = sys.argv[1]
+found = 0
+with open(path, encoding="utf-8", errors="replace") as fh:
+    for lineno, line in enumerate(fh, 1):
+        for label, pat in _PATTERNS:
+            if pat.search(line):
+                print(
+                    f"release.sh: secret detected in payload '{path}': "
+                    f"{label} at line {lineno} (value redacted)",
+                    file=sys.stderr,
+                )
+                found = 1
+sys.exit(found)
+PYEOF
+}
+if [[ -f "claude-arsenal/queue/${TASK_ID}.md" ]]; then
+    if ! _scan_payload_secrets "claude-arsenal/queue/${TASK_ID}.md"; then
+        echo "release.sh: refusing to stage payload with secrets — redact them from claude-arsenal/queue/${TASK_ID}.md before releasing" >&2
+        exit 2
+    fi
+fi
+
 final_status="$(python3 "${UPDATE_PY}" "${TASK_ID}" "${NEW_STATUS}" "${QUEUE_FILE}" "${PR_URL}" "${RESET_ATTEMPTS}")" || exit 1
 
 if [[ -z "${final_status}" ]]; then
