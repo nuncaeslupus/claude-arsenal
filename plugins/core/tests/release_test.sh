@@ -150,6 +150,49 @@ if [[ "$(remote_tip)" != "${before}" ]]; then
     echo "FAIL: refused secret-payload release must not advance the ledger" >&2; exit 1
 fi
 echo "PASS: refuses to stage payload with secret (CA-15)"
+rm -f "claude-arsenal/queue/lo-r001.md"
+
+# --- Gate 6 (CA-13): refuse `done` for a closed (never-merged) PR ---
+git fetch -q origin "${QUEUE_BRANCH}"
+git reset -q --hard "origin/${QUEUE_BRANCH}"
+# Put task back to in_progress so a `done` transition is valid status-wise.
+python3 -c "
+import json, sys
+rows=[]
+for line in open(sys.argv[1]):
+    r=json.loads(line)
+    if r['id']=='lo-r001': r['status']='in_progress'; r.pop('pr',None)
+    rows.append(r)
+open(sys.argv[1],'w').writelines(json.dumps(r)+'\n' for r in rows)
+" claude-arsenal/queue/tasks.jsonl
+git add claude-arsenal/queue/tasks.jsonl
+git commit -q -m "test: reset lo-r001 to in_progress for CA-13 gate"
+git push -q origin "${QUEUE_BRANCH}"
+# Inject a mock gh that reports the PR as CLOSED. Use a subdir of tmpwork so
+# the EXIT trap cleans it up automatically on early exit.
+_mock_gh_dir="${tmpwork}/mock_gh"
+mkdir -p "${_mock_gh_dir}"
+cat > "${_mock_gh_dir}/gh" <<'GHEOF'
+#!/usr/bin/env bash
+# argv: pr view <url> --json state,mergedAt --jq .state
+echo "CLOSED"
+GHEOF
+chmod +x "${_mock_gh_dir}/gh"
+before=$(remote_tip)
+set +e
+out=$(PATH="${_mock_gh_dir}:${PATH}" bash "${RELEASE}" lo-r001 done --pr "https://example.com/pr/closed" 2>&1); rc=$?
+set -e
+if [[ "${rc}" -ne 2 ]]; then
+    echo "FAIL: done with closed PR should exit 2, got ${rc}: ${out}" >&2; exit 1
+fi
+if ! printf '%s' "${out}" | grep -q "is closed"; then
+    echo "FAIL: expected 'is closed' refusal, got: ${out}" >&2; exit 1
+fi
+git fetch -q origin "${QUEUE_BRANCH}"
+if [[ "$(remote_tip)" != "${before}" ]]; then
+    echo "FAIL: refused closed-PR done must not advance the ledger" >&2; exit 1
+fi
+echo "PASS: refuses to mark done for a closed PR (CA-13)"
 
 echo "PASS: release_test — all gates passed"
 exit 0
