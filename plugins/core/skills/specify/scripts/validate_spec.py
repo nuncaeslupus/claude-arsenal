@@ -32,7 +32,7 @@ _HTML_TAGS = (
     r"|details|summary|kbd|iframe|script|style|svg|path|g|meta|link"
 )
 INLINE_PLACEHOLDER_RE = re.compile(
-    r"<(?![!?])(?!/?(?:" + _HTML_TAGS + r")\b)(?:[^>]*?[ _-][^>]*?|[A-Z0-9]{2,})>"
+    r"<(?![!?])(?!/?(?:" + _HTML_TAGS + r")\b)(?:[^>=]*?[ _-][^>=]*?|[A-Z0-9]{2,})>"
 )
 REQUIRED = {1: "Problem statement", 2: "Systems & Impact", 3: "Options", 4: "Recommendation"}
 APPENDED = {5: "Contracts", 6: "Risks & Validation"}
