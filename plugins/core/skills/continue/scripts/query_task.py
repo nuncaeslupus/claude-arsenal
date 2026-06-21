@@ -18,7 +18,28 @@ import subprocess
 import sys
 from pathlib import Path
 
-QUEUE_FILE = "claude-arsenal/queue/tasks.jsonl"
+# Resolve the ledger against ARSENAL_QUEUE_DIR (the coordination worktree) when
+# set, mirroring reconcile_merged.sh. Without this, hosts that empty the
+# main-tree tasks.jsonl seed ("single source of truth — remove live queue state
+# from main") would read the empty seed and report no_match / open=0 even though
+# the live ledger on the queue worktree is intact.
+_QUEUE_REL = "claude-arsenal/queue/tasks.jsonl"
+_QUEUE_DIR = os.environ.get("ARSENAL_QUEUE_DIR")
+if _QUEUE_DIR and not os.path.isdir(_QUEUE_DIR):
+    # Set but invalid (typo/misconfig): warn loudly rather than silently
+    # falling back to the main-tree seed — silent fallback is exactly the
+    # hard-to-debug "queue looks empty" symptom this fix targets.
+    sys.stderr.write(
+        f"query_task: WARNING — ARSENAL_QUEUE_DIR={_QUEUE_DIR!r} is not a "
+        f"directory; falling back to {_QUEUE_REL}\n"
+    )
+QUEUE_FILE = (
+    os.path.join(_QUEUE_DIR, _QUEUE_REL)
+    if _QUEUE_DIR and os.path.isdir(_QUEUE_DIR)
+    else _QUEUE_REL
+)
+# queue_eval.sh lives in the host main tree (vendored bin/) and honors
+# ARSENAL_QUEUE_DIR internally, so it stays relative to CWD.
 QUEUE_EVAL = "claude-arsenal/bin/queue_eval.sh"
 
 
