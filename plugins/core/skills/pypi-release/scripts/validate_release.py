@@ -48,13 +48,17 @@ def _artifact_has_version(artifact: str, version: str) -> bool:
     """Return True only when the artifact filename contains *exactly* this version
     as a delimited segment — not as a prefix of a longer version string.
 
-    Wheel filenames use '-' as delimiter: ``pkg-1.2-py3-none-any.whl``.
-    Sdist filenames use '-' before the version: ``pkg-1.2.tar.gz``.
-    A naive substring check would match version ``1.2`` inside ``1.2.3``.
+    Wheel filenames: ``pkg_name-1.2-py3-none-any.whl`` (dash-delimited).
+    Sdist filenames: ``pkg_name-1.2.tar.gz`` (dash before version).
+    Split on '-' and compare the second segment to avoid ``1.2`` matching ``1.2.3``.
     """
-    # re.escape handles dots and other regex-special chars in the version string.
-    pattern = r"(?<=[^0-9a-zA-Z])" + re.escape(version) + r"(?=[^0-9a-zA-Z]|$)"
-    return bool(re.search(pattern, artifact))
+    name = artifact
+    for suffix in (".tar.gz", ".whl", ".zip"):
+        if name.endswith(suffix):
+            name = name[: -len(suffix)]
+            break
+    parts = name.split("-")
+    return len(parts) > 1 and parts[1] == version
 
 
 def inspect_dist(root: Path, version: str | None) -> dict:
