@@ -7,6 +7,10 @@ if pointed at it) looking for the duplication header
 declared as siblings, computes per-file SHA-256, reports drift, and
 optionally copies a chosen canonical onto its declared siblings.
 
+Also scans *.sh files anywhere under the repo root (sibling of --library)
+so that shell scripts with the same DUPLICATED ACROSS SKILLS header are
+caught alongside Python scripts.
+
 Usage:
     python3 sync_duplicates.py --library plugins/skill-creator/skills --check
     python3 sync_duplicates.py --library plugins/skill-creator/skills --apply <canonical-path>
@@ -20,6 +24,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import shutil
 import sys
@@ -31,7 +36,7 @@ sys.path.insert(0, str(_HERE))
 import _console as console  # noqa: E402
 
 DUPLICATION_HEADER_RE = re.compile(
-    r"DUPLICATED ACROSS SKILLS(?: \([^)]*\))?:\s*\n((?:\s*[-*]\s+\S.*\n)+)",
+    r"DUPLICATED ACROSS SKILLS(?: \([^)]*\))?:\s*\n((?:(?:#\s+)?[-*]\s+\S.*\n)+)",
     re.IGNORECASE,
 )
 CANONICAL_MARK_RE = re.compile(r"\(canonical\)", re.IGNORECASE)
@@ -47,7 +52,11 @@ def _parse_header(text: str) -> list[tuple[str, bool]]:
         return []
     out: list[tuple[str, bool]] = []
     for line in m.group(1).splitlines():
-        stripped = line.strip().lstrip("-*").strip()
+        # Strip shell comment prefix (e.g. "# - path") before the bullet marker.
+        stripped = line.strip()
+        if stripped.startswith("#"):
+            stripped = stripped.lstrip("#").strip()
+        stripped = stripped.lstrip("-*").strip()
         if not stripped:
             continue
         is_canon = bool(CANONICAL_MARK_RE.search(stripped))
@@ -58,19 +67,62 @@ def _parse_header(text: str) -> list[tuple[str, bool]]:
     return out
 
 
+def _repo_root(start: Path) -> Path:
+    """Walk up from start until we find a directory containing a Makefile or .git."""
+    current = start.resolve()
+    for _ in range(10):
+        if (current / "Makefile").exists() or (current / ".git").exists():
+            return current
+        parent = current.parent
+        if parent == current:
+            break
+        current = parent
+    return start.resolve()
+
+
+def _scan_files(
+    paths: list[Path], groups: dict[frozenset[str], list[Path]]
+) -> None:
+    """Scan a list of files for the duplication header and populate groups."""
+    seen: set[Path] = {f.resolve() for files in groups.values() for f in files}
+    for script in paths:
+        if script.resolve() in seen:
+            continue
+        text = script.read_text(encoding="utf-8", errors="replace")
+        siblings = _parse_header(text)
+        if not siblings:
+            continue
+        key = frozenset(p for p, _ in siblings)
+        groups[key].append(script)
+        seen.add(script.resolve())
+
+
 def discover(library_dir: Path) -> dict[frozenset[str], list[Path]]:
     groups: dict[frozenset[str], list[Path]] = defaultdict(list)
+    # Primary scan: *.py files in skill scripts/ directories.
+    py_files: list[Path] = []
     for skill_dir in sorted(library_dir.iterdir()):
         scripts_dir = skill_dir / "scripts"
         if not scripts_dir.is_dir():
             continue
-        for script in scripts_dir.rglob("*.py"):
-            text = script.read_text(encoding="utf-8", errors="replace")
-            siblings = _parse_header(text)
-            if not siblings:
-                continue
-            key = frozenset(p for p, _ in siblings)
-            groups[key].append(script)
+        py_files.extend(sorted(scripts_dir.rglob("*.py")))
+    _scan_files(py_files, groups)
+
+    # Secondary scan: *.sh files anywhere under the repo root so that shell
+    # scripts carrying the DUPLICATED ACROSS SKILLS header are caught too.
+    # Use os.walk with directory pruning to skip .git, .venv, and other
+    # large/irrelevant trees that rglob would traverse.
+    root = _repo_root(library_dir)
+    _PRUNE = {".git", ".venv", "node_modules", "__pycache__", ".claude", "build", "dist"}
+    sh_files: list[Path] = []
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [d for d in dirnames if d not in _PRUNE and not d.startswith(".")]
+        for filename in filenames:
+            if filename.endswith(".sh"):
+                sh_files.append(Path(dirpath) / filename)
+    sh_files.sort()
+    _scan_files(sh_files, groups)
+
     return groups
 
 
