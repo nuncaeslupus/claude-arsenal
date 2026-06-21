@@ -25,6 +25,14 @@ from pathlib import Path
 # the live ledger on the queue worktree is intact.
 _QUEUE_REL = "claude-arsenal/queue/tasks.jsonl"
 _QUEUE_DIR = os.environ.get("ARSENAL_QUEUE_DIR")
+if _QUEUE_DIR and not os.path.isdir(_QUEUE_DIR):
+    # Set but invalid (typo/misconfig): warn loudly rather than silently
+    # falling back to the main-tree seed — silent fallback is exactly the
+    # hard-to-debug "queue looks empty" symptom this fix targets.
+    sys.stderr.write(
+        f"query_task: WARNING — ARSENAL_QUEUE_DIR={_QUEUE_DIR!r} is not a "
+        f"directory; falling back to {_QUEUE_REL}\n"
+    )
 QUEUE_FILE = (
     os.path.join(_QUEUE_DIR, _QUEUE_REL)
     if _QUEUE_DIR and os.path.isdir(_QUEUE_DIR)
