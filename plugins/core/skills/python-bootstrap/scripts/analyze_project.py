@@ -116,7 +116,7 @@ def build_report(root: Path) -> dict:
         "pyproject_present": True,
         "requires_python": requires_python,
         "requires_python_ok": isinstance(requires_python, str)
-        and bool(re.search(r">=3\.12(?!\d)", requires_python)),
+        and bool(re.search(r">=\s*(?:3\.(?:1[2-9]|[2-9]\d+)|[4-9]\d*)", requires_python)),
         "ruff": analyze_ruff(tool),
         "mypy": analyze_mypy(tool),
         "makefile": analyze_makefile(root),

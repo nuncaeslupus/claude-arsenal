@@ -75,7 +75,27 @@ def _gh_paginated(*args: str) -> list[Any]:
         )
         sys.exit(2)
     out = out.strip()
-    return json.loads(out) if out else []
+    if not out:
+        return []
+    results: list[Any] = []
+    decoder = json.JSONDecoder()
+    pos = 0
+    while pos < len(out):
+        while pos < len(out) and out[pos].isspace():
+            pos += 1
+        if pos >= len(out):
+            break
+        try:
+            obj, end_idx = decoder.raw_decode(out, pos)
+            if isinstance(obj, list):
+                results.extend(obj)
+            else:
+                results.append(obj)
+            pos = end_idx
+        except json.JSONDecodeError as exc:
+            sys.stderr.write(f"Failed to parse paginated JSON: {exc}\n")
+            sys.exit(2)
+    return results
 
 
 def _default_repo() -> str:

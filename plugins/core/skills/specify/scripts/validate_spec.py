@@ -31,7 +31,9 @@ _HTML_TAGS = (
     r"br|hr|p|a|ul|ol|li|em|strong|code|pre|h\d|div|span|img|table|tr|td|th"
     r"|details|summary|kbd|iframe|script|style|svg|path|g|meta|link"
 )
-INLINE_PLACEHOLDER_RE = re.compile(r"<(?![!?])(?!/?(?:" + _HTML_TAGS + r")\b)[^>]{2,}>")
+INLINE_PLACEHOLDER_RE = re.compile(
+    r"<(?![!?])(?!/?(?:" + _HTML_TAGS + r")\b)(?:[^>=]*?[ _-][^>=]*?|[A-Z0-9]{2,})>"
+)
 REQUIRED = {1: "Problem statement", 2: "Systems & Impact", 3: "Options", 4: "Recommendation"}
 APPENDED = {5: "Contracts", 6: "Risks & Validation"}
 

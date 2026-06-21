@@ -126,8 +126,13 @@ sys.exit(found)
 PYEOF
 }
 if [[ -f "claude-arsenal/queue/${TASK_ID}.md" ]]; then
-    if ! _scan_payload_secrets "claude-arsenal/queue/${TASK_ID}.md"; then
+    _scan_payload_secrets "claude-arsenal/queue/${TASK_ID}.md"
+    _scan_status=$?
+    if [[ ${_scan_status} -eq 1 ]]; then
         echo "release.sh: refusing to stage payload with secrets — redact them from claude-arsenal/queue/${TASK_ID}.md before releasing" >&2
+        exit 2
+    elif [[ ${_scan_status} -ne 0 ]]; then
+        echo "release.sh: secret scan failed (python3 may be missing or scan script errored)" >&2
         exit 2
     fi
 fi
