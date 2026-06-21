@@ -22,6 +22,13 @@ from pathlib import Path
 SECTION_RE = re.compile(r"^##\s+(\d+)\.\s+(.*\S)\s*$")
 # A placeholder line, allowing a leading list/blockquote/ordinal marker: `- <x>`, `> <x>`, `1. <x>`.
 PLACEHOLDER_RE = re.compile(r"^(?:[-*+>]|\d+\.)?\s*<.*>$")
+# Inline template placeholder — an angle-bracket token that looks like a fill-in field, not an
+# HTML/Markdown tag.  HTML tags start with a letter only; we exclude known HTML/Markdown constructs
+# (tags that start with `/`, `!`, or are single-word HTML tag names) and match only tokens that
+# contain at least one space or hyphen (e.g. `<your name here>`, `<project-name>`) or are
+# multi-word identifiers that look like template slots.
+_HTML_TAGS = r"br|hr|p|a|ul|ol|li|em|strong|code|pre|h\d|div|span|img|table|tr|td|th"
+INLINE_PLACEHOLDER_RE = re.compile(r"<(?!/?(?:" + _HTML_TAGS + r")\b)[^>]{2,}>")
 REQUIRED = {1: "Problem statement", 2: "Systems & Impact", 3: "Options", 4: "Recommendation"}
 APPENDED = {5: "Contracts", 6: "Risks & Validation"}
 
@@ -48,6 +55,20 @@ def is_unfilled(body: list[str]) -> bool:
     return not content or all(PLACEHOLDER_RE.match(ln) for ln in content)
 
 
+def has_inline_placeholders(body: list[str]) -> list[str]:
+    """Return any inline angle-bracket placeholder tokens still present in the body.
+
+    These are template fill-in fields like ``<your-project-name>`` or
+    ``<describe the system here>`` that were never replaced with real content.
+    A spec that still contains them has not been fully filled out.
+    """
+    found: list[str] = []
+    for ln in body:
+        for match in INLINE_PLACEHOLDER_RE.finditer(ln):
+            found.append(match.group(0))
+    return found
+
+
 def lint(text: str) -> tuple[list[str], list[str]]:
     """Return (problems, notes) for a specification document."""
     sections = split_sections(text)
@@ -59,6 +80,13 @@ def lint(text: str) -> tuple[list[str], list[str]]:
             problems.append(f"missing required section {num}. {name}")
         elif is_unfilled(sections[num]):
             problems.append(f"section {num}. {name} is empty or still placeholder")
+        else:
+            placeholders = has_inline_placeholders(sections[num])
+            if placeholders:
+                examples = ", ".join(placeholders[:3])
+                problems.append(
+                    f"section {num}. {name} contains unfilled template placeholder(s): {examples}"
+                )
 
     if not re.search(r"(?i)(?:##+|\*\*)\s*success criteria", text):
         problems.append("missing the measurable 'Success criteria' block (required)")

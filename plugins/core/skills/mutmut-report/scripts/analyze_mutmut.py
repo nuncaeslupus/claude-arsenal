@@ -168,7 +168,7 @@ def _main() -> None:
         type=int,
         default=50,
         dest="max_per_module",
-        help="Skip modules with more than this many survivors (default: 50)",
+        help="Cap survivors analysed per module to this many (default: 50)",
     )
     args = parser.parse_args()
 
@@ -200,7 +200,7 @@ def _main() -> None:
     for module, ids in sorted(by_module.items(), key=lambda x: len(x[1])):
         flag = ""
         if len(ids) > args.max_per_module:
-            flag = "  [skipped — too many]"
+            flag = f"  [capped at {args.max_per_module}]"
         if args.module and args.module not in module:
             flag = "  [filtered]"
         print(f"  {module:<58} {len(ids):>4}{flag}")
@@ -216,13 +216,13 @@ def _main() -> None:
     for module, ids in sorted(by_module.items(), key=lambda x: len(x[1])):
         if args.module and args.module not in module:
             continue
-        if len(ids) > args.max_per_module:
-            print(f"\n── {module} ({len(ids)} survivors) [SKIPPED] ──")
-            continue
+        capped = len(ids) > args.max_per_module
+        analysed_ids = ids[: args.max_per_module] if capped else ids
+        cap_note = f" [showing first {args.max_per_module} of {len(ids)}]" if capped else ""
 
-        print(f"\n── {module} ({len(ids)} survivors) ──")
+        print(f"\n── {module} ({len(ids)} survivors){cap_note} ──")
 
-        for mutant_id in ids:
+        for mutant_id in analysed_ids:
             diff = get_diff(mutmut_bin, mutant_id)
             category, reason = classify(diff)
             totals[category] += 1
@@ -249,9 +249,11 @@ def _main() -> None:
                 all_real_gaps.append((short_id, reason))
 
     # ── Summary ──────────────────────────────────────────────────────────────
+    analysed_total = sum(totals.values())
     print(f"\n{'=' * 62}")
     print("SUMMARY")
     print(f"{'=' * 62}")
+    print(f"  Analysed:                   {analysed_total} of {len(survivors)} surviving mutants")
     print(f"  Real gaps  (tests needed):  {totals['REAL_GAP']}")
     print(f"  Equivalent (accept):        {totals['EQUIVALENT']}")
     print(f"  Untestable (accept):        {totals['UNTESTABLE']}")

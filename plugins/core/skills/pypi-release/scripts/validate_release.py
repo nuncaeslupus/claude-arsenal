@@ -44,13 +44,26 @@ def find_dunder_version(root: Path) -> str | None:
     return None
 
 
+def _artifact_has_version(artifact: str, version: str) -> bool:
+    """Return True only when the artifact filename contains *exactly* this version
+    as a delimited segment — not as a prefix of a longer version string.
+
+    Wheel filenames use '-' as delimiter: ``pkg-1.2-py3-none-any.whl``.
+    Sdist filenames use '-' before the version: ``pkg-1.2.tar.gz``.
+    A naive substring check would match version ``1.2`` inside ``1.2.3``.
+    """
+    # re.escape handles dots and other regex-special chars in the version string.
+    pattern = r"(?<=[^0-9a-zA-Z])" + re.escape(version) + r"(?=[^0-9a-zA-Z]|$)"
+    return bool(re.search(pattern, artifact))
+
+
 def inspect_dist(root: Path, version: str | None) -> dict:
     dist = root / "dist"
     if not dist.is_dir():
         return {"present": False, "artifacts": [], "matching": [], "stale": []}
     artifacts = sorted(p.name for p in dist.iterdir() if p.suffix in {".whl", ".gz"})
-    matching = [a for a in artifacts if version and version in a]
-    stale = [a for a in artifacts if version and version not in a]
+    matching = [a for a in artifacts if version and _artifact_has_version(a, version)]
+    stale = [a for a in artifacts if version and not _artifact_has_version(a, version)]
     return {
         "present": bool(artifacts),
         "artifacts": artifacts,

@@ -52,6 +52,32 @@ def _gh(*args: str) -> Any:
     return json.loads(out) if out else None
 
 
+def _gh_paginated(*args: str) -> list[Any]:
+    """Run a ``gh api`` subcommand with ``--paginate`` to fetch all pages.
+
+    The ``gh api --paginate`` flag follows ``Link: rel="next"`` headers
+    automatically and returns every page concatenated as a JSON array.
+    Without pagination, REST list endpoints default to 30 items per page,
+    silently dropping any comments beyond page 1.
+    """
+    if shutil.which("gh") is None:
+        sys.stderr.write("gh CLI not found in PATH\n")
+        sys.exit(2)
+    try:
+        out = subprocess.check_output(
+            ["gh", "api", "--paginate", *args],
+            text=True,
+            stderr=subprocess.PIPE,
+        )
+    except subprocess.CalledProcessError as exc:
+        sys.stderr.write(
+            f"gh failed: gh api --paginate {' '.join(args)}\nstderr: {exc.stderr or ''}\n"
+        )
+        sys.exit(2)
+    out = out.strip()
+    return json.loads(out) if out else []
+
+
 def _default_repo() -> str:
     data = _gh("repo", "view", "--json", "nameWithOwner")
     return str(data["nameWithOwner"])
@@ -376,7 +402,8 @@ def main() -> int:
     ci = _aggregate_ci(checks)
 
     reactions = _gh("api", f"repos/{owner}/{name}/issues/{args.pr}/reactions") or []
-    line_comments = _gh("api", f"repos/{owner}/{name}/pulls/{args.pr}/comments") or []
+    # Use paginated fetch: PRs with >30 review comments would otherwise lose page 2+.
+    line_comments = _gh_paginated(f"repos/{owner}/{name}/pulls/{args.pr}/comments") or []
     reviews = pr.get("reviews") or []
 
     if args.unresolved_only:
