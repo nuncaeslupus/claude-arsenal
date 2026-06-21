@@ -1,6 +1,6 @@
 # Claude Arsenal
 
-<!-- claude-arsenal v0.16.3 — imported via @claude-arsenal/AGENTS.md -->
+<!-- claude-arsenal v0.17.0 — imported via @claude-arsenal/AGENTS.md -->
 
 This file is imported by the host repo's `CLAUDE.md` via the session-protocol block
 that `/init` injects. It provides the mechanics behind the proactive directives
@@ -152,7 +152,9 @@ The table columns are: `T# | Description | Location | Size | Depends | Gate | Te
    ```bash
    bash tests/my_feature_test.sh
    ```
-   gate_run.sh executes this block automatically before release.sh done.
+   gate_run.sh executes this block before release.sh done — and `release.sh
+   done` re-runs it as a hard precondition, so a `done` whose gate fails (or
+   was never run) is refused at the choke point, not just by convention.
    Prose-only gates are verified by worker judgment with no script run.
 
    ## Tests
@@ -212,7 +214,9 @@ The table columns are: `T# | Description | Location | Size | Depends | Gate | Te
    ```bash
    bash tests/my_feature_test.sh
    ```
-   gate_run.sh executes this block automatically before release.sh done.
+   gate_run.sh executes this block before release.sh done — and `release.sh
+   done` re-runs it as a hard precondition, so a `done` whose gate fails (or
+   was never run) is refused at the choke point, not just by convention.
    Prose-only gates are verified by worker judgment with no script run.
 
    ## Tests
@@ -246,8 +250,15 @@ path to the measured number inside it. `gate_run.sh` asserts `measured <op>
 threshold` over that file: a declared evidence gate with **no** evidence file, or
 evidence that **violates** the threshold, is a hard failure — it can never pass
 vacuously. This is the machine-checkable half of "`done` means the gate passed"
-(closes the false-`done` hole for `[LAPTOP]`/science gates); the release-side
-half is that `release.sh` refuses `done` without an opened PR.
+(closes the false-`done` hole for `[LAPTOP]`/science gates). The release-side
+half is enforced by `release.sh done`, which refuses to record `done` unless:
+the PR is opened (not a bare `branch:` ref) and not closed-without-merge; the
+payload's mechanical gate passes (it re-runs `gate_run.sh`, so the evidence/bash
+gate is a hard precondition); and — for a task tagged **`laptop`** — the session
+is not a cloud session. A cloud worker (`CLAUDE_CODE_REMOTE=true`) physically
+cannot satisfy a `[LAPTOP]`-only gate (model training, CPCV Sharpe, soak,
+paper-trade), so tag such tasks `laptop` (`create_task.py --tag laptop`) and the
+laptop session records `done`; a cloud session is refused.
 
 ---
 
