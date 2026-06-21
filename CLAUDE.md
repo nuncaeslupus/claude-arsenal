@@ -82,26 +82,7 @@ GitHub Settings UI (preserves history and sets up redirects); no
 
 ### Multi-PR autonomous work — stacking rule
 
-When a plan produces **N PRs that will be merged in sequence**, branches
-**must be stacked** from the start: each branch based on the previous
-(`fix/iss-B` branched from `fix/iss-A`), not all branched from `main`.
-
-Rationale: every PR bumps `.bundle-version`. If branches share the same
-base, each merge creates a version conflict for every subsequent PR. With
-stacking, only the first PR ever conflicts with `main`; the rest inherit
-the correct version from their parent.
-
-**After each merge**, immediately rebase the next waiting branch onto
-`main` using `--onto` to skip the now-merged commits:
-
-```bash
-# After fix/iss-A merges into main:
-fork=$(git merge-base fix/iss-B origin/fix/iss-A)
-git rebase --onto origin/main "${fork}" fix/iss-B
-git push --force-with-lease origin fix/iss-B
-```
-
-Then cascade the same `--onto` rebase down the remaining stack.
+When a plan produces **N PRs that will be merged in sequence**, follow the stacking rule documented in the `github` skill's SKILL.md (shipped to consumers). Key points: branches must stack from the start, and **only the last PR in the stack bumps `.bundle-version`** — intermediate PRs ship content at the current version. After each merge, rebase the next branch with `--onto` to skip the now-merged commits.
 
 ---
 
