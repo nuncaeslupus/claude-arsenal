@@ -42,31 +42,34 @@ has_remote=0
 git remote get-url "${REMOTE}" >/dev/null 2>&1 && has_remote=1
 
 # ---------------------------------------------------------------------------
-# sync_worktree: fetch the default branch and merge it into the coordination
-# worktree so it always carries the latest host code.
+# sync_worktree: fast-forward the coordination worktree to the latest
+# origin/<queue-branch> so claim/release commits pushed by OTHER sessions are
+# pulled in. The queue branch is an append-only ledger that is never merged
+# into mainline — so we do NOT merge the default branch into it (that would
+# fork the ledger and, on hosts that empty the main-tree tasks.jsonl seed,
+# conflicts on every session). A non-FF result means this worktree carries
+# un-pushed claim/release commits — the legitimate optimistic-lock path; leave
+# that to release.sh's existing rebase rather than forcing it here.
 # ---------------------------------------------------------------------------
 sync_worktree() {
     local wt="$1"
     [[ ${has_remote} -eq 0 ]] && return 0
-    git fetch "${REMOTE}" "${DEFAULT_BRANCH}" >/dev/null 2>&1 || return 0
-    git -C "${wt}" merge --no-edit "${REMOTE}/${DEFAULT_BRANCH}" >/dev/null 2>&1 || {
-        git -C "${wt}" merge --abort >/dev/null 2>&1 || true
-        echo "queue_branch.sh: WARNING — could not merge ${REMOTE}/${DEFAULT_BRANCH} into ${QUEUE_BRANCH}" >&2
-    }
+    git -C "${wt}" fetch "${REMOTE}" "${QUEUE_BRANCH}" >/dev/null 2>&1 || return 0
+    git -C "${wt}" merge --ff-only "${REMOTE}/${QUEUE_BRANCH}" >/dev/null 2>&1 || true
 }
 
 # ---------------------------------------------------------------------------
-# legacy_sync: merge default branch into the current branch (old behaviour;
-# only used when worktrees are unavailable).
+# legacy_sync: fast-forward the current (queue) branch to origin/<queue-branch>
+# so it picks up claim/release commits from other sessions (only used when
+# worktrees are unavailable). FF-only — never merges the default branch into
+# the append-only ledger; a non-FF result is the optimistic-lock path left to
+# release.sh.
 # ---------------------------------------------------------------------------
 legacy_sync() {
     [[ ${has_remote} -eq 0 ]] && return 0
-    git fetch "${REMOTE}" "${DEFAULT_BRANCH}" >/dev/null 2>&1 || return 0
-    git rev-parse --verify --quiet "${REMOTE}/${DEFAULT_BRANCH}" >/dev/null 2>&1 || return 0
-    git merge --no-edit "${REMOTE}/${DEFAULT_BRANCH}" >/dev/null 2>&1 || {
-        git merge --abort >/dev/null 2>&1 || true
-        echo "queue_branch.sh: WARNING — could not merge ${REMOTE}/${DEFAULT_BRANCH} into ${QUEUE_BRANCH}" >&2
-    }
+    git fetch "${REMOTE}" "${QUEUE_BRANCH}" >/dev/null 2>&1 || return 0
+    git rev-parse --verify --quiet "${REMOTE}/${QUEUE_BRANCH}" >/dev/null 2>&1 || return 0
+    git merge --ff-only "${REMOTE}/${QUEUE_BRANCH}" >/dev/null 2>&1 || true
 }
 
 # ---------------------------------------------------------------------------
@@ -207,7 +210,8 @@ if [[ "${wt_branch}" != "${QUEUE_BRANCH}" ]]; then
     exit 1
 fi
 
-# Sync the worktree from the default branch so it carries the latest host code.
+# Fast-forward the worktree to origin/<queue-branch> so it carries claim/release
+# commits pushed by other sessions (FF-only — never forks the append-only ledger).
 sync_worktree "${QUEUE_WORKTREE}"
 
 # Echo the worktree path — callers capture this as ARSENAL_QUEUE_DIR.
