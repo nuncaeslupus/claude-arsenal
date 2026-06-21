@@ -30,6 +30,17 @@ set -uo pipefail
 
 QUEUE_BRANCH="${ARSENAL_QUEUE_BRANCH:-arsenal-queue}"
 
+# Persist the isolation verdict for queue_batch.sh (QIC-6). `ok` confirms the
+# worker really ran in its own worktree (the orchestrator's HEAD never moved) →
+# parallel fan-out is safe. `restored` means isolation was silently ignored and
+# the worker ran in-place → record `unavailable` so the next batch is clamped to
+# a single worker without relying on the orchestrator to remember to clamp.
+_record_isolation() {
+    local dir="${ARSENAL_SESSION_DIR:-claude-arsenal/session}"
+    mkdir -p "${dir}" 2>/dev/null || return 0
+    printf '%s\n' "$1" > "${dir}/worktree_isolation" 2>/dev/null || true
+}
+
 # In worktree mode the main tree SHOULD stay on the default branch, but if
 # the Task tool silently ignores isolation: worktree the worker runs in-place
 # and can move the main HEAD. Check and restore the main tree first so the
@@ -45,12 +56,14 @@ if [[ -n "${ARSENAL_QUEUE_DIR:-}" ]]; then
         git reset -q --hard >/dev/null 2>&1 || true
         git clean -fdq >/dev/null 2>&1 || true
         git checkout -f "${default_branch}" >/dev/null 2>&1 || true
+        _record_isolation unavailable
         echo "restored"
         exit 0
     fi
 
     wt_branch="$(git -C "${ARSENAL_QUEUE_DIR}" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
     if [[ "${wt_branch}" == "${QUEUE_BRANCH}" ]]; then
+        _record_isolation available
         echo "ok"
         exit 0
     fi
@@ -64,6 +77,7 @@ current="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
 dirty="$(git status --porcelain 2>/dev/null)"
 
 if [[ "${current}" == "${QUEUE_BRANCH}" && -z "${dirty}" ]]; then
+    _record_isolation available
     echo "ok"
     exit 0
 fi
@@ -86,5 +100,6 @@ if [[ "${current}" != "${QUEUE_BRANCH}" || -n "${dirty}" ]]; then
     exit 2
 fi
 
+_record_isolation unavailable
 echo "restored"
 exit 0

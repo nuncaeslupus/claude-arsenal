@@ -1,6 +1,6 @@
 # Claude Arsenal
 
-<!-- claude-arsenal v0.15.10 — imported via @claude-arsenal/AGENTS.md -->
+<!-- claude-arsenal v0.16.0 — imported via @claude-arsenal/AGENTS.md -->
 
 This file is imported by the host repo's `CLAUDE.md` via the session-protocol block
 that `/init` injects. It provides the mechanics behind the proactive directives
@@ -288,9 +288,19 @@ dispatches that many workers at once. Run when the queue has open tasks:
    N task JSON lines (JSONL), respecting `LOOP_WORKSPACE` / `LOOP_TAGS` scope and
    excluding any task that blocks another in the same batch.
    - Empty → loop done; report summary and write `handover.md`.
+   - **Isolation clamp (mechanical).** `queue_batch.sh` emits at most ONE task
+     when worktree isolation is recorded `unavailable` (sentinel
+     `claude-arsenal/session/worktree_isolation`, written by `worktree_probe.sh`
+     and `worker_postcheck.sh`; override with `ARSENAL_WORKTREE_ISOLATION`). This
+     closes the double-dispatch window: once in-place mode is detected, the
+     selector itself refuses to hand back a parallel batch, so two workers can
+     never be dispatched in one round before the clamp takes effect.
 4. For each task line, `ARSENAL_QUEUE_DIR="${ARSENAL_QUEUE_DIR}" claude-arsenal/bin/claim.sh <task_id> <session_id>`
    (sequential — each push is atomic):
-   - `won` → keep the task in the dispatch set.
+   - `won` → keep the task in the dispatch set. A win is only reported after
+     `claim.sh` confirms the coordination ref actually advanced to its claim
+     commit (guarding against a restricted-push surface that silently redirects
+     the push off the shared ref — the web double-claim vector).
    - `lost` → another session claimed it; drop it from this batch.
    - `error: …` (exit 2) → **stop the loop and surface to the user.** A
      misconfiguration, not a race (wrong branch, protected coordination branch,
@@ -463,6 +473,13 @@ claim locally, but only one push can fast-forward the shared remote ref — the
 other is rejected non-fast-forward and reports `lost`, then re-evaluates. The
 **remote ref is the lock.** There is no other channel between sessions.
 
+`claim.sh` and `release.sh` rewrite `tasks.jsonl` with a write-temp-then-rename
+(atomic `os.replace`), so a crash mid-write can never leave a half-written,
+corrupt ledger. And `claim.sh` only reports `won` after confirming the push
+actually advanced the shared ref to its claim commit — a restricted-push surface
+that redirects the push off the coordination ref fails loud instead of letting
+two sessions both "win".
+
 That guarantee holds **only** when every orchestrator session pushes to **one
 shared, pushable ref**. So the queue lives on a dedicated branch
 (`ARSENAL_QUEUE_BRANCH`, default `arsenal-queue`). `queue_branch.sh` creates
@@ -522,6 +539,7 @@ Each line of `claude-arsenal/queue/tasks.jsonl` is a JSON object:
   "requires": [],
   "deps": [{"id": "lo-b2c1", "type": "blocks"}],
   "assignee": null,
+  "claimed_at": "2026-06-21T12:00:00+00:00",
   "workspace": "FRONTEND",
   "tags": ["CLI"],
   "pr": "https://github.com/owner/repo/pull/123",
@@ -531,6 +549,15 @@ Each line of `claude-arsenal/queue/tasks.jsonl` is a JSON object:
   "attempts": 0
 }
 ```
+
+`claimed_at` (ISO-8601 UTC) is the **lease stamp**: `claim.sh` sets it when a
+task flips to `in_progress`, and `release.sh` clears it when the task leaves
+`in_progress`. It exists so a crashed/abandoned claim — which strands a task
+`in_progress` forever — can be detected by age and reclaimed:
+`queue_doctor.py --lease-ttl <seconds>` flags any `in_progress` row whose lease
+is older than the TTL (`stale-lease`), and recovery is
+`release.sh <id> open --reset-attempts`. The age check is off by default
+(`--lease-ttl 0`); pick a TTL longer than your slowest task.
 
 `workspace`, `tags`, `pr`, and `issue` are optional and append-compatible — older
 readers ignore them. `tags` is a free-form label axis (`/queue-add --tag CLI`) that

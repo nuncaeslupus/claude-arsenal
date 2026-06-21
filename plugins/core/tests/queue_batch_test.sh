@@ -89,5 +89,31 @@ if ! bash "${BATCH}" --max 5 | ids | grep -qx "${B}"; then
 fi
 echo "PASS: dep-blocked task becomes eligible when its blocker is done"
 
+# Gate 7 (QIC-6): when worktree isolation is recorded `unavailable`, the batch is
+# clamped to a single task regardless of the requested --max (serialized in-place
+# mode), closing the double-dispatch window. `available`/absent leaves --max alone.
+mkdir -p claude-arsenal/session
+echo "unavailable" > claude-arsenal/session/worktree_isolation
+COUNT=$(bash "${BATCH}" --max 5 | grep -c .)
+if [[ "${COUNT}" -ne 1 ]]; then
+    echo "FAIL: isolation=unavailable should clamp batch to 1, got ${COUNT}" >&2; exit 1
+fi
+echo "PASS: isolation=unavailable clamps the batch to a single task"
+
+echo "available" > claude-arsenal/session/worktree_isolation
+COUNT=$(bash "${BATCH}" --max 5 | grep -c .)
+if [[ "${COUNT}" -lt 2 ]]; then
+    echo "FAIL: isolation=available should not clamp; expected ≥2, got ${COUNT}" >&2; exit 1
+fi
+echo "PASS: isolation=available leaves the batch width untouched"
+
+# Explicit env overrides the sentinel file.
+COUNT=$(ARSENAL_WORKTREE_ISOLATION=unavailable bash "${BATCH}" --max 5 | grep -c .)
+if [[ "${COUNT}" -ne 1 ]]; then
+    echo "FAIL: ARSENAL_WORKTREE_ISOLATION=unavailable should clamp to 1, got ${COUNT}" >&2; exit 1
+fi
+echo "PASS: ARSENAL_WORKTREE_ISOLATION env overrides the sentinel"
+rm -f claude-arsenal/session/worktree_isolation
+
 echo "PASS: queue_batch_test — all gates passed"
 exit 0

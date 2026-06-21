@@ -14,9 +14,34 @@ auto-escalation fires on an exhausted attempt cap).
 
 Exit: 0 on success, 1 on error.
 """
+import contextlib
 import json
+import os
 import sys
+import tempfile
 from pathlib import Path
+
+
+def atomic_write_text(path: Path, text: str) -> None:
+    """Write text to path durably: temp file in the same dir, then rename (QIC-13).
+
+    A crash mid-``write_text`` truncates and corrupts the ledger. Writing a temp
+    file in the destination directory and renaming it over the target is atomic on
+    POSIX (same-filesystem rename), so a reader/another writer always sees either
+    the old whole file or the new whole file, never a half-written one.
+    """
+    fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=f".{path.name}.", suffix=".tmp")
+    tmp_path = Path(tmp)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(text)
+            fh.flush()
+            os.fsync(fh.fileno())
+        tmp_path.replace(path)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            tmp_path.unlink()
+        raise
 
 
 def update_task_row(
@@ -64,6 +89,10 @@ def update_task_row(
             row["status"] = final_status
             if final_status not in ("in_progress",):
                 row["assignee"] = None
+                # Clear the lease timestamp when the task leaves in_progress so a
+                # stale claimed_at never lingers on an open/done row and trips the
+                # lease check (see queue_doctor.py --lease-ttl / claim.sh).
+                row.pop("claimed_at", None)
             if final_status in ("done", "merged"):
                 row["attempts"] = 0
             if pr_url:
@@ -74,9 +103,9 @@ def update_task_row(
         print(f"update_task_row: task {task_id} not found", file=sys.stderr)
         sys.exit(1)
 
-    queue_path.write_text(
+    atomic_write_text(
+        queue_path,
         "\n".join(json.dumps(r, separators=(",", ":")) for r in rows) + "\n",
-        encoding="utf-8",
     )
     return final_status
 

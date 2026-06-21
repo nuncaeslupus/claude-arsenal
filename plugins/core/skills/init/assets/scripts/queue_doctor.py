@@ -27,6 +27,7 @@ import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 
 ALL_STATUSES = {"open", "in_progress", "done", "blocked", "escalated", "merged"}
@@ -207,6 +208,59 @@ def check_invariants(rows: list[dict]) -> list[Finding]:
                     "stale-assignee",
                     tid,
                     f"status {status} but assignee={assignee!r} still set",
+                )
+            )
+    return findings
+
+
+def check_leases(rows: list[dict], lease_ttl: int) -> list[Finding]:
+    """Flag in_progress tasks whose lease (``claimed_at``) has expired.
+
+    ``claim.sh`` stamps ``claimed_at`` (ISO-8601 UTC) when a task is claimed. A
+    crashed/abandoned session leaves the task ``in_progress`` forever; comparing
+    the lease age against ``lease_ttl`` (seconds) surfaces these so they can be
+    reclaimed (``release.sh <id> open --reset-attempts``). Disabled when
+    ``lease_ttl <= 0`` (the default), so age-checking is strictly opt-in.
+    """
+    findings: list[Finding] = []
+    if lease_ttl <= 0:
+        return findings
+    now = datetime.now(UTC)
+    for row in rows:
+        if row.get("status") != "in_progress":
+            continue
+        tid = str(row.get("id") or "?")
+        claimed_at = row.get("claimed_at")
+        if not claimed_at:
+            # No lease stamp (claimed before lease tracking, or hand-edited):
+            # age is unknowable, so it cannot be reclaimed by age — flag as info.
+            findings.append(
+                Finding(
+                    "info",
+                    "no-lease",
+                    tid,
+                    "in_progress with no claimed_at — lease age cannot be checked",
+                )
+            )
+            continue
+        try:
+            ts = datetime.fromisoformat(str(claimed_at))
+            if ts.tzinfo is None:
+                ts = ts.replace(tzinfo=UTC)
+        except ValueError:
+            findings.append(
+                Finding("warn", "bad-lease", tid, f"claimed_at {claimed_at!r} is not ISO-8601")
+            )
+            continue
+        age = int((now - ts).total_seconds())
+        if age > lease_ttl:
+            findings.append(
+                Finding(
+                    "warn",
+                    "stale-lease",
+                    tid,
+                    f"in_progress for {age}s (> lease ttl {lease_ttl}s) — likely a crashed "
+                    f"session; reclaim with: release.sh {tid} open --reset-attempts",
                 )
             )
     return findings
@@ -474,6 +528,14 @@ def main() -> None:
         help="Flag tasks whose linked GitHub issue (row 'issue' field) is closed (needs gh)",
     )
     p.add_argument("--repo", default="", help="owner/name for --closed-issues (default: gh infers)")
+    p.add_argument(
+        "--lease-ttl",
+        type=int,
+        default=0,
+        metavar="SECONDS",
+        help="Flag in_progress tasks whose claimed_at lease is older than SECONDS "
+        "(crashed/stranded claims). 0 (default) disables the age check.",
+    )
     p.add_argument("--remote", default="origin", help="Remote for --cross-branch (default origin)")
     p.add_argument("--default-branch", default="main", help="Default branch for --cross-branch")
     p.add_argument(
@@ -494,6 +556,7 @@ def main() -> None:
     findings += check_structure(rows)
     findings += check_deps(rows)
     findings += check_invariants(rows)
+    findings += check_leases(rows, args.lease_ttl)
     findings += check_pr_fields(rows)
     findings += check_payloads(rows, queue_dir)
     if not args.no_secret_scan:
