@@ -73,6 +73,38 @@ A breach prints `OVER cap by N chars` and a hint to `/plugin disable
 
 ---
 
+## Refreshing the vendored `claude-arsenal/` runtime tree (CC web)
+
+Consumers who vendor the skills for Claude Code on the web have two
+separate trees to keep up to date:
+
+- **`.claude/skills/`** — the flattened skill files; refreshed by
+  `make update-skills` (or directly with `<clone>/scripts/vendor-skills.sh`).
+- **`claude-arsenal/`** — the queue runtime tree (`bin/`, `AGENTS.md`,
+  `queue/`); refreshed by re-running `init.py`.
+
+To update both after bumping `ARSENAL_REF` in your Makefile:
+
+```bash
+# 1. Re-vendor the skills
+make update-skills
+
+# 2. Re-run init to refresh claude-arsenal/bin/ scripts
+#    (queue data in claude-arsenal/queue/ is never touched)
+python3 .claude/skills/init/scripts/init.py --repo-path .
+
+# 3. Commit both trees
+git add .claude/skills claude-arsenal
+git commit -m "chore: vendor claude-arsenal @ vX.Y.Z"
+```
+
+`init.py --repo-path .` is idempotent: it only overwrites stale
+`claude-arsenal/bin/` scripts and the `AGENTS.md` header; your
+`tasks.jsonl`, per-task payloads, and project-local `CLAUDE.md` edits
+are left untouched.
+
+---
+
 ## Rolling back
 
 Marketplace install does not pin a version — `/plugin update` always

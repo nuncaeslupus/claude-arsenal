@@ -1,4 +1,14 @@
-# Plan: Loop Orchestrator Plugin
+> **ARCHIVED** — This document describes the never-shipped
+> `plugins/loop-orchestrator/` + `.loop/` architecture (design phase,
+> 2026-06-12). The loop-orchestrator plugin was not built; the shipped
+> queue subsystem lives instead in `plugins/core/skills/` (`init`,
+> `continue`, `queue-add`, `queue-status`) and writes its runtime tree
+> to `claude-arsenal/` (not `.loop/`). For the shipped design, see
+> [`docs/orchestrator-guide.md`](../docs/orchestrator-guide.md).
+
+---
+
+# Plan: Loop Orchestrator Plugin (ARCHIVED)
 
 **Date**: 2026-06-12
 **Specification**: `status/specification.md`
