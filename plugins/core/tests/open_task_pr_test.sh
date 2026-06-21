@@ -51,7 +51,7 @@ main_sha=$(git rev-parse origin/main)
 echo "feature" > feature.txt
 
 # Gate 0a: guard refuses when ARSENAL_SURFACE is unset.
-if err=$(ARSENAL_SURFACE="" ARSENAL_COAUTHOR="" bash "${HELPER}" lo-guard-unset "Guard test" 2>&1); then
+if err=$(ARSENAL_COAUTHOR="" bash "${HELPER}" lo-guard-unset "Guard test" 2>&1); then
     echo "FAIL: expected non-zero exit when ARSENAL_SURFACE unset, got exit 0 with output: ${err}" >&2; exit 1
 fi
 if ! echo "${err}" | grep -q "git add -A refused on shared checkout"; then

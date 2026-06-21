@@ -66,7 +66,7 @@ fi
 # context) or indicates a shared checkout, refuse loudly rather than silently
 # staging unrelated files.
 if [[ "${ARSENAL_SURFACE:-}" != "worktree" ]]; then
-    echo "open_task_pr: git add -A refused on shared checkout — ARSENAL_SURFACE='${ARSENAL_SURFACE:-<unset>}' (expected 'worktree'). Run from an isolated worktree or stage files explicitly and set ARSENAL_SURFACE=worktree." >&2
+    echo "open_task_pr: git add -A refused on shared checkout — ARSENAL_SURFACE='${ARSENAL_SURFACE:-<unset>}' (expected 'worktree'). Run from an isolated worktree." >&2
     exit 1
 fi
 git add -A
