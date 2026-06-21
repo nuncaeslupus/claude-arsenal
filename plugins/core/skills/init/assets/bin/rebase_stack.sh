@@ -18,10 +18,13 @@ BRANCH="${1:-$(git rev-parse --abbrev-ref HEAD)}"
 OLD_BASE="${2:?rebase_stack.sh requires <old-base> (tip of the parent branch)}"
 REMOTE="${ARSENAL_QUEUE_REMOTE:-origin}"
 
-git fetch "${REMOTE}" main >/dev/null 2>&1
+default_branch="$(git ls-remote --symref "${REMOTE}" HEAD 2>/dev/null \
+    | sed -n 's|^ref:[[:space:]]*refs/heads/\([^[:space:]]*\).*|\1|p')"
+[[ -z "${default_branch}" ]] && default_branch="main"
+git fetch "${REMOTE}" "${default_branch}" >/dev/null 2>&1
 
 fork="$(git merge-base "${BRANCH}" "${OLD_BASE}")"
-echo "rebase_stack: replaying ${BRANCH} commits after ${fork:0:12} onto ${REMOTE}/main"
-git rebase --onto "${REMOTE}/main" "${fork}" "${BRANCH}"
+echo "rebase_stack: replaying ${BRANCH} commits after ${fork:0:12} onto ${REMOTE}/${default_branch}"
+git rebase --onto "${REMOTE}/${default_branch}" "${fork}" "${BRANCH}"
 git push --force-with-lease "${REMOTE}" "${BRANCH}"
 echo "rebase_stack: ${BRANCH} rebased and pushed"
