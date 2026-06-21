@@ -129,5 +129,27 @@ if [[ "$(remote_tip)" != "${before}" ]]; then
 fi
 echo "PASS: refuses to leak non-queue commits onto the ledger (CA-03)"
 
+# --- Gate 5 (CA-15): refuse to stage a payload that contains a secret ---
+git fetch -q origin "${QUEUE_BRANCH}"
+git reset -q --hard "origin/${QUEUE_BRANCH}"
+# AKIAIOSFODNN7EXAMPLE + 16 chars = valid AWS key pattern (well-known example value).
+echo "## Failure notes" > "claude-arsenal/queue/lo-r001.md"
+echo "token = AKIAIOSFODNN7EXAMPLE" >> "claude-arsenal/queue/lo-r001.md"
+before=$(remote_tip)
+set +e
+out=$(bash "${RELEASE}" lo-r001 open 2>&1); rc=$?
+set -e
+if [[ "${rc}" -ne 2 ]]; then
+    echo "FAIL: release with secret in payload should exit 2, got ${rc}: ${out}" >&2; exit 1
+fi
+if ! printf '%s' "${out}" | grep -q "secret detected"; then
+    echo "FAIL: expected 'secret detected' in stderr, got: ${out}" >&2; exit 1
+fi
+git fetch -q origin "${QUEUE_BRANCH}"
+if [[ "$(remote_tip)" != "${before}" ]]; then
+    echo "FAIL: refused secret-payload release must not advance the ledger" >&2; exit 1
+fi
+echo "PASS: refuses to stage payload with secret (CA-15)"
+
 echo "PASS: release_test — all gates passed"
 exit 0
