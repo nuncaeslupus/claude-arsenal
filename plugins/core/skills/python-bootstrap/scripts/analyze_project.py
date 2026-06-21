@@ -13,6 +13,7 @@ usage/internal error.
 
 import argparse
 import json
+import re
 import sys
 import tomllib
 from pathlib import Path
@@ -114,7 +115,8 @@ def build_report(root: Path) -> dict:
         "mode": "retrofit",
         "pyproject_present": True,
         "requires_python": requires_python,
-        "requires_python_ok": isinstance(requires_python, str) and ">=3.12" in requires_python,
+        "requires_python_ok": isinstance(requires_python, str)
+        and bool(re.search(r">=3\.12(?!\d)", requires_python)),
         "ruff": analyze_ruff(tool),
         "mypy": analyze_mypy(tool),
         "makefile": analyze_makefile(root),

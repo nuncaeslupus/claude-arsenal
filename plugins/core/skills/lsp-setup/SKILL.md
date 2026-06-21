@@ -58,6 +58,8 @@ brew install gopls
 
 The exact mapping per language lives in `references/lsp-install-table.md`. Open that reference before writing this block.
 
+If a chosen language has **no row in the install table** (e.g. fsharp, erlang, or another niche language), do not dead-end: tell the user the language has no pre-packaged plugin in the `claude-code-lsps` marketplace, then document the official LSP server for that language (e.g. `fsautocomplete` for F#, `erlang_ls` for Erlang) and the manual install steps — binary install from the project's releases page, followed by a hand-authored `.lsp.json` pointing at the installed binary. Point the user to the [`.lsp.json` schema](https://github.com/piebald-ai/claude-code-lsps) for the field reference.
+
 State, in one sentence, that the user must run these — the skill does not install on the user's behalf.
 
 ### Step 4 — set the LSP-vs-grep expectation

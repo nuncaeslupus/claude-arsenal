@@ -36,7 +36,10 @@ def build_report(data: dict, limit: int) -> dict:
         if not isinstance(info, dict):
             continue
         missing = info.get("missing_lines", [])
-        if not missing:
+        missing_branches = info.get("missing_branches", [])
+        # Include files with missing lines OR with missing branch coverage (a file
+        # at 100% line coverage can still have untaken branches — see Gotchas).
+        if not missing and not missing_branches:
             continue
         summary = info.get("summary") or {}
         runs = contiguous_runs(missing)
@@ -45,7 +48,7 @@ def build_report(data: dict, limit: int) -> dict:
                 "file": path,
                 "percent_covered": round(summary.get("percent_covered", 0.0), 1),
                 "missing_count": len(missing),
-                "missing_branches": len(info.get("missing_branches", [])),
+                "missing_branches": len(missing_branches),
                 "largest_run": max((r[1] - r[0] + 1 for r in runs), default=0),
                 "missing_runs": runs,
             }
