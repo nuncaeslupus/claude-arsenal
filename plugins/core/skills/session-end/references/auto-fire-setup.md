@@ -26,7 +26,7 @@ Use the update-config skill to add a Stop hook to `~/.claude/settings.json`:
 What this does:
 
 1. **Recursion guard:** if `CLAUDE_SESSION_END_AUTOFIRE` is already set, exit 0
-   immediately. The spawned sub-session (step 3) inherits this variable, so when
+   immediately. The spawned sub-session (step 4) inherits this variable, so when
    *its own* Stop hook fires at close it short-circuits here instead of spawning
    yet another session. Without this guard the hook recurses indefinitely — each
    auto-fired session ends, re-triggers the Stop hook, and launches another.
