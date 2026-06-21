@@ -6,7 +6,11 @@
 # ARSENAL_QUEUE_BRANCH). Must run on that branch — see claim.sh for why the
 # shared ref is the lock.
 # <status>: done | merged | open | blocked | in_progress | escalated
-#   done       = PR opened + gate passed (the worker's terminal state).
+#   done       = PR opened + acceptance gate passed (the worker's terminal
+#                state). `done` is enforced here, not by convention: it requires
+#                an opened (non-closed) PR, the payload's mechanical gate to pass
+#                (gate_run.sh), and — for a "laptop"-tagged task — a non-cloud
+#                session. See the CA-11/CA-12/CA-13 guards below.
 #   merged     = that PR later landed on the default branch; set by
 #                reconcile_merged.sh after a `gh` merge-state check.
 #   escalated  = task auto-set when attempts >= max_attempts (see update_task_row.py).
@@ -28,6 +32,7 @@ shift 2 || true
 # stays valid even after we cd into the coordination worktree below.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 UPDATE_PY="${SCRIPT_DIR}/../scripts/update_task_row.py"
+GATE_RUN="${SCRIPT_DIR}/gate_run.sh"
 
 PR_URL=""
 RESET_ATTEMPTS=""
@@ -64,6 +69,62 @@ if [[ "${NEW_STATUS}" == "done" && "${PR_URL}" == http* ]] && command -v gh >/de
     _pr_state="$(gh pr view "${PR_URL}" --json state,mergedAt --jq '.state' 2>/dev/null || true)"
     if [[ "${_pr_state}" == "CLOSED" ]]; then
         echo "release.sh: refusing to mark ${TASK_ID} done — PR '${PR_URL}' is closed (never merged); open a new PR or release as open/in_progress" >&2
+        exit 2
+    fi
+fi
+
+# Guard (CA-11, venue): a [LAPTOP]-only gate (model training, CPCV Sharpe, soak,
+# paper-trade) cannot be satisfied by a cloud session, so a cloud worker must not
+# record `done` for a task tagged "laptop" — the honor-system false-`done` vector
+# #68 calls out. Detect the cloud surface via CLAUDE_CODE_REMOTE (the same signal
+# detect_surface.sh uses). Checked BEFORE the gate enforcement below so a cloud
+# session never even runs a laptop-only gate's code. Read the canonical queue
+# (the coordination worktree when ARSENAL_QUEUE_DIR is set, else the local one).
+_TAGS_QUEUE="${QUEUE_FILE}"
+if [[ -n "${ARSENAL_QUEUE_DIR:-}" && -f "${ARSENAL_QUEUE_DIR}/${QUEUE_FILE}" ]]; then
+    _TAGS_QUEUE="${ARSENAL_QUEUE_DIR}/${QUEUE_FILE}"
+fi
+_task_has_tag() {
+    python3 - "${_TAGS_QUEUE}" "${1}" "${2}" <<'PYEOF'
+import json, sys
+queue, task_id, tag = sys.argv[1], sys.argv[2], sys.argv[3]
+try:
+    with open(queue, encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(row, dict) and row.get("id") == task_id:
+                tags = row.get("tags")
+                sys.exit(0 if isinstance(tags, list) and tag in tags else 1)
+except OSError:
+    pass
+sys.exit(1)  # task not found / no such tag
+PYEOF
+}
+if [[ "${NEW_STATUS}" == "done" && "${CLAUDE_CODE_REMOTE:-}" == "true" ]] \
+    && _task_has_tag "${TASK_ID}" "laptop"; then
+    echo "release.sh: refusing to mark ${TASK_ID} done — task is tagged [laptop] and this is a cloud session (CLAUDE_CODE_REMOTE=true) that cannot satisfy a laptop-only gate; run the gate on the laptop and record done there" >&2
+    exit 2
+fi
+
+# Guard (CA-12): enforce the task's mechanical acceptance gate at the release
+# choke point, not just by worker-loop convention. A session can call
+# `release.sh <id> done` directly and bypass gate_run.sh in the worker loop;
+# re-running the gate here is the backstop that makes a declared numeric/bash
+# gate a hard precondition for `done`. Run it now, BEFORE the cd into the
+# coordination worktree, so the worker's committed evidence files (referenced
+# repo-root-relative by the gate block) are still reachable in this tree.
+# Skipped when there is no payload (hence no gate); gate_run.sh itself exits 0
+# for a payload with no gate. `merged` is exempt — the gate already ran at `done`
+# and reconcile_merged.sh sets `merged` from a real merge.
+if [[ "${NEW_STATUS}" == "done" && -f "claude-arsenal/queue/${TASK_ID}.md" && -f "${GATE_RUN}" ]]; then
+    if ! bash "${GATE_RUN}" "${TASK_ID}"; then
+        echo "release.sh: refusing to mark ${TASK_ID} done — acceptance gate failed (gate_run.sh); fix the gate / commit the evidence, or release as open/in_progress" >&2
         exit 2
     fi
 fi
