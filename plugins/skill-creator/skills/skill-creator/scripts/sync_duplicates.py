@@ -24,6 +24,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import shutil
 import sys
@@ -109,8 +110,17 @@ def discover(library_dir: Path) -> dict[frozenset[str], list[Path]]:
 
     # Secondary scan: *.sh files anywhere under the repo root so that shell
     # scripts carrying the DUPLICATED ACROSS SKILLS header are caught too.
+    # Use os.walk with directory pruning to skip .git, .venv, and other
+    # large/irrelevant trees that rglob would traverse.
     root = _repo_root(library_dir)
-    sh_files = sorted(root.rglob("*.sh"))
+    _PRUNE = {".git", ".venv", "node_modules", "__pycache__", ".claude", "build", "dist"}
+    sh_files: list[Path] = []
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [d for d in dirnames if d not in _PRUNE and not d.startswith(".")]
+        for filename in filenames:
+            if filename.endswith(".sh"):
+                sh_files.append(Path(dirpath) / filename)
+    sh_files.sort()
     _scan_files(sh_files, groups)
 
     return groups
