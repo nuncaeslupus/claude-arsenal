@@ -99,9 +99,11 @@ project-specific lookup stays in the wrapper.
 - **Non-numeric gates report "manual", never PASS.** A gate the grammar cannot
   parse (e.g. "all golden files identical") is surfaced for human judgement and is
   never auto-passed — rewrite it as a measurable condition where one exists.
-- **A plan with no `Gate` column exits 2, not 1.** That is the grandfathered
-  signal — a plan predating the gate kernel, not a failing gate. `review` / `ship`
-  treat exit 2 as a should-flag (note it), not a blocker.
+- **Exit 2 means no Gate column found or a usage error** (plan file missing, bad
+  `--id`). Confirm the `--input` path is correct and the file exists before
+  treating exit 2 as the grandfathered signal — a wrong invocation silently
+  produces the same code. Treat exit 2 as a should-flag (not a blocker) only
+  after confirming the plan genuinely predates the gate convention.
 - **Stale evidence after a re-run.** The Evidence log records one measurement at a
   point in time (its SHA + provenance say which). After re-measuring, update the
   row — `run_gate.py` trusts the recorded number; it does not re-run the command.

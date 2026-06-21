@@ -23,7 +23,7 @@ Reads `status/specification.md` to know what should be shipping. Confirms scope 
 
 - Does the change solve the stated problem?
 - All acceptance criteria satisfied?
-- Every task's **Gate** is recorded and met — run the `gate-check` engine (`run_gate.py status/plan.md`): exit 0 means all gated tasks pass with complete evidence (measured value, command, commit SHA, provenance). A failing or unrecorded gate is No-Go; a plan with no Gate column (exit 2) predates the convention — fall back to the acceptance-criteria check above.
+- Every task's **Gate** is recorded and met — run the `gate-check` engine (`run_gate.py --input status/plan.md`): exit 0 means all gated tasks pass with complete evidence (measured value, command, commit SHA, provenance). A failing or unrecorded gate is No-Go; exit 2 means no Gate column found or a usage error (missing file, bad `--id`) — confirm the correct plan file exists and the invocation uses `--input`; fall back to the acceptance-criteria check only after confirming the plan genuinely predates the gate convention.
 - If partial delivery → is the partial state safe and functional?
 
 ### Step 3: Compatibility check
