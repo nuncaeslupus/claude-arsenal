@@ -58,10 +58,22 @@ def build_targets(root: Path) -> tuple[Target, ...]:
     )
 
 
+def _read_text(path: Path, label: str) -> str:
+    """Read ``path``, failing with a clean message (not a traceback) if it is absent.
+
+    A missing file here almost always means a wrong ``--repo-root``; surface that
+    plainly rather than dumping a FileNotFoundError stack.
+    """
+    try:
+        return path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        _fail(f"{label} not found at {path} (wrong --repo-root?)")
+
+
 def read_canonical(root: Path) -> str:
     """Return the canonical version from ``root``'s .bundle-version, validating semver."""
     bundle = root / BUNDLE_REL
-    version = bundle.read_text(encoding="utf-8").strip()
+    version = _read_text(bundle, bundle.name).strip()
     if not re.fullmatch(SEMVER, version):
         _fail(f"{bundle.name} is not a valid X.Y.Z version: {version!r}")
     return version
@@ -100,7 +112,7 @@ def main() -> int:
     drifted: list[tuple[Target, str]] = []
 
     for target in build_targets(root):
-        text = target.path.read_text(encoding="utf-8")
+        text = _read_text(target.path, target.label)
         have = current_version(target, text)
         if have == canonical:
             continue
