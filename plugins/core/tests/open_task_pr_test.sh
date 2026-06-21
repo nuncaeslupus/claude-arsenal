@@ -3,6 +3,8 @@
 # Against a bare temp remote (no `gh` backend): asserts the helper cuts the
 # feature branch off the host DEFAULT branch, writes a Conventional Commit with
 # the dynamic Co-Authored-By trailer, pushes the branch, and reports branch:<name>.
+# Also verifies the ARSENAL_SURFACE guard: git add -A must be refused when
+# ARSENAL_SURFACE is unset or not 'worktree'.
 # Exit: 0 on PASS, 1 on FAIL.
 
 set -euo pipefail
@@ -48,7 +50,25 @@ git config user.name "Arsenal Test"
 main_sha=$(git rev-parse origin/main)
 echo "feature" > feature.txt
 
-OUT=$(ARSENAL_COAUTHOR="Test Bot <noreply@anthropic.com>" \
+# Gate 0a: guard refuses when ARSENAL_SURFACE is unset.
+if err=$(ARSENAL_SURFACE="" ARSENAL_COAUTHOR="" bash "${HELPER}" lo-guard-unset "Guard test" 2>&1); then
+    echo "FAIL: expected non-zero exit when ARSENAL_SURFACE unset, got exit 0 with output: ${err}" >&2; exit 1
+fi
+if ! echo "${err}" | grep -q "git add -A refused on shared checkout"; then
+    echo "FAIL: expected 'git add -A refused on shared checkout' in stderr, got: ${err}" >&2; exit 1
+fi
+echo "PASS: guard refuses git add -A when ARSENAL_SURFACE is unset"
+
+# Gate 0b: guard refuses when ARSENAL_SURFACE is 'shared' (non-worktree).
+if err=$(ARSENAL_SURFACE="shared" ARSENAL_COAUTHOR="" bash "${HELPER}" lo-guard-shared "Guard test" 2>&1); then
+    echo "FAIL: expected non-zero exit when ARSENAL_SURFACE=shared, got exit 0 with output: ${err}" >&2; exit 1
+fi
+if ! echo "${err}" | grep -q "git add -A refused on shared checkout"; then
+    echo "FAIL: expected 'git add -A refused on shared checkout' in stderr, got: ${err}" >&2; exit 1
+fi
+echo "PASS: guard refuses git add -A when ARSENAL_SURFACE=shared"
+
+OUT=$(ARSENAL_SURFACE="worktree" ARSENAL_COAUTHOR="Test Bot <noreply@anthropic.com>" \
       bash "${HELPER}" lo-x001 "Add feature thing")
 
 EXPECT_BRANCH="arsenal/lo-x001-add-feature-thing"

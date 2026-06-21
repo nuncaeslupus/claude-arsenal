@@ -15,7 +15,8 @@
 # ARSENAL_COAUTHOR ("Name <email>") when the caller exports the active model
 # identity supplied by the harness. Absent it, no trailer is written.
 #
-# Env: ARSENAL_QUEUE_REMOTE (default origin); ARSENAL_COAUTHOR (optional).
+# Env: ARSENAL_QUEUE_REMOTE (default origin); ARSENAL_COAUTHOR (optional);
+#      ARSENAL_SURFACE (must equal 'worktree' to permit git add -A).
 # Exit: 0 branch pushed (PR opened or branch emitted), 1 on push failure / usage.
 
 set -uo pipefail
@@ -58,6 +59,16 @@ if [[ "${current}" != "${BRANCH}" ]]; then
 fi
 
 # Stage and commit. A dynamic Co-Authored-By is added only when supplied.
+# Safety guard: git add -A stages everything in the working tree, which risks
+# sweeping unrelated files or secrets when multiple workers share the same
+# checkout. Only allow it when ARSENAL_SURFACE confirms this process is running
+# inside an isolated worktree. If the surface is unset (legacy / no-init
+# context) or indicates a shared checkout, refuse loudly rather than silently
+# staging unrelated files.
+if [[ "${ARSENAL_SURFACE:-}" != "worktree" ]]; then
+    echo "open_task_pr: git add -A refused on shared checkout — ARSENAL_SURFACE='${ARSENAL_SURFACE:-<unset>}' (expected 'worktree'). Run from an isolated worktree or stage files explicitly and set ARSENAL_SURFACE=worktree." >&2
+    exit 1
+fi
 git add -A
 commit_args=(-m "${TYPE}: ${TITLE}")
 if [[ -n "${ARSENAL_COAUTHOR:-}" ]]; then
