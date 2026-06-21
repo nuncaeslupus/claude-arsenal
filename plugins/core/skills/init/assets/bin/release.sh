@@ -78,27 +78,10 @@ if [[ "${current_branch}" != "${QUEUE_BRANCH}" ]]; then
     exit 2
 fi
 
-final_status="$(python3 "${UPDATE_PY}" "${TASK_ID}" "${NEW_STATUS}" "${QUEUE_FILE}" "${PR_URL}" "${RESET_ATTEMPTS}")" || exit 1
-
-if [[ -z "${final_status}" ]]; then
-    echo "release.sh: update_task_row.py returned empty status for ${TASK_ID}" >&2
-    exit 1
-fi
-
-# Guard: never let a worker's residual staged changes ride onto the append-only
-# coordination ledger. An in-place worker (one whose `isolation: worktree` was
-# silently ignored) may have left other paths staged in the index; a plain
-# `git commit` would sweep them onto the queue branch. A mixed reset clears the
-# index without touching the working tree, so only the queue row + payload we
-# stage below get committed. (worker_postcheck.sh should already have cleaned
-# the tree; this guards the index regardless.)
-git reset -q >/dev/null 2>&1 || true
-
-# Guard (CA-15): scan the payload for secrets before it reaches the shared
-# coordination ref. Workers write failure notes and PR URLs into the payload;
-# a secret accidentally included there would land on the public ledger and in
-# every consumer's clone. Scan matches the same patterns as queue_doctor.py so
-# the gate is consistent with the doctor check that runs post-merge.
+# Guard (CA-15): scan the payload for secrets before modifying any local file.
+# Scanning first avoids the split-brain state where tasks.jsonl is updated by
+# update_task_row.py but the release is then refused — leaving the local ledger
+# out of sync with the remote. Matches the same patterns as queue_doctor.py.
 _scan_payload_secrets() {
     python3 - "${1}" <<'PYEOF'
 import re, sys
@@ -136,6 +119,22 @@ if [[ -f "claude-arsenal/queue/${TASK_ID}.md" ]]; then
         exit 2
     fi
 fi
+
+final_status="$(python3 "${UPDATE_PY}" "${TASK_ID}" "${NEW_STATUS}" "${QUEUE_FILE}" "${PR_URL}" "${RESET_ATTEMPTS}")" || exit 1
+
+if [[ -z "${final_status}" ]]; then
+    echo "release.sh: update_task_row.py returned empty status for ${TASK_ID}" >&2
+    exit 1
+fi
+
+# Guard: never let a worker's residual staged changes ride onto the append-only
+# coordination ledger. An in-place worker (one whose `isolation: worktree` was
+# silently ignored) may have left other paths staged in the index; a plain
+# `git commit` would sweep them onto the queue branch. A mixed reset clears the
+# index without touching the working tree, so only the queue row + payload we
+# stage below get committed. (worker_postcheck.sh should already have cleaned
+# the tree; this guards the index regardless.)
+git reset -q >/dev/null 2>&1 || true
 
 # Stage the queue row AND the task payload: a release may carry ## Failure notes
 # or a PR URL written into claude-arsenal/queue/<id>.md that must travel with the
