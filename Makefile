@@ -1,4 +1,4 @@
-.PHONY: help sync smoke test queue-doctor tag validate audit audit-rule-drift sync-dupes lint format dev new-skill update-skills clean
+.PHONY: help sync smoke test queue-doctor tag sync-version sync-version-check validate audit audit-rule-drift sync-dupes lint format dev new-skill update-skills clean
 
 PLUGIN_DIRS := $(wildcard plugins/*)
 PLUGIN_SKILL_LIBS := $(wildcard plugins/*/skills)
@@ -52,8 +52,14 @@ tag:  ## create+push v<.bundle-version> tag from HEAD if missing — manual fall
 			echo "make tag: $$t is lower than latest v$$latest — refusing" >&2; exit 1; fi; \
 		git tag -a "$$t" -m "Release $$t" && git push origin "$$t" && echo "make tag: created+pushed $$t"; fi
 
-test:  ## run the core plugin behaviour tests (plugins/core/tests/*.sh)
-	@set -e; for t in plugins/core/tests/*.sh; do \
+sync-version:  ## write the canonical .bundle-version into both plugin manifests + AGENTS.md
+	uv run python scripts/sync_version.py
+
+sync-version-check:  ## fail if any manifest / AGENTS.md version drifts from .bundle-version
+	uv run python scripts/sync_version.py --check
+
+test:  ## run the core plugin + repo-tool behaviour tests (plugins/core/tests/*.sh, scripts/*_test.sh)
+	@set -e; for t in plugins/core/tests/*.sh scripts/*_test.sh; do \
 		[ -f "$$t" ] || continue; \
 		echo "=== test: $$t ==="; bash "$$t"; \
 	done
@@ -70,8 +76,8 @@ ifeq ($(PLUGIN_DIRS),)
 	@echo "make lint: no plugins yet — skipping ruff/mypy on plugins/*/scripts." >&2
 	@exit 0
 else
-	uv run ruff check plugins
-	uv run mypy plugins
+	uv run ruff check plugins scripts
+	uv run mypy plugins scripts
 endif
 
 format:  ## ruff format + ruff check --fix

@@ -44,6 +44,9 @@ jobs:
       - name: make audit-rule-drift
         run: make audit-rule-drift
 
+      - name: make sync-version-check
+        run: make sync-version-check
+
   test:
     name: core tests
     runs-on: ubuntu-22.04
