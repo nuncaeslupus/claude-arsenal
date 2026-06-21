@@ -86,12 +86,10 @@ After each merge, immediately rebase the next waiting branch onto `main` to skip
 
 ```bash
 # After fix/iss-A merges into main:
-fork=$(git merge-base fix/iss-B origin/fix/iss-A)
-git rebase --onto origin/main "${fork}" fix/iss-B
-git push --force-with-lease origin fix/iss-B
+bash "${CLAUDE_SKILL_DIR}/../../init/assets/bin/rebase_stack.sh" fix/iss-B fix/iss-A
 ```
 
-Cascade the same `--onto` rebase down the remaining stack.
+`rebase_stack.sh <branch> <old-base>` computes the fork point, runs `git rebase --onto origin/main`, and force-pushes with lease in one step. Cascade it down the remaining stack (B→C, C→D, …) after each merge.
 
 ## Project type — Classic vs v2
 
