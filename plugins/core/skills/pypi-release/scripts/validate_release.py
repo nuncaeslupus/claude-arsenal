@@ -36,8 +36,13 @@ def load_pyproject(root: Path) -> dict:
 
 def find_dunder_version(root: Path) -> str | None:
     """Scan the most likely package __init__.py files for __version__."""
+    skip_parts = {"tests", "test", "build", "dist", ".venv", "venv", ".tox"}
     candidates = sorted(root.glob("src/*/__init__.py")) + sorted(root.glob("*/__init__.py"))
     for path in candidates:
+        # parts are checked relative to root: an absolute path could match a
+        # skip dir in an ancestor (e.g. repo cloned under a dir named "build").
+        if skip_parts & set(path.relative_to(root).parts):
+            continue
         match = DUNDER_RE.search(path.read_text(encoding="utf-8", errors="ignore"))
         if match:
             return match.group(1)

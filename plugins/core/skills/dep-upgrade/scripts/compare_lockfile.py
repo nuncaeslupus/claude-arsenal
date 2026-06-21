@@ -45,7 +45,9 @@ def direct_dep_names(pyproject: Path) -> set[str]:
     specs: list[str] = []
     project = data.get("project", {})
     if isinstance(project, dict):
-        specs += project.get("dependencies", [])
+        deps = project.get("dependencies", [])
+        if isinstance(deps, list):
+            specs += deps
         opt_deps = project.get("optional-dependencies", {})
         if isinstance(opt_deps, dict):
             for group in opt_deps.values():
@@ -59,7 +61,9 @@ def direct_dep_names(pyproject: Path) -> set[str]:
     tool = data.get("tool", {})
     uv = tool.get("uv", {}) if isinstance(tool, dict) else {}
     if isinstance(uv, dict):
-        specs += uv.get("dev-dependencies", [])
+        dev_deps = uv.get("dev-dependencies", [])
+        if isinstance(dev_deps, list):
+            specs += dev_deps
 
     names = set()
     for spec in specs:

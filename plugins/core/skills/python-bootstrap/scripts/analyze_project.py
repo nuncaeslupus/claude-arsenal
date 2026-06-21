@@ -77,7 +77,10 @@ def analyze_makefile(root: Path) -> dict:
         if ":" not in line or line.startswith((" ", "\t", "#")):
             continue
         lhs, _, rhs = line.partition(":")
-        if "=" in lhs or rhs.lstrip().startswith("="):  # skip variable assignments (VAR =, VAR :=)
+        # skip variable assignments (VAR =, VAR :=, VAR ::=, VAR :::=); lstrip(": ")
+        # consumes the extra colons of GNU Make's ::= / :::= while keeping real
+        # double-colon-rule targets (foo:: bar) as targets.
+        if "=" in lhs or rhs.lstrip(": ").startswith("="):
             continue
         targets.update(lhs.split())  # a line may declare several targets: "lint format:"
     return {

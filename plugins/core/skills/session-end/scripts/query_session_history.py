@@ -45,7 +45,7 @@ def _default_project_dir() -> Path:
 def _parse_records(path: Path) -> list[dict]:
     """Parse a JSONL transcript into records, skipping blank / invalid lines."""
     records: list[dict] = []
-    with path.open() as fh:
+    with path.open(encoding="utf-8") as fh:
         for raw in fh:
             if not raw.strip():
                 continue
