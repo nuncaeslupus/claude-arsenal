@@ -244,3 +244,38 @@ non-zero, so it doubles as a CI / `make` gate:
   `arsenal-queue` between tasks. If `worker_postcheck.sh` exits 2 (could not
   restore), the tree has uncommittable state — inspect `git status`, return to
   `arsenal-queue` manually, then resume.
+
+---
+
+## Design decisions
+
+### Why the queue lives in `core`, not its own plugin
+
+The queue skills (`continue`, `queue-add`, `queue-status`, plus the runtime
+tree `init` lays down) ship inside `core` rather than a standalone `queue`
+plugin. This was weighed deliberately (issue #82):
+
+- **Cohesion / opt-out is a real but minor win.** A separate plugin would let
+  consumers disable the queue and group its skills together. But the queue is
+  tightly coupled to `core`'s `init` (which writes the runtime tree) and
+  `continue` (the orchestrator entry point); splitting it means threading that
+  coupling across two plugins for a cohesion-only gain.
+- **Extraction does not relieve the listing budget.** The 8000-char skills
+  index cap is **global across all installed skills**, so moving descriptions
+  into another plugin leaves the aggregate unchanged. The only lever that
+  restores headroom is trimming descriptions — which is what we do instead
+  (see below).
+
+**Decision:** keep the queue in `core`; do not extract. Revisit only if a
+consumer needs to ship the queue *without* the rest of `core`.
+
+### Listing-budget headroom
+
+The index cap is global. When headroom gets tight, trim the longest skill
+descriptions (preserving trigger keywords and the `Do NOT` boundary that keeps
+them distinct) rather than restructuring plugins. `make audit` reports the
+per-plugin breakdown and remaining headroom. Reaching the repo's ≥50%-headroom
+aim across the full default install set would require trimming well beyond the
+few longest descriptions, at the cost of trigger coverage — so treat 50% as a
+direction, and keep the longest descriptions honest rather than chasing the
+exact number.

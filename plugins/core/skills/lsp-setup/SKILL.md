@@ -1,6 +1,6 @@
 ---
 name: lsp-setup
-description: Use when the user wants to enable, configure, or troubleshoot Claude Code's built-in LSP tool for a project — analyzes the working directory for language manifests (pyproject.toml, package.json, go.mod, Cargo.toml, mix.exs, …), asks which languages to enable, then prints the LSP binary install command and the Claude Code plugin install command the user must run. Triggers — "set up LSP", "enable language server", "configure pyright / gopls / rust-analyzer", "find references is slow", "/plugin install … @claude-code-lsps". Owns scripts — analyze_languages.py. Do NOT use for one-off grep / find lookups (LSP cold-start beats grep only on cross-file symbol queries), for skill authoring (see skill-creator), or for unrelated MCP server setup.
+description: Use when the user wants to enable, configure, or troubleshoot Claude Code's built-in LSP tool for a project — detects language manifests (pyproject.toml, package.json, go.mod, Cargo.toml, …), asks which languages to enable, then prints the LSP binary and Claude Code plugin install commands to run. Triggers — "set up LSP", "enable language server", "configure pyright / gopls / rust-analyzer", "/plugin install … @claude-code-lsps". Owns scripts — analyze_languages.py. Do NOT use for one-off grep/find lookups, skill authoring (see skill-creator), or unrelated MCP server setup.
 ---
 
 # lsp-setup
