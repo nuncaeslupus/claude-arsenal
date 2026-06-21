@@ -783,8 +783,19 @@ def check_references(skill_dir: Path, body: str, result: Result) -> None:
     _check_link_safety(skill_dir, body, result)
 
 
+def _resolve_doc_link(target: str, base: Path, repo_root: Path | None) -> Path:
+    """Resolve a markdown link target. A '/'-prefixed target is repo-relative
+    (resolved against repo_root), not host-FS-root-relative; Path('/a') / '/b'
+    would otherwise collapse to '/b'."""
+    if target.startswith("/"):
+        root = repo_root if repo_root is not None else base
+        return (root / target.lstrip("/")).resolve()
+    return (base / target).resolve()
+
+
 def _check_link_safety(skill_dir: Path, body: str, result: Result) -> None:
     skill_md = skill_dir / "SKILL.md"
+    repo_root = _find_repo_root(skill_dir)
     link_re = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
     body_no_fence = _strip_all_code(body)
     for m in link_re.finditer(body_no_fence):
@@ -802,7 +813,7 @@ def _check_link_safety(skill_dir: Path, body: str, result: Result) -> None:
         if ".." in target.split("/"):
             result.fail("links.parent-traversal", f"SKILL.md link uses '..': {target!r}", skill_md)
         if target and not target.startswith("#"):
-            resolved = (skill_dir / target).resolve()
+            resolved = _resolve_doc_link(target, skill_dir, repo_root)
             if not resolved.exists():
                 result.fail(
                     "links.resolve",
@@ -831,7 +842,7 @@ def _check_link_safety(skill_dir: Path, body: str, result: Result) -> None:
                             ref,
                         )
                 if target and not target.startswith("#"):
-                    resolved = (ref.parent / target).resolve()
+                    resolved = _resolve_doc_link(target, ref.parent, repo_root)
                     if not resolved.exists():
                         result.warn(
                             "links.resolve",

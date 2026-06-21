@@ -97,9 +97,14 @@ def _import_chain_depth(start: Path, root: Path, seen: set[Path] | None = None) 
         max_child = 0
         for m in AT_IMPORT_REGEX.finditer(text):
             target = m.group(1)
-            candidate = (start.parent / target).resolve()
-            if not candidate.exists():
-                candidate = (root / target).resolve()
+            if target.startswith("/"):
+                # A '/'-prefixed import is repo-relative, not host-FS-root:
+                # `root / "/x"` would collapse to "/x" (the FS root).
+                candidate = (root / target.lstrip("/")).resolve()
+            else:
+                candidate = (start.parent / target).resolve()
+                if not candidate.exists():
+                    candidate = (root / target).resolve()
             depth = _import_chain_depth(candidate, root, seen) if candidate.exists() else 0
             max_child = max(max_child, depth)
         return 1 + max_child
