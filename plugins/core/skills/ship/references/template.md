@@ -49,7 +49,7 @@
 
 - [ ] Original objective is fully covered
 - [ ] Acceptance criteria satisfied
-- [ ] Every task gate recorded with complete evidence and met (`run_gate.py status/plan.md` exits 0; or the plan predates gates)
+- [ ] Every task gate recorded with complete evidence and met (`run_gate.py --input status/plan.md` exits 0; exit 2 = no Gate column or usage error — verify before treating as grandfathered)
 - [ ] Known edge cases handled
 
 ### Compatibility

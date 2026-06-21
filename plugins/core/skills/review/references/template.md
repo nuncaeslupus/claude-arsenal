@@ -54,8 +54,8 @@
 | Integration tests | Yes/No/N/A | |
 | Security tests | Yes/No/N/A | |
 | Existing tests still pass | Yes/No | |
-| Task gates recorded with complete evidence | Yes/No/N-A | `run_gate.py status/plan.md` |
-| Each gate's measured value meets its threshold | Yes/No/N-A | exit 0 = all pass; exit 2 = plan has no gates |
+| Task gates recorded with complete evidence | Yes/No/N-A | `run_gate.py --input status/plan.md` |
+| Each gate's measured value meets its threshold | Yes/No/N-A | exit 0 = all pass; exit 2 = no Gate column or usage error (verify before treating as grandfathered) |
 
 ## 5. Blockers
 

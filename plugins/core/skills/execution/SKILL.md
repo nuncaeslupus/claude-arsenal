@@ -90,7 +90,7 @@ After each significant change:
 
 #### 2c. Record the gate evidence (RECORD)
 
-Once the task is green, record its gate evidence in `status/plan.md`'s **Evidence log** before starting the next task: the measured value, the exact command that produced it, the commit SHA, and the environment provenance (which machine or runner — `ci`, `local`, or a project tag). Confirm the measured value meets the gate; the `gate-check` skill's `run_gate.py status/plan.md --id <task> <measured>` reports PASS/FAIL with the numbers and flags an incomplete row. A task is not done until its gate passes and its evidence is recorded — that recorded trail is what `review` and `ship` audit. (For a plan with no Gate column — predating this convention — keep the green-tests bar from Step 2b and skip the record.)
+Once the task is green, record its gate evidence in `status/plan.md`'s **Evidence log** before starting the next task: the measured value, the exact command that produced it, the commit SHA, and the environment provenance (which machine or runner — `ci`, `local`, or a project tag). Confirm the measured value meets the gate; the `gate-check` skill's `run_gate.py --input status/plan.md --id <task> <measured>` reports PASS/FAIL with the numbers and flags an incomplete row. A task is not done until its gate passes and its evidence is recorded — that recorded trail is what `review` and `ship` audit. (For a plan with no Gate column — predating this convention — keep the green-tests bar from Step 2b and skip the record.)
 
 ### Step 3: Verify and refactor
 

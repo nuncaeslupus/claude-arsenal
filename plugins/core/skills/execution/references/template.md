@@ -25,7 +25,7 @@ Copy into `status/plan.md`'s Evidence log once green:
 - Command run: `<command>`
 - Commit SHA: <sha>
 - Environment provenance: <ci / local / project tag>
-- Gate met (`run_gate.py --id <task> <measured>` → PASS): yes / no
+- Gate met (`run_gate.py --input status/plan.md --id <task> <measured>` → PASS): yes / no
 
 ## Decisions & deviations
 

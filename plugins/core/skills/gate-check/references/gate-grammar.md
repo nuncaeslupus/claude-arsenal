@@ -89,9 +89,11 @@ conditions that genuinely cannot be reduced to a number.
 | 1 | a gate fails, a gated task's evidence is incomplete, or the focused task fails |
 | 2 | usage error: plan file missing, no table with a `Gate` column, or unknown `--id` |
 
-Exit 2 on a plan with no `Gate` column is the **grandfathered** signal — a plan
-predating the gate kernel. `review` / `ship` treat it as a should-flag (note that
-the plan has no gates), not a hard blocker.
+Exit 2 covers two distinct conditions: a plan with no `Gate` column (genuinely
+grandfathered — a plan predating the gate kernel) and usage errors (plan file
+missing, unknown `--id`). Confirm the invocation uses `--input <plan>` and the
+file exists before treating exit 2 as a should-flag; a wrong invocation produces
+exit 2 and silently skips the audit just as a missing Gate column does.
 
 With `--strict`, a task that has no gate of its own is also a failure (exit 1) —
 use it on new plans, where every task is expected to carry a measurable gate. The
