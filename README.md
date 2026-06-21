@@ -29,18 +29,21 @@ Investigate why login is slow       # loads core:specify
 
 ### Claude Code web (vendoring)
 
-Claude Code **on the web** has no plugin support, so vendor the skills into the
-project's committed `.claude/skills/`. `docs/INSTALL.md` ships a copy-paste
-`make update-skills` target (clone + pin + run `scripts/vendor-skills.sh`) to add
-to the **consuming** project; then:
+Claude Code **on the web** (claude.ai/code) has no `/plugin` or marketplace
+support — it only reads skills **committed into the project** at
+`.claude/skills/`. So vendor them there. `docs/INSTALL.md` ships a copy-paste
+`make update-skills` target (clone pinned `ARSENAL_REF` → `scripts/vendor-skills.sh`)
+to add to the **consuming** project; then:
 
 ```bash
 make update-skills                  # the target you added from docs/INSTALL.md
 git add .claude/skills && git commit -m "chore: vendor claude-arsenal skills"
 ```
 
-Full flow (the `vendor-skills.sh` script, the `.arsenal-vendored` marker, and
-why `skill-creator` is excluded by default):
+The default vendors `core` only; **`skill-creator` is excluded** (its gate is a
+plugin hook that does not run on the web — pass `--plugins all` to include it
+anyway). Full flow (the `vendor-skills.sh` script, the `.arsenal-vendored`
+marker, and the exclusion rationale):
 [`docs/INSTALL.md`](docs/INSTALL.md#use-on-claude-code-web-vendoring).
 
 Full install guide and update/uninstall flow:
