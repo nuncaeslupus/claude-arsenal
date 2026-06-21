@@ -56,6 +56,18 @@ if [[ "${NEW_STATUS}" == "done" ]]; then
     fi
 fi
 
+# Guard (CA-13): refuse to record `done` for a PR that was closed without
+# merging — a closed PR is an abandoned PR; the task must be re-opened or
+# moved to a fresh PR. `merged` is exempt (reconcile_merged.sh sets it after
+# a real merge). Skips silently when gh is not on PATH.
+if [[ "${NEW_STATUS}" == "done" && "${PR_URL}" == http* ]] && command -v gh >/dev/null 2>&1; then
+    _pr_state="$(gh pr view "${PR_URL}" --json state,mergedAt --jq '.state' 2>/dev/null || true)"
+    if [[ "${_pr_state}" == "CLOSED" ]]; then
+        echo "release.sh: refusing to mark ${TASK_ID} done — PR '${PR_URL}' is closed (never merged); open a new PR or release as open/in_progress" >&2
+        exit 2
+    fi
+fi
+
 # Operate from the coordination worktree when ARSENAL_QUEUE_DIR is set so the
 # main working tree never needs to change branch.
 # The orchestrator writes failure notes to the payload file in the main tree;
