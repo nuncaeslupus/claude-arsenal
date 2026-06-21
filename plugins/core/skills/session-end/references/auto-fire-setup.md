@@ -14,7 +14,7 @@ Use the update-config skill to add a Stop hook to `~/.claude/settings.json`:
         "hooks": [
           {
             "type": "command",
-            "command": "test -f \"${CLAUDE_PROJECT_DIR}/tmp/.skip-next-session-end\" && rm -f \"${CLAUDE_PROJECT_DIR}/tmp/.skip-next-session-end\" || /usr/bin/env claude --print '/session-end'"
+            "command": "if [ -n \"${CLAUDE_SESSION_END_AUTOFIRE:-}\" ]; then exit 0; fi; test -f \"${CLAUDE_PROJECT_DIR}/tmp/.skip-next-session-end\" && rm -f \"${CLAUDE_PROJECT_DIR}/tmp/.skip-next-session-end\" || CLAUDE_SESSION_END_AUTOFIRE=1 /usr/bin/env claude --print '/session-end'"
           }
         ]
       }
@@ -25,9 +25,16 @@ Use the update-config skill to add a Stop hook to `~/.claude/settings.json`:
 
 What this does:
 
-1. Check for the skip sentinel `${CLAUDE_PROJECT_DIR}/tmp/.skip-next-session-end`.
-2. If present: delete it and exit 0 — session-end is skipped this once.
-3. Otherwise: launch a non-interactive Claude session that invokes `/session-end` against the same project directory.
+1. **Recursion guard:** if `CLAUDE_SESSION_END_AUTOFIRE` is already set, exit 0
+   immediately. The spawned sub-session (step 3) inherits this variable, so when
+   *its own* Stop hook fires at close it short-circuits here instead of spawning
+   yet another session. Without this guard the hook recurses indefinitely — each
+   auto-fired session ends, re-triggers the Stop hook, and launches another.
+2. Check for the skip sentinel `${CLAUDE_PROJECT_DIR}/tmp/.skip-next-session-end`.
+3. If present: delete it and exit 0 — session-end is skipped this once.
+4. Otherwise: launch a non-interactive Claude session (with
+   `CLAUDE_SESSION_END_AUTOFIRE=1` in its environment) that invokes
+   `/session-end` against the same project directory.
 
 The non-interactive invocation runs the skill in a fresh sub-session; it does not pollute the just-ended conversation. The retrospective + handoff write happen in the sub-session and commit (if handoff mode is on) before exiting.
 
@@ -52,6 +59,7 @@ The skip file lives under `tmp/` (gitignored). It is NOT honored when session-en
 - Confirm `claude --print '/session-end'` works in your environment from outside an active session. Some shells lose env vars between the Stop event and the spawned subprocess.
 - Confirm the github skill is also installed (or you have `handoff=no` / `handoff=ticket` set), otherwise session-end may try to write `status/handoff.md` in a repo that doesn't expect it.
 - Confirm `${CLAUDE_PROJECT_DIR}` resolves correctly inside the hook — some hook versions only expose `${CLAUDE_TRANSCRIPT_PATH}` or similar; consult the harness's Stop-hook env-var contract.
+- The recursion guard relies on `CLAUDE_SESSION_END_AUTOFIRE` propagating from the spawned `claude` process into its own Stop-hook subprocess. If your harness sanitizes the hook environment, swap the env sentinel for a marker file instead — e.g. guard on `test -f "${CLAUDE_PROJECT_DIR}/tmp/.session-end-autofiring"`, `touch` it before the spawn, and `rm -f` it when the sub-session exits.
 
 ## Disabling auto-fire
 
