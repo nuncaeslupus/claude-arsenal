@@ -152,7 +152,8 @@ if push_err="$(LANG=C git push "${REMOTE}" "HEAD:refs/heads/${QUEUE_BRANCH}" 2>&
     # The remote ref is the lock — so confirm it actually advanced TO OUR commit
     # before claiming the win. Re-fetch the published tip and compare.
     git fetch "${REMOTE}" "${QUEUE_BRANCH}" >/dev/null 2>&1 || true
-    landed_tip="$(git rev-parse --verify --quiet "refs/remotes/${REMOTE}/${QUEUE_BRANCH}" 2>/dev/null || true)"
+    landed_tip="$(git rev-parse --verify --quiet "refs/remotes/${REMOTE}/${QUEUE_BRANCH}" 2>/dev/null \
+        || git rev-parse --verify --quiet FETCH_HEAD 2>/dev/null || true)"
     local_head="$(git rev-parse --verify --quiet HEAD 2>/dev/null || true)"
     # Our claim commit must be REACHABLE from the published tip (ancestor-or-equal),
     # not strictly equal: another session may legitimately fast-forward a different
