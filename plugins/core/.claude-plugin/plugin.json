@@ -1,6 +1,6 @@
 {
   "name": "core",
-  "version": "0.15.2",
+  "version": "0.15.6",
   "author": "nuncaeslupus",
   "description": "Generic engineering workflows plus task queue orchestration: specify, design, execution, review, ship, github, lsp-setup, session-end, and the Python toolchain skills; plus init, continue, queue-add, and queue-status for git-backed DAG queue management."
 }
