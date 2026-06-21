@@ -87,6 +87,14 @@ if [[ ${wins} -ne 1 || ${losts} -ne 1 ]]; then
 fi
 echo "PASS: exactly one session won, one lost"
 
+# The winner's claimed task JSON must carry a lease stamp (claimed_at) so a
+# crashed claim can later be detected by age and reclaimed (#72).
+if ! grep -hq '"claimed_at"' "${out_a}" "${out_b}"; then
+    echo "FAIL: the won task row must carry a claimed_at lease stamp" >&2
+    cat "${out_a}" "${out_b}" >&2; exit 1
+fi
+echo "PASS: the winning claim stamps a claimed_at lease"
+
 # -- Part 1b (CA-03): a claim must not publish non-queue commits to the ledger --
 # Seed a fresh open task, then put a task-code commit on the branch. Claiming it
 # would push 2 commits (the leaked code + the claim) via `HEAD:refs/heads/...`,
@@ -117,6 +125,62 @@ if [[ "$(git rev-parse "origin/${QUEUE_BRANCH}")" != "${before_tip}" ]]; then
     echo "FAIL: refused claim must not advance the ledger" >&2; exit 1
 fi
 echo "PASS: claim refuses to leak non-queue commits onto the ledger (CA-03)"
+
+# -- Part 1c (#72): a redirected push must NOT report "won" --
+# A restricted-push surface can transparently retarget `git push HEAD:refs/heads/
+# arsenal-queue` to the session's own branch and still exit 0 — the shared ref
+# never moves, so two sessions could both "win" the same task. claim.sh verifies
+# the coordination ref actually advanced to its claim commit before declaring a
+# win. Simulate the redirect with a PATH git shim that rewrites the push target,
+# and assert claim fails loud (exit 2) instead of returning "won".
+cd "${tmpdir_a}"
+git fetch -q origin "${QUEUE_BRANCH}"
+git reset -q --hard "origin/${QUEUE_BRANCH}"
+printf '%s\n' \
+    '{"id":"lo-c003","title":"Redirect task","status":"open","priority":0,"requires":[],"deps":[],"assignee":null,"payload":"lo-c003.md"}' \
+    > claude-arsenal/queue/tasks.jsonl
+git add claude-arsenal/queue/tasks.jsonl
+git commit -q -m "seed: add open task lo-c003"
+git push -q origin "HEAD:refs/heads/${QUEUE_BRANCH}"
+before_tip=$(git rev-parse "origin/${QUEUE_BRANCH}")
+
+shimdir=$(mktemp -d)
+real_git="$(command -v git)"
+cat > "${shimdir}/git" <<SHIM
+#!/usr/bin/env bash
+# Redirect any push to the coordination ref onto a side ref, exiting 0 — mimics a
+# proxy that retargets the push while reporting success.
+if [[ "\$1" == push ]]; then
+    rewritten=(); hit=0
+    for a in "\$@"; do
+        if [[ "\$a" == *"refs/heads/${QUEUE_BRANCH}" ]]; then
+            a="\${a/refs\/heads\/${QUEUE_BRANCH}/refs\/heads\/session-redirect}"; hit=1
+        fi
+        rewritten+=("\$a")
+    done
+    [[ "\$hit" == 1 ]] && exec "${real_git}" "\${rewritten[@]}"
+fi
+exec "${real_git}" "\$@"
+SHIM
+chmod +x "${shimdir}/git"
+
+set +e
+out_r=$(PATH="${shimdir}:${PATH}" bash "${CLAIM}" lo-c003 session-a 2>&1); rc_r=$?
+set -e
+rm -rf "${shimdir}"
+git fetch -q origin "${QUEUE_BRANCH}"
+
+if printf '%s' "${out_r}" | grep -q "^won"; then
+    echo "FAIL: redirected push must not report 'won', got: ${out_r}" >&2; exit 1
+fi
+if [[ "${rc_r}" -ne 2 ]] || ! printf '%s' "${out_r}" | grep -q "redirected off the shared ref"; then
+    echo "FAIL: redirected claim should error (exit 2, 'redirected off the shared ref'), got exit ${rc_r}: ${out_r}" >&2
+    exit 1
+fi
+if [[ "$(git rev-parse "origin/${QUEUE_BRANCH}")" != "${before_tip}" ]]; then
+    echo "FAIL: a redirected claim must not advance the coordination ref" >&2; exit 1
+fi
+echo "PASS: redirected push fails loud instead of a false 'won' (#72)"
 
 # -- Part 2: a session on the wrong branch must fail loud, not look "lost" --
 cd "${tmpdir_b}"

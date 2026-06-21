@@ -43,7 +43,12 @@ mkdir -p claude-arsenal/queue
 printf '%s\n' '{"id":"lo-t1","title":"T1","status":"in_progress","assignee":"s1"}' \
     > claude-arsenal/queue/tasks.jsonl
 echo "# T1" > claude-arsenal/queue/lo-t1.md
-git add claude-arsenal
+# Session-local files (incl. the worktree_isolation sentinel postcheck writes)
+# are gitignored in production (init.py); mirror that so they don't read as a
+# dirty tree here. `git clean` (no -x) leaves ignored files, so the sentinel
+# persists across the postcheck restore exactly as it does in a real repo.
+printf 'claude-arsenal/session/\n' > .gitignore
+git add .gitignore claude-arsenal
 git commit -q -m "seed queue"
 git push -q -u origin arsenal-queue
 QUEUE_TIP=$(git rev-parse HEAD)

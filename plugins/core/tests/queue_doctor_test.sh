@@ -108,5 +108,36 @@ nout="$(PATH="${stub}:${PATH}" python3 "${DOCTOR}" --queue "${cdir}/tasks.jsonl"
 printf '%s' "${nout}" | grep -q "\[closed-issue\]" && { echo "FAIL: closed-issue fired with no issue field" >&2; exit 1; }
 echo "PASS: --closed-issues is a no-op for tasks without an issue field"
 
+# --- --lease-ttl: stale in_progress lease (crashed claim) is flagged (#72). ---
+ldir="${tmp}/lease/claude-arsenal/queue"; mkdir -p "${ldir}"
+OLD_TS=$(python3 -c "from datetime import datetime,timezone,timedelta; print((datetime.now(timezone.utc)-timedelta(hours=2)).replace(microsecond=0).isoformat())")
+NEW_TS=$(python3 -c "from datetime import datetime,timezone; print(datetime.now(timezone.utc).replace(microsecond=0).isoformat())")
+cat > "${ldir}/tasks.jsonl" <<QUEUE
+{"id":"lo-stale","title":"stale","status":"in_progress","assignee":"sess-x","claimed_at":"${OLD_TS}","deps":[],"payload":"lo-stale.md"}
+{"id":"lo-fresh","title":"fresh","status":"in_progress","assignee":"sess-y","claimed_at":"${NEW_TS}","deps":[],"payload":"lo-fresh.md"}
+{"id":"lo-nolease","title":"nolease","status":"in_progress","assignee":"sess-z","deps":[],"payload":"lo-nolease.md"}
+{"id":"lo-badlease","title":"badlease","status":"in_progress","assignee":"sess-w","claimed_at":"not-a-date","deps":[],"payload":"lo-badlease.md"}
+QUEUE
+echo "# x" > "${ldir}/lo-stale.md"; echo "# y" > "${ldir}/lo-fresh.md"
+echo "# z" > "${ldir}/lo-nolease.md"; echo "# w" > "${ldir}/lo-badlease.md"
+
+# ttl=0 (default) → no lease findings at all.
+zout="$(python3 "${DOCTOR}" --queue "${ldir}/tasks.jsonl" --fail-on error 2>&1)"
+printf '%s' "${zout}" | grep -qE "\[(stale-lease|no-lease|bad-lease)\]" \
+    && { echo "FAIL: lease checks fired with --lease-ttl 0 (should be disabled): ${zout}" >&2; exit 1; }
+echo "PASS: lease age check is disabled by default (--lease-ttl 0)"
+
+# ttl=3600 → stale (2h old) flagged, fresh (just now) not; missing/invalid noted.
+lout="$(python3 "${DOCTOR}" --queue "${ldir}/tasks.jsonl" --lease-ttl 3600 --fail-on error 2>&1)"
+printf '%s' "${lout}" | grep -q "\[stale-lease\] lo-stale" \
+    || { echo "FAIL: stale lease lo-stale not flagged: ${lout}" >&2; exit 1; }
+printf '%s' "${lout}" | grep -q "\[stale-lease\] lo-fresh" \
+    && { echo "FAIL: fresh lease lo-fresh wrongly flagged stale: ${lout}" >&2; exit 1; }
+printf '%s' "${lout}" | grep -q "\[no-lease\] lo-nolease" \
+    || { echo "FAIL: lo-nolease not flagged no-lease: ${lout}" >&2; exit 1; }
+printf '%s' "${lout}" | grep -q "\[bad-lease\] lo-badlease" \
+    || { echo "FAIL: lo-badlease not flagged bad-lease: ${lout}" >&2; exit 1; }
+echo "PASS: --lease-ttl flags stale leases, spares fresh ones, notes missing/invalid"
+
 echo "PASS: queue_doctor_test — all gates passed"
 exit 0

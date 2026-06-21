@@ -32,6 +32,24 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# Worktree-isolation clamp (QIC-6): when worker isolation is known to be
+# unavailable this session, parallel fan-out is unsafe — all workers would share
+# one tree and clobber each other. Once that is detected (worktree_probe.sh
+# returns `unavailable`, or worker_postcheck.sh returns `restored`) the verdict
+# is recorded in this sentinel. Emitting only ONE task here is what mechanically
+# forces serialized in-place mode, closing the window where a batch could be
+# selected and dispatched at the configured width before the orchestrator clamps.
+# Explicit env (ARSENAL_WORKTREE_ISOLATION) wins over the file; absence/`available`
+# leaves --max untouched.
+ISO_SENTINEL="${ARSENAL_SESSION_DIR:-claude-arsenal/session}/worktree_isolation"
+ISO_STATE="${ARSENAL_WORKTREE_ISOLATION:-}"
+if [[ -z "${ISO_STATE}" && -f "${ISO_SENTINEL}" ]]; then
+    ISO_STATE="$(tr -d '[:space:]' < "${ISO_SENTINEL}" 2>/dev/null || true)"
+fi
+if [[ "${ISO_STATE}" == "unavailable" ]]; then
+    MAX=1
+fi
+
 python3 - "${QUEUE_FILE}" "${PROFILE}" "${WORKSPACE}" "${TAGS}" "${MAX}" <<'PY' || true
 import sys, json, pathlib
 
