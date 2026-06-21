@@ -43,7 +43,8 @@ fi
 
 _claim_json() {
     python3 - "${TASK_ID}" "${SESSION_ID}" "${QUEUE_FILE}" <<'PY'
-import sys, json, pathlib
+import sys, os, json, tempfile, pathlib
+from datetime import datetime, timezone
 
 task_id, session_id, queue_path = sys.argv[1:]
 path = pathlib.Path(queue_path)
@@ -72,10 +73,29 @@ if target is None:
 
 target["status"] = "in_progress"
 target["assignee"] = session_id
-path.write_text(
-    "\n".join(json.dumps(r, separators=(",", ":")) for r in rows) + "\n",
-    encoding="utf-8",
-)
+# Stamp the lease (QIC: claimed_at lease). A crashed session would otherwise
+# strand the task in_progress forever; queue_doctor flags an expired lease and
+# reclaim.sh resets it to open. release.sh/update_task_row.py clear claimed_at on
+# any exit from in_progress.
+target["claimed_at"] = datetime.now(timezone.utc).isoformat()
+
+# Atomic write (QIC-13): temp-then-rename so a crash mid-write cannot corrupt
+# the ledger — readers always see either the old file or the fully-written new one.
+payload = "\n".join(json.dumps(r, separators=(",", ":")) for r in rows) + "\n"
+directory = path.parent if str(path.parent) else pathlib.Path(".")
+fd, tmp_name = tempfile.mkstemp(dir=directory, prefix=path.name + ".", suffix=".tmp")
+try:
+    with os.fdopen(fd, "w", encoding="utf-8") as fh:
+        fh.write(payload)
+        fh.flush()
+        os.fsync(fh.fileno())
+    os.replace(tmp_name, path)
+except BaseException:
+    try:
+        os.unlink(tmp_name)
+    except OSError:
+        pass
+    raise
 print("ok")
 print(json.dumps(target))
 PY
@@ -127,8 +147,35 @@ fi
 # racer fast-forwards; the rest are rejected non-fast-forward.
 # LANG=C keeps error messages in English so the grep below is locale-safe.
 if push_err="$(LANG=C git push "${REMOTE}" "HEAD:refs/heads/${QUEUE_BRANCH}" 2>&1)"; then
-    echo "won"
-    echo "${task_json}"
+    # Read-back guard (web double-claim). On restricted-push surfaces (observed
+    # on Claude Code on the web) a `git push HEAD:refs/heads/<queue>` can be
+    # silently redirected to the session branch and STILL exit 0 — two sessions
+    # would then both report "won" for the same task. A successful push is not
+    # proof the claim landed on the shared ref: fetch the published tip and
+    # confirm our claim commit actually advanced the coordination ref. If it did
+    # not, the push went elsewhere (or lost a race) — unwind and report "lost".
+    claim_head="$(git rev-parse --verify --quiet HEAD 2>/dev/null || true)"
+    git fetch "${REMOTE}" "${QUEUE_BRANCH}" >/dev/null 2>&1 || true
+    published_tip="$(git rev-parse --verify --quiet "refs/remotes/${REMOTE}/${QUEUE_BRANCH}" 2>/dev/null || true)"
+    # Our claim commit must be the published tip or an ancestor of it (a later
+    # claim/release may have fast-forwarded on top). Anything else means it never
+    # reached the coordination ref.
+    if [[ -n "${claim_head}" && -n "${published_tip}" ]] \
+        && git merge-base --is-ancestor "${claim_head}" "${published_tip}" 2>/dev/null; then
+        echo "won"
+        echo "${task_json}"
+        exit 0
+    fi
+    # Push reported success but the coordination ref was not advanced to our
+    # commit (redirected to the session branch, or a concurrent rewrite). Unwind
+    # the local claim and resync so the next iteration re-evaluates fresh state.
+    git reset HEAD~1 >/dev/null 2>&1 || true
+    git checkout -- "${QUEUE_FILE}" >/dev/null 2>&1 || true
+    if [[ -n "${published_tip}" ]]; then
+        git reset "${REMOTE}/${QUEUE_BRANCH}" >/dev/null 2>&1 || true
+        git checkout -- "${QUEUE_FILE}" >/dev/null 2>&1 || true
+    fi
+    echo "lost"
     exit 0
 fi
 

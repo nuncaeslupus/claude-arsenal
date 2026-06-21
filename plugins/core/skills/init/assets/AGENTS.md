@@ -1,6 +1,6 @@
 # Claude Arsenal
 
-<!-- claude-arsenal v0.15.10 — imported via @claude-arsenal/AGENTS.md -->
+<!-- claude-arsenal v0.16.0 — imported via @claude-arsenal/AGENTS.md -->
 
 This file is imported by the host repo's `CLAUDE.md` via the session-protocol block
 that `/init` injects. It provides the mechanics behind the proactive directives
@@ -84,8 +84,9 @@ At the start of every session (fresh start, context compaction, or cold restart)
 4b. **Queue consistency check** —
     `ARSENAL_QUEUE_DIR="${ARSENAL_QUEUE_DIR}" claude-arsenal/bin/queue_doctor.sh`.
     Read-only audit of `tasks.jsonl` and its payloads: orphaned payloads,
-    broken / cyclic deps, crashed `in_progress` claims (no assignee), stale or
-    `branch:`-only `pr` fields, a payload secret-scan, and — when `gh` is
+    broken / cyclic deps, crashed `in_progress` claims (no assignee), expired
+    claim leases (`stale-lease` / `no-lease` — recover with `reclaim.sh`), stale
+    or `branch:`-only `pr` fields, a payload secret-scan, and — when `gh` is
     available — `done` / `merged` rows whose PR is closed-unmerged (the
     false-`done` detector). **Report any ERROR / WARN findings to the user.** At
     session start it is advisory and never halts the loop; run it standalone to
@@ -275,7 +276,12 @@ dispatches that many workers at once. Run when the queue has open tasks:
      HEAD had to be recovered) → clamp `ARSENAL_MAX_WORKERS=1` and stay in
      serialized in-place mode for the rest of the session. Only ramp to the
      configured `ARSENAL_MAX_WORKERS` once a worker has returned with `ok`,
-     confirming real worktrees are in effect.
+     confirming real worktrees are in effect — at that point **export
+     `ARSENAL_ISOLATION_CONFIRMED=1`** so `queue_batch.sh` will fan out beyond a
+     single task. Until that flag is exported, `queue_batch.sh` mechanically
+     clamps every batch to one task (QIC-6), so the first batch can never
+     dispatch two workers before isolation is proven even if this prose rule is
+     skipped.
 1. Apply credit guards (see below) if not already set this session.
 2. **Budget check** — `claude-arsenal/bin/budget_check.sh`.
    - exit `0` → under quota (or quota unobservable; fail-open) AND under the
@@ -442,6 +448,7 @@ billing. The counter resets per `CLAUDE_SESSION_ID` and lives in the gitignored
 | Env var | Default | Effect |
 |---------|---------|--------|
 | `ARSENAL_MAX_WORKERS` | `2` | Workers per batch. `2` is the validated git-push concurrency ceiling; higher N raises claim-race churn and PR/merge-conflict surface. **Forced to `1` when worktree isolation is unavailable** (loop step 0): parallel workers are unsafe sharing one tree. |
+| `ARSENAL_ISOLATION_CONFIRMED` | _(unset)_ | Export `1` only after a worker returns `ok` proving real `git worktree` isolation (loop step 0). Until set, `queue_batch.sh` clamps every batch to one task (QIC-6 double-dispatch guard), regardless of `ARSENAL_MAX_WORKERS`. |
 | `ARSENAL_QUOTA_STOP_PCT` | `90` | Stop the loop before dispatch at/above this used-percentage on either window. |
 | `ARSENAL_MAX_ITERATIONS` | `50` | Always-available per-session dispatch-round cap (quota-independent). `0` disables it. |
 | `ARSENAL_GATE_INHERIT_ENV` | _(unset)_ | Set `1` to run gate blocks with the caller's full environment instead of the hardened throwaway HOME + restricted PATH. |
@@ -485,6 +492,26 @@ the main working tree never leaves the default branch. Requirements:
 Per-task **code** work is unaffected: workers run in `isolation: worktree` on
 their own feature branches → PRs → protected `main`, exactly as before. Only the
 queue-state commits live on the coordination branch.
+
+### Claim leases — recovering crashed claims
+
+`claim.sh` stamps `claimed_at` (UTC ISO-8601) on every claim. If a session
+crashes mid-task, its task would otherwise sit `in_progress` forever with no way
+to free it. Two mechanisms close that gap:
+
+- `queue_doctor.py` flags an `in_progress` row whose `claimed_at` is older than
+  the lease window (`--lease-secs`, default 2h) as `stale-lease` (and a row with
+  no `claimed_at` at all as `no-lease`).
+- `claude-arsenal/bin/reclaim.sh` resets those expired claims back to `open`
+  (clearing `assignee`/`claimed_at`, incrementing `attempts` so a task that
+  repeatedly strands sessions auto-escalates) and pushes the reset to the
+  coordination ref. Run it (or `--dry-run` first) when the doctor reports a
+  stale lease; `release.sh`/`update_task_row.py` clear the lease on any normal
+  exit from `in_progress`.
+
+All ledger writers (`claim.sh`, `update_task_row.py`) rewrite `tasks.jsonl`
+**atomically** (temp file + `os.replace`), so a crash mid-write can never leave
+a truncated/corrupt ledger.
 
 ---
 
@@ -581,8 +608,9 @@ claude-arsenal/
     queue_eval.sh     ← next single task (thin wrapper over queue_batch.sh)
     queue_batch.sh    ← up to N independent tasks (parallel fan-out)
     worktree_probe.sh ← probes whether git worktrees work here (fan-out safety)
-    claim.sh
+    claim.sh          ← flips a task to in_progress; stamps the claimed_at lease
     release.sh        ← orchestrator-side; accepts --pr, stages the payload
+    reclaim.sh        ← resets crashed claims (expired claimed_at lease) back to open
     verify_claim.sh   ← post-compaction probe: checks pushed branch vs queue state
     worker_postcheck.sh ← orchestrator-side; restores HEAD→queue branch + clean tree post-worker
     reconcile_merged.sh ← done→merged flip via `gh` PR merge-state check

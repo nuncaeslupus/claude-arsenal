@@ -15,6 +15,9 @@
 #     another task in the batch (intra-batch dep exclusion)
 #
 # Env: ARSENAL_MAX_WORKERS (default 2) sets N when --max is omitted.
+#      ARSENAL_ISOLATION_CONFIRMED — until set to 1 (worker proved real worktree
+#        isolation, loop step 0) the effective batch is clamped to 1 regardless
+#        of --max / ARSENAL_MAX_WORKERS (QIC-6 double-dispatch guard).
 #      LOOP_WORKSPACE, LOOP_TAGS — selection filters.
 # Exit: 0 always.
 
@@ -33,7 +36,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 python3 - "${QUEUE_FILE}" "${PROFILE}" "${WORKSPACE}" "${TAGS}" "${MAX}" <<'PY' || true
-import sys, json, pathlib
+import os, sys, json, pathlib
 
 queue_path, profile_path, workspace_filter, tags_filter, max_raw = sys.argv[1:6]
 
@@ -42,6 +45,15 @@ try:
 except ValueError:
     max_n = 2
 if max_n < 1:
+    max_n = 1
+
+# Mechanical double-dispatch guard (QIC-6). Parallel fan-out is only safe once a
+# worker has returned confirming real `git worktree` isolation (loop step 0). The
+# orchestrator exports ARSENAL_ISOLATION_CONFIRMED=1 only after that proof; until
+# then, clamp the batch to a single task so the first batch can NEVER select two
+# tasks before isolation is established — closing the window even if the
+# orchestrator skips the prose "first batch as a single worker" rule.
+if os.environ.get("ARSENAL_ISOLATION_CONFIRMED") != "1":
     max_n = 1
 
 queue = pathlib.Path(queue_path)

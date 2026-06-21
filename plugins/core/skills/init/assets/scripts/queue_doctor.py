@@ -27,10 +27,17 @@ import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 
 ALL_STATUSES = {"open", "in_progress", "done", "blocked", "escalated", "merged"}
 TERMINAL = {"done", "merged"}
+
+# Default claim-lease window (seconds). An in_progress task whose claimed_at is
+# older than this is treated as a crashed/abandoned claim — reclaim.sh resets it
+# to open. Override with --lease-secs. Generous by default: real tasks may run
+# long, so this only fires on clearly-stranded claims.
+DEFAULT_LEASE_SECS = 7200
 
 # Severity ordering for the --fail-on gate.
 SEVERITY_RANK = {"info": 0, "warn": 1, "error": 2}
@@ -184,9 +191,10 @@ def check_deps(rows: list[dict]) -> list[Finding]:
     return findings
 
 
-def check_invariants(rows: list[dict]) -> list[Finding]:
-    """assignee ↔ in_progress, and attempts/escalation sanity."""
+def check_invariants(rows: list[dict], lease_secs: int = DEFAULT_LEASE_SECS) -> list[Finding]:
+    """assignee ↔ in_progress, lease liveness, and attempts/escalation sanity."""
     findings: list[Finding] = []
+    now = datetime.now(UTC)
     for row in rows:
         tid = str(row.get("id") or "?")
         status = row.get("status")
@@ -209,7 +217,54 @@ def check_invariants(rows: list[dict]) -> list[Finding]:
                     f"status {status} but assignee={assignee!r} still set",
                 )
             )
+        # Lease liveness: an in_progress claim must carry a fresh claimed_at.
+        # Missing or expired → the owning session likely crashed; nothing else
+        # would ever reclaim it (the old gap), so flag for reclaim.sh.
+        if status == "in_progress":
+            claimed_at = row.get("claimed_at")
+            if not claimed_at:
+                findings.append(
+                    Finding(
+                        "warn",
+                        "no-lease",
+                        tid,
+                        "in_progress with no claimed_at lease — crashed pre-claim "
+                        "or legacy row; reclaim with reclaim.sh",
+                    )
+                )
+            else:
+                age = _lease_age_secs(claimed_at, now)
+                if age is None:
+                    findings.append(
+                        Finding(
+                            "warn",
+                            "bad-lease",
+                            tid,
+                            f"claimed_at={claimed_at!r} is not parseable ISO-8601",
+                        )
+                    )
+                elif age > lease_secs:
+                    findings.append(
+                        Finding(
+                            "warn",
+                            "stale-lease",
+                            tid,
+                            f"in_progress lease expired ({int(age)}s > {lease_secs}s) "
+                            "— crashed session; reclaim with reclaim.sh",
+                        )
+                    )
     return findings
+
+
+def _lease_age_secs(claimed_at: str, now: datetime) -> float | None:
+    """Age in seconds of an ISO-8601 claimed_at stamp, or None if unparseable."""
+    try:
+        ts = datetime.fromisoformat(str(claimed_at))
+    except (ValueError, TypeError):
+        return None
+    if ts.tzinfo is None:
+        ts = ts.replace(tzinfo=UTC)
+    return (now - ts).total_seconds()
 
 
 def check_pr_fields(rows: list[dict]) -> list[Finding]:
@@ -477,6 +532,12 @@ def main() -> None:
     p.add_argument("--remote", default="origin", help="Remote for --cross-branch (default origin)")
     p.add_argument("--default-branch", default="main", help="Default branch for --cross-branch")
     p.add_argument(
+        "--lease-secs",
+        type=int,
+        default=DEFAULT_LEASE_SECS,
+        help=f"in_progress claimed_at lease window in seconds (default {DEFAULT_LEASE_SECS})",
+    )
+    p.add_argument(
         "--fail-on",
         choices=["info", "warn", "error"],
         default="warn",
@@ -493,7 +554,7 @@ def main() -> None:
     rows, findings = load_rows(queue_path)
     findings += check_structure(rows)
     findings += check_deps(rows)
-    findings += check_invariants(rows)
+    findings += check_invariants(rows, args.lease_secs)
     findings += check_pr_fields(rows)
     findings += check_payloads(rows, queue_dir)
     if not args.no_secret_scan:

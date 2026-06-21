@@ -58,12 +58,26 @@ fail() { echo "FAIL: $1" >&2; echo "--- doctor output ---" >&2; echo "${out}" >&
 
 [[ "${rc}" -eq 1 ]] || fail "bad queue should exit 1 (fail-on=warn), got ${rc}"
 
-for code in duplicate-id bad-status dangling-dep stranded-in-progress \
+for code in duplicate-id bad-status dangling-dep stranded-in-progress no-lease \
             terminal-without-pr done-from-branch stale-assignee blocked-on-escalated \
             missing-payload orphan-payload bad-json dep-cycle secret-in-payload; do
     printf '%s' "${out}" | grep -q "\[${code}\]" || fail "expected finding [${code}] not reported"
 done
 echo "PASS: all expected finding codes reported on the bad queue"
+
+# --- Lease liveness (QIC claimed_at): expired → stale-lease, fresh → clean. ---
+ldir="${tmp}/lease/claude-arsenal/queue"; mkdir -p "${ldir}"
+OLD_TS="2000-01-01T00:00:00+00:00"
+NOW_TS="$(python3 -c 'from datetime import datetime,timezone; print(datetime.now(timezone.utc).isoformat())')"
+printf '%s\n%s\n' \
+    "{\"id\":\"lo-old\",\"title\":\"stale\",\"status\":\"in_progress\",\"assignee\":\"s1\",\"claimed_at\":\"${OLD_TS}\",\"deps\":[],\"payload\":\"lo-old.md\"}" \
+    "{\"id\":\"lo-new\",\"title\":\"fresh\",\"status\":\"in_progress\",\"assignee\":\"s2\",\"claimed_at\":\"${NOW_TS}\",\"deps\":[],\"payload\":\"lo-new.md\"}" \
+    > "${ldir}/tasks.jsonl"
+echo "# old" > "${ldir}/lo-old.md"; echo "# new" > "${ldir}/lo-new.md"
+lout="$(python3 "${DOCTOR}" --queue "${ldir}/tasks.jsonl" 2>&1)"
+printf '%s' "${lout}" | grep -q "\[stale-lease\] lo-old" || { echo "FAIL: expired lease not flagged: ${lout}" >&2; exit 1; }
+printf '%s' "${lout}" | grep -q "lo-new" && { echo "FAIL: fresh lease should not be flagged: ${lout}" >&2; exit 1; }
+echo "PASS: expired lease flagged stale-lease; fresh lease clean"
 
 # Secrets must be redacted — the full value must never appear in output.
 if printf '%s' "${out}" | grep -q "${SECRET_AWS}"; then

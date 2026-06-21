@@ -118,6 +118,50 @@ if [[ "$(git rev-parse "origin/${QUEUE_BRANCH}")" != "${before_tip}" ]]; then
 fi
 echo "PASS: claim refuses to leak non-queue commits onto the ledger (CA-03)"
 
+# -- Part 1c (web double-claim): a push silently redirected to a different ref
+# must NOT report "won". On the restricted-push web surface a
+# `git push HEAD:refs/heads/arsenal-queue` can be rewritten to the session
+# branch and still exit 0; without the read-back guard two sessions both win.
+# Simulate it with a git shim that rewrites the coordination push to a decoy
+# branch (still exit 0). claim.sh must read the ref back, see its commit never
+# landed on the coordination ref, and report "lost". lo-c002 is still open on
+# the remote (Part 1b seeded it but its claim was refused).
+tmpdir_d=$(mktemp -d)
+shimdir=$(mktemp -d)
+git clone -q "${tmpremote}" "${tmpdir_d}"
+cd "${tmpdir_d}"
+git config user.email "test@arsenal.example"
+git config user.name "Arsenal Test"
+real_git="$(command -v git)"
+cat > "${shimdir}/git" <<EOF
+#!/usr/bin/env bash
+if [[ "\$1" == "push" ]]; then
+    args=()
+    for a in "\$@"; do
+        if [[ "\$a" == "HEAD:refs/heads/${QUEUE_BRANCH}" ]]; then
+            args+=("HEAD:refs/heads/decoy-redirect")
+        else
+            args+=("\$a")
+        fi
+    done
+    exec "${real_git}" "\${args[@]}"
+fi
+exec "${real_git}" "\$@"
+EOF
+chmod +x "${shimdir}/git"
+before_tip=$(git rev-parse "origin/${QUEUE_BRANCH}")
+out_r=$(PATH="${shimdir}:${PATH}" bash "${CLAIM}" lo-c002 session-d 2>/dev/null | head -1)
+git fetch -q origin "${QUEUE_BRANCH}"
+after_tip=$(git rev-parse "origin/${QUEUE_BRANCH}")
+rm -rf "${shimdir}"
+if [[ "${out_r}" != "lost" ]]; then
+    echo "FAIL: redirected push must report 'lost', got '${out_r}'" >&2; exit 1
+fi
+if [[ "${after_tip}" != "${before_tip}" ]]; then
+    echo "FAIL: redirected claim must not advance the coordination ref" >&2; exit 1
+fi
+echo "PASS: redirected push reports 'lost', not a false 'won' (web double-claim)"
+
 # -- Part 2: a session on the wrong branch must fail loud, not look "lost" --
 cd "${tmpdir_b}"
 git checkout -q -b some-feature-branch

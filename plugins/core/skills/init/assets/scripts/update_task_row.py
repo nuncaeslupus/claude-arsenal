@@ -14,9 +14,34 @@ auto-escalation fires on an exhausted attempt cap).
 
 Exit: 0 on success, 1 on error.
 """
+import contextlib
 import json
+import os
 import sys
+import tempfile
 from pathlib import Path
+
+
+def _atomic_write_jsonl(path: Path, rows: list[dict]) -> None:
+    """Serialize rows and replace `path` atomically (QIC-13).
+
+    Write to a temp file in the same directory, fsync, then rename — a rename is
+    atomic on POSIX, so a crash mid-write can never leave a truncated/corrupt
+    ledger; readers see either the old file or the fully-written new one.
+    """
+    payload = "\n".join(json.dumps(r, separators=(",", ":")) for r in rows) + "\n"
+    fd, tmp_name = tempfile.mkstemp(dir=path.parent, prefix=path.name + ".", suffix=".tmp")
+    tmp = Path(tmp_name)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(payload)
+            fh.flush()
+            os.fsync(fh.fileno())
+        tmp.replace(path)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            tmp.unlink()
+        raise
 
 
 def update_task_row(
@@ -64,6 +89,11 @@ def update_task_row(
             row["status"] = final_status
             if final_status not in ("in_progress",):
                 row["assignee"] = None
+                # Release the lease (QIC: claimed_at lease). claim.sh stamps
+                # claimed_at when a task goes in_progress; clear it on any exit
+                # from in_progress so a completed/re-opened task is never seen as
+                # a stale (crashed) claim by the doctor / reclaim path.
+                row.pop("claimed_at", None)
             if final_status in ("done", "merged"):
                 row["attempts"] = 0
             if pr_url:
@@ -74,10 +104,7 @@ def update_task_row(
         print(f"update_task_row: task {task_id} not found", file=sys.stderr)
         sys.exit(1)
 
-    queue_path.write_text(
-        "\n".join(json.dumps(r, separators=(",", ":")) for r in rows) + "\n",
-        encoding="utf-8",
-    )
+    _atomic_write_jsonl(queue_path, rows)
     return final_status
 
 

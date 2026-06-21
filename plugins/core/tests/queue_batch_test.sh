@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # queue_batch_test.sh — unit test for queue_batch.sh (parallel fan-out selector).
-# Asserts: --max cap, priority order, blocking-dep exclusion (a task whose dep is
-# not done never appears), and LOOP_TAGS × LOOP_WORKSPACE AND-filtering.
+# Asserts: the QIC-6 double-dispatch clamp (single task until isolation is
+# confirmed), --max cap, priority order, blocking-dep exclusion (a task whose dep
+# is not done never appears), and LOOP_TAGS × LOOP_WORKSPACE AND-filtering.
 # Exit: 0 on PASS, 1 on FAIL.
 
 set -euo pipefail
@@ -35,6 +36,19 @@ C=$(python3 "${ADD_PY}" --title "C task" --priority 8  --tag CLI --workspace BAC
 D=$(python3 "${ADD_PY}" --title "D task" --priority 7  --tag WEB --workspace FRONTEND --queue "${Q}")
 
 ids() { python3 -c "import json,sys; [print(json.loads(l)['id']) for l in sys.stdin if l.strip()]"; }
+
+# Gate 0 (QIC-6): without ARSENAL_ISOLATION_CONFIRMED the batch is clamped to a
+# single task regardless of --max — the mechanical double-dispatch guard. This
+# must hold BEFORE we opt into multi-task batching for the gates below.
+COUNT=$(ARSENAL_ISOLATION_CONFIRMED="" bash "${BATCH}" --max 5 | grep -c .)
+if [[ "${COUNT}" -ne 1 ]]; then
+    echo "FAIL: unconfirmed isolation must clamp the batch to 1, got ${COUNT}" >&2; exit 1
+fi
+echo "PASS: double-dispatch guard clamps to 1 until isolation is confirmed"
+
+# Remaining gates test the multi-task selector, which is only reached once a
+# worker has proven real worktree isolation — so opt in for the rest of the run.
+export ARSENAL_ISOLATION_CONFIRMED=1
 
 # Gate 1: --max 5 global → A, C, D (B excluded: dep A still open); A first by priority.
 OUT=$(bash "${BATCH}" --max 5 | ids)
