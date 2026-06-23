@@ -2,8 +2,9 @@
 """Sync every version string in the repo from the canonical ``.bundle-version``.
 
 ``.bundle-version`` (read by ``tag-release.yml`` and ``check_update.sh``) is the
-single source of truth for the marketplace version. Both plugin manifests and the
-vendored ``AGENTS.md`` header carry their own copy that used to drift (issue #80).
+single source of truth for the marketplace version. Both plugin manifests, the
+vendored ``AGENTS.md`` header, and the consumer ``ARSENAL_REF`` pin examples in
+``docs/INSTALL.md`` carry their own copy that used to drift (issue #80).
 
 This script keeps them in lockstep:
 
@@ -11,7 +12,8 @@ This script keeps them in lockstep:
     python3 scripts/sync_version.py --check    # exit 1 if any target has drifted
 
 Replacement is a surgical regex on the version token only, so each file keeps its
-hand-authored formatting. Stdlib-only.
+hand-authored formatting. A target may carry more than one token (``docs/INSTALL.md``
+has two ``vX.Y.Z`` pins); every occurrence is checked and rewritten. Stdlib-only.
 """
 
 from __future__ import annotations
@@ -30,6 +32,11 @@ SEMVER = r"\d+\.\d+\.\d+"
 
 _JSON_VERSION = re.compile(rf'(?P<pre>"version"\s*:\s*")(?P<ver>{SEMVER})(?P<post>")')
 _AGENTS_HEADER = re.compile(rf"(?P<pre><!-- claude-arsenal v)(?P<ver>{SEMVER})(?P<post>)")
+# The consumer ``ARSENAL_REF`` pin in docs/INSTALL.md is a git tag (``vX.Y.Z``).
+# Anchor to the two contexts it appears in — the Makefile var and the commit-message
+# example — so unrelated ``vX.Y.Z`` tokens added to the doc later (e.g. a prerequisite
+# tool version) are never silently rewritten to the bundle version.
+_TAG_PIN = re.compile(rf"(?P<pre>ARSENAL_REF\s*\?=\s*v|skills @ v)(?P<ver>{SEMVER})(?P<post>)")
 
 
 @dataclass(frozen=True)
@@ -55,6 +62,7 @@ def build_targets(root: Path) -> tuple[Target, ...]:
             _AGENTS_HEADER,
             "AGENTS.md header",
         ),
+        Target(root / "docs/INSTALL.md", _TAG_PIN, "INSTALL.md ARSENAL_REF pin"),
     )
 
 
@@ -79,12 +87,12 @@ def read_canonical(root: Path) -> str:
     return version
 
 
-def current_version(target: Target, text: str) -> str:
-    """Return the version token currently in ``text`` for ``target``."""
-    match = target.pattern.search(text)
-    if match is None:
+def current_versions(target: Target, text: str) -> list[str]:
+    """Return every version token in ``text`` for ``target`` (a file may carry several)."""
+    found = [m.group("ver") for m in target.pattern.finditer(text)]
+    if not found:
         _fail(f"no version token found in {target.label} ({target.path})")
-    return match.group("ver")
+    return found
 
 
 def _fail(message: str) -> NoReturn:
@@ -113,12 +121,13 @@ def main() -> int:
 
     for target in build_targets(root):
         text = _read_text(target.path, target.label)
-        have = current_version(target, text)
-        if have == canonical:
+        haves = current_versions(target, text)
+        if all(have == canonical for have in haves):
             continue
-        drifted.append((target, have))
+        stale = ", ".join(sorted({have for have in haves if have != canonical}))
+        drifted.append((target, stale))
         if not args.check:
-            new_text = target.pattern.sub(rf"\g<pre>{canonical}\g<post>", text, count=1)
+            new_text = target.pattern.sub(rf"\g<pre>{canonical}\g<post>", text)
             target.path.write_text(new_text, encoding="utf-8")
 
     if args.check:
