@@ -95,8 +95,9 @@ creates a new git tag (`v<version>`) automatically if it does not already
 exist. Consumer projects pin to these tags to re-vendor the marketplace.
 
 `.bundle-version` is the **single canonical version** for the whole repo.
-Both plugin manifests (`plugins/*/.claude-plugin/plugin.json`) and the
-vendored `AGENTS.md` header carry a copy of it that is **derived, never
+The plugin manifests (`plugins/*/.claude-plugin/plugin.json`), the
+vendored `AGENTS.md` header, and the consumer `ARSENAL_REF` pin examples
+in `docs/INSTALL.md` all carry a copy of it that is **derived, never
 hand-edited**: after bumping `.bundle-version`, run `make sync-version` to
 propagate it. CI's `make sync-version-check` fails the build if any copy
 drifts. (Historically these drifted independently — issue #80.)

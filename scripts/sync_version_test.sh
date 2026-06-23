@@ -19,10 +19,11 @@ tmp=$(mktemp -d)
 cleanup() { rm -rf "${tmp}"; }
 trap cleanup EXIT
 
-# --- Build a fake repo tree with the three version-bearing files, all drifted. ---
+# --- Build a fake repo tree with every version-bearing file, all drifted. ---
 mkdir -p "${tmp}/plugins/core/skills/init/assets" \
          "${tmp}/plugins/core/.claude-plugin" \
-         "${tmp}/plugins/skill-creator/.claude-plugin"
+         "${tmp}/plugins/skill-creator/.claude-plugin" \
+         "${tmp}/docs"
 
 printf '0.15.0\n' > "${tmp}/plugins/core/skills/init/assets/.bundle-version"
 
@@ -51,12 +52,20 @@ cat > "${tmp}/plugins/core/skills/init/assets/AGENTS.md" <<'MD'
 body
 MD
 
+# INSTALL.md carries TWO tag-form pins — both must be checked and rewritten, so a
+# regression back to a single-token (count=1 / .search) sync is caught here.
+cat > "${tmp}/docs/INSTALL.md" <<'MD'
+ARSENAL_REF     ?= v0.11.0   # pin to a tag
+git commit -m "chore: vendor claude-arsenal skills @ v0.11.0"
+MD
+
 fail() { echo "FAIL: $1" >&2; exit 1; }
 
-# --- Gate 1: --check reports drift on all three targets and exits 1. ---
+# --- Gate 1: --check reports drift on every target and exits 1. ---
 out="$(python3 "${SYNC}" --repo-root "${tmp}" --check 2>&1)"; rc=$?
 [[ "${rc}" -eq 1 ]] || fail "drifted tree should --check exit 1, got ${rc}: ${out}"
-for label in "core/plugin.json" "skill-creator/plugin.json" "AGENTS.md header"; do
+for label in "core/plugin.json" "skill-creator/plugin.json" "AGENTS.md header" \
+             "INSTALL.md ARSENAL_REF pin"; do
     printf '%s' "${out}" | grep -qF "${label}" || fail "--check did not name '${label}': ${out}"
 done
 echo "PASS: --check names every drifted target and exits 1"
@@ -69,6 +78,11 @@ grep -q '"version": "0.15.0"' "${tmp}/plugins/skill-creator/.claude-plugin/plugi
     || fail "skill-creator/plugin.json not synced to 0.15.0"
 grep -q "<!-- claude-arsenal v0.15.0 " "${tmp}/plugins/core/skills/init/assets/AGENTS.md" \
     || fail "AGENTS.md header not synced to 0.15.0"
+# Both INSTALL.md pins must land on the canonical version (no stale token left behind).
+[[ "$(grep -c "v0.15.0" "${tmp}/docs/INSTALL.md")" -eq 2 ]] \
+    || fail "INSTALL.md should have 2 pins synced to v0.15.0"
+grep -q "v0.11.0" "${tmp}/docs/INSTALL.md" \
+    && fail "INSTALL.md still has a stale v0.11.0 pin (count=1 regression?)"
 echo "PASS: apply rewrites every target to the canonical version"
 
 # --- Gate 3: formatting around the version token is preserved. ---
