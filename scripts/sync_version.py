@@ -33,8 +33,10 @@ SEMVER = r"\d+\.\d+\.\d+"
 _JSON_VERSION = re.compile(rf'(?P<pre>"version"\s*:\s*")(?P<ver>{SEMVER})(?P<post>")')
 _AGENTS_HEADER = re.compile(rf"(?P<pre><!-- claude-arsenal v)(?P<ver>{SEMVER})(?P<post>)")
 # The consumer ``ARSENAL_REF`` pin in docs/INSTALL.md is a git tag (``vX.Y.Z``).
-# It appears more than once, so this matches every tag-form token in the file.
-_TAG_PIN = re.compile(rf"(?P<pre>v)(?P<ver>{SEMVER})(?P<post>)")
+# Anchor to the two contexts it appears in — the Makefile var and the commit-message
+# example — so unrelated ``vX.Y.Z`` tokens added to the doc later (e.g. a prerequisite
+# tool version) are never silently rewritten to the bundle version.
+_TAG_PIN = re.compile(rf"(?P<pre>ARSENAL_REF\s*\?=\s*v|skills @ v)(?P<ver>{SEMVER})(?P<post>)")
 
 
 @dataclass(frozen=True)
