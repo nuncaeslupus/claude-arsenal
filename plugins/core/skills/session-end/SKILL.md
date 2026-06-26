@@ -25,6 +25,17 @@ Do not load mid-job. The retrospective wants a complete arc to scan.
 
 ## Step 1 — handoff (opt-in)
 
+**Spec-alignment check (always, before writing the handoff).** Ask: did this
+session ADOPT or LOCK any architecture decision? If yes, verify the spec and
+plan actually reflect it — workspace projects keep them at
+`claude-arsenal/project/<WORKSPACE>/spec.md` + `plan.md`; otherwise they are
+`status/specification.md` + `status/plan.md`. If they don't, either update them now or seed a
+queue task before ending — a decision that lives only in handover prose drifts,
+because the handover is a snapshot the next session overwrites while the spec,
+plan, and queue are the ledger. The same rule applies to any blocking spec
+divergence found this session (see the vendored `AGENTS.md` "Divergence
+handling" section): seed it as a queue task, don't leave it in prose.
+
 Read the host repo's `CLAUDE.md` and look for one of:
 
 | Marker | Behavior |
