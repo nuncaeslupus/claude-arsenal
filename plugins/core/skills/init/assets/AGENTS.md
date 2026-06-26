@@ -1,6 +1,6 @@
 # Claude Arsenal
 
-<!-- claude-arsenal v0.17.1 — imported via @claude-arsenal/AGENTS.md -->
+<!-- claude-arsenal v0.18.0 — imported via @claude-arsenal/AGENTS.md -->
 
 This file is imported by the host repo's `CLAUDE.md` via the session-protocol block
 that `/init` injects. It provides the mechanics behind the proactive directives
@@ -389,6 +389,38 @@ dispatches that many workers at once. Run when the queue has open tasks:
    > sessions, but multi-workspace orchestrator sessions span the whole loop and
    > never call `/session-end` per workspace — these files fall through unless the
    > orchestrator does it explicitly at loop exit.
+
+---
+
+## Divergence handling
+
+A **spec divergence** is code that contradicts what `spec.md` / `plan.md`
+require — wrong labels, wrong scope, a missing step, a wrong constant. Noting one
+in `handover.md` prose is **insufficient**: the handover is a snapshot the next
+session overwrites, so a prose-only divergence never shows up in `queue-status`,
+is never ordered or blocked against other tasks, and silently persists across
+context compactions while workers keep building on the wrong inputs.
+
+**Rule: any blocking spec divergence found during a session MUST be seeded as a
+queue task before the session ends.** The queue is the source of truth, not the
+handover.
+
+Minimum task — title it `D-N` (the Nth divergence this session):
+
+```bash
+python3 .claude/skills/queue-add/scripts/create_task.py \
+  --title "D-N: <short description>" \
+  --workspace <WORKSPACE> \
+  --queue claude-arsenal/queue/tasks.jsonl
+```
+
+Give it a payload stub at `claude-arsenal/queue/<id>.md` that names three things:
+what the spec requires, what the code does, and the fix location.
+
+This applies to workers and solo sessions alike. A worker that spots a divergence
+outside its own task's scope flags it in its returned outcome; the orchestrator —
+the single queue writer — seeds the task (it never lets a worker push to the
+coordination branch). A solo session seeds the task directly.
 
 ---
 
