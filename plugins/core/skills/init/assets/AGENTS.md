@@ -410,10 +410,11 @@ Minimum task — title it `D-N` (the Nth divergence this session):
 ```bash
 python3 .claude/skills/queue-add/scripts/create_task.py \
   --title "D-N: <short description>" \
-  --workspace <WORKSPACE> \
   --queue claude-arsenal/queue/tasks.jsonl
 ```
 
+In a workspace-structured project, add `--workspace <WORKSPACE>` to file the
+divergence under the right workspace; solo / single-workspace repos omit it.
 Give it a payload stub at `claude-arsenal/queue/<id>.md` that names three things:
 what the spec requires, what the code does, and the fix location.
 
