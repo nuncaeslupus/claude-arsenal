@@ -82,10 +82,10 @@ def render_inline(text: str) -> str:
 
 
 def strip_inline_md(text: str) -> str:
-    text = re.sub(r"`([^`]*)`", r"\1", text)
-    text = re.sub(r"\*\*([^*]*)\*\*", r"\1", text)
-    text = re.sub(r"\*([^*]*)\*", r"\1", text)
-    text = re.sub(r"_([^_]*)_", r"\1", text)
+    text = re.sub(r"`(.*?)`", r"\1", text)
+    text = re.sub(r"\*\*(.*?)\*\*", r"\1", text)
+    text = re.sub(r"\*(.*?)\*", r"\1", text)
+    text = re.sub(r"_(.*?)_", r"\1", text)
     return text.strip()
 
 
@@ -101,13 +101,18 @@ def parse_doc(raw: str):
     h1 = ""
     i = 0
     h1_found = False
+    in_code_block = False
     while i < len(lines):
-        m = re.match(r"^#\s+(.*)$", lines[i])
-        if m:
-            h1 = m.group(1).strip()
-            i += 1
-            h1_found = True
-            break
+        line = lines[i]
+        if line.strip().startswith("```"):
+            in_code_block = not in_code_block
+        if not in_code_block:
+            m = re.match(r"^#\s+(.*)$", line)
+            if m:
+                h1 = m.group(1).strip()
+                i += 1
+                h1_found = True
+                break
         i += 1
     if not h1_found:
         i = 0
@@ -746,8 +751,12 @@ def main() -> int:
     seed_notes: dict = {}
     if notes_path.exists():
         try:
-            seed_notes = json.loads(notes_path.read_text(encoding="utf-8"))
-            print(f"ℹ  seeding from {notes_path} ({len(seed_notes)} notes)", file=sys.stderr)
+            loaded = json.loads(notes_path.read_text(encoding="utf-8"))
+            if isinstance(loaded, dict):
+                seed_notes = loaded
+                print(f"ℹ  seeding from {notes_path} ({len(seed_notes)} notes)", file=sys.stderr)
+            else:
+                print(f"⚠  {notes_path} does not contain a JSON object", file=sys.stderr)
         except Exception as exc:
             print(f"⚠  could not read {notes_path}: {exc}", file=sys.stderr)
 
