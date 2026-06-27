@@ -26,7 +26,7 @@
 # Branch name:  ARSENAL_QUEUE_BRANCH   (default: arsenal-queue)
 # Remote:       ARSENAL_QUEUE_REMOTE   (default: origin)
 # Default br:   ARSENAL_DEFAULT_BRANCH (default: main)
-# Worktree dir: ARSENAL_QUEUE_WORKTREE (default: <repo-root>/../arsenal-queue-wt)
+# Worktree dir: ARSENAL_QUEUE_WORKTREE (default: <repo-root>/../<repo-name>-arsenal-queue-wt)
 #
 # Exit: 0 on success, 1 on hard failure.
 
@@ -36,7 +36,8 @@ QUEUE_BRANCH="${ARSENAL_QUEUE_BRANCH:-arsenal-queue}"
 REMOTE="${ARSENAL_QUEUE_REMOTE:-origin}"
 DEFAULT_BRANCH="${ARSENAL_DEFAULT_BRANCH:-main}"
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-QUEUE_WORKTREE="${ARSENAL_QUEUE_WORKTREE:-${REPO_ROOT}/../arsenal-queue-wt}"
+REPO_NAME="$(basename "${REPO_ROOT}")"
+QUEUE_WORKTREE="${ARSENAL_QUEUE_WORKTREE:-${REPO_ROOT}/../${REPO_NAME}-arsenal-queue-wt}"
 
 has_remote=0
 git remote get-url "${REMOTE}" >/dev/null 2>&1 && has_remote=1
@@ -157,6 +158,19 @@ if [[ ${has_remote} -eq 1 ]]; then
         fi
         git push -u "${REMOTE}" "${QUEUE_BRANCH}" >/dev/null 2>&1 \
             || echo "queue_branch.sh: WARNING — could not push '${QUEUE_BRANCH}' to '${REMOTE}'; cross-session locking will not work until published" >&2
+    fi
+fi
+
+# Verify an existing directory at QUEUE_WORKTREE belongs to this clone before
+# reusing it. Comparing the common git directory (the physical .git dir) is
+# robust against SSH/HTTPS URL mismatches and multiple local clones of the same
+# remote — both would pass a remote-URL check yet cannot share a worktree.
+if [[ -d "${QUEUE_WORKTREE}" ]]; then
+    this_common_dir="$(cd "${REPO_ROOT}" && cd "$(git rev-parse --git-common-dir)" && pwd)"
+    existing_common_dir="$(cd "${QUEUE_WORKTREE}" 2>/dev/null && cd "$(git rev-parse --git-common-dir 2>/dev/null)" 2>/dev/null && pwd || true)"
+    if [[ -n "${existing_common_dir}" && "${existing_common_dir}" != "${this_common_dir}" ]]; then
+        echo "queue_branch.sh: ERROR — '${QUEUE_WORKTREE}' belongs to a different repository clone; set ARSENAL_QUEUE_WORKTREE to a different path" >&2
+        exit 1
     fi
 fi
 
