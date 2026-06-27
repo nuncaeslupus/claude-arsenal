@@ -97,6 +97,27 @@ python3 "${CLAUDE_SKILL_DIR}/scripts/validate_spec.py" --input status/specificat
 
 It checks that the required sections (1–4) and the measurable Success criteria block are present and filled — shape only, not content quality. Sections 5–6 are reported as pending until `design` appends them. Exit 0 clean, 1 on a missing or unfilled required section.
 
+## Annotatable reader
+
+When the spec is ready for stakeholder review, generate a phone-friendly, self-contained HTML reader and an annotated Markdown copy:
+
+```bash
+uv run --with markdown python3 "${CLAUDE_SKILL_DIR}/scripts/create_reader.py"
+```
+
+Auto-discovers the spec source (workspace mode: `claude-arsenal/project/*/spec.md`; single mode: `status/specification.md`). Outputs `spec-reader.html` and `spec-annotated.md` to the output directory (next to the spec in single mode, `docs/spec-reader/` in workspace mode).
+
+The HTML reader auto-saves notes in the browser and exports them as a Markdown file the reviewer sends back. The Markdown copy has a `> ✎ Notes` slot after every section for annotation in any text editor. To re-seed a rebuilt reader with notes from a previous export, place the returned file at `{output-dir}/notes.json`.
+
+Override defaults when needed:
+
+```bash
+uv run --with markdown python3 "${CLAUDE_SKILL_DIR}/scripts/create_reader.py" \
+    --input path/to/spec.md --output-dir docs/review --name "My Project"
+```
+
+Commit the generated files so reviewers can open the HTML directly from the repo.
+
 ## Workspace-aware paths
 
 When `claude-arsenal/project/<WORKSPACE>/` exists, write the spec to `claude-arsenal/project/<WORKSPACE>/spec.md` instead of `status/specification.md`, and in the same pass generate a ≤200-word worker brief at `claude-arsenal/project/<WORKSPACE>/context.md` (the orientation a queue worker reads before touching the task). Otherwise use `status/` as above. The validator takes the path via `--input`; point it at whichever spec file was written.
