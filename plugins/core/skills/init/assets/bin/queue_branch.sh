@@ -165,7 +165,7 @@ fi
 # reusing it. Comparing the common git directory (the physical .git dir) is
 # robust against SSH/HTTPS URL mismatches and multiple local clones of the same
 # remote — both would pass a remote-URL check yet cannot share a worktree.
-if [[ -d "${QUEUE_WORKTREE}" ]]; then
+if [[ -d "${QUEUE_WORKTREE}" && -e "${QUEUE_WORKTREE}/.git" ]]; then
     this_common_dir="$(cd "${REPO_ROOT}" && cd "$(git rev-parse --git-common-dir)" && pwd)"
     existing_common_dir="$(cd "${QUEUE_WORKTREE}" 2>/dev/null && cd "$(git rev-parse --git-common-dir 2>/dev/null)" 2>/dev/null && pwd || true)"
     if [[ -n "${existing_common_dir}" && "${existing_common_dir}" != "${this_common_dir}" ]]; then
