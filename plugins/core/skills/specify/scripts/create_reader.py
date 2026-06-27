@@ -252,7 +252,7 @@ def auto_discover(cwd: Path) -> tuple[str, list[tuple[str, dict]]]:
     if ws_dir.is_dir() and any(ws_dir.glob("*/spec.md")):
         return "workspace", collect_parts_workspace(ws_dir)
     single = cwd / "status" / "specification.md"
-    if single.exists():
+    if single.is_file():
         return "single", collect_parts_single(single)
     print(
         "✗ No spec found. Run from the repo root with a status/specification.md or "
@@ -269,7 +269,8 @@ def infer_title(cwd: Path) -> str:
         remote = subprocess.check_output(
             ["git", "remote", "get-url", "origin"], cwd=cwd, stderr=subprocess.DEVNULL, text=True
         ).strip()
-        name = re.split(r"[/:]", remote.rstrip(".git"))[-1]
+        match = re.search(r"([^/:]+?)(?:\.[gG][iI][tT])?/?$", remote)
+        name = match.group(1) if match else ""
         if name:
             return name.replace("-", " ").replace("_", " ").title()
     except Exception:
@@ -722,7 +723,7 @@ def main() -> int:
 
     if args.input:
         spec_path = Path(args.input)
-        if not spec_path.exists():
+        if not spec_path.is_file():
             print(f"✗ {spec_path} not found", file=sys.stderr)
             return 2
         parts = collect_parts_single(spec_path)
