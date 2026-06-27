@@ -212,6 +212,13 @@ if [[ ${wt_registered} -eq 0 ]]; then
     fi
 fi
 
+# Abort if the worktree was not properly initialised — git -C on a plain
+# directory (without .git) silently traverses up to the parent repo.
+if [[ ! -e "${QUEUE_WORKTREE}/.git" ]]; then
+    echo "queue_branch.sh: ERROR — failed to initialise worktree at '${QUEUE_WORKTREE}'; remove the directory and retry" >&2
+    exit 1
+fi
+
 # Verify the worktree is on the right branch; try to recover via checkout
 # before giving up (handles the case of manual branch switches in the worktree).
 wt_branch="$(git -C "${QUEUE_WORKTREE}" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"

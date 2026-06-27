@@ -269,7 +269,8 @@ def infer_title(cwd: Path) -> str:
         remote = subprocess.check_output(
             ["git", "remote", "get-url", "origin"], cwd=cwd, stderr=subprocess.DEVNULL, text=True
         ).strip()
-        name = re.split(r"[/:]", remote[:-4] if remote.endswith(".git") else remote)[-1]
+        match = re.search(r"([^/:]+?)(?:\.[gG][iI][tT])?/?$", remote)
+        name = match.group(1) if match else ""
         if name:
             return name.replace("-", " ").replace("_", " ").title()
     except Exception:
