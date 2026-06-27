@@ -1,6 +1,6 @@
 # Claude Arsenal
 
-<!-- claude-arsenal v0.18.0 — imported via @claude-arsenal/AGENTS.md -->
+<!-- claude-arsenal v0.19.0 — imported via @claude-arsenal/AGENTS.md -->
 
 This file is imported by the host repo's `CLAUDE.md` via the session-protocol block
 that `/init` injects. It provides the mechanics behind the proactive directives
