@@ -161,14 +161,15 @@ if [[ ${has_remote} -eq 1 ]]; then
     fi
 fi
 
-# Verify an existing directory at QUEUE_WORKTREE belongs to this repo's remote
-# before reusing it. Without this check a second repo at the same sibling path
-# would silently pick up the wrong project's coordination branch.
+# Verify an existing directory at QUEUE_WORKTREE belongs to this clone before
+# reusing it. Comparing the common git directory (the physical .git dir) is
+# robust against SSH/HTTPS URL mismatches and multiple local clones of the same
+# remote — both would pass a remote-URL check yet cannot share a worktree.
 if [[ -d "${QUEUE_WORKTREE}" ]]; then
-    existing_remote="$(git -C "${QUEUE_WORKTREE}" remote get-url "${REMOTE}" 2>/dev/null || true)"
-    this_remote="$(git remote get-url "${REMOTE}" 2>/dev/null || true)"
-    if [[ -n "${existing_remote}" && "${existing_remote}" != "${this_remote}" ]]; then
-        echo "queue_branch.sh: ERROR — '${QUEUE_WORKTREE}' belongs to a different remote (${existing_remote}); set ARSENAL_QUEUE_WORKTREE to a different path" >&2
+    this_common_dir="$(cd "${REPO_ROOT}" && cd "$(git rev-parse --git-common-dir)" && pwd)"
+    existing_common_dir="$(cd "${QUEUE_WORKTREE}" 2>/dev/null && cd "$(git rev-parse --git-common-dir 2>/dev/null)" 2>/dev/null && pwd || true)"
+    if [[ -n "${existing_common_dir}" && "${existing_common_dir}" != "${this_common_dir}" ]]; then
+        echo "queue_branch.sh: ERROR — '${QUEUE_WORKTREE}' belongs to a different repository clone; set ARSENAL_QUEUE_WORKTREE to a different path" >&2
         exit 1
     fi
 fi
