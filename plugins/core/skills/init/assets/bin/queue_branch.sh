@@ -26,7 +26,7 @@
 # Branch name:  ARSENAL_QUEUE_BRANCH   (default: arsenal-queue)
 # Remote:       ARSENAL_QUEUE_REMOTE   (default: origin)
 # Default br:   ARSENAL_DEFAULT_BRANCH (default: main)
-# Worktree dir: ARSENAL_QUEUE_WORKTREE (default: <repo-root>/../arsenal-queue-wt)
+# Worktree dir: ARSENAL_QUEUE_WORKTREE (default: <repo-root>/../<repo-name>-arsenal-queue-wt)
 #
 # Exit: 0 on success, 1 on hard failure.
 
@@ -36,7 +36,8 @@ QUEUE_BRANCH="${ARSENAL_QUEUE_BRANCH:-arsenal-queue}"
 REMOTE="${ARSENAL_QUEUE_REMOTE:-origin}"
 DEFAULT_BRANCH="${ARSENAL_DEFAULT_BRANCH:-main}"
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-QUEUE_WORKTREE="${ARSENAL_QUEUE_WORKTREE:-${REPO_ROOT}/../arsenal-queue-wt}"
+REPO_NAME="$(basename "${REPO_ROOT}")"
+QUEUE_WORKTREE="${ARSENAL_QUEUE_WORKTREE:-${REPO_ROOT}/../${REPO_NAME}-arsenal-queue-wt}"
 
 has_remote=0
 git remote get-url "${REMOTE}" >/dev/null 2>&1 && has_remote=1
@@ -157,6 +158,18 @@ if [[ ${has_remote} -eq 1 ]]; then
         fi
         git push -u "${REMOTE}" "${QUEUE_BRANCH}" >/dev/null 2>&1 \
             || echo "queue_branch.sh: WARNING — could not push '${QUEUE_BRANCH}' to '${REMOTE}'; cross-session locking will not work until published" >&2
+    fi
+fi
+
+# Verify an existing directory at QUEUE_WORKTREE belongs to this repo's remote
+# before reusing it. Without this check a second repo at the same sibling path
+# would silently pick up the wrong project's coordination branch.
+if [[ -d "${QUEUE_WORKTREE}" ]]; then
+    existing_remote="$(git -C "${QUEUE_WORKTREE}" remote get-url "${REMOTE}" 2>/dev/null || true)"
+    this_remote="$(git remote get-url "${REMOTE}" 2>/dev/null || true)"
+    if [[ -n "${existing_remote}" && "${existing_remote}" != "${this_remote}" ]]; then
+        echo "queue_branch.sh: ERROR — '${QUEUE_WORKTREE}' belongs to a different remote (${existing_remote}); set ARSENAL_QUEUE_WORKTREE to a different path" >&2
+        exit 1
     fi
 fi
 
