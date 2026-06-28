@@ -43,7 +43,7 @@ For each task:
 - **Where**: which files/services
 - **Dependencies**: what must be done first
 - **Gate (measurable acceptance condition)**: the objective metric and threshold that proves this task is done — written `<metric> <op> <threshold>` (e.g. `p95_latency_ms <= 200`, `line_coverage >= 0.90`), not just "tests pass." Derive it from the spec's success criteria. The `gate-check` skill defines the grammar the gate must follow so it can be checked mechanically; reserve a non-numeric gate for a condition that genuinely cannot be reduced to a number.
-- **Tests**: file paths the task creates or modifies, plus a one-sentence testability statement (what assertion proves the task is done).
+- **Tests**: test file path(s) and one or more test function names using `test_<what>_<condition>_<expected_result>` naming, each with a one-sentence assertion that can be written as a failing test before any production code is touched. These are copied verbatim into the task payload so the worker writes them RED first.
 - **Estimated effort**: Small (< 1h) / Medium (1-4h) / Large (4h+)
 
 Recommended: tasks should be small enough to be a single commit.

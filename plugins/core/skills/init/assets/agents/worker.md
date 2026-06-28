@@ -45,9 +45,22 @@ branch. Capture it first.
    If the payload already contains `## Attempt N failure` sections, read them
    before implementing — they record what prior approaches were tried and why
    they failed.
-2. **Implement the work** described in the payload. Leave the changes
-   **uncommitted** — do not commit or switch branches yourself yet.
-3. **Run the gates while the payload is still present:** the host lint gate if
+2. **Write tests first (RED).** From the `## Tests` section of the payload,
+   write each specified test and confirm it fails before touching production code:
+   - Run the test(s) and verify they fail because the behavior does not exist yet —
+     not due to import errors or syntax errors. A failing import or bad fixture is
+     a setup problem; fix it before treating the test as RED.
+   - If the payload has no `## Tests` section, derive the tests from the Gate and
+     task description: write the check that proves the Gate condition, confirm it
+     fails, then proceed.
+   - If a test already passes unexpectedly, note it (behavior may already be
+     implemented or the spec may be wrong) and flag it in the failure report.
+
+3. **Implement to green (GREEN).** Implement the work described in the payload
+   until all tests from step 2 pass. Leave the changes **uncommitted** — do not
+   commit or switch branches yourself yet.
+
+4. **Run the gates while the payload is still present:** the host lint gate if
    one exists (`make lint`, `npm run lint`, …), then
    `claude-arsenal/bin/gate_run.sh <task_id>`.
    - **Gate fails** (lint or `gate_run.sh` exit non-zero) → **open no PR.**
@@ -66,7 +79,7 @@ branch. Capture it first.
      ```
 
      Exit.
-4. **Gate passes** → open the PR with the thin helper. Export the dynamic
+5. **Gate passes** → open the PR with the thin helper. Export the dynamic
    Co-Authored-By identity supplied by the harness first (never hardcode a
    model name):
    ```bash
@@ -77,8 +90,8 @@ branch. Capture it first.
    (`origin/main`, **not** `arsenal-queue`), commits (Conventional Commits +
    the Co-Authored-By trailer), pushes, and prints either a PR URL or
    `branch:<name>` (push-only, when no PR backend is available here).
-5. **Return the outcome to the orchestrator** — status `done`, plus the PR URL
-   or `branch:<name>` line from step 4. A `branch:<name>` means the branch was
+6. **Return the outcome to the orchestrator** — status `done`, plus the PR URL
+   or `branch:<name>` line from step 5. A `branch:<name>` means the branch was
    pushed but **no PR was opened** (no PR backend in this worktree); it is not a
    completed task on its own — the orchestrator opens the PR before recording
    `done`. Do **not** call `release.sh`; the orchestrator records the result on
@@ -87,7 +100,7 @@ branch. Capture it first.
 ## On failure
 
 If implementation cannot be completed for any other reason, return outcome
-`open` to the orchestrator with a structured failure note (see step 3 format)
+`open` to the orchestrator with a structured failure note (see step 4 format)
 for the `## Failure notes` section. Do not open a PR.
 
 ## What not to do

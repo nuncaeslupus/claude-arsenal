@@ -45,10 +45,10 @@ The **Gate** column is required: a measurable acceptance condition `<metric> <op
 
 | T# | Description | Service | Size | Depends | Gate | Tests |
 |----|-------------|---------|------|---------|------|-------|
-| T1 | <description> | <service> | S/M/L | — | `<metric> <op> <threshold>` | <files + testability statement> |
-| T2 | <description> | <service> | S/M/L | T1 | `<metric> <op> <threshold>` | <files + testability statement> |
-| T3 | <description> | <service> | S/M/L | T1 | `<metric> <op> <threshold>` | <files + testability statement> |
-| T4 | <description> | <service> | S/M/L | T2, T3 | `<metric> <op> <threshold>` | <files + testability statement> |
+| T1 | <description> | <service> | S/M/L | — | `<metric> <op> <threshold>` | `test_<what>_<condition>_<expected_result>` in `<file>` — <one-sentence assertion> |
+| T2 | <description> | <service> | S/M/L | T1 | `<metric> <op> <threshold>` | `test_<what>_<condition>_<expected_result>` in `<file>` — <one-sentence assertion> |
+| T3 | <description> | <service> | S/M/L | T1 | `<metric> <op> <threshold>` | `test_<what>_<condition>_<expected_result>` in `<file>` — <one-sentence assertion> |
+| T4 | <description> | <service> | S/M/L | T2, T3 | `<metric> <op> <threshold>` | `test_<what>_<condition>_<expected_result>` in `<file>` — <one-sentence assertion> |
 
 **Status legend**: ☐ not started · ◐ in progress · ☑ merged
 
