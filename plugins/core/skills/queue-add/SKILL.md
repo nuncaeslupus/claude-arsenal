@@ -38,9 +38,10 @@ Use the printed ID as a `--deps` argument when adding dependent tasks.
 ## Writing the payload file
 
 After `create_task.py` prints the new ID, create `claude-arsenal/queue/<id>.md`.
-The payload is the first thing a worker reads; include a gate line and one reference
-anchor per spec section, decision record, or sibling pattern needed to start —
-spare them the grep.
+The payload is the first thing a worker reads; include a gate line, the test
+function names the worker must write RED first (copied from the plan's Tests column),
+and one reference anchor per spec section, decision record, or sibling pattern
+needed to start — spare them the grep.
 
 Load `.claude/skills/queue-add/references/payload-template.md` when writing the payload file for a new task.
 

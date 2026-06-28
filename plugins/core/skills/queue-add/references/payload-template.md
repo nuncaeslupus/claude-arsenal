@@ -4,6 +4,12 @@
 
 **Gate**: <copy the measurable acceptance condition from plan.md>
 
+## Tests
+
+Copy from the plan's Tests column. The worker writes these as failing (RED) tests before touching production code.
+
+- `test_<what>_<condition>_<expected_result>` in `<file-path>` — <one-sentence assertion>
+
 ## References
 
 Add one line per anchor needed to start the task without grepping.
