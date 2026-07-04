@@ -95,7 +95,7 @@ def slug(text: str) -> str:
     return text.strip("-")
 
 
-def parse_doc(raw: str):
+def parse_doc(raw: str) -> tuple[str, str, list[dict]]:
     """Return (h1_title, intro_md, [sections])."""
     lines = raw.split("\n")
     h1 = ""
@@ -291,7 +291,7 @@ def build_html(parts: list[tuple[str, dict]], title: str, gen_date: str, seed_no
     ls_ns = slug(title) + "-spec-v1:"
 
     toc = ['<details class="toc" open><summary>Contents</summary>']
-    for kind, p in parts:
+    for _kind, p in parts:
         head = esc(p["title"])
         if p["part_label"] != "Specification":
             head = f'{esc(p["part_label"])} — {head}'

@@ -18,6 +18,12 @@ git worktree list >/dev/null 2>&1 || { echo "SKIP: git worktree unavailable" >&2
 fail() { echo "FAIL: $1" >&2; exit 1; }
 
 tmp=$(mktemp -d)
+# Canonicalize: on macOS, mktemp -d returns a path under /var/folders/... where
+# /var is a symlink to /private/var. git resolves symlinks when recording
+# worktree paths, so `git worktree list` (and queue_branch.sh's stdout) would
+# report the /private/... form — comparing against the unresolved ${tmp} below
+# would then spuriously fail.
+tmp="$(cd "${tmp}" && pwd -P)"
 cleanup() { cd /; rm -rf "${tmp}"; }
 trap cleanup EXIT
 
