@@ -36,7 +36,9 @@ if [[ -n "${QUEUE_DIR}" && ! -d "${QUEUE_DIR}" ]]; then
     QUEUE_DIR=""
 fi
 if [[ -z "${QUEUE_DIR}" ]]; then
-    QUEUE_DIR="$(git worktree list --porcelain 2>/dev/null | awk -v want="refs/heads/${QUEUE_BRANCH}" '
+    # tr -d '\r' before awk: MSYS/Git-Bash porcelain lines end \r\n, and `\r`
+    # inside an awk regex literal is non-portable (POSIX/BSD awk).
+    QUEUE_DIR="$(git worktree list --porcelain 2>/dev/null | tr -d '\r' | awk -v want="refs/heads/${QUEUE_BRANCH}" '
         /^worktree / { path = substr($0, 10) }
         $0 == "branch " want { print path; exit }
     ')"
