@@ -29,7 +29,13 @@
 QUEUE_BRANCH="${ARSENAL_QUEUE_BRANCH:-arsenal-queue}"
 QUEUE_REL="claude-arsenal/queue/tasks.jsonl"
 QUEUE_DIR="${ARSENAL_QUEUE_DIR:-}"
-if [[ -z "${QUEUE_DIR}" || ! -d "${QUEUE_DIR}" ]]; then
+if [[ -n "${QUEUE_DIR}" && ! -d "${QUEUE_DIR}" ]]; then
+    # Set but invalid: warn loudly rather than silently falling back, mirroring
+    # query_task.py — silent fallback is the hard-to-debug "queue looks empty".
+    echo "queue_batch: WARNING — ARSENAL_QUEUE_DIR=${QUEUE_DIR} is not a directory; deriving the coordination worktree instead" >&2
+    QUEUE_DIR=""
+fi
+if [[ -z "${QUEUE_DIR}" ]]; then
     QUEUE_DIR="$(git worktree list --porcelain 2>/dev/null | awk -v want="refs/heads/${QUEUE_BRANCH}" '
         /^worktree / { path = substr($0, 10) }
         $0 == "branch " want { print path; exit }
