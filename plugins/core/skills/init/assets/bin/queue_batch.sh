@@ -18,7 +18,34 @@
 #      LOOP_WORKSPACE, LOOP_TAGS — selection filters.
 # Exit: 0 always.
 
-QUEUE_FILE="claude-arsenal/queue/tasks.jsonl"
+# Resolve the ledger against the coordination worktree, NOT the main working
+# tree. The selector MUST read the same tasks.jsonl that claim.sh/release.sh
+# mutate (the arsenal-queue worktree). The main tree's committed copy drifts —
+# the coordination branch is never merged to mainline — so reading it hands back
+# stale/foreign rows that a subsequent claim can't find. Precedence: an explicit
+# ARSENAL_QUEUE_DIR wins; otherwise derive the worktree that has the coordination
+# branch checked out, so a fresh shell that never inherited the env var still
+# reads the right file; only if neither resolves do we fall back to CWD.
+QUEUE_BRANCH="${ARSENAL_QUEUE_BRANCH:-arsenal-queue}"
+QUEUE_REL="claude-arsenal/queue/tasks.jsonl"
+QUEUE_DIR="${ARSENAL_QUEUE_DIR:-}"
+if [[ -n "${QUEUE_DIR}" && ! -d "${QUEUE_DIR}" ]]; then
+    # Set but invalid: warn loudly rather than silently falling back, mirroring
+    # query_task.py — silent fallback is the hard-to-debug "queue looks empty".
+    echo "queue_batch: WARNING — ARSENAL_QUEUE_DIR=${QUEUE_DIR} is not a directory; deriving the coordination worktree instead" >&2
+    QUEUE_DIR=""
+fi
+if [[ -z "${QUEUE_DIR}" ]]; then
+    QUEUE_DIR="$(git worktree list --porcelain 2>/dev/null | awk -v want="refs/heads/${QUEUE_BRANCH}" '
+        /^worktree / { path = substr($0, 10) }
+        $0 == "branch " want { print path; exit }
+    ')"
+fi
+if [[ -n "${QUEUE_DIR}" && -d "${QUEUE_DIR}" ]]; then
+    QUEUE_FILE="${QUEUE_DIR}/${QUEUE_REL}"
+else
+    QUEUE_FILE="${QUEUE_REL}"
+fi
 PROFILE="${SURFACE_PROFILE:-claude-arsenal/session/surface_profile.json}"
 WORKSPACE="${LOOP_WORKSPACE:-}"
 TAGS="${LOOP_TAGS:-}"

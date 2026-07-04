@@ -18,28 +18,60 @@ import subprocess
 import sys
 from pathlib import Path
 
-# Resolve the ledger against ARSENAL_QUEUE_DIR (the coordination worktree) when
-# set, mirroring reconcile_merged.sh. Without this, hosts that empty the
-# main-tree tasks.jsonl seed ("single source of truth — remove live queue state
-# from main") would read the empty seed and report no_match / open=0 even though
-# the live ledger on the queue worktree is intact.
 _QUEUE_REL = "claude-arsenal/queue/tasks.jsonl"
+
+
+def _derive_queue_dir() -> str | None:
+    """Path of the worktree that has the coordination branch checked out.
+
+    ARSENAL_QUEUE_DIR is set by queue_branch.sh, but each command in the
+    /continue skill runs in its own shell, so a query_task invocation may never
+    inherit it. Without a fallback that lands us on the main working tree's
+    committed tasks.jsonl — which drifts from the live ledger, since the
+    coordination branch is never merged to mainline — and we report stale/foreign
+    rows. Deriving the worktree keeps the read correct even without the env var.
+    Every path `git worktree list` reports belongs to THIS repo by construction.
+    """
+    branch = os.environ.get("ARSENAL_QUEUE_BRANCH", "arsenal-queue")
+    try:
+        out = subprocess.run(
+            ["git", "worktree", "list", "--porcelain"],
+            capture_output=True,
+            text=True,
+            check=False,
+        ).stdout
+    except OSError:
+        return None
+    path = None
+    for line in out.splitlines():
+        if line.startswith("worktree "):
+            path = line[len("worktree ") :]
+        elif line == f"branch refs/heads/{branch}":
+            return path
+    return None
+
+
+# Resolve the ledger against the coordination worktree, mirroring queue_batch.sh.
+# An explicit ARSENAL_QUEUE_DIR wins; if it is set but invalid, warn loudly
+# rather than silently falling back (silent fallback is the hard-to-debug "queue
+# looks empty" symptom). If it is unset, derive the worktree so a fresh shell
+# still reads the live ledger, not the drifting main-tree seed.
 _QUEUE_DIR = os.environ.get("ARSENAL_QUEUE_DIR")
 if _QUEUE_DIR and not Path(_QUEUE_DIR).is_dir():
-    # Set but invalid (typo/misconfig): warn loudly rather than silently
-    # falling back to the main-tree seed — silent fallback is exactly the
-    # hard-to-debug "queue looks empty" symptom this fix targets.
     sys.stderr.write(
         f"query_task: WARNING — ARSENAL_QUEUE_DIR={_QUEUE_DIR!r} is not a "
-        f"directory; falling back to {_QUEUE_REL}\n"
+        f"directory; deriving the coordination worktree instead\n"
     )
+    _QUEUE_DIR = None
+if not _QUEUE_DIR:
+    _QUEUE_DIR = _derive_queue_dir()
 QUEUE_FILE = (
     str(Path(_QUEUE_DIR) / _QUEUE_REL)
     if _QUEUE_DIR and Path(_QUEUE_DIR).is_dir()
     else _QUEUE_REL
 )
-# queue_eval.sh lives in the host main tree (vendored bin/) and honors
-# ARSENAL_QUEUE_DIR internally, so it stays relative to CWD.
+# queue_eval.sh -> queue_batch.sh resolves the coordination worktree itself
+# (explicit ARSENAL_QUEUE_DIR, else derived), so it stays relative to CWD.
 QUEUE_EVAL = "claude-arsenal/bin/queue_eval.sh"
 
 
