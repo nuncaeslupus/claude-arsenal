@@ -27,7 +27,12 @@ QUEUE_BRANCH="${ARSENAL_QUEUE_BRANCH:-arsenal-queue}"
 REMOTE="${ARSENAL_QUEUE_REMOTE:-origin}"
 DEFAULT_BRANCH="${ARSENAL_DEFAULT_BRANCH:-main}"
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-QUEUE_WORKTREE="${ARSENAL_QUEUE_DIR:-${REPO_ROOT}/../arsenal-queue-wt}"
+REPO_NAME="$(basename "${REPO_ROOT}")"
+# Mirror queue_branch.sh's repo-name-scoped default exactly. A bare, unscoped
+# fallback here would let two different repos that happen to be sibling
+# directories (e.g. ~/dev/repo-a, ~/dev/repo-b) both resolve to the identical
+# path when ARSENAL_QUEUE_DIR isn't set — silently merging their queues.
+QUEUE_WORKTREE="${ARSENAL_QUEUE_DIR:-${REPO_ROOT}/../${REPO_NAME}-arsenal-queue-wt}"
 QUEUE_REL="claude-arsenal/queue/tasks.jsonl"
 
 # Nothing to do if the coordination branch has no queue file yet.

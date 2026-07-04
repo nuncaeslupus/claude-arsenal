@@ -1,6 +1,6 @@
 # Claude Arsenal
 
-<!-- claude-arsenal v0.20.0 — imported via @claude-arsenal/AGENTS.md -->
+<!-- claude-arsenal v0.20.1 — imported via @claude-arsenal/AGENTS.md -->
 
 This file is imported by the host repo's `CLAUDE.md` via the session-protocol block
 that `/init` injects. It provides the mechanics behind the proactive directives
@@ -503,7 +503,7 @@ billing. The counter resets per `CLAUDE_SESSION_ID` and lives in the gitignored
 | `LOOP_TAGS` | _(unset)_ | Comma/space-separated tag scope (ANDed); set by `/continue` token inference. |
 | `ARSENAL_QUEUE_BRANCH` | `arsenal-queue` | Coordination branch (must stay unprotected + pushable). |
 | `ARSENAL_QUEUE_REMOTE` | `origin` | Remote for queue + per-task pushes. |
-| `ARSENAL_QUEUE_WORKTREE` | `<repo-root>/../arsenal-queue-wt` | Path for the side worktree that hosts the coordination branch. |
+| `ARSENAL_QUEUE_WORKTREE` | `<repo-root>/../<repo-name>-arsenal-queue-wt` | Path for the side worktree that hosts the coordination branch. Name-scoped by repo so sibling clones never collide — **never** override this to a fixed path shared across repos (see warning below). |
 | `ARSENAL_QUEUE_DIR` | _(set by `queue_branch.sh`)_ | Active worktree path; export once, then pass to `claim.sh`/`release.sh`. |
 
 ---
@@ -542,6 +542,21 @@ the main working tree never leaves the default branch. Requirements:
   the remote). Keeping it off `main` keeps mainline history clean. The branch
   needs no cleanup — only the current state of `tasks.jsonl` matters, so its
   history is disposable and can be squashed any time without loss of meaning.
+- **One coordination worktree per repo clone — never a path shared across
+  repos.** `ARSENAL_QUEUE_WORKTREE` defaults to
+  `<repo-root>/../<repo-name>-arsenal-queue-wt`, name-scoped so sibling clones
+  of *different* repos (e.g. `~/dev/project-a` and `~/dev/project-b`) never
+  compute the same path. If you override `ARSENAL_QUEUE_WORKTREE` (or hand-set
+  `ARSENAL_QUEUE_DIR`) to a fixed, non-namespaced path — including the old
+  shared default `<repo-root>/../arsenal-queue-wt` from before this scoping
+  existed — two unrelated repositories can end up pointed at the exact same
+  worktree, whose `origin` belongs to only ONE of them. Both projects then
+  silently coordinate through that one repo's `arsenal-queue` branch: their
+  task ledgers merge, and a worker in project A can claim and "complete" a
+  task that actually belongs to project B. `queue_branch.sh` will reuse an
+  existing worktree it finds already checked out elsewhere in *this* repo, but
+  it cannot protect you from an override that points at a *different* repo's
+  worktree — don't set one unless the path is still unique per repo.
 
 Per-task **code** work is unaffected: workers run in `isolation: worktree` on
 their own feature branches → PRs → protected `main`, exactly as before. Only the

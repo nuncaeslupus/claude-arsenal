@@ -74,6 +74,25 @@ legacy_sync() {
 }
 
 # ---------------------------------------------------------------------------
+# find_branch_worktree: path of the worktree (if any) that already has
+# QUEUE_BRANCH checked out, per `git worktree list`. Git refuses a second
+# worktree for the same branch ("'<branch>' is already used by worktree at
+# '<path>'"), so callers must discover and reuse that path rather than
+# hard-failing when it doesn't match the computed default — e.g. a worktree
+# left at a legacy, non-namespaced path from before repo-name scoping was
+# added (see queue_branch.sh history). Every path `git worktree list` reports
+# belongs to THIS repo by construction, so no separate ownership check is
+# needed for a path found this way.
+# ---------------------------------------------------------------------------
+find_branch_worktree() {
+    local branch="$1"
+    git worktree list --porcelain 2>/dev/null | awk -v want="refs/heads/${branch}" '
+        /^worktree / { path = substr($0, 10) }
+        $0 == "branch " want { print path; exit }
+    '
+}
+
+# ---------------------------------------------------------------------------
 # LEGACY FALLBACK — only when `git worktree` is unavailable.
 # Preserves the original branch-switch behaviour exactly.
 # ---------------------------------------------------------------------------
@@ -185,6 +204,27 @@ if [[ ${wt_registered} -eq 0 ]]; then
     # Clean up any stale worktree record pointing at this path before adding.
     git worktree prune >/dev/null 2>&1 || true
 
+    # The branch may already be checked out at a DIFFERENT path than the one
+    # just computed — most commonly a worktree created before repo-name
+    # scoping (#122) landed, sitting at the old shared default
+    # `../arsenal-queue-wt`. `git worktree add` would fail outright in that
+    # case ("already used by worktree at ..."); detect it first and reuse
+    # that worktree instead of hard-failing.
+    existing_path="$(find_branch_worktree "${QUEUE_BRANCH}")"
+    if [[ -n "${existing_path}" && "${existing_path}" != "${QUEUE_WORKTREE}" ]]; then
+        if [[ -e "${existing_path}/.git" ]]; then
+            echo "queue_branch.sh: '${QUEUE_BRANCH}' is already checked out at '${existing_path}' (expected '${QUEUE_WORKTREE}'); reusing it instead of creating a second worktree" >&2
+            QUEUE_WORKTREE="${existing_path}"
+            wt_registered=1
+        else
+            # Registration is stale (directory removed by hand) — prune and
+            # fall through to creating at the computed default path.
+            git worktree prune >/dev/null 2>&1 || true
+        fi
+    fi
+fi
+
+if [[ ${wt_registered} -eq 0 ]]; then
     mkdir -p "$(dirname "${QUEUE_WORKTREE}")" 2>/dev/null || true
 
     if [[ ${has_remote} -eq 1 ]] \
