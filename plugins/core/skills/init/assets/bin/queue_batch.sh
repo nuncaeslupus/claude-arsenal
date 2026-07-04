@@ -37,6 +37,7 @@ if [[ -n "${QUEUE_DIR}" && ! -d "${QUEUE_DIR}" ]]; then
 fi
 if [[ -z "${QUEUE_DIR}" ]]; then
     QUEUE_DIR="$(git worktree list --porcelain 2>/dev/null | awk -v want="refs/heads/${QUEUE_BRANCH}" '
+        { sub(/\r$/, "") }   # strip CR: MSYS/Git-Bash porcelain lines end \r\n
         /^worktree / { path = substr($0, 10) }
         $0 == "branch " want { print path; exit }
     ')"

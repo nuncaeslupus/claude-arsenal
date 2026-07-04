@@ -87,6 +87,7 @@ legacy_sync() {
 find_branch_worktree() {
     local branch="$1"
     git worktree list --porcelain 2>/dev/null | awk -v want="refs/heads/${branch}" '
+        { sub(/\r$/, "") }   # strip CR: MSYS/Git-Bash porcelain lines end \r\n
         /^worktree / { path = substr($0, 10) }
         $0 == "branch " want { print path; exit }
     '
@@ -196,7 +197,9 @@ fi
 # Create or reuse the worktree.
 # Check by canonical path match in the porcelain listing.
 wt_registered=0
-if git worktree list --porcelain 2>/dev/null | grep -qxF "worktree ${QUEUE_WORKTREE}"; then
+# tr -d '\r': MSYS/Git-Bash porcelain lines end \r\n, which would defeat the
+# exact-line match (grep -x) and leave the worktree undetected.
+if git worktree list --porcelain 2>/dev/null | tr -d '\r' | grep -qxF "worktree ${QUEUE_WORKTREE}"; then
     wt_registered=1
 fi
 
