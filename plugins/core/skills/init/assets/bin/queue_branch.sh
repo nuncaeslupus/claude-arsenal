@@ -86,8 +86,10 @@ legacy_sync() {
 # ---------------------------------------------------------------------------
 find_branch_worktree() {
     local branch="$1"
-    git worktree list --porcelain 2>/dev/null | awk -v want="refs/heads/${branch}" '
-        { sub(/\r$/, "") }   # strip CR: MSYS/Git-Bash porcelain lines end \r\n
+    # tr -d '\r': MSYS/Git-Bash porcelain lines end \r\n. Strip before awk
+    # rather than inside it — `\r` in an awk regex literal is non-portable
+    # (POSIX/BSD awk may read it as a literal backslash-r).
+    git worktree list --porcelain 2>/dev/null | tr -d '\r' | awk -v want="refs/heads/${branch}" '
         /^worktree / { path = substr($0, 10) }
         $0 == "branch " want { print path; exit }
     '
