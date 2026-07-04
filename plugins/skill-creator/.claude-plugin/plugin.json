@@ -1,6 +1,6 @@
 {
   "name": "skill-creator",
-  "version": "0.20.0",
+  "version": "0.20.1",
   "description": "Meta-skill that gates every authoring, editing, or refactoring change to a Claude Code skill. Ships the validator, library auditor, alignment runner, scaffolder, and the rubric every other skill in the marketplace is checked against.",
   "author": { "name": "nuncaeslupus" }
 }

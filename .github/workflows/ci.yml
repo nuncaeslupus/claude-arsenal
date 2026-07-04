@@ -54,6 +54,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # The test suite invokes shipped scripts (e.g. queue_doctor.py) via bare
+      # `python3`, matching how consumers run them — so `python3` on PATH must
+      # satisfy the project's own floor (pyproject.toml requires-python
+      # >=3.12), not whatever ubuntu-22.04 defaults to (3.10).
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
       - name: Configure git identity (tests create temp repos)
         run: |
           git config --global user.email "ci@arsenal.example"
