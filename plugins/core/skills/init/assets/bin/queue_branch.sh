@@ -23,9 +23,26 @@
 # unavailable (very old git or bare repo). In that mode nothing is echoed and
 # claim/release run from the main tree as before.
 #
+# In worktree mode, once the main tree's branch has settled, its name is
+# persisted to `${ARSENAL_SESSION_DIR:-claude-arsenal/session}/host_branch` so
+# worker_postcheck.sh can confirm the main tree's HEAD hasn't moved without
+# assuming it is `main` (see #128 — a web session's designated branch is
+# usually its own feature branch, not the repo's trunk).
+#
+# Project identity guard: ARSENAL_QUEUE_BRANCH is a generic literal name
+# (`arsenal-queue` by default) with no built-in tie to a specific project. If
+# it is ever fetched from the wrong remote — a stale `origin` left over from a
+# template/fork, a copy-pasted ARSENAL_QUEUE_REMOTE, or two unrelated projects
+# that end up sharing a remote — another project's tasks can silently land in
+# this session's queue. This script stamps a `.project-id` file (the
+# normalized remote URL) on the coordination branch the first time it creates
+# it, and on every subsequent run refuses to proceed (exit 1) if the fetched
+# branch's stamp doesn't match this repo's own remote, rather than mixing
+# queues.
+#
 # Branch name:  ARSENAL_QUEUE_BRANCH   (default: arsenal-queue)
 # Remote:       ARSENAL_QUEUE_REMOTE   (default: origin)
-# Default br:   ARSENAL_DEFAULT_BRANCH (default: main)
+# Default br:   ARSENAL_DEFAULT_BRANCH (default: the remote's HEAD branch, else `main`)
 # Worktree dir: ARSENAL_QUEUE_WORKTREE (default: <repo-root>/../<repo-name>-arsenal-queue-wt)
 #
 # Exit: 0 on success, 1 on hard failure.
@@ -34,13 +51,73 @@ set -uo pipefail
 
 QUEUE_BRANCH="${ARSENAL_QUEUE_BRANCH:-arsenal-queue}"
 REMOTE="${ARSENAL_QUEUE_REMOTE:-origin}"
-DEFAULT_BRANCH="${ARSENAL_DEFAULT_BRANCH:-main}"
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 REPO_NAME="$(basename "${REPO_ROOT}")"
 QUEUE_WORKTREE="${ARSENAL_QUEUE_WORKTREE:-${REPO_ROOT}/../${REPO_NAME}-arsenal-queue-wt}"
 
 has_remote=0
 git remote get-url "${REMOTE}" >/dev/null 2>&1 && has_remote=1
+
+# Auto-detect the repo's actual trunk branch from the remote's HEAD (set by
+# `git clone` / `git remote set-head`) instead of assuming it is literally
+# `main` — repos whose trunk is `master` or something else would otherwise
+# have DEFAULT_BRANCH silently point at a branch that doesn't exist. Only
+# falls back to the literal string `main` when detection is unavailable.
+DEFAULT_BRANCH="${ARSENAL_DEFAULT_BRANCH:-}"
+if [[ -z "${DEFAULT_BRANCH}" && ${has_remote} -eq 1 ]]; then
+    DEFAULT_BRANCH="$(git symbolic-ref --short "refs/remotes/${REMOTE}/HEAD" 2>/dev/null | sed "s#^${REMOTE}/##")"
+fi
+DEFAULT_BRANCH="${DEFAULT_BRANCH:-main}"
+
+# ---------------------------------------------------------------------------
+# Project identity: a normalized form of the remote URL, used to stamp and
+# verify the coordination branch belongs to THIS repo (see header comment).
+# Strips protocol/user prefixes and the `.git` suffix so the same remote
+# compares equal regardless of https/ssh form. Empty when there is no remote
+# — a fully local repo cannot fetch another project's branch, so there is
+# nothing to guard against.
+# ---------------------------------------------------------------------------
+_normalize_remote_id() {
+    local url="$1"
+    url="${url#https://}"; url="${url#http://}"; url="${url#ssh://git@}"; url="${url#git@}"
+    url="${url/://}"
+    url="${url%.git}"
+    printf '%s' "${url}"
+}
+PROJECT_ID=""
+[[ ${has_remote} -eq 1 ]] && PROJECT_ID="$(_normalize_remote_id "$(git remote get-url "${REMOTE}" 2>/dev/null || true)")"
+
+# ---------------------------------------------------------------------------
+# _verify_or_stamp_project_id: called once the coordination branch is checked
+# out at $1 (a worktree path, or "." in legacy in-place mode). If a
+# `.project-id` marker already exists on the branch, it must match this
+# repo's PROJECT_ID or we refuse to proceed — that mismatch is exactly a
+# foreign project's queue landing here. If no marker exists yet (a brand-new
+# branch, or one that predates this guard), stamp it now so future runs, from
+# any clone, can detect a mismatch immediately.
+# ---------------------------------------------------------------------------
+_verify_or_stamp_project_id() {
+    local wt="$1"
+    [[ -z "${PROJECT_ID}" ]] && return 0
+    local marker="${wt}/claude-arsenal/queue/.project-id"
+    if [[ -f "${marker}" ]]; then
+        local recorded
+        recorded="$(cat "${marker}" 2>/dev/null || true)"
+        if [[ -n "${recorded}" && "${recorded}" != "${PROJECT_ID}" ]]; then
+            echo "queue_branch.sh: ERROR — '${QUEUE_BRANCH}' on '${REMOTE}' is stamped for a different project ('${recorded}'), not this repo ('${PROJECT_ID}'). Refusing to use it to avoid mixing queues — check ARSENAL_QUEUE_REMOTE/origin, or set a distinct ARSENAL_QUEUE_BRANCH for this project." >&2
+            return 1
+        fi
+        return 0
+    fi
+    mkdir -p "$(dirname "${marker}")" 2>/dev/null || return 0
+    printf '%s\n' "${PROJECT_ID}" > "${marker}" 2>/dev/null || return 0
+    git -C "${wt}" add "claude-arsenal/queue/.project-id" >/dev/null 2>&1 || return 0
+    if ! git -C "${wt}" diff --cached --quiet -- claude-arsenal/queue/.project-id 2>/dev/null; then
+        git -C "${wt}" commit -q -m "chore(queue): stamp project identity" >/dev/null 2>&1 || true
+        [[ ${has_remote} -eq 1 ]] && git -C "${wt}" push "${REMOTE}" "HEAD:refs/heads/${QUEUE_BRANCH}" >/dev/null 2>&1 || true
+    fi
+    return 0
+}
 
 # ---------------------------------------------------------------------------
 # sync_worktree: fast-forward the coordination worktree to the latest
@@ -109,6 +186,7 @@ if ! git worktree list >/dev/null 2>&1; then
             git branch --set-upstream-to="${REMOTE}/${QUEUE_BRANCH}" >/dev/null 2>&1 || true
         fi
         legacy_sync
+        _verify_or_stamp_project_id "." || exit 1
         echo "on coordination branch '${QUEUE_BRANCH}' (legacy mode)" >&2
         exit 0
     fi
@@ -126,6 +204,7 @@ if ! git worktree list >/dev/null 2>&1; then
             git checkout -b "${QUEUE_BRANCH}" --track "${REMOTE}/${QUEUE_BRANCH}" >/dev/null 2>&1
         fi
         legacy_sync
+        _verify_or_stamp_project_id "." || exit 1
         echo "tracking existing '${REMOTE}/${QUEUE_BRANCH}' (legacy mode)" >&2
         exit 0
     fi
@@ -137,6 +216,7 @@ if ! git worktree list >/dev/null 2>&1; then
     if [[ ${has_remote} -eq 1 ]]; then
         if git push -u "${REMOTE}" "${QUEUE_BRANCH}" >/dev/null 2>&1; then
             legacy_sync
+            _verify_or_stamp_project_id "." || exit 1
             echo "created and published '${QUEUE_BRANCH}' (legacy mode)" >&2
             exit 0
         fi
@@ -153,19 +233,46 @@ fi
 # ---------------------------------------------------------------------------
 
 # Transition: if the main tree is on the coordination branch (left by a
-# legacy session), switch it back to the default branch so host consumers
-# (web servers, editors) see the correct content again.
+# legacy session, or an interrupted worker that ran in-place), switch it back
+# to the branch it actually belongs on. That is NOT blindly DEFAULT_BRANCH
+# (the repo's trunk) — a Claude Code on the web session is commonly pinned to
+# its own designated feature branch, not the trunk (#128). Prefer a branch
+# this same script recorded in a PRIOR run of this session (below); only fall
+# back to the trunk when nothing was recorded yet (e.g. the very first run).
 current_main="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
 if [[ "${current_main}" == "${QUEUE_BRANCH}" ]]; then
     if [[ -n "$(git status --porcelain -uno 2>/dev/null)" ]]; then
-        echo "queue_branch.sh: ERROR — main tree is on '${QUEUE_BRANCH}' with uncommitted changes; cannot auto-switch to '${DEFAULT_BRANCH}'. Please commit, stash, or discard your changes, then switch the main tree to '${DEFAULT_BRANCH}' manually." >&2
+        echo "queue_branch.sh: ERROR — main tree is on '${QUEUE_BRANCH}' with uncommitted changes; cannot auto-switch. Please commit, stash, or discard your changes, then switch the main tree manually." >&2
         exit 1
-    else
-        git checkout "${DEFAULT_BRANCH}" >/dev/null 2>&1 \
-            || { git fetch "${REMOTE}" "${DEFAULT_BRANCH}" >/dev/null 2>&1 || true; \
-                 git checkout -b "${DEFAULT_BRANCH}" "${REMOTE}/${DEFAULT_BRANCH}" >/dev/null 2>&1; } \
-            || { echo "queue_branch.sh: ERROR — could not switch main tree from '${QUEUE_BRANCH}' to '${DEFAULT_BRANCH}'" >&2; exit 1; }
     fi
+
+    return_branch=""
+    _session_dir="${ARSENAL_SESSION_DIR:-claude-arsenal/session}"
+    if [[ -f "${_session_dir}/host_branch" ]]; then
+        _recorded="$(cat "${_session_dir}/host_branch" 2>/dev/null || true)"
+        [[ -n "${_recorded}" && "${_recorded}" != "${QUEUE_BRANCH}" ]] && return_branch="${_recorded}"
+    fi
+    return_branch="${return_branch:-${DEFAULT_BRANCH}}"
+
+    git checkout "${return_branch}" >/dev/null 2>&1 \
+        || { git fetch "${REMOTE}" "${return_branch}" >/dev/null 2>&1 || true; \
+             git checkout -b "${return_branch}" "${REMOTE}/${return_branch}" >/dev/null 2>&1; } \
+        || { echo "queue_branch.sh: ERROR — could not switch main tree from '${QUEUE_BRANCH}' to '${return_branch}'" >&2; exit 1; }
+fi
+
+# Persist the main tree's actual current branch so worker_postcheck.sh (and any
+# other post-worker check) can verify the main tree's HEAD didn't move WITHOUT
+# assuming it equals the repo's trunk branch. This is deliberately not
+# DEFAULT_BRANCH above — that's the repo's trunk (used only as the queue
+# branch's fork point). On Claude Code on the web a session is typically
+# pinned to its OWN designated branch (e.g. `claude/web-continuation-xxx`),
+# never switched here, so DEFAULT_BRANCH's `main` fallback is the wrong thing
+# to diff the main tree against post-worker (#128).
+host_branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+if [[ -n "${host_branch}" ]]; then
+    session_dir="${ARSENAL_SESSION_DIR:-claude-arsenal/session}"
+    mkdir -p "${session_dir}" 2>/dev/null || true
+    printf '%s\n' "${host_branch}" > "${session_dir}/host_branch" 2>/dev/null || true
 fi
 
 # Ensure the coordination branch exists on the remote; create + push if not.
@@ -279,6 +386,10 @@ fi
 # Fast-forward the worktree to origin/<queue-branch> so it carries claim/release
 # commits pushed by other sessions (FF-only — never forks the append-only ledger).
 sync_worktree "${QUEUE_WORKTREE}"
+
+# Refuse a coordination branch stamped for a different project rather than
+# silently mixing queues (see header comment).
+_verify_or_stamp_project_id "${QUEUE_WORKTREE}" || exit 1
 
 # Echo the worktree path — callers capture this as ARSENAL_QUEUE_DIR.
 echo "${QUEUE_WORKTREE}"

@@ -1,6 +1,6 @@
 # Claude Arsenal
 
-<!-- claude-arsenal v0.20.3 — imported via @claude-arsenal/AGENTS.md -->
+<!-- claude-arsenal v0.20.5 — imported via @claude-arsenal/AGENTS.md -->
 
 This file is imported by the host repo's `CLAUDE.md` via the session-protocol block
 that `/init` injects. It provides the mechanics behind the proactive directives
@@ -557,6 +557,17 @@ the main working tree never leaves the default branch. Requirements:
   existing worktree it finds already checked out elsewhere in *this* repo, but
   it cannot protect you from an override that points at a *different* repo's
   worktree — don't set one unless the path is still unique per repo.
+- **Project identity is stamped and checked on every run.** Because
+  `ARSENAL_QUEUE_BRANCH` (`arsenal-queue`) is a generic literal name,
+  `queue_branch.sh` writes `claude-arsenal/queue/.project-id` (a normalized
+  form of `ARSENAL_QUEUE_REMOTE`'s URL) onto the coordination branch the
+  first time it creates it, independent of the worktree-path check above —
+  this also catches contamination that happens purely at the remote (a stale
+  `origin` left over from a template/fork, a copy-pasted
+  `ARSENAL_QUEUE_REMOTE`, or two projects that briefly share a remote), not
+  just a local path collision. Every later run compares the fetched branch's
+  stamp against this repo's own remote and **refuses to proceed (exit 1)** on
+  a mismatch instead of silently absorbing another project's task rows.
 
 Per-task **code** work is unaffected: workers run in `isolation: worktree` on
 their own feature branches → PRs → protected `main`, exactly as before. Only the
