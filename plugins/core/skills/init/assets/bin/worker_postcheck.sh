@@ -41,12 +41,25 @@ _record_isolation() {
     printf '%s\n' "$1" > "${dir}/worktree_isolation" 2>/dev/null || true
 }
 
-# In worktree mode the main tree SHOULD stay on the default branch, but if
+# In worktree mode the main tree SHOULD stay on whatever branch it was on when
+# queue_branch.sh set up the coordination worktree ("the host branch"), but if
 # the Task tool silently ignores isolation: worktree the worker runs in-place
 # and can move the main HEAD. Check and restore the main tree first so the
 # orchestrator can detect this (a `restored` result clamps ARSENAL_MAX_WORKERS=1).
 if [[ -n "${ARSENAL_QUEUE_DIR:-}" ]]; then
-    default_branch="${ARSENAL_DEFAULT_BRANCH:-main}"
+    # The host branch is NOT assumed to be `main` — on Claude Code on the web a
+    # session is typically pinned to its own designated branch (e.g.
+    # `claude/web-continuation-xxx`). queue_branch.sh persists the main tree's
+    # actual branch to this session file; only fall back to the literal `main`
+    # when neither an explicit override nor a recorded value is available
+    # (e.g. queue_branch.sh predates #128). ARSENAL_DEFAULT_BRANCH still wins
+    # when the orchestrator sets it explicitly.
+    session_dir="${ARSENAL_SESSION_DIR:-claude-arsenal/session}"
+    recorded_branch=""
+    if [[ -f "${session_dir}/host_branch" ]]; then
+        recorded_branch="$(cat "${session_dir}/host_branch" 2>/dev/null || true)"
+    fi
+    default_branch="${ARSENAL_DEFAULT_BRANCH:-${recorded_branch:-main}}"
     current_main="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
     dirty_main="$(git status --porcelain 2>/dev/null)"
 

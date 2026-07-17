@@ -307,6 +307,7 @@ def init_base(
     _add_gitignore_entry(repo_path, "claude-arsenal/session/rate_limits.json")
     _add_gitignore_entry(repo_path, "claude-arsenal/session/budget_iterations.json")
     _add_gitignore_entry(repo_path, "claude-arsenal/session/worktree_isolation")
+    _add_gitignore_entry(repo_path, "claude-arsenal/session/host_branch")
 
     # statusLine command feeding budget_check.sh (token-budget stop)
     _register_statusline(repo_path)

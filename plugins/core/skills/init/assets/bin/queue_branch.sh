@@ -23,6 +23,12 @@
 # unavailable (very old git or bare repo). In that mode nothing is echoed and
 # claim/release run from the main tree as before.
 #
+# In worktree mode, once the main tree's branch has settled, its name is
+# persisted to `${ARSENAL_SESSION_DIR:-claude-arsenal/session}/host_branch` so
+# worker_postcheck.sh can confirm the main tree's HEAD hasn't moved without
+# assuming it is `main` (see #128 — a web session's designated branch is
+# usually its own feature branch, not the repo's trunk).
+#
 # Branch name:  ARSENAL_QUEUE_BRANCH   (default: arsenal-queue)
 # Remote:       ARSENAL_QUEUE_REMOTE   (default: origin)
 # Default br:   ARSENAL_DEFAULT_BRANCH (default: main)
@@ -166,6 +172,21 @@ if [[ "${current_main}" == "${QUEUE_BRANCH}" ]]; then
                  git checkout -b "${DEFAULT_BRANCH}" "${REMOTE}/${DEFAULT_BRANCH}" >/dev/null 2>&1; } \
             || { echo "queue_branch.sh: ERROR — could not switch main tree from '${QUEUE_BRANCH}' to '${DEFAULT_BRANCH}'" >&2; exit 1; }
     fi
+fi
+
+# Persist the main tree's actual current branch so worker_postcheck.sh (and any
+# other post-worker check) can verify the main tree's HEAD didn't move WITHOUT
+# assuming it equals the repo's trunk branch. This is deliberately not
+# DEFAULT_BRANCH above — that's the repo's trunk (used only as the queue
+# branch's fork point). On Claude Code on the web a session is typically
+# pinned to its OWN designated branch (e.g. `claude/web-continuation-xxx`),
+# never switched here, so DEFAULT_BRANCH's `main` fallback is the wrong thing
+# to diff the main tree against post-worker (#128).
+host_branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+if [[ -n "${host_branch}" ]]; then
+    session_dir="${ARSENAL_SESSION_DIR:-claude-arsenal/session}"
+    mkdir -p "${session_dir}" 2>/dev/null || true
+    printf '%s\n' "${host_branch}" > "${session_dir}/host_branch" 2>/dev/null || true
 fi
 
 # Ensure the coordination branch exists on the remote; create + push if not.
