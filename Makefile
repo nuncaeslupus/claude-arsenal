@@ -58,8 +58,8 @@ sync-version:  ## write the canonical .bundle-version into both plugin manifests
 sync-version-check:  ## fail if any manifest / AGENTS.md version drifts from .bundle-version
 	uv run python scripts/sync_version.py --check
 
-test:  ## run the core plugin + repo-tool behaviour tests (plugins/core/tests/*.sh, scripts/*_test.sh)
-	@set -e; for t in plugins/core/tests/*.sh scripts/*_test.sh; do \
+test:  ## run every plugin's behaviour tests (plugins/*/tests/*.sh) + repo-tool tests (scripts/*_test.sh)
+	@set -e; for t in plugins/*/tests/*.sh scripts/*_test.sh; do \
 		[ -f "$$t" ] || continue; \
 		echo "=== test: $$t ==="; bash "$$t"; \
 	done

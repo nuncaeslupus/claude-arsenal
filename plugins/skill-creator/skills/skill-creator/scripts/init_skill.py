@@ -13,6 +13,13 @@ with that canary plus a placeholder negative-control.
 When `--plugin <name>` is set, the default library is rewritten to
 `plugins/<name>/skills`, so consumers can scaffold inside their own
 plugin without typing the long path.
+
+Library resolution, in order: `--library` (an explicit target dir wins),
+then `plugins/<--plugin>/skills`, then the cwd's `.claude/skills/` when
+that directory exists — a host repo keeps its skills there and has no
+`plugins/` tree, so defaulting to the marketplace layout scaffolded into
+`plugins/skill-creator/skills/` and had to be moved by hand. Only when
+none of those apply does it fall back to `plugins/skill-creator/skills`.
 """
 
 from __future__ import annotations
@@ -55,10 +62,13 @@ def main() -> int:
     parser.add_argument("name", help="Skill name (kebab-case, ≤64 chars)")
     parser.add_argument(
         "--library",
+        "--output",
+        dest="library",
         default=None,
         help=(
-            "Skill library root (default: plugins/<--plugin>/skills, or "
-            "plugins/skill-creator/skills if --plugin is unset)"
+            "Skill library root to scaffold into (default: "
+            "plugins/<--plugin>/skills, else the cwd's .claude/skills when it "
+            "exists, else plugins/skill-creator/skills)"
         ),
     )
     parser.add_argument(
@@ -82,6 +92,11 @@ def main() -> int:
         library_root = args.library
     elif args.plugin:
         library_root = f"plugins/{args.plugin}/skills"
+    elif Path(".claude/skills").is_dir():
+        # A host repo keeps its skills here and has no plugins/ tree; scaffolding
+        # into the marketplace layout there creates plugins/skill-creator/skills/
+        # from nothing and has to be moved by hand.
+        library_root = ".claude/skills"
     else:
         library_root = "plugins/skill-creator/skills"
     library = Path(library_root).resolve()
