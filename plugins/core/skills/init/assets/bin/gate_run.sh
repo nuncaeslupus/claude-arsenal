@@ -4,7 +4,24 @@
 #
 # Reads claude-arsenal/queue/<task_id>.md and looks for the first ```bash (or
 # ```sh) code block inside the ## Acceptance gate section. If found, executes
-# it in the repo root; if absent (prose-only gate), exits 0 immediately.
+# it in the repo root; if absent (prose-only gate), nothing is executed.
+#
+# A GATE THAT RAN NOTHING IS NOT A PASS, and it no longer looks like one. The
+# no-block case used to exit 0 in silence, indistinguishable from a real pass —
+# and since release.sh re-runs this script as its hard precondition for `done`,
+# a repo whose payloads all write gates as prose (or as inline single-backtick
+# commands, which the fence regex does not match) had an inert gate layer for
+# every task without a word of warning. One consumer audit found 0 of 70
+# payloads carrying a fenced block. Every outcome is now announced on stdout as
+# a `gate:` line and, when nothing ran, warned about on stderr:
+#
+#   gate: passed      a block was found and it exited 0
+#   gate: prose-only  an ## Acceptance gate section exists with no fenced block
+#   gate: none        no ## Acceptance gate section at all
+#
+# Set ARSENAL_GATE_REQUIRE_BLOCK=1 to make the two nothing-ran outcomes a hard
+# failure (exit 1) — the right setting for a repo that intends every task to
+# carry a mechanical gate.
 #
 # SECURITY: the gate block runs VERBATIM in the caller's working tree — it is
 # code, not data. A plan/payload an attacker can influence is therefore
@@ -15,8 +32,9 @@
 # ARSENAL_GATE_INHERIT_ENV=1 to run with the caller's full environment for
 # gates that genuinely need the real HOME/PATH (caches, pyenv/cargo shims).
 #
-# Exit: 0 gate passed or no mechanical gate defined
-#       1 gate failed (command exited non-zero)
+# Exit: 0 gate passed, or nothing mechanical was defined (see the `gate:` line)
+#       1 gate failed (command exited non-zero), or nothing ran under
+#         ARSENAL_GATE_REQUIRE_BLOCK=1
 #       2 usage/setup error
 
 set -euo pipefail
@@ -51,25 +69,58 @@ import subprocess
 import sys
 import tempfile
 
-payload = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8")
+payload_path = pathlib.Path(sys.argv[1])
+payload = payload_path.read_text(encoding="utf-8")
+task_id = payload_path.stem
+
+# `strict` turns "nothing executable was found" into a hard failure, for repos
+# that intend every task to carry a mechanical gate.
+strict = os.environ.get("ARSENAL_GATE_REQUIRE_BLOCK", "") not in ("", "0", "false")
+
+
+def nothing_ran(kind, detail):
+    """Announce that no command was executed. Never silent: this is the state
+    that used to be indistinguishable from a real pass."""
+    print(f"gate: {kind}")
+    print(
+        f"gate_run: {task_id} — NOTHING WAS EXECUTED ({detail}). "
+        "This is not a mechanical pass; whatever verification happened was a human's "
+        "or an agent's judgment, not this gate's.",
+        file=sys.stderr,
+    )
+    if strict:
+        print(
+            "gate_run: ARSENAL_GATE_REQUIRE_BLOCK=1 — failing because the payload "
+            "defines no runnable ```bash block under '## Acceptance gate'.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    sys.exit(0)
+
 
 # Extract ## Acceptance gate section (up to next ## heading or EOF).
 section_match = re.search(
     r'##\s+Acceptance gate\s*\n(.*?)(?=\n##\s|\Z)', payload, re.DOTALL | re.IGNORECASE
 )
 if not section_match:
-    sys.exit(0)  # no gate section — nothing to run
+    nothing_ran("none", "the payload has no '## Acceptance gate' section")
 
 section = section_match.group(1)
 
-# Find first ```bash or ```sh code block inside the section.
+# Find first ```bash or ```sh code block inside the section. An inline
+# single-backtick command does NOT match and never has — that is the most
+# common way a gate ends up inert, so name it in the message.
 block_match = re.search(r'```(?:bash|sh)\s*\n(.*?)```', section, re.DOTALL)
 if not block_match:
-    sys.exit(0)  # prose-only gate — deferred to worker judgment
+    nothing_ran(
+        "prose-only",
+        "the '## Acceptance gate' section has no fenced ```bash/```sh block — "
+        "prose and inline `single-backtick` commands are not executed",
+    )
 
 cmd = block_match.group(1).strip().replace('\r', '')
 if not cmd:
-    sys.exit(0)
+    nothing_ran("prose-only", "the fenced gate block is empty")
 
 script = "#!/usr/bin/env bash\nset -euo pipefail\n" + cmd + "\n"
 
@@ -80,9 +131,15 @@ def _run(env):
     return subprocess.run(["bash", "-s"], input=script, text=True, env=env).returncode
 
 
+def _finish(rc):
+    if rc == 0:
+        print("gate: passed")
+    sys.exit(1 if rc != 0 else 0)
+
+
 inherit = os.environ.get("ARSENAL_GATE_INHERIT_ENV", "") not in ("", "0", "false")
 if inherit:
-    sys.exit(1 if _run(None) != 0 else 0)
+    _finish(_run(None))
 
 # Hardened-by-default environment: throwaway HOME + PATH with $HOME-local shim
 # dirs stripped. Keeps system + non-home tooling on PATH so common gates still
@@ -118,5 +175,5 @@ with tempfile.TemporaryDirectory(prefix="arsenal-gate-home-") as gate_home:
         "TERM": os.environ.get("TERM", "dumb"),
     }
     rc = _run(env)
-sys.exit(1 if rc != 0 else 0)
+_finish(rc)
 PY
