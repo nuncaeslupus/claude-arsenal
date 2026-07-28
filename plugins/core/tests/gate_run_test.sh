@@ -139,5 +139,52 @@ if [[ "${after}" -gt "${before}" ]]; then
 fi
 echo "PASS: no orphaned gate script left behind"
 
+# --- A gate that ran nothing must not look like a pass -----------------------
+# Regression for the downstream audit that found 0 of 70 payloads carrying a
+# fenced block: every gate exited 0 in silence, and release.sh treated that as
+# its `done` precondition, so the mechanical-gate layer was inert repo-wide
+# without a word of warning.
+
+# Gate 10: no ## Acceptance gate section → `gate: none` + a stderr warning.
+out="$(cd "${tmpdir}" && bash "${GATE_RUN}" "lo-no-gate" 2>"${tmpdir}/err.log")"
+if [[ "${out}" != *"gate: none"* ]]; then
+    echo "FAIL: missing gate section should report 'gate: none', got '${out}'" >&2; exit 1
+fi
+if ! grep -q "NOTHING WAS EXECUTED" "${tmpdir}/err.log"; then
+    echo "FAIL: missing gate section should warn on stderr, got: $(cat "${tmpdir}/err.log")" >&2; exit 1
+fi
+echo "PASS: a payload with no gate section reports 'gate: none', loudly"
+
+# Gate 11: prose-only gate → `gate: prose-only` + a stderr warning that names
+# the inline-backtick trap.
+out="$(cd "${tmpdir}" && bash "${GATE_RUN}" "lo-prose" 2>"${tmpdir}/err.log")"
+if [[ "${out}" != *"gate: prose-only"* ]]; then
+    echo "FAIL: prose-only gate should report 'gate: prose-only', got '${out}'" >&2; exit 1
+fi
+if ! grep -q "NOTHING WAS EXECUTED" "${tmpdir}/err.log"; then
+    echo "FAIL: prose-only gate should warn on stderr, got: $(cat "${tmpdir}/err.log")" >&2; exit 1
+fi
+echo "PASS: a prose-only gate reports 'gate: prose-only', loudly"
+
+# Gate 12: a gate that really ran and passed says so — the two states are now
+# distinguishable from each other, which is the whole point.
+out="$(cd "${tmpdir}" && bash "${GATE_RUN}" "lo-pass" 2>/dev/null)"
+if [[ "${out}" != *"gate: passed"* ]]; then
+    echo "FAIL: an executed passing gate should report 'gate: passed', got '${out}'" >&2; exit 1
+fi
+echo "PASS: an executed gate reports 'gate: passed'"
+
+# Gate 13: strict mode turns "nothing ran" into a hard failure.
+if (cd "${tmpdir}" && ARSENAL_GATE_REQUIRE_BLOCK=1 bash "${GATE_RUN}" "lo-prose" >/dev/null 2>&1); then
+    echo "FAIL: ARSENAL_GATE_REQUIRE_BLOCK=1 should fail a prose-only gate" >&2; exit 1
+fi
+if (cd "${tmpdir}" && ARSENAL_GATE_REQUIRE_BLOCK=1 bash "${GATE_RUN}" "lo-no-gate" >/dev/null 2>&1); then
+    echo "FAIL: ARSENAL_GATE_REQUIRE_BLOCK=1 should fail a payload with no gate section" >&2; exit 1
+fi
+if ! (cd "${tmpdir}" && ARSENAL_GATE_REQUIRE_BLOCK=1 bash "${GATE_RUN}" "lo-pass" >/dev/null 2>&1); then
+    echo "FAIL: ARSENAL_GATE_REQUIRE_BLOCK=1 must still pass a real mechanical gate" >&2; exit 1
+fi
+echo "PASS: ARSENAL_GATE_REQUIRE_BLOCK=1 fails vacuous gates and passes real ones"
+
 echo "PASS: gate_run_test — all gates passed"
 exit 0

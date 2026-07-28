@@ -1,8 +1,20 @@
 name: tag-release
 
+# push: the normal path — tag as soon as a version bump lands on main.
+# schedule + workflow_dispatch: the recovery path. A push-only trigger fires
+# exactly once, so if Actions is unavailable at merge time (no runners, an
+# outage, a spending limit) the release ships UNTAGGED and stays that way —
+# nothing re-fires, and every consumer's tag-gated check_update.sh keeps
+# reporting the previous version as latest. That happened to v0.21.0 (and
+# v0.20.4 before it). The daily run re-derives the tag from .bundle-version and
+# creates it if missing, so a missed release self-heals once Actions recovers;
+# it is a no-op on every other day.
 on:
   push:
     branches: [main]
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
 
 permissions:
   contents: write

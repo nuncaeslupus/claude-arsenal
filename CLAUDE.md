@@ -103,10 +103,24 @@ propagate it. CI's `make sync-version-check` fails the build if any copy
 drifts. (Historically these drifted independently — issue #80.)
 
 Tagging is automatic via that workflow. **If GitHub Actions is unavailable**
-(an outage), the tag will not be created until Actions resume — run `make tag`
-from `main` as a one-command fallback (it creates+pushes `v<.bundle-version>`,
-skips if it exists, and refuses a version lower than the latest tag, mirroring
-the workflow).
+(an outage, no runners, a spending limit), the push-triggered run never fires
+and the release ships **untagged** — which is invisible from here but breaks
+every consumer: `check_update.sh` gates on the newest tag, so they keep being
+told the previous version is the latest. This has happened twice (`v0.20.4`,
+`v0.21.0`).
+
+Two things now cover it:
+
+- `tag-release.yml` also runs on a daily `schedule` and on `workflow_dispatch`,
+  so a tag missed during an outage is created automatically once Actions
+  recovers. It is a no-op when the tag already exists.
+- `make tag` from `main` remains the immediate fallback (creates+pushes
+  `v<.bundle-version>`, skips if it exists, refuses a version lower than the
+  latest tag, mirroring the workflow).
+
+After merging a version bump, **verify the tag exists** (`git ls-remote --tags
+origin 'refs/tags/v*'`) rather than assuming the workflow ran. Consumers cannot
+re-vendor a version that has no tag.
 
 Bump rules:
 - **Patch** (`x.y.Z`) — bug fixes, doc corrections, validator tweaks.
