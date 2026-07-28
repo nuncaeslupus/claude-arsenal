@@ -3,8 +3,11 @@
 # Against a bare temp remote (no `gh` backend): asserts the helper cuts the
 # feature branch off the host DEFAULT branch, writes a Conventional Commit with
 # the dynamic Co-Authored-By trailer, pushes the branch, and reports branch:<name>.
-# Also verifies the ARSENAL_SURFACE guard: git add -A must be refused when
-# ARSENAL_SURFACE is unset or not 'worktree'.
+# Also verifies the shared-checkout guard (#130 item 4): git add -A is refused
+# on a plain (non-worktree) checkout, is NOT unlocked by the caller asserting
+# ARSENAL_SURFACE=worktree about itself, and is allowed either by real worktree
+# isolation, by the orchestrator's recorded serialized in-place mode, or by the
+# explicit ARSENAL_ALLOW_SHARED_ADD operator override.
 # Exit: 0 on PASS, 1 on FAIL.
 
 set -euo pipefail
@@ -50,25 +53,41 @@ git config user.name "Arsenal Test"
 main_sha=$(git rev-parse origin/main)
 echo "feature" > feature.txt
 
-# Gate 0a: guard refuses when ARSENAL_SURFACE is unset.
+# Gate 0a: guard refuses on a plain checkout with nothing set.
 if err=$(ARSENAL_COAUTHOR="" bash "${HELPER}" lo-guard-unset "Guard test" 2>&1); then
-    echo "FAIL: expected non-zero exit when ARSENAL_SURFACE unset, got exit 0 with output: ${err}" >&2; exit 1
+    echo "FAIL: expected non-zero exit on a shared checkout, got exit 0 with output: ${err}" >&2; exit 1
 fi
 if ! echo "${err}" | grep -q "git add -A refused on shared checkout"; then
     echo "FAIL: expected 'git add -A refused on shared checkout' in stderr, got: ${err}" >&2; exit 1
 fi
-echo "PASS: guard refuses git add -A when ARSENAL_SURFACE is unset"
+echo "PASS: guard refuses git add -A on a shared checkout"
 
-# Gate 0b: guard refuses when ARSENAL_SURFACE is 'shared' (non-worktree).
-if err=$(ARSENAL_SURFACE="shared" ARSENAL_COAUTHOR="" bash "${HELPER}" lo-guard-shared "Guard test" 2>&1); then
-    echo "FAIL: expected non-zero exit when ARSENAL_SURFACE=shared, got exit 0 with output: ${err}" >&2; exit 1
+# Gate 0b (#130 item 4): the caller certifying its own isolation must NOT
+# unlock the guard — that is the self-certification hole this closes.
+if err=$(ARSENAL_SURFACE="worktree" ARSENAL_COAUTHOR="" bash "${HELPER}" lo-guard-selfcert "Guard test" 2>&1); then
+    echo "FAIL: ARSENAL_SURFACE=worktree self-certification still unlocks the guard: ${err}" >&2; exit 1
 fi
 if ! echo "${err}" | grep -q "git add -A refused on shared checkout"; then
     echo "FAIL: expected 'git add -A refused on shared checkout' in stderr, got: ${err}" >&2; exit 1
 fi
-echo "PASS: guard refuses git add -A when ARSENAL_SURFACE=shared"
+echo "PASS: guard is not unlocked by the caller's own ARSENAL_SURFACE claim"
 
-OUT=$(ARSENAL_SURFACE="worktree" ARSENAL_COAUTHOR="Test Bot <noreply@anthropic.com>" \
+# Gate 0c: the orchestrator's recorded serialized in-place mode unlocks it —
+# that sentinel is written by worktree_probe.sh / worker_postcheck.sh and is
+# what clamps the batch to a single worker, so no concurrent worker exists.
+mkdir -p "${tmpwork}/claude-arsenal/session"
+echo "unavailable" > "${tmpwork}/claude-arsenal/session/worktree_isolation"
+if ! ARSENAL_COAUTHOR="" bash "${HELPER}" lo-guard-inplace "Guard inplace" >/dev/null 2>&1; then
+    echo "FAIL: recorded serialized in-place mode should permit git add -A" >&2; exit 1
+fi
+echo "PASS: recorded serialized in-place mode permits git add -A"
+# Reset the tree for the main scenario below.
+git checkout -q main 2>/dev/null || git checkout -q -B main origin/main
+git branch -qD arsenal/lo-guard-inplace-guard-inplace 2>/dev/null || true
+rm -rf "${tmpwork}/claude-arsenal"
+echo "feature" > feature.txt
+
+OUT=$(ARSENAL_ALLOW_SHARED_ADD=1 ARSENAL_COAUTHOR="Test Bot <noreply@anthropic.com>" \
       bash "${HELPER}" lo-x001 "Add feature thing")
 
 EXPECT_BRANCH="arsenal/lo-x001-add-feature-thing"

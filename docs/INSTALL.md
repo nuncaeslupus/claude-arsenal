@@ -170,7 +170,7 @@ Add this target to the **consuming project's** Makefile:
 
 ```make
 ARSENAL_REPO    ?= https://github.com/nuncaeslupus/claude-arsenal.git
-ARSENAL_REF     ?= v0.20.5           # pin to a tag — upgrade deliberately
+ARSENAL_REF     ?= v0.21.0           # pin to a tag — upgrade deliberately
 ARSENAL_PLUGINS ?= core  # comma list, or "all" to include skill-creator
 
 update-skills:  ## vendor claude-arsenal skills into .claude/skills (for CC web)
@@ -184,7 +184,7 @@ Then:
 ```bash
 make update-skills          # regenerates .claude/skills/ from the pinned tag
 git add .claude/skills      # commit so the next web session sees them
-git commit -m "chore: vendor claude-arsenal skills @ v0.20.5"
+git commit -m "chore: vendor claude-arsenal skills @ v0.21.0"
 ```
 
 `core` is already the default. To vendor everything including
