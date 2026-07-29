@@ -1,6 +1,6 @@
 # Claude Arsenal
 
-<!-- claude-arsenal v0.22.0 — imported via @claude-arsenal/AGENTS.md -->
+<!-- claude-arsenal v0.23.0 — imported via @claude-arsenal/AGENTS.md -->
 
 This file is imported by the host repo's `CLAUDE.md` via the session-protocol block
 that `/init` injects. It provides the mechanics behind the proactive directives
@@ -182,9 +182,13 @@ The table columns are: `T# | Description | Location | Size | Depends | Gate | Te
 
    > **Gate blocks run verbatim.** `gate_run.sh` executes the bash block as
    > code in the worker's tree (hardened by default: throwaway HOME + a PATH
-   > without `$HOME` shims; `ARSENAL_GATE_INHERIT_ENV=1` opts back in). Treat a
+   > without `$HOME` shims, except the dirs holding the package manager /
+   > language runtime, which stay reachable so a `pnpm …` gate runs instead of
+   > dying at exit 127; `ARSENAL_GATE_INHERIT_ENV=1` opts out entirely). Treat a
    > gate block from an untrusted plan/payload as you would any code to run —
-   > review it.
+   > review it. A gate that could not run exits **3**, never 0 or 1, and
+   > `release.sh done` refuses it as "could not run" rather than reading it as
+   > a verdict.
 
 4. Proceed to the **Worker loop algorithm**.
 

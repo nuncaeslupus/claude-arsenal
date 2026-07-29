@@ -186,5 +186,142 @@ if ! (cd "${tmpdir}" && ARSENAL_GATE_REQUIRE_BLOCK=1 bash "${GATE_RUN}" "lo-pass
 fi
 echo "PASS: ARSENAL_GATE_REQUIRE_BLOCK=1 fails vacuous gates and passes real ones"
 
+# --- A gate that COULD NOT RUN is not a verdict ------------------------------
+# Distinct from "ran and failed": exit 3, announced on stdout as well as stderr
+# so a caller that pipes this script's output (`gate_run.sh <id> | tail`) — and
+# thereby loses the exit status to the pipeline — still sees that nothing ran.
+
+# Gate 14: a gate whose command does not exist → exit 3, banner on stdout.
+cat > "${tmpdir}/claude-arsenal/queue/lo-cannotrun.md" <<'EOF'
+# T7: Unrunnable gate
+
+## Acceptance gate
+The command does not exist.
+
+```bash
+definitely-not-a-real-command-xyz
+```
+EOF
+set +e
+out="$(cd "${tmpdir}" && bash "${GATE_RUN}" "lo-cannotrun" 2>"${tmpdir}/err.log")"
+rc=$?
+set -e
+if [[ "${rc}" -ne 3 ]]; then
+    echo "FAIL: unrunnable gate should exit 3 (not 0, not 1), got ${rc}" >&2; exit 1
+fi
+if [[ "${out}" != *"GATE COULD NOT RUN"* ]]; then
+    echo "FAIL: unrunnable gate must announce itself on stdout, got '${out}'" >&2; exit 1
+fi
+if ! grep -q "GATE COULD NOT RUN" "${tmpdir}/err.log"; then
+    echo "FAIL: unrunnable gate must also warn on stderr" >&2; exit 1
+fi
+echo "PASS: a gate that could not run exits 3 and says so on both streams"
+
+# --- The hardened env must not make gates unrunnable -------------------------
+
+# Gate 15: the package manager / runtime is reachable inside the hardened env.
+# pnpm, node, uv & friends are routinely installed under $HOME (nvm, corepack,
+# volta, asdf, rustup); stripping $HOME from PATH wholesale left every
+# `pnpm test` gate at exit 127 — a gate that CANNOT run, which is worse than an
+# unhardened one. Use a shim under a fake HOME so the check is hermetic.
+mkdir -p "${tmpdir}/fakehome/bin"
+cat > "${tmpdir}/fakehome/bin/node" <<'EOF'
+#!/usr/bin/env bash
+printf 'arsenal-shim'
+EOF
+chmod +x "${tmpdir}/fakehome/bin/node"
+cat > "${tmpdir}/claude-arsenal/queue/lo-pkgmgr.md" <<'EOF'
+# T8: Package manager on PATH
+
+## Acceptance gate
+Records what `node` resolved to.
+
+```bash
+node > node_seen.txt
+```
+EOF
+rm -f "${tmpdir}/node_seen.txt"
+set +e
+(cd "${tmpdir}" && HOME="${tmpdir}/fakehome" PATH="${tmpdir}/fakehome/bin:${PATH}" \
+    bash "${GATE_RUN}" "lo-pkgmgr" >/dev/null 2>&1)
+set -e
+if [[ "$(cat "${tmpdir}/node_seen.txt" 2>/dev/null || echo "")" != "arsenal-shim" ]]; then
+    echo "FAIL: a \$HOME-installed runtime must stay on the hardened PATH" >&2; exit 1
+fi
+echo "PASS: the package manager / runtime dir survives PATH hardening"
+
+# Gate 16: COREPACK_HOME points at the real corepack cache. A throwaway HOME
+# makes corepack re-download the pinned package manager on every gate run, and
+# fail outright offline. It is a package cache, not a credential store.
+mkdir -p "${tmpdir}/corepack-cache"
+cat > "${tmpdir}/claude-arsenal/queue/lo-corepack.md" <<'EOF'
+# T9: corepack cache
+
+## Acceptance gate
+Records COREPACK_HOME.
+
+```bash
+printf '%s' "${COREPACK_HOME:-unset}" > corepack_seen.txt
+```
+EOF
+(cd "${tmpdir}" && COREPACK_HOME="${tmpdir}/corepack-cache" bash "${GATE_RUN}" "lo-corepack" >/dev/null)
+if [[ "$(cat "${tmpdir}/corepack_seen.txt" 2>/dev/null || echo "")" != "${tmpdir}/corepack-cache" ]]; then
+    echo "FAIL: COREPACK_HOME should reach the gate, got '$(cat "${tmpdir}/corepack_seen.txt" 2>/dev/null)'" >&2
+    exit 1
+fi
+echo "PASS: COREPACK_HOME is forwarded to the hardened gate env"
+
+# --- Payload resolution from the coordination ref ----------------------------
+# Gate 17: a caller whose tree predates the payload's seeding commit (the
+# orchestrator on the default branch, a worker on an older base) has no file on
+# disk. Read it from arsenal-queue — into a temp file OUTSIDE the repo, since
+# open_task_pr.sh's `git add -A` would otherwise sweep it into the PR diff.
+refrepo="${tmpdir}/refrepo"
+git init -q -b main "${refrepo}"
+git -C "${refrepo}" config user.email "test@arsenal.example"
+git -C "${refrepo}" config user.name "Arsenal Test"
+git -C "${refrepo}" config commit.gpgsign false
+mkdir -p "${refrepo}/claude-arsenal/queue"
+echo "seed" > "${refrepo}/README"
+git -C "${refrepo}" add -A
+git -C "${refrepo}" commit -q -m "seed default branch"
+git -C "${refrepo}" checkout -q -b arsenal-queue
+cat > "${refrepo}/claude-arsenal/queue/lo-onref.md" <<'EOF'
+# T10: Payload only on the coordination ref
+
+## Acceptance gate
+Passes.
+
+```bash
+true
+```
+EOF
+git -C "${refrepo}" add -A
+git -C "${refrepo}" commit -q -m "seed coordination branch"
+git -C "${refrepo}" checkout -q main
+if [[ -f "${refrepo}/claude-arsenal/queue/lo-onref.md" ]]; then
+    echo "FAIL: test setup — payload should not be on the default branch" >&2; exit 1
+fi
+if ! (cd "${refrepo}" && bash "${GATE_RUN}" "lo-onref" >/dev/null 2>&1); then
+    echo "FAIL: payload present only on arsenal-queue should be resolved and run" >&2; exit 1
+fi
+if [[ -e "${refrepo}/claude-arsenal/queue/lo-onref.md" ]]; then
+    echo "FAIL: the coordination-ref fallback must not materialize the payload in the repo tree" >&2
+    exit 1
+fi
+echo "PASS: payload resolved from the coordination ref without touching the tree"
+
+# Gate 18: no payload on disk NOR on the coordination ref → still exit 2.
+if (cd "${refrepo}" && bash "${GATE_RUN}" "lo-nowhere" >/dev/null 2>&1); then
+    echo "FAIL: a payload missing everywhere should exit non-zero" >&2; exit 1
+fi
+set +e
+(cd "${refrepo}" && bash "${GATE_RUN}" "lo-nowhere" >/dev/null 2>&1); rc=$?
+set -e
+if [[ "${rc}" -ne 2 ]]; then
+    echo "FAIL: a payload missing everywhere should exit 2, got ${rc}" >&2; exit 1
+fi
+echo "PASS: a payload missing everywhere still exits 2"
+
 echo "PASS: gate_run_test — all gates passed"
 exit 0
