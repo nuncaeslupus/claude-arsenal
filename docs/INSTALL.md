@@ -166,6 +166,10 @@ idempotent.
 The `make update-skills` target below wraps step 2 for repeatability; steps 3
 and 4 stay explicit because they write into your repo.
 
+For **updating** an already-vendored repo — and the two ways that silently
+fails — see `docs/UPDATE.md` § *Refreshing the vendored `claude-arsenal/`
+runtime tree*.
+
 Add this target to the **consuming project's** Makefile:
 
 ```make
