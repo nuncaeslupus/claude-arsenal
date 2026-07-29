@@ -103,6 +103,36 @@ git commit -m "chore: vendor claude-arsenal @ vX.Y.Z"
 `tasks.jsonl`, per-task payloads, and project-local `CLAUDE.md` edits
 are left untouched.
 
+### Two ways this silently does nothing (or undoes your work)
+
+Both were hit by a real consumer repo in one session:
+
+**A stale `ARSENAL_REF` makes `make update-skills` a successful no-op.** The pin
+is a literal in the consumer's Makefile and nothing compares it against the
+latest tag, so a repo pinned three releases back re-vendors the *same old
+version* and reports `vendored N skill(s)` — a success message for an update
+that did not happen. `check_update.sh` is the automated counterpart, but it is
+**inert unless the consumer added an `arsenal` git remote**, which vendoring
+consumers have no reason to do. Check the pin against the tag list before
+assuming you are current:
+
+```bash
+git ls-remote --tags https://github.com/nuncaeslupus/claude-arsenal.git 'refs/tags/v*' \
+  | sed 's|.*refs/tags/||' | sort -V | tail -1
+```
+
+**A local edit to `claude-arsenal/bin/` is reverted by the next `init.py`.**
+"Only overwrites stale scripts" reads like a safety guarantee, and for queue
+data it is — but `init.py` decides staleness by **checksum against the plugin
+source**, so a script you patched locally is by definition stale and gets
+overwritten, printing only `refreshed: bin/<name>.sh`. That is the intended
+design, and it means **the bundle is not a place to fix bugs**: patch it
+upstream and re-vendor, or your fix disappears at the next session start
+without a warning. A consumer repo lost two gate-enforcement fixes this way
+before noticing they were still present only because the fixes had *also* been
+committed to the consumer's own tree.
+
+
 ---
 
 ## Rolling back
