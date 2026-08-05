@@ -22,7 +22,7 @@ Load this skill when:
 ## How to use
 
 ```bash
-python3 .claude/skills/queue-add/scripts/create_task.py \
+python3 "${CLAUDE_SKILL_DIR}/scripts/create_task.py" \
   --title "Implement claim.sh" \
   --priority 10 \
   --workspace BACKEND \
@@ -43,7 +43,7 @@ function names the worker must write RED first (copied from the plan's Tests col
 and one reference anchor per spec section, decision record, or sibling pattern
 needed to start — spare them the grep.
 
-Load `.claude/skills/queue-add/references/payload-template.md` when writing the payload file for a new task.
+Load `${CLAUDE_SKILL_DIR}/references/payload-template.md` when writing the payload file for a new task.
 
 Example:
 

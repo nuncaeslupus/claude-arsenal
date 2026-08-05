@@ -23,10 +23,10 @@ Load this skill when:
 
 ```bash
 # Summary counts
-python3 .claude/skills/queue-status/scripts/query_status.py
+python3 "${CLAUDE_SKILL_DIR}/scripts/query_status.py"
 
 # Full task list
-python3 .claude/skills/queue-status/scripts/query_status.py --detail
+python3 "${CLAUDE_SKILL_DIR}/scripts/query_status.py" --detail
 ```
 
 ## Consistency check

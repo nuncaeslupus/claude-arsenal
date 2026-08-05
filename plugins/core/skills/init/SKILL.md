@@ -26,12 +26,12 @@ Load this skill when:
 
 **First-time init:**
 ```bash
-python3 .claude/skills/init/scripts/init.py --repo-path .
+python3 "${CLAUDE_SKILL_DIR}/scripts/init.py" --repo-path .
 ```
 
 **Auto-refresh (session start — silent):**
 ```bash
-python3 .claude/skills/init/scripts/init.py --repo-path . --silent
+python3 "${CLAUDE_SKILL_DIR}/scripts/init.py" --repo-path . --silent
 ```
 Refreshes stale bundle scripts without the "up to date" noise. Prints an upgrade
 banner when the installed bundle version is behind the plugin source, and reports
@@ -39,8 +39,8 @@ any files it refreshed. The session-start protocol runs this automatically.
 
 **Register a workspace:**
 ```bash
-python3 .claude/skills/init/scripts/init.py --workspace FRONTEND
-python3 .claude/skills/init/scripts/init.py --workspace BACKEND --root ./backend/
+python3 "${CLAUDE_SKILL_DIR}/scripts/init.py" --workspace FRONTEND
+python3 "${CLAUDE_SKILL_DIR}/scripts/init.py" --workspace BACKEND --root ./backend/
 ```
 
 The script:
