@@ -54,6 +54,13 @@ detect() {
     # A token in the environment is not proof the API is reachable: sandboxes
     # set GITHUB_TOKEN and still answer 403, because the real credential is
     # held by a proxy outside the VM. Probe instead of assuming.
+    #
+    # The probe is a READ, and answers only the read question. A channel that
+    # can GET /rate_limit may still be refused a ref creation, so `rest` here
+    # means "reachable", not "may write" — `api()` maps a refused write back to
+    # the `none` path rather than treating it as a fault. Probing with a real
+    # write is not an option: the only way to test creating a ref is to create
+    # one.
     if command -v curl >/dev/null 2>&1 && [[ -n "${GITHUB_TOKEN:-${GH_TOKEN:-}}" ]]; then
         local code
         code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 \
@@ -88,14 +95,34 @@ api() {
         rest)
             local tmp code
             tmp="$(mktemp)"
+            # `curl -d` sends application/x-www-form-urlencoded. github.com
+            # parses the raw body as JSON regardless, which is why this went
+            # unnoticed — but a proxy in front of the API is entitled to reject
+            # it, and one does.
             code="$(curl -sS -o "${tmp}" -w '%{http_code}' -X "${method}" \
                 -H "Authorization: Bearer ${GITHUB_TOKEN:-${GH_TOKEN}}" \
                 -H "Accept: application/vnd.github+json" \
-                ${body:+-d "${body}"} \
+                ${body:+-H "Content-Type: application/json"} \
+                ${body:+--data-raw "${body}"} \
                 "https://api.github.com${path}" 2>/dev/null || echo 000)"
             cat "${tmp}"; rm -f "${tmp}"
             [[ "${code}" =~ ^2 ]] && return 0
             [[ "${code}" == "422" ]] && return 3
+            # A write this channel is not permitted to make is not a broken
+            # channel — it is the same situation as having no channel at all,
+            # and the caller already knows how to handle that: print the call
+            # and let the model make it with its own GitHub tools. Reporting it
+            # as a fault instead made the `manual` fallback unreachable on
+            # exactly the surface it was written for, and `error` is what the
+            # worker loop stops the whole session over. 404 counts too: a proxy
+            # that hides write paths reports them as missing.
+            if [[ "${method}" != "GET" && ( "${code}" == "403" || "${code}" == "404" ) ]]; then
+                echo "channel:none"
+                echo "${method} ${path}"
+                [[ -n "${body}" ]] && echo "${body}"
+                echo "github_channel: HTTP ${code} for ${method} ${path} — this channel may read but not write here; handing the call back" >&2
+                return 5
+            fi
             echo "github_channel: HTTP ${code} for ${method} ${path}" >&2
             return 4
             ;;
