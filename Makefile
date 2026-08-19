@@ -46,11 +46,13 @@ tag:  ## create+push v<.bundle-version> tag from HEAD if missing — manual fall
 	@v=$$(tr -d '[:space:]' < plugins/core/skills/init/assets/.bundle-version); t="v$$v"; \
 	if [ -z "$$v" ]; then echo "make tag: .bundle-version is empty" >&2; exit 1; fi; \
 	git fetch --tags --quiet; \
-	if git rev-parse "$$t" >/dev/null 2>&1; then echo "make tag: $$t already exists — nothing to release"; \
+	if git ls-remote --exit-code --tags origin "refs/tags/$$t" >/dev/null 2>&1; then \
+		echo "make tag: $$t already published — nothing to release"; \
 	else latest=$$(git tag -l 'v*.*.*' --sort=v:refname | tail -1 | sed 's/^v//'); \
 		if [ -n "$$latest" ] && ! python3 -c "import sys; p=lambda x: list(map(int, x.split('.'))); sys.exit(0 if p(sys.argv[1]) >= p(sys.argv[2]) else 1)" "$$v" "$$latest"; then \
 			echo "make tag: $$t is lower than latest v$$latest — refusing" >&2; exit 1; fi; \
-		git tag -a "$$t" -m "Release $$t" && git push origin "$$t" && echo "make tag: created+pushed $$t"; fi
+		git rev-parse "$$t" >/dev/null 2>&1 || git tag -a "$$t" -m "Release $$t"; \
+		git push origin "$$t" && echo "make tag: published $$t"; fi
 
 bump:  ## bump .bundle-version (LEVEL=patch|minor|major, default patch) and sync every derived copy
 	@level="$${LEVEL:-patch}"; vfile=plugins/core/skills/init/assets/.bundle-version; \
@@ -60,10 +62,10 @@ bump:  ## bump .bundle-version (LEVEL=patch|minor|major, default patch) and sync
 	$(MAKE) --no-print-directory sync-version; \
 	echo "bump: $$cur -> $$next ($$level). Commit this, and run 'make tag' from main after it merges."
 
-release-check:  ## verify the released version is actually tagged — run after merging to main
+release-check:  ## verify the released version is published as a REMOTE tag — run after merging to main
 	@v=$$(tr -d '[:space:]' < plugins/core/skills/init/assets/.bundle-version); \
-	git fetch --tags --quiet 2>/dev/null || true; \
-	if git rev-parse "v$$v" >/dev/null 2>&1; then echo "release-check: v$$v is tagged — consumers can fetch it."; \
+	if git ls-remote --exit-code --tags origin "refs/tags/v$$v" >/dev/null 2>&1; then \
+		echo "release-check: v$$v is published — consumers can fetch it."; \
 	else echo "release-check: v$$v has NO TAG."; \
 	     echo "  Consumers gate updates on the newest tag, so an untagged release is invisible to them"; \
 	     echo "  and they keep being told the previous version is current. Run: make tag"; exit 1; fi
