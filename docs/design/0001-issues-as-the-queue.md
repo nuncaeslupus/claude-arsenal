@@ -1,14 +1,16 @@
-# Design 0001 — Repo-defined tasks, issue-coordinated claims
+# Design 0001 — Repo-defined tasks, issue handles, atomic claims
 
-**Status:** Proposed (revision 2) — awaiting decision before implementation
+**Status:** Proposed (revision 3) — awaiting decision before implementation
 **Supersedes:** the `arsenal-queue` coordination branch (`AGENTS.md` § *Queue coordination branch*)
 **Addresses:** #137, #139, #142, #143, #144, #145, #146
 
-> **Revision 2 changed the conclusion.** Revision 1 proposed moving tasks *into*
-> GitHub Issues and host state into a hidden `.arsenal/`. Measurement (§ 2) and
-> maintainer constraints (§ 3) rule both out. What survives is the part that was
-> right — the coordination branch has to go — for a stronger reason than
-> revision 1 gave.
+> **What changed across revisions.** Rev 1 proposed moving tasks *into* GitHub
+> Issues and host state into a hidden `.arsenal/`; measurement and the
+> maintainer's requirements ruled both out. Rev 2 kept tasks in the repo but
+> claimed them with an ordered-comment "bakery" lock, which was not atomic. Rev 3
+> replaces that with a real compare-and-swap — `POST /git/refs` returns 422 when
+> the ref exists — and settles the vendoring question by experiment (§ 6). The
+> conclusion that has held throughout: the coordination branch has to go.
 
 ---
 
@@ -50,6 +52,7 @@ of them run in the same cloud environments](https://code.claude.com/docs/en/clou
 | `git push` to **another branch** | yes | **documented as blocked** (see below) |
 | `git push` to custom refs / tags / notes | yes | **no** — 403, verified |
 | `git push --delete` (any ref) | yes | **no** — 403, verified |
+| Create a ref via the GitHub API (`POST /git/refs`) | yes | **yes** — 422 on collision, verified |
 | Arbitrary outbound network | yes | depends on the environment's access level |
 
 Three quotes carry most of the weight:
@@ -107,7 +110,8 @@ Anything the design needs must be built from those two. Nothing else qualifies.
 |---|---|---|
 | Specs, plans, task definitions, the **DAG**, acceptance gates | **files in the repo** | requirement 5; versioned, reviewable, offline, no second copy |
 | Which task is next | **computed locally** from those files | deterministic, no network |
-| Who has claimed what, what is done | **one GitHub issue** | the only mutable channel writable from every surface |
+| Visibility: the board, who is on what | **one `arsenal:task` issue per task** | the only mutable channel writable from every surface |
+| The claim itself (mutual exclusion) | **an atomic ref, `arsenal/claims/<id>`** | `POST /git/refs` is a real compare-and-swap (§ 3.3) |
 
 ### 3.1 Where the DAG is stored
 
@@ -137,46 +141,102 @@ This is also why there is no `queue_sync.sh` any more. Tasks arrive the way ever
 other file arrives: on a branch, through a PR, onto the default branch. There is
 no second copy on a coordination branch to reconcile against.
 
-### 3.2 Claiming across surfaces
+### 3.2 Task handles: one issue per task, labelled
 
-One issue per repository — the **coordination issue** — holds the claim log in
-its comments. To claim `T-0042`:
+Each task file gets a GitHub issue that acts as its **handle**, not a copy of it.
+The body is a stub:
 
-1. Read the task files at the current commit; compute the eligible set (deps
-   satisfied, surface `requires` met).
-2. Read the coordination issue's comments; a claim is live if it has no matching
-   release and its lease has not expired.
-3. Post `claim T-0042 session=<id>`.
-4. Re-read. **The earliest comment id for that task wins**; if it is not yours,
-   drop it and take the next eligible task.
+```
+Task T-0042 — defined in `arsenal/tasks/T-0042.md`
 
-Comment ids are server-assigned and totally ordered, so this is a bakery lock,
-not a guess. It needs exactly two operations — *post comment* and *list
-comments* — both in the guaranteed built-in tool set on every surface. It works
-identically from the CLI, the desktop app, the mobile app and the web, which is
-requirement 3.
+<!-- arsenal-task: T-0042 -->
+```
 
-**What it gives up:** GitHub's API is not linearizable across replicas, so a
-narrow race can let two sessions both believe they won. The re-read bounds it
-without eliminating it. The cost when it happens is two branches for one task —
-visible and cheap. The current design's CAS is strictly stronger, and unusable
-on the surface that matters, which makes the comparison moot.
+Every such issue carries the label **`arsenal:task`**. That label is the
+boundary between machine-managed work and ordinary issues people file: nothing
+without it is ever treated as claimable, so a feature request or a discussion
+thread can never be picked up by a worker. It is also what makes #142 work in
+the useful direction — file an issue from a phone, label it, and it becomes a
+task once its task file lands.
 
-**Why one issue and not one per task:** issue-per-task means every task
-definition gets copied into an issue, which is the duplication this design
-exists to remove, and it fills the tracker with rows. One issue keeps the
-tracker clean and the claim log in one place. Issue-per-task remains an option
-if a visible board is wanted more than a quiet tracker.
+Because the definition stays in the repo and the issue holds only a pointer,
+there is no second copy to reconcile, and therefore no `queue_sync.sh`.
 
-### 3.3 The public-repo concern is withdrawn
+### 3.3 Claiming — atomic, not probabilistic
+
+Two different things can go wrong, and they need different mechanisms. Revision
+2 conflated them.
+
+**S1 — never take work someone else already holds.** A human assigns themselves
+an issue, or another agent is already on it. This is not a race: the assignment
+happened long before. It is a precondition check, and it is exact. Refuse to
+claim if the issue is closed, carries `arsenal:claimed`, has an assignee, or has
+an open linked PR.
+
+**S2 — two Claude sessions racing for the same free task.** This *is* a race,
+and it needs a real lock. Note that assignee cannot resolve it: every session
+authenticates as the same GitHub identity, so "is it assigned?" cannot tell two
+sessions apart. It distinguishes humans from the machine (S1) and nothing else.
+
+GitHub provides an atomic primitive for S2, verified against this repository:
+
+```
+POST /repos/{owner}/{repo}/git/refs   →  422 "Reference already exists"
+```
+
+**Creating a ref is a compare-and-swap.** Exactly one concurrent creator gets
+201; every other gets 422. It is server-side, it is documented behaviour, and it
+is reachable through the built-in GitHub tools that § 2 established are
+available on every surface — no `gh`, no git push, no worktree, no coordination
+branch.
+
+So the claim protocol is:
+
+1. Compute the eligible set locally from the task files (deps satisfied,
+   `requires` met).
+2. **S1 check** on the candidate's issue: open, no assignee, no
+   `arsenal:claimed`, no open linked PR.
+3. **S2 claim**: create `arsenal/claims/T-0042` at the base commit.
+   - **201** — the claim is yours. Nobody else can hold it. Then mark the issue:
+     self-assign and add `arsenal:claimed`, so humans can see it in the UI.
+   - **422** — another session holds it. Take the next eligible task.
+4. Work the task, open the PR with `Closes #N`.
+
+There is no settle interval, no tie-break, and no window in which two sessions
+both believe they won. The bakery scheme in revision 2 is withdrawn: it was the
+best available before this primitive was found, and it is strictly worse.
+
+**Retries and stale claims.** A ref cannot be deleted from a cloud session (§ 2,
+verified), so a claim ref is not released — it is superseded. Attempt *n* claims
+`arsenal/claims/T-0042.a<n>`, bounded by the task's `max-attempts`. A crashed
+session therefore blocks nothing: the next attempt takes the next ref.
+
+**The cost, stated plainly.** Claim refs accumulate — roughly one per task ever
+claimed, grouped under `arsenal/claims/` so they collapse in GitHub's branch
+UI. They can be pruned from a CLI session or a scheduled job, never from a cloud
+session. This is the price of a guarantee that holds on every surface, and it is
+the one real drawback of this design.
+
+**One caveat consumers must be warned about:** creating a ref fires GitHub's
+`push`/`create` events. A repository whose workflows trigger on unfiltered
+`on: push` would run CI on every claim. `/init` must check for this and tell the
+consumer to scope their workflows:
+
+```yaml
+on:
+  push:
+    branches-ignore: ['arsenal/**']
+```
+
+### 3.4 The public-repo concern is withdrawn
 
 Revision 1 raised it because *task content* was moving into issues: on a public
-repo, private ledger rows would have become public. Under this design task
-content never leaves the repository — if the repo is public the task files are
-already public, and the coordination issue carries only task ids and session
-ids. There is no new exposure. Disregard that open question.
+repo, private ledger rows would have become public. Under this design the issue
+is a stub — a title, a pointer to the task file, and a label. The content it
+points at is already in the repository, at the same visibility. Nothing is
+exposed that was not exposed before. Disregard that open question.
 
-### 3.4 Layout
+### 3.5 Layout
 
 ```
 arsenal/                 # host-owned. Project content: visible, versioned, yours
@@ -194,7 +254,7 @@ Upstream owns `.claude/skills/` and may overwrite it freely; it scaffolds
 the vendored prefix contains only upstream content — reached without hiding the
 consumer's own work.
 
-### 3.5 Configuration that survives updates
+### 3.6 Configuration that survives updates
 
 Everything a consumer can tune lives in `arsenal/config.toml`, which upstream
 never rewrites. Skills read it; nobody edits a skill to configure behaviour.
@@ -258,23 +318,31 @@ Yes, and it has a concrete bug.
    Projects v2 is GraphQL-only: "Claude can't reach GitHub APIs that exist only
    in GraphQL, such as Projects v2, through the proxy." The flag currently
    promises something unreachable on half the surfaces.
-3. **It owns `merge-policy`** (§ 3.5) — reading it, and refusing to merge beyond
+3. **It owns `merge-policy`** (§ 3.6) — reading it, and refusing to merge beyond
    what the consumer authorised.
 
 ---
 
-## 6. What is still unverified
+## 6. Canary result — vendoring stays flat
 
-One thing, and it only affects § 4's optional improvement:
+**Measured, not assumed.** A cloud session was run against a checkout carrying
+both layouts side by side:
 
-**Does a committed skills-directory plugin load on the web?** The docs say
-project-scope `@skills-dir` plugins load "only after you accept the workspace
-trust dialog", and it is unclear whether a cloud session satisfies that. A
-canary is already pushed to the `arsenal-probe-delete-me` branch:
-`.claude/skills/plain-canary/` (plain) and `.claude/skills/plugcanary/` (plugin
-layout). Start one cloud session on that branch and ask which skills it sees —
-`PLAIN-CANARY-4713`, `PLUG-CANARY-8829`, both, or neither. Nothing else in this
-design depends on the answer.
+| Layout | Loaded on the web? |
+|---|---|
+| `.claude/skills/plain-canary/SKILL.md` | **yes** — appeared as `plain-canary` |
+| `.claude/skills/plugcanary/.claude-plugin/plugin.json` + `skills/plug-canary/SKILL.md` | **no** — never reached the session |
+
+So § 4's optional improvement is dead: a skills-directory plugin committed to
+`.claude/skills/` does **not** load on the web. Vendoring stays flat, exactly as
+it is today.
+
+The probe also surfaced a footgun worth documenting for consumers: the plugin
+directory was ignored *entirely* — not merely demoted to a plain skill — because
+`plugcanary/` has no `SKILL.md` at its own top level. A consumer who arranges a
+vendored tree that way ships **nothing**, silently, with no error. The vendoring
+script should reject any directory under `.claude/skills/` that has no top-level
+`SKILL.md`.
 
 ---
 
@@ -318,10 +386,13 @@ shows the branch machinery was accidental complexity, not a requirement.
 ## 9. Staged delivery
 
 1. **This document.** Decide first.
-2. **`arsenal/` layout + `config.toml`** (including `merge-policy`, and #143's
-   budget) with migration from the current tree. Independently valuable.
-3. **Task files + the pure selector** — DAG, priority, `requires`, gates, unit
+2. **`arsenal/` layout + `config.toml`** (including `merge-policy` and #143's
+   listing budget), with migration from the current tree. Independently
+   valuable, and the prerequisite for the rest.
+3. **Task files + the pure selector** — DAG, priority, `requires`, gates. Unit
    tested with no git and no network.
-4. **Claim protocol + `github` skill as the access layer** (§ 5).
+4. **Claim protocol** (§ 3.3) and the `github` skill as the access layer (§ 5),
+   including the `on: push` warning at `/init`.
 5. **Delete** the coordination-branch machinery and its tests.
-6. **Optional:** skills-directory plugin layout, if § 6 confirms it.
+6. **Harden vendoring** — reject a `.claude/skills/` subdirectory with no
+   top-level `SKILL.md`, per § 6.
