@@ -8,6 +8,9 @@ import sys
 from pathlib import Path
 
 CLAUDE_MD_MARKER = "<!-- claude-arsenal: auto-managed -->"
+CLAUDE_MD_END_MARKER = "<!-- /claude-arsenal: auto-managed -->"
+# How the block ended before it had a closing marker.
+LEGACY_BLOCK_TAIL = "@claude-arsenal/AGENTS.md"
 
 CLAUDE_MD_BLOCK = """\
 <!-- claude-arsenal: auto-managed -->
@@ -29,7 +32,8 @@ Every session, without waiting to be asked:
 5. Open each task's PR with `Closes #<issue>` so merging it closes the task by itself.
 6. After any session with tasks: update `arsenal/session/handover.md`.
 
-@claude-arsenal/AGENTS.md"""
+@claude-arsenal/AGENTS.md
+<!-- /claude-arsenal: auto-managed -->"""
 
 _CONFIG_TEMPLATE = """\
 # claude-arsenal host configuration — yours; upstream never rewrites this file.
@@ -178,6 +182,34 @@ def _refresh_bundle(bundle: Path, target: Path, silent: bool = False) -> None:
             if _has_shebang(src):
                 dst.chmod(dst.stat().st_mode | 0o111)
             print(f"  refreshed:  {rel}")
+    _prune_bundle(bundle, target)
+
+
+# Directories the bundle owns outright: everything in them comes from upstream,
+# so a file there that upstream no longer ships is a leftover, not host data.
+_PRUNABLE_DIRS = ("bin", "scripts")
+
+
+def _prune_bundle(bundle: Path, target: Path) -> None:
+    """Delete installed bundle files upstream no longer ships.
+
+    Refreshing by checksum updates and adds, but never removed — so an upgrade
+    left every retired script sitting in the bundle, still executable. Those are
+    not inert leftovers: they are the previous architecture, and a session that
+    finds `claim.sh` can still run it against a queue that is no longer the
+    board. Only the two upstream-owned directories are swept; host trees are
+    never touched.
+    """
+    for dirname in _PRUNABLE_DIRS:
+        src_dir, dst_dir = bundle / dirname, target / dirname
+        if not dst_dir.is_dir():
+            continue
+        shipped = {p.name for p in src_dir.iterdir() if p.is_file()} if src_dir.is_dir() else set()
+        for installed in sorted(dst_dir.iterdir()):
+            if not installed.is_file() or installed.name in shipped:
+                continue
+            installed.unlink()
+            print(f"  removed (no longer shipped): {dirname}/{installed.name}")
 
 
 def _check_bundle_version(bundle: Path, arsenal: Path) -> None:
@@ -239,19 +271,60 @@ def _add_gitignore_entry(repo_path: Path, entry: str) -> None:
     print(f"  .gitignore: added {entry}")
 
 
+def _replace_managed_block(content: str) -> str | None:
+    """Return content with the managed block replaced, or None if there is none.
+
+    The block is delimited by the two markers. Repos installed before the end
+    marker existed have only the opening one, and their block runs to the
+    `@claude-arsenal/AGENTS.md` import that terminates the template — match that
+    so an upgrade repairs them too, instead of skipping the one file that tells
+    every session what to do.
+    """
+    start = content.find(CLAUDE_MD_MARKER)
+    if start == -1:
+        return None
+    end = content.find(CLAUDE_MD_END_MARKER, start)
+    if end != -1:
+        end += len(CLAUDE_MD_END_MARKER)
+    else:
+        legacy = content.find(LEGACY_BLOCK_TAIL, start)
+        if legacy == -1:
+            # An opening marker with no recognisable end: replacing to the end of
+            # the file would eat host-owned content, so leave it and say so.
+            return ""
+        end = legacy + len(LEGACY_BLOCK_TAIL)
+    return content[:start] + CLAUDE_MD_BLOCK + content[end:]
+
+
 def _inject_claude_md(repo_path: Path) -> None:
     claude_md = repo_path / "CLAUDE.md"
-    if claude_md.exists():
-        content = claude_md.read_text(encoding="utf-8")
-        if CLAUDE_MD_MARKER in content:
-            print("  CLAUDE.md: session-protocol block already present — skipping")
-            return
-        new_content = content.rstrip("\n") + f"\n\n{CLAUDE_MD_BLOCK}\n"
-        claude_md.write_text(new_content, encoding="utf-8")
-        print("  CLAUDE.md: injected session-protocol block")
-    else:
+    if not claude_md.exists():
         claude_md.write_text(f"{CLAUDE_MD_BLOCK}\n", encoding="utf-8")
         print("  CLAUDE.md: created with session-protocol block")
+        return
+
+    content = claude_md.read_text(encoding="utf-8")
+    if CLAUDE_MD_MARKER not in content:
+        claude_md.write_text(content.rstrip("\n") + f"\n\n{CLAUDE_MD_BLOCK}\n", encoding="utf-8")
+        print("  CLAUDE.md: injected session-protocol block")
+        return
+
+    # The block is labelled auto-managed, so manage it. It was previously written
+    # once and never touched again, which meant an upgrade that rewrote the
+    # protocol left every consumer running the old one — naming paths that had
+    # moved and scripts that had been deleted.
+    replaced = _replace_managed_block(content)
+    if replaced == "":
+        print(
+            "  CLAUDE.md: managed block has no end marker and no recognisable tail — "
+            "left alone; review it against the current protocol"
+        )
+        return
+    if replaced is None or replaced.rstrip("\n") == content.rstrip("\n"):
+        print("  CLAUDE.md: session-protocol block up to date")
+        return
+    claude_md.write_text(replaced.rstrip("\n") + "\n", encoding="utf-8")
+    print("  CLAUDE.md: session-protocol block refreshed (was out of date)")
 
 
 def _upsert_overview(repo_path: Path, workspace: str, root: str, spec: str, plan: str) -> None:

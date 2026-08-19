@@ -26,7 +26,7 @@ from typing import Any
 # by hand.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from task_select import TASK_MARKER_RE, load_tasks, state_from_issues
+from task_select import TASK_MARKER_RE, effective_state, load_tasks, state_from_issues
 
 TERMINAL = {"done", "merged"}
 
@@ -51,25 +51,31 @@ def main(argv: list[str] | None = None) -> int:
         issues = [i for i in payload if isinstance(i, dict)]
 
     tasks, warnings = load_tasks(args.tasks_dir)
-    state = state_from_issues(issues)
+    state = effective_state(tasks, state_from_issues(issues))
     handled = {
         m.group(1) for i in issues if (m := TASK_MARKER_RE.search(i.get("body") or ""))
     }
 
     counts = {"open": 0, "claimed": 0, "done": 0, "cancelled": 0, "blocked": 0}
     problems: list[str] = []
+    known_ids = {t["id"] for t in tasks}
     for task in tasks:
         current = state.get(task["id"], "open")
         if current == "open" and blocking(task, state):
             counts["blocked"] += 1
         else:
             counts[current] = counts.get(current, 0) + 1
+        # Finished work is held to a different standard: it needs no issue to
+        # claim it and no gate to run again. Reporting it as a problem would
+        # bury the live tasks that genuinely have one.
+        if task.get("status") in TERMINAL:
+            continue
         if not task["gate"]:
             problems.append(f"{task['id']}: no fenced gate block — nothing would be checked")
         if task["id"] not in handled:
             problems.append(f"{task['id']}: no issue handle — not claimable until one exists")
         for dep in task["deps"]:
-            if dep not in {t["id"] for t in tasks}:
+            if dep not in known_ids:
                 problems.append(f"{task['id']}: depends on unknown task {dep}")
 
     print(

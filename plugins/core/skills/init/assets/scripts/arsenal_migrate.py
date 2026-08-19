@@ -38,6 +38,7 @@ from pathlib import Path
 from typing import Any
 
 TERMINAL = {"done", "merged"}
+HISTORY_DIRNAME = "_history"
 DEFAULT_QUEUE = Path("claude-arsenal/queue/tasks.jsonl")
 
 CONFIG_TEMPLATE = """\
@@ -102,7 +103,7 @@ def _yaml_list(values: list[str]) -> str:
     return "[" + ", ".join(values) + "]"
 
 
-def task_markdown(row: dict[str, Any], payload_body: str) -> str:
+def task_markdown(row: dict[str, Any], payload_body: str, *, terminal: bool = False) -> str:
     deps = [str(d.get("id")) for d in row.get("deps", []) if isinstance(d, dict) and d.get("id")]
     lines = ["---", f"id: {row['id']}", f"title: {json.dumps(str(row.get('title', row['id'])))}"]
     priority = row.get("priority", 0)
@@ -117,6 +118,13 @@ def task_markdown(row: dict[str, Any], payload_body: str) -> str:
         lines.append(f"tags: {_yaml_list([str(t) for t in row['tags']])}")
     if row.get("issue"):
         lines.append(f"issue: {row['issue']}")
+    if terminal:
+        # The status is what makes a dep on this task resolve as satisfied
+        # rather than unknown, and it is recorded in the file because the issue
+        # that once carried it may be closed, pruned, or never have existed.
+        lines.append(f"status: {row.get('status')}")
+        if row.get("pr"):
+            lines.append(f"pr: {row['pr']}")
     max_attempts = row.get("max_attempts")
     if isinstance(max_attempts, int) and max_attempts != 3:
         lines.append(f"max-attempts: {max_attempts}")
@@ -162,20 +170,45 @@ def migrate(
 
     report.append(f"queue: {len(rows)} row(s) — {len(live)} live, {len(finished)} terminal")
 
+    def payload_for(row: dict[str, Any]) -> str:
+        payload_path = queue_dir / str(row.get("payload") or f"{row['id']}.md")
+        return payload_path.read_text(encoding="utf-8") if payload_path.is_file() else ""
+
     created = skipped = 0
     for row in live:
         target = tasks_dir / f"{row['id']}.md"
         if target.exists():
             skipped += 1
             continue
-        payload_name = row.get("payload") or f"{row['id']}.md"
-        payload_path = queue_dir / str(payload_name)
-        payload_body = payload_path.read_text(encoding="utf-8") if payload_path.is_file() else ""
         if apply:
             tasks_dir.mkdir(parents=True, exist_ok=True)
-            target.write_text(task_markdown(row, payload_body), encoding="utf-8")
+            target.write_text(task_markdown(row, payload_for(row)), encoding="utf-8")
         created += 1
     report.append(f"task files: {created} to create, {skipped} already present → {tasks_dir}/")
+
+    # Finished tasks keep their files too. Recording them only as prose meant a
+    # dep on completed work resolved as *unknown*, and the selector blocks on
+    # unknown deps by design — so on a real board every task whose prerequisites
+    # had just been finished became permanently unselectable. It also dropped
+    # the payloads, and with them each finished task's gate, so a host check
+    # that re-asserts them found nothing to check and passed in silence.
+    history_dir = tasks_dir / HISTORY_DIRNAME
+    kept = 0
+    for row in finished:
+        target = history_dir / f"{row['id']}.md"
+        if target.exists():
+            continue
+        if apply:
+            history_dir.mkdir(parents=True, exist_ok=True)
+            target.write_text(
+                task_markdown(row, payload_for(row), terminal=True), encoding="utf-8"
+            )
+        kept += 1
+    if finished:
+        report.append(
+            f"history files: {kept} terminal task(s) → {history_dir}/ "
+            "(ids resolve, gates preserved)"
+        )
 
     if finished:
         history = tasks_dir / "_migrated-history.md"
@@ -224,7 +257,10 @@ def migrate(
     report.append("  git worktree remove ../<repo>-arsenal-queue-wt   # if one exists")
     report.append("  rm -rf claude-arsenal/queue")
     report.append("")
-    report.append("Each live task also needs its issue handle; run /queue-sync-issues once.")
+    report.append(
+        "Each live task also needs its issue handle; run handle_sync.py "
+        "(in claude-arsenal/scripts/) to list the ones still missing."
+    )
 
     if not apply:
         report.append("")
