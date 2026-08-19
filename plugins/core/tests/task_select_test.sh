@@ -252,4 +252,47 @@ EOF
 out=$(python3 "${SELECT_PY}" --tasks-dir "${TASKS}" --issues "${tmpdir}/issues-notplanned2.json" --max 9 2>/dev/null)
 grep -q 't-bbbb2222' <<<"${out}" && fail "state_reason=not_planned must still block the dependent"
 
+# --- 19: task identity survives a body sanitizer ---
+#         The GitHub MCP tools a cloud session uses strip angle-bracketed
+#         content out of issue bodies, so an id kept in an HTML comment was gone
+#         before anything read it: every issue was anonymous, the state map came
+#         back empty, and an empty map is indistinguishable from a healthy new
+#         board — until the first finished task is handed out a second time.
+cat > "${tmpdir}/issues-stripped.json" <<'EOF'
+[{"number": 7, "state": "CLOSED",
+  "body": "`arsenal-task: t-aaaa1111`\nTask defined in `arsenal/tasks/t-aaaa1111.md`"}]
+EOF
+out=$(python3 "${SELECT_PY}" --tasks-dir "${TASKS}" --issues "${tmpdir}/issues-stripped.json" --max 9 2>/dev/null)
+grep -q 't-aaaa1111' <<<"${out}" && fail "a closed task must not be handed out again"
+grep -q 't-bbbb2222' <<<"${out}" || fail "the visible token must resolve the issue to its task"
+
+# an issue carrying ONLY the path still resolves — this is what rescues issues
+# opened before the visible token existed, whose comment the sanitizer ate
+cat > "${tmpdir}/issues-pathonly.json" <<'EOF'
+[{"number": 8, "state": "CLOSED", "body": "Task defined in `arsenal/tasks/t-aaaa1111.md`"}]
+EOF
+out=$(python3 "${SELECT_PY}" --tasks-dir "${TASKS}" --issues "${tmpdir}/issues-pathonly.json" --max 9 2>/dev/null)
+grep -q 't-bbbb2222' <<<"${out}" || fail "the task-file path must resolve identity as a fallback"
+
+# the legacy HTML comment keeps working where it survives
+cat > "${tmpdir}/issues-legacy.json" <<'EOF'
+[{"number": 9, "state": "CLOSED", "body": "handle <!-- arsenal-task: t-aaaa1111 -->"}]
+EOF
+out=$(python3 "${SELECT_PY}" --tasks-dir "${TASKS}" --issues "${tmpdir}/issues-legacy.json" --max 9 2>/dev/null)
+grep -q 't-bbbb2222' <<<"${out}" || fail "a legacy comment marker must still resolve"
+
+# --- 20: issues that resolve to nothing is a parse failure, said out loud ---
+cat > "${tmpdir}/issues-anon.json" <<'EOF'
+[{"number": 10, "state": "OPEN", "body": "the marker was stripped out of this body"},
+ {"number": 11, "state": "CLOSED", "body": "so was this one"}]
+EOF
+err=$(python3 "${SELECT_PY}" --tasks-dir "${TASKS}" --issues "${tmpdir}/issues-anon.json" 2>&1 >/dev/null)
+grep -q "none carries a task id" <<<"${err}" \
+    || fail "N issues resolving to zero task ids must be reported, not returned quietly: ${err}"
+
+# and an empty issue list is NOT a parse failure — a new board is legitimately empty
+echo '[]' > "${tmpdir}/issues-empty.json"
+err=$(python3 "${SELECT_PY}" --tasks-dir "${TASKS}" --issues "${tmpdir}/issues-empty.json" 2>&1 >/dev/null)
+grep -q "none carries a task id" <<<"${err}" && fail "an empty issue list must not warn"
+
 echo "PASS: task_select_test — all gates passed"

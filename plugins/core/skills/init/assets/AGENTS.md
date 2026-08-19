@@ -1,6 +1,6 @@
 # Claude Arsenal
 
-<!-- claude-arsenal v0.27.0 — imported via @claude-arsenal/AGENTS.md -->
+<!-- claude-arsenal v0.28.0 — imported via @claude-arsenal/AGENTS.md -->
 
 This file is imported by the host repo's `CLAUDE.md` via the session-protocol block
 that `/init` injects. It provides the mechanics behind the proactive directives
@@ -42,7 +42,10 @@ At the start of every session (fresh start, context compaction, or cold restart)
 4. **Create any missing handles** —
    `python3 claude-arsenal/scripts/handle_sync.py --issues /tmp/arsenal-issues.json`
    prints one JSON object per task file that has no issue yet; create those issues with
-   the `arsenal:task` label and the `<!-- arsenal-task: <id> -->` marker in the body.
+   the `arsenal:task` label and a visible `` `arsenal-task: <id>` `` line in the
+   body. It must be visible text, not an HTML comment: some GitHub tools strip
+   angle-bracketed content from bodies, and an id that is stripped leaves the
+   issue anonymous and the board reading as stateless.
    This is the only sync in the system: one-directional and idempotent, so a failure
    delays work rather than corrupting it.
 

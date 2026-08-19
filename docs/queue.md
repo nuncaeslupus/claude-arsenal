@@ -16,6 +16,22 @@ identical for every agent.
 not a copy of it — and a claim is an atomic ref creation that GitHub itself
 arbitrates.
 
+The handle names its task with a visible line in the issue body:
+
+```
+`arsenal-task: t-3f8a91c2`
+Task defined in `arsenal/tasks/t-3f8a91c2.md`
+```
+
+**Visible, not an HTML comment.** The id used to live in `<!-- … -->`, and the
+GitHub tools a cloud session uses strip angle-bracketed content out of issue
+bodies — so on that surface every issue was anonymous, the state map came back
+empty, and an empty map looks exactly like a healthy new board right up until
+the first finished task is handed out a second time. The task-file path is read
+as a fallback, which rescues issues opened before the visible token existed, and
+a legacy comment still works wherever it survives. If issues are fetched and
+none yields a task id, that is reported as the parse failure it is.
+
 There is no coordination branch, no side worktree, and no ledger file that two
 sessions have to keep in step.
 

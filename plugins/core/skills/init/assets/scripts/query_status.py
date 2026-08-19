@@ -26,9 +26,13 @@ from typing import Any
 # by hand.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from task_select import TASK_MARKER_RE, effective_state, load_tasks, state_from_issues
-
-TERMINAL = {"done", "merged"}
+from task_select import (
+    TERMINAL,
+    effective_state,
+    load_tasks,
+    state_from_issues,
+    task_id_from_issue,
+)
 
 
 def blocking(task: dict[str, Any], state: dict[str, str]) -> list[str]:
@@ -51,10 +55,8 @@ def main(argv: list[str] | None = None) -> int:
         issues = [i for i in payload if isinstance(i, dict)]
 
     tasks, warnings = load_tasks(args.tasks_dir)
-    state = effective_state(tasks, state_from_issues(issues))
-    handled = {
-        m.group(1) for i in issues if (m := TASK_MARKER_RE.search(i.get("body") or ""))
-    }
+    state = effective_state(tasks, state_from_issues(issues, warnings=warnings))
+    handled = {t for i in issues if (t := task_id_from_issue(i))}
 
     counts = {"open": 0, "claimed": 0, "done": 0, "cancelled": 0, "blocked": 0}
     problems: list[str] = []

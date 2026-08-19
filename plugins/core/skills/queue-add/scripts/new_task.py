@@ -27,7 +27,10 @@ import secrets
 import sys
 from pathlib import Path
 
-TASK_MARKER = "<!-- arsenal-task: {task_id} -->"
+# The id has to be VISIBLE body text. As an HTML comment it was stripped by
+# the GitHub tools a cloud session uses, which left every issue anonymous and
+# the whole board reading as stateless.
+TASK_MARKER = "`arsenal-task: {task_id}`"
 
 TEMPLATE = """\
 ---
@@ -158,8 +161,8 @@ def main(argv: list[str] | None = None) -> int:
     print("Open its issue handle with your GitHub tools:", file=sys.stderr)
     print(f"  title: {args.title}", file=sys.stderr)
     print("  labels: arsenal:task", file=sys.stderr)
-    print(f"  body:  Task `{task_id}` — defined in `{path}`", file=sys.stderr)
-    print(f"         {TASK_MARKER.format(task_id=task_id)}", file=sys.stderr)
+    print(f"  body:  {TASK_MARKER.format(task_id=task_id)}", file=sys.stderr)
+    print(f"         Task defined in `{path}`", file=sys.stderr)
     return 0
 
 

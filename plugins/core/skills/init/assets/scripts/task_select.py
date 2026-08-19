@@ -49,10 +49,35 @@ FRONT_MATTER_RE = re.compile(r"\A---\r?\n(.*?)\r?\n---\r?\n", re.DOTALL)
 # board reports "no gate" for a task whose gate runs fine, which is the
 # direction that gets a working payload rewritten or the warning ignored.
 GATE_BLOCK_RE = re.compile(r"^[ \t]*```(?:bash|sh)\b", re.MULTILINE)
-# The marker an issue carries to say which task file it is a handle for. Kept
-# in the issue body rather than the task file so a task file never has to be
-# rewritten to learn its issue number.
-TASK_MARKER_RE = re.compile(r"<!--\s*arsenal-task:\s*([A-Za-z0-9._-]+)\s*-->")
+# How an issue says which task file it is a handle for. Kept in the issue body
+# rather than the task file so a task file never has to be rewritten to learn
+# its issue number.
+#
+# This used to be an HTML comment, and load-bearing data does not belong
+# anywhere a sanitizer is entitled to remove: the GitHub MCP tools a cloud
+# session uses strip angle-bracketed content out of issue bodies, so the marker
+# was gone before anything could read it and every board on that surface
+# resolved to zero task ids. The pattern below is anchored on the visible token
+# instead, which matches a plain `arsenal-task: <id>` line *and* the same text
+# inside a legacy comment — so repos already carrying comments keep working
+# wherever the comment survives.
+TASK_MARKER_RE = re.compile(r"arsenal-task:\s*`?([A-Za-z0-9._-]+)`?")
+
+# Second way in: the task file's path, which every issue body names and which is
+# ordinary markdown. This is what rescues issues opened before the visible token
+# existed, on the surface where their comment is stripped.
+TASK_PATH_RE = re.compile(
+    r"(?:arsenal|claude-arsenal)/tasks/(?:_history/)?([A-Za-z0-9._-]+)\.md"
+)
+
+
+def task_id_from_issue(issue: dict[str, Any]) -> str | None:
+    """The task an issue is a handle for, or None."""
+    body = issue.get("body") or ""
+    for pattern in (TASK_MARKER_RE, TASK_PATH_RE):
+        if match := pattern.search(body):
+            return match.group(1)
+    return None
 
 TERMINAL = {"done", "merged"}
 
@@ -82,6 +107,7 @@ def state_from_issues(
     *,
     claimed_label: str = "arsenal:claimed",
     cancelled_label: str = "arsenal:cancelled",
+    warnings: list[str] | None = None,
 ) -> dict[str, str]:
     """Derive the task state map from GitHub issues.
 
@@ -96,12 +122,12 @@ def state_from_issues(
     signal every surface can see. `state_reason` is honoured when present.
     """
     state: dict[str, str] = {}
+    resolved = 0
     for issue in issues:
-        body = issue.get("body") or ""
-        marker = TASK_MARKER_RE.search(body)
-        if not marker:
+        task_id = task_id_from_issue(issue)
+        if not task_id:
             continue
-        task_id = marker.group(1)
+        resolved += 1
         labels = {
             label["name"] if isinstance(label, dict) else str(label)
             for label in (issue.get("labels") or [])
@@ -126,6 +152,18 @@ def state_from_issues(
             state[task_id] = "claimed"
         else:
             state[task_id] = "open"
+
+    # An empty map is indistinguishable from a healthy new board: every task
+    # defaults to `open`, so selection looks right until the first task is
+    # finished and gets handed out a second time. Issues that yield no task at
+    # all is never a legitimate reading of a non-empty list — it is a parse
+    # failure, and it says so instead of returning quietly.
+    if warnings is not None and issues and not resolved:
+        warnings.append(
+            f"{len(issues)} issue(s) fetched and none carries a task id — the board is "
+            "being read as stateless. Check that bodies still contain their "
+            "`arsenal-task: <id>` line; some GitHub tools strip HTML comments."
+        )
     return state
 
 
@@ -326,6 +364,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     state: dict[str, str] = {}
+    issue_warnings: list[str] = []
     if args.issues:
         try:
             payload = json.loads(args.issues.read_text(encoding="utf-8"))
@@ -336,7 +375,9 @@ def main(argv: list[str] | None = None) -> int:
         # GitHub tools wrap results in, so the caller can save what it got.
         if isinstance(payload, dict):
             payload = payload.get("issues", [])
-        state = state_from_issues([i for i in payload if isinstance(i, dict)])
+        state = state_from_issues(
+            [i for i in payload if isinstance(i, dict)], warnings=issue_warnings
+        )
     else:
         raw_state = ""
         if args.state:
@@ -350,6 +391,7 @@ def main(argv: list[str] | None = None) -> int:
             return 2
 
     tasks, warnings = load_tasks(args.tasks_dir)
+    warnings += issue_warnings
 
     if args.all:
         merged = effective_state(tasks, state)
