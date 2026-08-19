@@ -1,275 +1,327 @@
-# Design 0001 — GitHub Issues as the queue
+# Design 0001 — Repo-defined tasks, issue-coordinated claims
 
-**Status:** Proposed — awaiting decision before implementation
+**Status:** Proposed (revision 2) — awaiting decision before implementation
 **Supersedes:** the `arsenal-queue` coordination branch (`AGENTS.md` § *Queue coordination branch*)
-**Closes or dissolves:** #137, #139, #142, #144, #145, #146 (see § *Disposition of open issues*)
+**Addresses:** #137, #139, #142, #143, #144, #145, #146
+
+> **Revision 2 changed the conclusion.** Revision 1 proposed moving tasks *into*
+> GitHub Issues and host state into a hidden `.arsenal/`. Measurement (§ 2) and
+> maintainer constraints (§ 3) rule both out. What survives is the part that was
+> right — the coordination branch has to go — for a stronger reason than
+> revision 1 gave.
 
 ---
 
-## 1. Why change anything
+## 1. Requirements this has to satisfy
 
-Two complaints arrived from opposite ends and turn out to be the same complaint.
+Stated by the maintainer, and treated here as non-negotiable:
 
-**From consumers (#144):** the vendored `claude-arsenal/` tree cannot be consumed
-as a `git subtree`, because host-owned state (`queue/`, `session/`, `project/`)
-lives *inside* the prefix that upstream owns and overwrites. Every consumer that
-tries pays for a bespoke vendor-and-assemble workaround, and every upgrade is one
-mistake away from taking the task ledger with it.
+1. **Always works** — every surface: Claude Code CLI, the Claude desktop and
+   mobile apps, Claude Code on the web, and any sandbox those impose.
+2. **Always up to date** — a session never operates on a stale bundle.
+3. **Always takes tasks in order** — including two sessions open at once on
+   *different* surfaces.
+4. **Always installable, easily updatable.**
+5. **Specs, plans and tasks are part of the project** — versioned with the code,
+   not in an external system and not hidden away.
 
-**From the maintainer:** the coordination branch is unpleasant to live with.
-
-They are the same problem. The ledger is a *file*, so it has to live somewhere in
-the working tree; because it must also be written atomically by concurrent
-sessions, it has to live on a *shared branch*; and because the main tree must not
-change branch, that branch needs a *side worktree*. Each fix creates the next
-constraint. The result is measurable:
-
-| Concern | Lines |
-|---|---|
-| `queue_branch.sh` — worktree lifecycle, project-id stamping, legacy fallback | 395 |
-| `queue_sync.sh` — port rows written on the default branch onto the ledger branch | 190 |
-| `claim.sh` / `release.sh` — optimistic-push CAS, status transitions | 515 |
-| `queue_doctor.py` + `queue_doctor.sh` — detect ledger/reality divergence | 635 |
-| `queue_batch.sh` / `queue_eval.sh` — selection | 204 |
-| `verify_claim.sh`, `reconcile_merged.sh`, `update_task_row.py` | 300 |
-| `create_task.py`, `query_task.py`, `query_status.py` | 461 |
-| **Total queue machinery** | **2,700** |
-
-Plus 417 lines of tests that exist only to hold that machinery upright
-(`claim_contention.sh` 202, `queue_project_identity_test.sh` 90,
-`queue_branch_reuse_test.sh` 66, `continue_queue_dir_test.sh` 59).
-
-Almost none of this is about *what work to do next*. It is about synthesizing a
-compare-and-swap, a durable ledger, and a status-vs-reality reconciler — three
-things GitHub already provides, for a repository that is already on GitHub.
+Requirement 5 is what revision 1 got wrong, and requirement 1 is what the
+current design gets wrong.
 
 ---
 
-## 2. Constraints, verified rather than assumed
+## 2. Verified surface capabilities
 
-Everything below was measured in a Claude Code **web** session (the surface the
-whole vendoring story exists to serve), against this repository, on 2026-08-19.
-They are what rules several attractive designs out.
+Measured from a cloud session against this repository on 2026-08-19, plus the
+documented contract in `code.claude.com/docs`. "Cloud" covers Claude Code on the
+web, the mobile and Desktop apps, Claude Tag and routines — [the docs state all
+of them run in the same cloud environments](https://code.claude.com/docs/en/cloud-environments).
 
-| Probe | Result |
-|---|---|
-| `command -v gh` | **absent** |
-| `curl https://api.github.com/repos/...` with `$GITHUB_TOKEN` | **403** — `"GitHub access is not enabled for this session"` |
-| `git push origin <sha>:refs/heads/<new-branch>` | **allowed** |
-| `git push origin <sha>:refs/arsenal/claims/42` | **403** |
-| `git push origin <sha>:refs/notes/<name>` | **403** |
-| `git push origin <sha>:refs/tags/<name>` | **403** |
-| `git push origin --delete <branch>` | **403** — refs cannot be deleted |
-| GitHub MCP tools (`mcp__github__*`) | **available** |
-
-Three consequences, each of which kills a design that looks good on paper:
-
-1. **`gh` is not the portable access path.** `reconcile_merged.sh`, the
-   `--closed-issues` doctor check and `open_task_pr.sh`'s PR creation are all
-   `command -v gh`-gated, so on the web surface they are silently inert *today*.
-   The queue's PR-truth layer does not run where the queue most needs it.
-2. **Custom ref namespaces are not usable.** A per-task lock at
-   `refs/arsenal/claims/<n>` is otherwise ideal — create-only push is a true
-   compare-and-swap, it needs no worktree and no checkout, and such refs are
-   invisible to a normal clone (verified locally: a fresh clone's `git branch -a`
-   shows only `main`). The sandbox rejects it. So do tags and notes.
-3. **Refs cannot be deleted.** Any lock whose release is "delete the ref" is
-   unimplementable here, and any design that accumulates per-task refs
-   accumulates them permanently.
-
-> **Read (2) and (3) together and the current design's own guarantee is
-> narrower than documented:** the coordination branch works because
-> `refs/heads/*` writes are allowed, but nothing on this surface can ever clean
-> it up. "Its history is disposable and can be squashed any time" is not true
-> from a web session.
-
-The only writable primitive is *create-or-fast-forward a branch*. The only
-portable GitHub access is *the model's own tools*. A design has to be built from
-those two facts, not around them.
-
----
-
-## 3. The proposal
-
-**The issue tracker is the queue.** An issue *is* a task — not a mirror of one,
-not a thing synced into one. There is no `tasks.jsonl`, no coordination branch,
-no side worktree, and no sync step, because there is no second copy of the truth.
-
-The machinery splits into three layers by what each thing actually is:
-
-| Layer | What it is | Where it runs |
+| Capability | CC CLI (local) | Cloud session |
 |---|---|---|
-| **Ledger** | GitHub Issues — bodies, labels, assignees, sub-issues, linked PRs | GitHub |
-| **Selection** | a pure function: given a JSON snapshot of issues, which task is next? | local script, no network, no git |
-| **Access** | reading and writing issues | the model, via whatever it has: MCP, `gh`, or REST |
+| Install plugins / marketplaces | yes | **no** — `/plugin` "aren't available" |
+| Committed `.claude/skills/` | yes | yes |
+| `gh` CLI | if installed | **no** — absent, and not in *Installed tools* |
+| GitHub REST via `curl` + `$GITHUB_TOKEN` | yes | **no** — 403, verified |
+| Built-in GitHub tools (issues, PRs, comments) | only if configured | **yes, always** |
+| GitHub GraphQL / **Projects v2** | yes | **no** — proxy serves a pinned set only |
+| `git clone` / `fetch` | yes | yes |
+| `git push` to the session's **working branch** | yes | yes |
+| `git push` to **another branch** | yes | **documented as blocked** (see below) |
+| `git push` to custom refs / tags / notes | yes | **no** — 403, verified |
+| `git push --delete` (any ref) | yes | **no** — 403, verified |
+| Arbitrary outbound network | yes | depends on the environment's access level |
 
-The selection layer is the only part that has to be a script, because it is the
-only part that is a computation. Everything else is either GitHub's job or a
-protocol step in `AGENTS.md`.
+Three quotes carry most of the weight:
 
-### 3.1 Task schema
+> **"Push protection: `git push` works only against the session's current
+> working branch; cloning, fetching, and PR operations work normally."**
 
-Every field of today's task row has a native home. Nothing needs a parallel store.
+> **"Cloud sessions include built-in GitHub tools that let Claude read issues,
+> list pull requests, fetch diffs, and post comments without any setup."**
 
-| `tasks.jsonl` field | Where it lives now |
-|---|---|
-| `id` | the issue number |
-| `title` | the issue title |
-| `payload` (`<id>.md`) | the issue body |
-| acceptance gate | a fenced ` ```bash ` block in the issue body — unchanged in meaning, `gate_run.sh` still runs it |
-| `status: open` | issue open, no `arsenal:claimed` label |
-| `status: in_progress` | `arsenal:claimed` + assignee |
-| `status: done` | a linked PR is open (`Closes #N`) |
-| `status: merged` | **issue closed — GitHub does this itself when the PR merges** |
-| `status: blocked` | derived from deps, not stored |
-| `status: escalated` | `arsenal:escalated` label |
-| `priority` | `arsenal:p0`…`arsenal:p3` — one closed vocabulary, one documented meaning |
-| `deps` | `Depends: #12, #13` in the body, and/or a native sub-issue parent |
-| `requires` (surface caps) | `arsenal:needs:<cap>` |
-| `workspace` | `arsenal:ws:<name>` |
-| `tags` | plain labels |
-| `assignee`, `claimed_at` | issue assignee; claim-comment timestamp |
-| `pr` | the native PR link |
-| `attempts` / `max_attempts` | `arsenal:attempt:<n>` label, bumped on each failed release |
-| `issue` | **gone — it is the issue** |
+> **"GitHub operations use a separate proxy that is independent of this
+> setting"** — i.e. GitHub keeps working even at network access level **None**.
 
-Two of these are worth calling out because they delete whole categories of bug:
+**Why there is no `gh`:** it is not a Claude-app quirk and not a bug. Cloud
+sessions ship `git, jq, yq, ripgrep, tmux, vim, nano` and no `gh`, and real
+GitHub credentials are deliberately kept outside the VM — "authentication is
+handled through a secure proxy using scoped credentials." The session gets a
+scoped git credential plus the built-in GitHub tools; it never gets a token it
+could spend on the API directly. That is why `curl` with `$GITHUB_TOKEN` returns
+403 while `git push` succeeds.
 
-- **Status is derived, not stored.** Today a status field can disagree with
-  reality — a `done` whose PR was never opened, an `in_progress` whose session
-  died, a `merged` whose PR was closed unmerged. `queue_doctor.py` is 590 lines
-  of detecting exactly that class of divergence. When "done" *means* "a linked PR
-  is open", the divergence is not detected, it is unrepresentable.
-- **`merged` is free.** A PR that says `Closes #N` closes the issue on merge.
-  `reconcile_merged.sh` (84 lines, and inert on web anyway) has nothing left to do.
+### 2.1 The finding that decides the design
 
-### 3.2 Claiming
+The coordination branch requires pushing to a branch that is **not** the
+session's working branch. That is the one git operation the cloud sandbox
+documents as unsupported.
 
-Today's claim is a linearizable CAS: two sessions race to fast-forward one ref
-and git lets exactly one win. The replacement is weaker, and this is the one
-place the proposal genuinely gives something up. It is worth being exact about
-what, and why the trade is right.
+It currently succeeds anyway — verified: this session pushed to an unrelated
+branch and to an unrelated ref-namespace, and only the branch push was allowed.
+So enforcement today is looser than the contract. **Building on that is building
+on leniency that is documented to be withdrawn.** The maintainer's instinct
+about the queue branch turns out to be right for a sharper reason than
+ergonomics: it is the least portable primitive available, and it is the load
+bearing one.
 
-**Protocol.** To claim issue `#N`:
+### 2.2 What *is* portable
 
-1. Refuse if it is closed, carries `arsenal:claimed`, has an assignee, or has an
-   unsatisfied dep.
-2. Post a claim comment: `<!-- arsenal-claim session=<sid> -->`.
-3. Add `arsenal:claimed` and self-assign.
-4. **Settle and verify:** re-read the issue's claim comments. The winner is the
-   one with the earliest `created_at`, ties broken by session id. If that is not
-   mine, remove my label and assignment and move on.
+Two channels are available on every surface:
 
-**Why this is enough.** The scenario the strong lock protects against is two
-*orchestrator sessions* racing for one task. That is not the common case: the
-fan-out model is one orchestrator dispatching N workers, and a single process
-needs no distributed lock at all. Concurrent orchestrators are the rare case, and
-the cost of losing the race is bounded and visible — two PRs for one issue, which
-a human sees immediately and closes one of. Weigh that against what the strong
-lock costs *every* consumer in the common case: a branch, a worktree, a sync
-script, a project-identity guard against cross-repo contamination, and 2,700
-lines. The current design pays a permanent tax to prevent a rare, cheap,
-self-announcing failure.
+- **The repository itself** — clone and fetch anywhere; push to your own working
+  branch anywhere.
+- **GitHub Issues and PRs** — guaranteed in cloud sessions through the built-in
+  tools, independent of network access level; on the CLI through `gh` or a
+  configured MCP server.
 
-**Honest statement of the weakening:** GitHub's API is not linearizable across
-replicas, so a sufficiently narrow race can let two sessions both believe they
-won. The settle-and-verify step bounds it; it does not eliminate it. If a
-consumer genuinely runs concurrent orchestrators and cannot tolerate that, the
-mitigation is one orchestrator per repository, not a coordination branch.
-
-### 3.3 Where host state lives
-
-```
-claude-arsenal/          # upstream only — /init owns it, may overwrite freely
-  AGENTS.md  .bundle-version  bin/  scripts/  agents/
-.arsenal/                # host-owned — never touched by /init or an upgrade
-  session/               # handover.md, host_branch, surface_profile.json, rescue_refs
-  project/               # overview.md, <workspace>/plan.md
-  cache/issues.json      # last issue snapshot (see § 4)
-```
-
-The path is `ARSENAL_HOME`, defaulting to `.arsenal/` at the repo root. Per the
-consumer's argument in #144, the resolver **refuses** a path inside the upstream
-prefix rather than warning about it: a `.gitignore` line is a convention, a
-resolver plus a test is a mechanism. With `queue/` gone entirely and the rest
-moved out, `claude-arsenal/` contains only files upstream owns — which is exactly
-#144's fix (2), and what makes fix (1) (shipping the bundle as an artifact whose
-root *is* the bundle) a later delivery change rather than another migration.
+Anything the design needs must be built from those two. Nothing else qualifies.
 
 ---
 
-## 4. What is given up
+## 3. The design
 
-| Loss | Mitigation |
-|---|---|
-| **Offline operation.** Claiming needs the network. | `.arsenal/cache/issues.json` holds the last snapshot, so `/queue-status` and selection still answer offline. Claiming fails loudly rather than silently diverging. |
-| **Repos with no remote, or not on GitHub.** | Out of scope, and said so plainly rather than half-supported. `/queue-add` errors with a clear reason instead of writing a ledger nothing will ever read. |
-| **Linearizable claiming.** | § 3.2 — bounded, visible, cheap failure; one orchestrator per repo if that is not acceptable. |
-| **Issue-tracker noise.** Tasks that were private ledger rows become public issues. | For a public repo this is a real change in posture. Labels keep them filterable, but it should be a deliberate choice, not a surprise. |
-| **API rate limits.** | The snapshot cache plus conditional requests; selection never re-fetches. |
+**The repository defines the work. Issues coordinate who is doing it.**
+
+| Concern | Where it lives | Why |
+|---|---|---|
+| Specs, plans, task definitions, the **DAG**, acceptance gates | **files in the repo** | requirement 5; versioned, reviewable, offline, no second copy |
+| Which task is next | **computed locally** from those files | deterministic, no network |
+| Who has claimed what, what is done | **one GitHub issue** | the only mutable channel writable from every surface |
+
+### 3.1 Where the DAG is stored
+
+In the task files, in the repo. One file per task:
+
+```markdown
+---
+id: T-0042
+title: Extract the surface probe into its own script
+priority: 2
+deps: [T-0038, T-0039]
+requires: [surface:cli]
+---
+
+## Acceptance gate
+```bash
+bash tests/surface_probe_test.sh
+```
+```
+
+The DAG is the union of the `deps` fields — versioned with the code, reviewed in
+the PR that adds the task, and readable with no network. Ordering is a pure
+function over that set plus the claim state, so **"take tasks in order" never
+depends on a network call being available**, only on which tasks are claimed.
+
+This is also why there is no `queue_sync.sh` any more. Tasks arrive the way every
+other file arrives: on a branch, through a PR, onto the default branch. There is
+no second copy on a coordination branch to reconcile against.
+
+### 3.2 Claiming across surfaces
+
+One issue per repository — the **coordination issue** — holds the claim log in
+its comments. To claim `T-0042`:
+
+1. Read the task files at the current commit; compute the eligible set (deps
+   satisfied, surface `requires` met).
+2. Read the coordination issue's comments; a claim is live if it has no matching
+   release and its lease has not expired.
+3. Post `claim T-0042 session=<id>`.
+4. Re-read. **The earliest comment id for that task wins**; if it is not yours,
+   drop it and take the next eligible task.
+
+Comment ids are server-assigned and totally ordered, so this is a bakery lock,
+not a guess. It needs exactly two operations — *post comment* and *list
+comments* — both in the guaranteed built-in tool set on every surface. It works
+identically from the CLI, the desktop app, the mobile app and the web, which is
+requirement 3.
+
+**What it gives up:** GitHub's API is not linearizable across replicas, so a
+narrow race can let two sessions both believe they won. The re-read bounds it
+without eliminating it. The cost when it happens is two branches for one task —
+visible and cheap. The current design's CAS is strictly stronger, and unusable
+on the surface that matters, which makes the comparison moot.
+
+**Why one issue and not one per task:** issue-per-task means every task
+definition gets copied into an issue, which is the duplication this design
+exists to remove, and it fills the tracker with rows. One issue keeps the
+tracker clean and the claim log in one place. Issue-per-task remains an option
+if a visible board is wanted more than a quiet tracker.
+
+### 3.3 The public-repo concern is withdrawn
+
+Revision 1 raised it because *task content* was moving into issues: on a public
+repo, private ledger rows would have become public. Under this design task
+content never leaves the repository — if the repo is public the task files are
+already public, and the coordination issue carries only task ids and session
+ids. There is no new exposure. Disregard that open question.
+
+### 3.4 Layout
+
+```
+arsenal/                 # host-owned. Project content: visible, versioned, yours
+  config.toml            # host configuration — never written by an update
+  specs/  plans/         # specifications and plans
+  tasks/T-0042.md        # task definitions + DAG + gates
+  session/handover.md    # session state
+.claude/skills/          # vendored upstream — regenerated, never hand-edited
+```
+
+`arsenal/` is deliberately **not** a dotdir: requirement 5 says specs and plans
+are project content that people read and edit, and hiding them contradicts that.
+Upstream owns `.claude/skills/` and may overwrite it freely; it scaffolds
+`arsenal/` on first init and never writes there again. That is #144's fix —
+the vendored prefix contains only upstream content — reached without hiding the
+consumer's own work.
+
+### 3.5 Configuration that survives updates
+
+Everything a consumer can tune lives in `arsenal/config.toml`, which upstream
+never rewrites. Skills read it; nobody edits a skill to configure behaviour.
+
+```toml
+# How far must a task PR get before it may merge?
+#   always              — merge as soon as it is open
+#   after-ci            — merge once CI is green
+#   after-ci-and-review — also wait for a bot/human review, if one exists
+#   never               — never merge; the human reviews every PR
+merge-policy = "after-ci"
+
+test-discipline = "test-first"       # or test-after
+session-end     = "handoff"          # handoff | ticket | none
+listing-budget  = 8000               # #143 — the audit's budget, per consumer
+```
+
+This replaces the `<!-- flag: value -->` HTML comments currently scattered in the
+host `CLAUDE.md`. Those work, but they are three different syntaxes in a file
+whose main job is prose, and a consumer cannot see the whole configuration in
+one place. One file, one format, and it answers #143 (a hardcoded 8000-char
+budget a consumer cannot change) with the same mechanism rather than a bespoke
+flag.
+
+`merge-policy` is asked once, at `/init`, and written to the file — never asked
+again, and never lost to an upgrade.
 
 ---
 
-## 5. Disposition of the open issues
+## 4. Installation and updates
+
+Vendoring stays, because on cloud sessions `/plugin` is unavailable and a
+committed `.claude/skills/` is the only channel. What improves:
+
+- **A pinned ref and a single command.** `arsenal/config.toml` records the
+  pinned upstream version; one `make arsenal-update` re-vendors and rewrites the
+  pin. Nothing else in the repo is touched, because upstream no longer owns
+  anything outside `.claude/skills/`.
+- **Possibly real plugin semantics on the CLI from the same tree.** The docs
+  describe *skills-directory plugins*: a committed `.claude/skills/<name>/` with
+  a `.claude-plugin/plugin.json` loads as `<name>@skills-dir` with no marketplace
+  and no install step. If that layout also degrades to plain skills on the web,
+  one committed tree serves both surfaces — plugin on the CLI, plain skills on
+  the web. **Unverified — see § 6.**
+
+---
+
+## 5. Should the `github` skill change?
+
+Yes, and it has a concrete bug.
+
+1. **It must become the GitHub access layer.** Today scripts call `gh` directly
+   and gate on `command -v gh`, so on cloud sessions `reconcile_merged.sh`, the
+   `--closed-issues` doctor check and `open_task_pr.sh`'s PR creation are
+   silently inert — they degrade to nothing exactly where the queue runs. The
+   skill should probe once for the available channel (built-in tools → `gh` →
+   none), record it, and be the single documented way every other skill asks for
+   a GitHub operation. "No `gh`" must stop meaning "skip the step".
+2. **`projects=v2` cannot work on cloud** and should be removed or marked
+   CLI-only. The proxy "serves only a pinned set of GraphQL operations", and
+   Projects v2 is GraphQL-only: "Claude can't reach GitHub APIs that exist only
+   in GraphQL, such as Projects v2, through the proxy." The flag currently
+   promises something unreachable on half the surfaces.
+3. **It owns `merge-policy`** (§ 3.5) — reading it, and refusing to merge beyond
+   what the consumer authorised.
+
+---
+
+## 6. What is still unverified
+
+One thing, and it only affects § 4's optional improvement:
+
+**Does a committed skills-directory plugin load on the web?** The docs say
+project-scope `@skills-dir` plugins load "only after you accept the workspace
+trust dialog", and it is unclear whether a cloud session satisfies that. A
+canary is already pushed to the `arsenal-probe-delete-me` branch:
+`.claude/skills/plain-canary/` (plain) and `.claude/skills/plugcanary/` (plugin
+layout). Start one cloud session on that branch and ask which skills it sees —
+`PLAIN-CANARY-4713`, `PLUG-CANARY-8829`, both, or neither. Nothing else in this
+design depends on the answer.
+
+---
+
+## 7. Disposition of the open issues
 
 | Issue | Under this design |
 |---|---|
-| #142 — open issues are invisible work | **Dissolved.** Issues *are* the queue; there is nothing to import and nothing to forget. |
-| #144 — bundle is not subtree-consumable | **Fixed** by § 3.3. |
-| #139 — `queue_sync.sh` path traversal | **Dissolved** with the script. |
-| #146 — `priority` carries two conventions | **Fixed** by the closed `arsenal:p0..p3` vocabulary. |
-| #145 — doctor never reads payload contents | **Mostly dissolved.** What survives is a body linter: does this issue carry a fenced gate block? |
-| #137 — `release.sh --pr` accepts any string | **Mostly dissolved.** "Done" is derived from a real linked PR, not from a string a caller passed. |
-| #140 — `.gitignore` omits `session/rescue_refs` | **Simplified** — one ignorable root. |
-| #138, #147 — `worker_postcheck.sh` bugs | **Unaffected.** Still real, still to fix. The blast radius shrinks because `queue_branch.sh` no longer moves the main tree's branch. |
-| #143 — hardcoded listing budget | **Independent.** Small, worth doing regardless. |
+| #144 — bundle is not subtree-consumable | **Fixed** — upstream owns only `.claude/skills/`; `arsenal/` is the consumer's. |
+| #142 — open issues are invisible work | **Fixed differently.** Tasks are repo files, so nothing is invisible; an issue can be imported by adding a task file that references it. |
+| #139 — `queue_sync.sh` path traversal | **Dissolved** — no coordination branch, so no sync script. |
+| #146 — `priority` carries two conventions | **Fixed** — one documented `priority` field in the task front-matter. |
+| #143 — hardcoded listing budget | **Fixed** by `arsenal/config.toml`. |
+| #145 — doctor never reads payload contents | **Mostly dissolved**; what remains is a lint over task files for a fenced gate block. |
+| #137 — `release.sh --pr` accepts any string | **Mostly dissolved** — merge state is read from GitHub, not passed as a string. |
+| #140 — `.gitignore` omits `session/rescue_refs` | **Simplified** — one host-owned root. |
+| #138, #147 — `worker_postcheck.sh` bugs | **Unaffected.** Still real; smaller blast radius once nothing switches the main tree's branch. |
 | #141 — `create_reader.py` nits | **Independent.** |
 
 ---
 
-## 6. Migration
+## 8. What gets deleted
 
-For a consumer already running the current design, `arsenal_migrate.py`:
+`queue_branch.sh` (395), `queue_sync.sh` (190), `reconcile_merged.sh` (84),
+`verify_claim.sh` (86), `update_task_row.py` (130), and the four tests that exist
+only to hold the coordination branch upright (417) — **1,302 lines outright**.
+`claim.sh`, `release.sh`, `queue_doctor.py` and `queue_batch.sh` (1,354) are
+rewritten far smaller: selection becomes a pure function over task files, and the
+ledger-vs-reality divergence most of `queue_doctor.py` detects stops being
+representable.
 
-1. Reads `tasks.jsonl` from the coordination branch (or the working tree).
-2. Creates one issue per non-terminal task: body from the payload, labels from
-   priority/workspace/tags/requires, and a `arsenal-task-id: <old-id>` marker so
-   a re-run is idempotent rather than duplicating.
-3. Rewrites `deps` to the new issue numbers in a second pass.
-4. Records terminal tasks in a single closed summary issue rather than
-   resurrecting them.
-5. Moves `session/` and `project/` to `.arsenal/`.
-6. Prints what to delete by hand: the `arsenal-queue` branch and the side
-   worktree. **It cannot delete them itself from a web session** (§ 2, constraint
-   3) — this is stated in the output rather than attempted and silently failed.
-
----
-
-## 7. Staged delivery
-
-1. **This document.** Decide before building.
-2. **State relocation** (`ARSENAL_HOME`, the refusing resolver, `/init` writing
-   the new layout, migration of an existing tree). Independently valuable and
-   the prerequisite for everything else.
-3. **Selection layer** — `queue_select.py` as a pure function over an issue
-   snapshot, with the dep/priority/tag/workspace/surface logic ported from
-   `queue_batch.sh` and unit-tested without git or network.
-4. **Protocol rewrite** — `AGENTS.md` session protocol, claim/release,
-   `/queue-add`, `/queue-status`, `/continue`, `worker.md`.
-5. **Deletion** — the coordination branch machinery and its tests.
-6. **Bundle packaging** (#144 fix 1) — optional, and cheap once step 2 landed.
+A worktree-free proof of the alternative was run before writing this: a ledger
+branch *can* be read, modified and compare-and-swapped with pure plumbing
+(`cat-file`, `mktree`, `commit-tree`, `push --force-with-lease=<ref>:<sha>`) with
+no checkout and no worktree — 395 lines of worktree lifecycle were never
+necessary even for the current design. It is recorded here because it is the
+fallback if the issue-based claim ever proves insufficient, and because it
+shows the branch machinery was accidental complexity, not a requirement.
 
 ---
 
-## 8. Open questions
+## 9. Staged delivery
 
-1. **Public repos.** Turning ledger rows into public issues is a visible posture
-   change. Acceptable for this repo; should `/init` ask, or default to a
-   `arsenal:task` label that keeps them filterable and let the consumer decide?
-2. **`project/` is human-authored.** Specs and plans under `.arsenal/project/`
-   are content people read and edit, and a dotdir hides them. Keep them visible
-   (`docs/`-adjacent) with only machine state under `.arsenal/`, or accept the
-   dotdir for the sake of one ignorable root?
-3. **Does anything still need `tasks.jsonl`?** This repo dogfoods `status/queue/`
-   and CI runs `queue doctor` over it. That check becomes a lint over issue
-   bodies — confirm nothing else depends on the file format.
+1. **This document.** Decide first.
+2. **`arsenal/` layout + `config.toml`** (including `merge-policy`, and #143's
+   budget) with migration from the current tree. Independently valuable.
+3. **Task files + the pure selector** — DAG, priority, `requires`, gates, unit
+   tested with no git and no network.
+4. **Claim protocol + `github` skill as the access layer** (§ 5).
+5. **Delete** the coordination-branch machinery and its tests.
+6. **Optional:** skills-directory plugin layout, if § 6 confirms it.
