@@ -97,9 +97,10 @@ WORKSPACE_HANDOVER_STUB = """\
 ## How to continue
 
 1. Read `claude-arsenal/AGENTS.md` for the worker loop algorithm.
-2. Run `claude-arsenal/bin/queue_eval.sh` to get the next unblocked task.
-3. If the last task is still `in_progress` with no active assignee, run:
-   `claude-arsenal/bin/release.sh <task_id> open` to requeue it first.
+2. Fetch the `arsenal:task` issues, then run
+   `claude-arsenal/scripts/task_select.py --issues <file>` for the next task.
+3. Claim it with `claude-arsenal/bin/claim_task.sh <task_id>`; `lost` means
+   another session has it, so take the next one.
 """
 
 OVERVIEW_HEADER = """\
@@ -141,11 +142,11 @@ def _has_shebang(path: Path) -> bool:
 
 # Host-owned bundle paths the init only SCAFFOLDS: a template is written once
 # when absent, but NEVER overwritten on re-run — these hold live host data
-# (AGENTS.md marks session/, project/, and queue/ "host-owned; never touched by
-# /init re-run"). Clobbering them wipes the consumer's handover / plans / queue
-# on every `init --silent` at session start. Only session/ ships a template
-# today; project/ and queue/ are listed defensively so a future bundle file
-# under them can't introduce the same data loss.
+# (AGENTS.md marks session/ and project/ "host-owned; never touched by /init
+# re-run"). Clobbering them wipes the consumer's handover and plans on every
+# `init --silent` at session start. Only session/ ships a template today;
+# project/ is listed defensively so a future bundle file under it can't
+# introduce the same data loss.
 _SCAFFOLD_ONCE = ("session/", "project/")
 
 
@@ -370,7 +371,8 @@ def init_workspace(
     plan: str,
     bundle_override: Path | None = None,
 ) -> None:
-    # The workspace name becomes a directory under claude-arsenal/project/.
+    # The workspace name becomes a directory under arsenal/project/ — host-owned,
+    # so a bundle upgrade never touches a workspace's spec, plan, or context.
     # Strip Windows-style trailing dots/spaces before checking (they normalize
     # to ".." on NTFS) and retain the substring ".." guard for defence-in-depth.
     normalized = workspace.rstrip(". ")
@@ -428,8 +430,8 @@ def main() -> None:
     if args.workspace:
         name = args.workspace
         root = args.root or f"./{name}/"
-        spec = args.spec or f"claude-arsenal/project/{name}/spec.md"
-        plan = args.plan or f"claude-arsenal/project/{name}/plan.md"
+        spec = args.spec or f"arsenal/project/{name}/spec.md"
+        plan = args.plan or f"arsenal/project/{name}/plan.md"
         init_workspace(repo_path, name, root, spec, plan, bundle_override)
     else:
         init_base(repo_path, bundle_override, silent=args.silent)

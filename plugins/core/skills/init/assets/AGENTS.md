@@ -1,6 +1,6 @@
 # Claude Arsenal
 
-<!-- claude-arsenal v0.25.0 — imported via @claude-arsenal/AGENTS.md -->
+<!-- claude-arsenal v0.26.0 — imported via @claude-arsenal/AGENTS.md -->
 
 This file is imported by the host repo's `CLAUDE.md` via the session-protocol block
 that `/init` injects. It provides the mechanics behind the proactive directives
@@ -62,11 +62,11 @@ At the start of every session (fresh start, context compaction, or cold restart)
 ## Queue seeding from workspace plans
 
 When there are no task files yet and workspace plans exist (per
-`claude-arsenal/project/overview.md`), seed the queue from each workspace's plan
+`arsenal/project/overview.md`), seed the queue from each workspace's plan
 without asking the user first.
 
 For each workspace listed in the overview:
-1. Read `claude-arsenal/project/<workspace>/plan.md` for the implementation-tasks table.
+1. Read `arsenal/project/<workspace>/plan.md` for the implementation-tasks table.
 2. Seed tasks for that workspace using `--workspace <NAME>` flag on `new_task.py`.
 
 The table columns are: `T# | Description | Location | Size | Depends | Gate | Tests`
@@ -275,23 +275,38 @@ dispatches that many workers at once. Run when the queue has open tasks:
      `ARSENAL_MAX_ITERATIONS` rounds (the always-available cap). **Stop the
      loop**, write `handover.md`, and report the reason (remaining % + reset
      time, or the round cap). Do not dispatch.
-3. `claude-arsenal/bin/queue_batch.sh --max "${ARSENAL_MAX_WORKERS:-2}"` → up to
-   N task JSON lines (JSONL), respecting `LOOP_WORKSPACE` / `LOOP_TAGS` scope and
-   excluding any task that blocks another in the same batch.
+3. Fetch the `arsenal:task` issues over the channel from step 1 of the
+   session-start protocol, save them, and ask for the batch:
+
+   ```bash
+   python3 claude-arsenal/scripts/task_select.py \
+       --issues "${ARSENAL_ISSUES_JSON:-/tmp/arsenal-issues.json}" \
+       --max "${ARSENAL_MAX_WORKERS:-2}" \
+       ${LOOP_WORKSPACE:+--workspace "$LOOP_WORKSPACE"}
+   ```
+
+   → up to N task JSON lines (JSONL), best first. Add `--tag` per `LOOP_TAGS`
+   entry to narrow further.
    - Empty → loop done; report summary and write `handover.md`.
-   - **Isolation clamp (mechanical).** `queue_batch.sh` emits at most ONE task
+   - **No task in the batch can block another in it.** A task whose dep is not
+     yet `done` is not eligible at all, so a blocked dependent cannot be
+     selected alongside the dep it waits on. This needs no separate rule.
+   - **Isolation clamp (mechanical).** `task_select.py` returns at most ONE task
      when worktree isolation is recorded `unavailable` (sentinel
-     `claude-arsenal/session/worktree_isolation`, written by `worktree_probe.sh`
-     and `worker_postcheck.sh`; override with `ARSENAL_WORKTREE_ISOLATION`). This
+     `arsenal/session/worktree_isolation`, written by `worktree_probe.sh` and
+     `worker_postcheck.sh`; override with `ARSENAL_WORKTREE_ISOLATION`). This
      closes the double-dispatch window: once in-place mode is detected, the
      selector itself refuses to hand back a parallel batch, so two workers can
-     never be dispatched in one round before the clamp takes effect.
+     never be dispatched in one round before the clamp takes effect. The clamp
+     lives in the selector rather than in this protocol on purpose — a rule the
+     caller has to remember is one it can skip exactly once, in the round that
+     discovers isolation is missing.
 4. For each task line, `bash claude-arsenal/bin/claim_task.sh <task_id>`
    (sequential — each push is atomic):
-   - `won` → keep the task in the dispatch set. A win is only reported after
-     `claim_task.sh` reports `won` only when GitHub created the ref for it — a claim
-     commit (guarding against a restricted-push surface that silently redirects
-     the push off the shared ref — the web double-claim vector).
+   - `won` → keep the task in the dispatch set. `claim_task.sh` reports `won`
+     only when GitHub itself created the ref, which guards against a
+     restricted-push surface that silently redirects the push off the shared
+     ref — the web double-claim vector.
    - `lost` → another session claimed it; drop it from this batch.
    - `error: …` (exit 2) → **stop the loop and surface to the user.** A
      misconfiguration, not a race (wrong branch, protected coordination branch,
@@ -369,7 +384,7 @@ python3 .claude/skills/queue-add/scripts/new_task.py \
 
 In a workspace-structured project, add `--workspace <WORKSPACE>` to file the
 divergence under the right workspace; solo / single-workspace repos omit it.
-Give it a payload stub at `claude-arsenal/queue/<id>.md` that names three things:
+Give it a task file at `arsenal/tasks/<id>.md` that names three things:
 what the spec requires, what the code does, and the fix location.
 
 This applies to workers and solo sessions alike. A worker that spots a divergence
@@ -421,7 +436,7 @@ a property of merging rather than a command anyone runs.
 ## Quota governance — token-budget stop
 
 `statusline_capture.sh` (registered by `/init` as the host `statusLine` command)
-writes `claude-arsenal/session/rate_limits.json` (gitignored) from the
+writes `arsenal/session/rate_limits.json` (gitignored) from the
 `rate_limits` block Claude Code feeds a statusLine on stdin — the only channel
 that data arrives on. Before every dispatch, the loop runs `budget_check.sh`:
 
@@ -437,7 +452,7 @@ enforces an **always-available** per-session dispatch-round cap
 (`ARSENAL_MAX_ITERATIONS`, default 50; `0` disables) that does not depend on
 observable quota — the real ceiling for an auto-dispatching loop on metered
 billing. The counter resets per `CLAUDE_SESSION_ID` and lives in the gitignored
-`claude-arsenal/session/budget_iterations.json`.
+`arsenal/session/budget_iterations.json`.
 
 ---
 

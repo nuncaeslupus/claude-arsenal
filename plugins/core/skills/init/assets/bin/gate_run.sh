@@ -2,10 +2,9 @@
 # gate_run.sh <task_id>
 # Runs the mechanical acceptance gate for a task, if one is defined.
 #
-# Reads claude-arsenal/queue/<task_id>.md — falling back to the coordination
-# branch (`git show <default>:…`) when the file is not on disk, so a caller
-# whose tree predates the payload's seeding commit (the orchestrator sitting on
-# the default branch, a worker on an older base) never has to materialize one —
+# Reads arsenal/tasks/<task_id>.md — falling back to `git show <ref>:…` when the
+# file is not on disk, so a caller whose tree predates the commit that added the
+# task (a worker on an older base) never has to materialize one —
 # and looks for the first ```bash (or ```sh) code block inside the
 # ## Acceptance gate section. If found, executes it in the repo root; if absent
 # (prose-only gate), nothing is executed.
@@ -43,8 +42,8 @@
 # Exit: 0 gate passed, or nothing mechanical was defined (see the `gate:` line)
 #       1 gate failed (command exited non-zero), or nothing ran under
 #         ARSENAL_GATE_REQUIRE_BLOCK=1
-#       2 usage/setup error — including "no payload on disk NOR on the
-#         coordination ref", i.e. the task declares no gate at all
+#       2 usage/setup error — including "no task file on disk NOR on any
+#         known ref", i.e. there is nothing to read a gate from
 #       3 gate COULD NOT RUN (command/interpreter not found, 126/127). Distinct
 #         from 1 so "the gate never executed" is never mistaken for a verdict.
 #         Also printed loudly on stdout, so a caller that pipes this script's

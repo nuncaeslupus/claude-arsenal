@@ -124,4 +124,4 @@ Before creating the PR, verify:
 
 ## Workspace-aware paths
 
-When `claude-arsenal/project/<WORKSPACE>/` exists, read the spec and plan from there (`spec.md`, `plan.md`, `context.md`) and record gate evidence in the workspace's `plan.md` instead of `status/`. Otherwise read `status/specification.md` and `status/plan.md` as above. When running under the task queue, the claimed task's payload at `claude-arsenal/queue/<id>.md` carries the acceptance gate, which the queue's gate runner executes before the task is released.
+When `arsenal/project/<WORKSPACE>/` exists, read the spec and plan from there (`spec.md`, `plan.md`, `context.md`) and record gate evidence in the workspace's `plan.md` instead of `status/`. Otherwise read `status/specification.md` and `status/plan.md` as above. When running under the task queue, the claimed task's payload at `arsenal/tasks/<id>.md` carries the acceptance gate, which the queue's gate runner executes before the task is released.

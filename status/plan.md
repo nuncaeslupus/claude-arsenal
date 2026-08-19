@@ -4,7 +4,7 @@
 > queue subsystem lives instead in `plugins/core/skills/` (`init`,
 > `continue`, `queue-add`, `queue-status`) and writes its runtime tree
 > to `claude-arsenal/` (not `.loop/`). For the shipped design, see
-> [`docs/orchestrator-guide.md`](../docs/orchestrator-guide.md).
+> [`docs/queue.md`](../docs/queue.md).
 
 ---
 

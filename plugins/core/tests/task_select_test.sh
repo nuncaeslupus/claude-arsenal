@@ -167,4 +167,39 @@ grep -q 't-aaaa1111' <<<"${out}" && fail "a claimed issue must not be selected"
 out=$(python3 "${SELECT_PY}" --tasks-dir "${TASKS}" --issues "${tmpdir}/issues.json" --max 9 2>/dev/null)
 grep -q '"number"' <<<"${out}" && fail "selector must emit tasks, never raw issues"
 
+# --- 16: the batch is clamped to one task without worktree isolation ---
+#         Parallel workers without separate worktrees share one tree and clobber
+#         each other. queue_batch.sh enforced this mechanically; when it was
+#         deleted the rule survived only as prose in AGENTS.md, which is exactly
+#         the kind of rule a caller skips once — in the round that discovers
+#         isolation is missing, after two workers are already out.
+sentinel="${tmpdir}/worktree_isolation"
+
+echo "available" > "${sentinel}"
+n=$(python3 "${SELECT_PY}" --tasks-dir "${TASKS}" --capability surface:cli --max 9 \
+        --isolation-sentinel "${sentinel}" </dev/null 2>/dev/null | wc -l)
+[[ "${n}" -gt 1 ]] || fail "with isolation available the batch must not be clamped (got ${n})"
+
+echo "unavailable" > "${sentinel}"
+n=$(python3 "${SELECT_PY}" --tasks-dir "${TASKS}" --capability surface:cli --max 9 \
+        --isolation-sentinel "${sentinel}" </dev/null 2>/dev/null | wc -l)
+[[ "${n}" -eq 1 ]] || fail "without worktree isolation the batch must be 1 task, got ${n}"
+
+# the reason is reported, not silently applied
+python3 "${SELECT_PY}" --tasks-dir "${TASKS}" --capability surface:cli --max 9 --isolation-sentinel "${sentinel}" \
+    </dev/null 2>&1 >/dev/null | grep -q "capped at 1" \
+    || fail "the clamp must say why the batch shrank"
+
+# a missing sentinel is not a clamp: an unprobed surface is not a known-bad one
+rm -f "${sentinel}"
+n=$(python3 "${SELECT_PY}" --tasks-dir "${TASKS}" --capability surface:cli --max 9 \
+        --isolation-sentinel "${sentinel}" </dev/null 2>/dev/null | wc -l)
+[[ "${n}" -gt 1 ]] || fail "an absent sentinel must not clamp the batch (got ${n})"
+
+# the environment override wins over the file, for a surface probed by hand
+echo "available" > "${sentinel}"
+n=$(ARSENAL_WORKTREE_ISOLATION=unavailable python3 "${SELECT_PY}" --tasks-dir "${TASKS}" --capability surface:cli \
+        --max 9 --isolation-sentinel "${sentinel}" </dev/null 2>/dev/null | wc -l)
+[[ "${n}" -eq 1 ]] || fail "ARSENAL_WORKTREE_ISOLATION must override the sentinel (got ${n})"
+
 echo "PASS: task_select_test — all gates passed"

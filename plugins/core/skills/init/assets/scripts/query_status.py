@@ -5,7 +5,7 @@ Reads the task graph from the repository and the state from the GitHub issues th
 caller already fetched, so it needs no network of its own and cannot disagree with
 what the selector sees — both derive from the same two inputs.
 
-    query_status.py --tasks-dir arsenal/tasks --issues /tmp/issues.json [--detail]
+    python3 claude-arsenal/scripts/query_status.py --issues /tmp/issues.json [--detail]
 
 Exit: 0 always; 1 with --fail-on-problems if any task has no gate, no handle, or a
 dependency that does not exist.
@@ -19,20 +19,14 @@ import sys
 from pathlib import Path
 from typing import Any
 
-# task_select.py is the single implementation of "read the graph, derive state".
-# At runtime it sits in the host's bundle; in this repo it sits in the init
-# skill's assets. Import whichever exists rather than keeping a second copy in
-# step by hand.
-_HERE = Path(__file__).resolve()
-for _candidate in (
-    Path("claude-arsenal/scripts"),
-    _HERE.parents[2] / "init/assets/scripts",
-):
-    if (_candidate / "task_select.py").is_file():
-        sys.path.insert(0, str(_candidate))
-        break
+# task_select.py is the single implementation of "read the graph, derive state",
+# and it sits beside this file — in the bundle at runtime, in the init skill's
+# assets here. Importing it is what keeps the board and the selector from ever
+# disagreeing: both answer from the same code, not from two copies kept in step
+# by hand.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from task_select import TASK_MARKER_RE, load_tasks, state_from_issues  # noqa: E402
+from task_select import TASK_MARKER_RE, load_tasks, state_from_issues
 
 TERMINAL = {"done", "merged"}
 

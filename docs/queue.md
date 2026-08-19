@@ -3,7 +3,8 @@
 > **Status:** live as of v0.25.0. The session protocol, the `/queue-*` skills and
 > the worker all run on the model described here; the coordination branch and its
 > machinery are gone. Existing repos migrate with `arsenal_migrate.py` (below).
-> `docs/orchestrator-guide.md` is superseded by this page.
+> It replaces `docs/orchestrator-guide.md`, which described the old design
+> and has been removed.
 
 Two ideas, and everything else follows from them.
 

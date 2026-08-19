@@ -28,7 +28,7 @@ Do not load mid-job. The retrospective wants a complete arc to scan.
 **Spec-alignment check (always, before writing the handoff).** Ask: did this
 session ADOPT or LOCK any architecture decision? If yes, verify the spec and
 plan actually reflect it — workspace projects keep them at
-`claude-arsenal/project/<WORKSPACE>/spec.md` + `plan.md`; otherwise they are
+`arsenal/project/<WORKSPACE>/spec.md` + `plan.md`; otherwise they are
 `status/specification.md` + `status/plan.md`. If they don't, either update them now or seed a
 queue task before ending — a decision that lives only in handover prose drifts,
 because the handover is a snapshot the next session overwrites while the spec,
@@ -120,4 +120,4 @@ Stop-hook setup (so this skill fires at conversation close without an explicit `
 
 ## Workspace-aware paths
 
-When `claude-arsenal/project/<WORKSPACE>/` exists, write the Step 1 handoff to `claude-arsenal/project/<WORKSPACE>/handover.md` and refresh the cross-workspace `claude-arsenal/session/handover.md` instead of `status/handoff.md`. Otherwise use `status/handoff.md` as above. The handoff opt-in marker still governs whether Step 1 runs at all.
+When `arsenal/project/<WORKSPACE>/` exists, write the Step 1 handoff to `arsenal/project/<WORKSPACE>/handover.md` and refresh the cross-workspace `arsenal/session/handover.md` instead of `status/handoff.md`. Otherwise use `status/handoff.md` as above. The handoff opt-in marker still governs whether Step 1 runs at all.
