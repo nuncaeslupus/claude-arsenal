@@ -25,8 +25,11 @@ trap cleanup EXIT
 bash "${VENDOR}" --src "${REPO}" --dest "${tmpdir}/.claude/skills" --plugins core >/dev/null
 
 # Gate 1: the init skill carries its bundle along (assets/ rode with the copy).
-if [[ ! -f "${tmpdir}/.claude/skills/init/assets/bin/queue_eval.sh" ]]; then
-    echo "FAIL: flattened init skill is missing assets/bin/queue_eval.sh" >&2; exit 1
+if [[ ! -f "${tmpdir}/.claude/skills/init/assets/bin/claim_task.sh" ]]; then
+    echo "FAIL: flattened init skill is missing assets/bin/claim_task.sh" >&2; exit 1
+fi
+if [[ ! -f "${tmpdir}/.claude/skills/init/assets/scripts/task_select.py" ]]; then
+    echo "FAIL: flattened init skill is missing assets/scripts/task_select.py" >&2; exit 1
 fi
 
 # Gate 2: run the flattened init.py with NO --bundle-dir override — it must
@@ -36,8 +39,9 @@ echo "# Test repo" > CLAUDE.md
 python3 .claude/skills/init/scripts/init.py --repo-path "${tmpdir}" >/dev/null
 
 # Gate 3: claude-arsenal/ was bootstrapped from the flattened bundle.
-for f in claude-arsenal/bin/queue_eval.sh claude-arsenal/AGENTS.md \
-         claude-arsenal/queue/tasks.jsonl claude-arsenal/session/handover.md; do
+for f in claude-arsenal/bin/claim_task.sh claude-arsenal/scripts/task_select.py \
+         claude-arsenal/AGENTS.md arsenal/config.toml arsenal/tasks \
+         arsenal/session/handover.md; do
     if [[ ! -e "${tmpdir}/${f}" ]]; then
         echo "FAIL: flattened init did not create ${f}" >&2; exit 1
     fi

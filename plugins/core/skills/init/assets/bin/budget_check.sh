@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # budget_check.sh — pre-dispatch quota guard for the worker loop.
 #
-# Reads claude-arsenal/session/rate_limits.json (written by statusline_capture.sh)
+# Reads arsenal/session/rate_limits.json (written by statusline_capture.sh)
 # and decides whether the loop may dispatch more workers.
 #
 # Exit:
@@ -22,10 +22,10 @@
 
 set -uo pipefail
 
-FILE="${ARSENAL_RATE_LIMITS_FILE:-claude-arsenal/session/rate_limits.json}"
+FILE="${ARSENAL_RATE_LIMITS_FILE:-arsenal/session/rate_limits.json}"
 STOP_PCT="${ARSENAL_QUOTA_STOP_PCT:-90}"
 MAX_ITER="${ARSENAL_MAX_ITERATIONS:-50}"
-ITER_FILE="${ARSENAL_ITER_STATE_FILE:-claude-arsenal/session/budget_iterations.json}"
+ITER_FILE="${ARSENAL_ITER_STATE_FILE:-arsenal/session/budget_iterations.json}"
 SESSION_ID="${CLAUDE_SESSION_ID:-default}"
 
 python3 - "${FILE}" "${STOP_PCT}" "${MAX_ITER}" "${ITER_FILE}" "${SESSION_ID}" <<'PY'

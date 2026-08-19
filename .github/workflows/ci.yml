@@ -54,7 +54,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # The test suite invokes shipped scripts (e.g. queue_doctor.py) via bare
+      # The test suite invokes shipped scripts (e.g. task_select.py) via bare
       # `python3`, matching how consumers run them — so `python3` on PATH must
       # satisfy the project's own floor (pyproject.toml requires-python
       # >=3.12), not whatever ubuntu-22.04 defaults to (3.10).
@@ -121,5 +121,3 @@ jobs:
 
       - name: make queue-doctor
         run: make queue-doctor
-        env:
-          GH_TOKEN: ${{ github.token }}  # needed for the --closed-issues gh calls

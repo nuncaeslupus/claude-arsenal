@@ -52,6 +52,22 @@ tag:  ## create+push v<.bundle-version> tag from HEAD if missing — manual fall
 			echo "make tag: $$t is lower than latest v$$latest — refusing" >&2; exit 1; fi; \
 		git tag -a "$$t" -m "Release $$t" && git push origin "$$t" && echo "make tag: created+pushed $$t"; fi
 
+bump:  ## bump .bundle-version (LEVEL=patch|minor|major, default patch) and sync every derived copy
+	@level="$${LEVEL:-patch}"; vfile=plugins/core/skills/init/assets/.bundle-version; \
+	cur=$$(tr -d '[:space:]' < $$vfile); \
+	next=$$(python3 -c "import sys;M,m,p=map(int,sys.argv[1].split('.'));l=sys.argv[2];print(f'{M+1}.0.0' if l=='major' else f'{M}.{m+1}.0' if l=='minor' else f'{M}.{m}.{p+1}')" "$$cur" "$$level"); \
+	printf '%s\n' "$$next" > $$vfile; \
+	$(MAKE) --no-print-directory sync-version; \
+	echo "bump: $$cur -> $$next ($$level). Commit this, and run 'make tag' from main after it merges."
+
+release-check:  ## verify the released version is actually tagged — run after merging to main
+	@v=$$(tr -d '[:space:]' < plugins/core/skills/init/assets/.bundle-version); \
+	git fetch --tags --quiet 2>/dev/null || true; \
+	if git rev-parse "v$$v" >/dev/null 2>&1; then echo "release-check: v$$v is tagged — consumers can fetch it."; \
+	else echo "release-check: v$$v has NO TAG."; \
+	     echo "  Consumers gate updates on the newest tag, so an untagged release is invisible to them"; \
+	     echo "  and they keep being told the previous version is current. Run: make tag"; exit 1; fi
+
 sync-version:  ## write the canonical .bundle-version into both plugin manifests + AGENTS.md
 	uv run python scripts/sync_version.py
 
@@ -64,9 +80,9 @@ test:  ## run every plugin's behaviour tests (plugins/*/tests/*.sh) + repo-tool 
 		echo "=== test: $$t ==="; bash "$$t"; \
 	done
 
-queue-doctor:  ## dogfood: run the queue consistency check on this repo's own backlog (status/queue)
-	uv run python plugins/core/skills/init/assets/scripts/queue_doctor.py \
-		--queue status/queue/tasks.jsonl --closed-issues --repo nuncaeslupus/claude-arsenal --fail-on warn
+queue-doctor:  ## dogfood: audit this repo's own task files (arsenal/tasks) the way a consumer would
+	uv run python plugins/core/skills/queue-status/scripts/query_status.py \
+		--tasks-dir arsenal/tasks --detail --fail-on-problems
 
 sync-dupes:  ## sync_duplicates.py --check across plugins/*/scripts/_shared/
 	uv run python $(SYNC_DUPES) --check

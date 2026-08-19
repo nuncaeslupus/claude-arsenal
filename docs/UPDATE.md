@@ -100,7 +100,7 @@ git commit -m "chore: vendor claude-arsenal @ vX.Y.Z"
 
 `init.py --repo-path .` is idempotent: it only overwrites stale
 `claude-arsenal/bin/` scripts and the `AGENTS.md` header; your
-`tasks.jsonl`, per-task payloads, and project-local `CLAUDE.md` edits
+everything under `arsenal/` (tasks, specs, plans, config, session state) and project-local `CLAUDE.md` edits
 are left untouched.
 
 ### Two ways this silently does nothing (or undoes your work)

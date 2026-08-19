@@ -3,7 +3,7 @@
 # Runs the mechanical acceptance gate for a task, if one is defined.
 #
 # Reads claude-arsenal/queue/<task_id>.md — falling back to the coordination
-# branch (`git show arsenal-queue:…`) when the file is not on disk, so a caller
+# branch (`git show <default>:…`) when the file is not on disk, so a caller
 # whose tree predates the payload's seeding commit (the orchestrator sitting on
 # the default branch, a worker on an older base) never has to materialize one —
 # and looks for the first ```bash (or ```sh) code block inside the
@@ -12,7 +12,7 @@
 #
 # A GATE THAT RAN NOTHING IS NOT A PASS, and it no longer looks like one. The
 # no-block case used to exit 0 in silence, indistinguishable from a real pass —
-# and since release.sh re-runs this script as its hard precondition for `done`,
+# and since a worker opens no PR when this script fails,
 # a repo whose payloads all write gates as prose (or as inline single-backtick
 # commands, which the fence regex does not match) had an inert gate layer for
 # every task without a word of warning. One consumer audit found 0 of 70
@@ -59,32 +59,43 @@ if [[ -z "${TASK_ID}" ]]; then
     exit 2
 fi
 
-PAYLOAD="claude-arsenal/queue/${TASK_ID}.md"
 PAYLOAD_TMP=""
 # `return 0` matters: under `set -e` a non-zero status out of an EXIT trap
 # becomes the script's exit status, which would report every clean run as failed.
 cleanup() { [[ -n "${PAYLOAD_TMP}" ]] && rm -f "${PAYLOAD_TMP}"; return 0; }
 trap cleanup EXIT
 
+# The task file is ordinary versioned content on the default branch, so any
+# worktree cut from there already has it. That is a direct consequence of tasks
+# being repository files rather than rows on a coordination branch: the old code
+# needed a `git show <branch>:…` fallback and a temp file outside the tree,
+# because the payload only existed on a ref the worker was not on.
+HOME_DIR="${ARSENAL_HOME:-arsenal}"
+PAYLOAD="${HOME_DIR}/tasks/${TASK_ID}.md"
+
 if [[ ! -f "${PAYLOAD}" ]]; then
-    # A caller whose tree predates the payload's seeding commit has no file on
-    # disk — the orchestrator's main tree sits on the default branch, and a
-    # worker's worktree may be cut from an older base. Read it from the
-    # coordination ref instead, into a temp file OUTSIDE the repo tree: a
-    # payload materialized inside it gets swept into the feature branch by
-    # open_task_pr.sh's `git add -A`.
-    QUEUE_BRANCH="${ARSENAL_QUEUE_BRANCH:-arsenal-queue}"
-    QUEUE_REMOTE="${ARSENAL_QUEUE_REMOTE:-origin}"
-    PAYLOAD_TMP="$(mktemp -t "arsenal-payload-${TASK_ID}-XXXXXX.md")"
-    for ref in "${QUEUE_BRANCH}" "${QUEUE_REMOTE}/${QUEUE_BRANCH}"; do
-        if git show "${ref}:${PAYLOAD}" >"${PAYLOAD_TMP}" 2>/dev/null; then
-            echo "gate_run: payload read from ${ref} (not on disk)" >&2
+    # Fall back to reading it from the default branch: a worktree cut from an
+    # older base can predate the commit that added the task.
+    REMOTE="${ARSENAL_QUEUE_REMOTE:-origin}"
+    DEFAULT_BRANCH="${ARSENAL_DEFAULT_BRANCH:-}"
+    if [[ -z "${DEFAULT_BRANCH}" ]]; then
+        DEFAULT_BRANCH="$(git symbolic-ref --short "refs/remotes/${REMOTE}/HEAD" 2>/dev/null | sed "s#^${REMOTE}/##")"
+    fi
+    DEFAULT_BRANCH="${DEFAULT_BRANCH:-main}"
+    # Materialize OUTSIDE the repo tree: a file written inside it would be swept
+    # into the feature branch by open_task_pr.sh's `git add -A`.
+    PAYLOAD_TMP="$(mktemp -t "arsenal-task-${TASK_ID}-XXXXXX.md")"
+    found=0
+    for ref in "${REMOTE}/${DEFAULT_BRANCH}" "${DEFAULT_BRANCH}"; do
+        if git show "${ref}:${HOME_DIR}/tasks/${TASK_ID}.md" >"${PAYLOAD_TMP}" 2>/dev/null; then
+            echo "gate_run: task file read from ${ref} (not on disk)" >&2
             PAYLOAD="${PAYLOAD_TMP}"
+            found=1
             break
         fi
     done
-    if [[ "${PAYLOAD}" != "${PAYLOAD_TMP}" ]]; then
-        echo "gate_run: payload not found: ${PAYLOAD} (nor on ${QUEUE_BRANCH})" >&2
+    if [[ ${found} -eq 0 ]]; then
+        echo "gate_run: task file not found: ${HOME_DIR}/tasks/${TASK_ID}.md" >&2
         exit 2
     fi
 fi
