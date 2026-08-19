@@ -25,7 +25,7 @@
 
 ## Surface profile at handover
 
-<!-- Copy of claude-arsenal/session/surface_profile.json contents for quick reference. -->
+<!-- Copy of arsenal/session/surface_profile.json contents for quick reference. -->
 
 ## Queue snapshot at handover
 

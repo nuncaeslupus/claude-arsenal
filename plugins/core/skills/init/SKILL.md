@@ -53,8 +53,8 @@ The script:
 7. Injects the session-start protocol block + `@claude-arsenal/AGENTS.md` import into `CLAUDE.md`.
 
 With `--workspace NAME`, additionally:
-- Creates `claude-arsenal/project/<NAME>/` with `spec.md`, `plan.md`, `context.md`, `handover.md` stubs.
-- Upserts `claude-arsenal/project/overview.md` workspace index.
+- Creates `arsenal/project/<NAME>/` with `spec.md`, `plan.md`, `context.md`, `handover.md` stubs.
+- Upserts `arsenal/project/overview.md` workspace index.
 
 ## Gotchas
 

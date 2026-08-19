@@ -145,7 +145,7 @@ fi
 #   2. Serialized in-place mode → allow. Not the caller's word for it: the
 #      sentinel is written by worktree_probe.sh / worker_postcheck.sh (the
 #      orchestrator's own probes), and `unavailable` is exactly what clamps
-#      queue_batch.sh to one worker — so there is no concurrent worker to
+#      task_select.py to one worker — so there is no concurrent worker to
 #      clobber.
 #   3. Otherwise refuse. ARSENAL_ALLOW_SHARED_ADD=1 is the operator escape
 #      hatch for a bespoke setup, named so it reads as what it is.
@@ -190,7 +190,7 @@ fi
 # Open the PR when a CLI backend is present; otherwise hand the branch back so
 # the orchestrator opens it via the github skill / MCP.
 if command -v gh >/dev/null 2>&1; then
-    body="$(printf '## Summary\n\n%s\n\n## Test plan\n\nSee acceptance gate in claude-arsenal/queue/%s.md.\n' "${TITLE}" "${TASK_ID}")"
+    body="$(printf '## Summary\n\n%s\n\n## Test plan\n\nSee acceptance gate in arsenal/tasks/%s.md.\n' "${TITLE}" "${TASK_ID}")"
     if url="$(gh pr create --base "${default_base}" --head "${BRANCH}" \
                 --title "${TYPE}: ${TITLE}" --body "${body}" 2>/dev/null)"; then
         echo "${url}"

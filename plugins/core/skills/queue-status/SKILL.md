@@ -3,6 +3,8 @@ name: queue-status
 description: When the user wants queue progress counts by status, or to audit the queue for inconsistencies (missing gates, missing issue handles, broken deps). Do NOT use to modify task status.
 user-invocable: true
 argument-hint: "[--detail]"
+metadata:
+  type: workflow
 ---
 
 # queue-status
@@ -25,13 +27,19 @@ Load this skill when:
 First fetch the `arsenal:task` issues — open **and** closed — with whatever GitHub access
 this surface has, and save the JSON. Then:
 
-```bash
+Run `query_status.py` (in `claude-arsenal/scripts/`, beside `task_select.py`):
+
+```
 # Summary counts
-python3 "${CLAUDE_SKILL_DIR}/scripts/query_status.py" --issues /tmp/issues.json
+query_status.py --issues /tmp/issues.json
 
 # Full task list with blockers
-python3 "${CLAUDE_SKILL_DIR}/scripts/query_status.py" --issues /tmp/issues.json --detail
+query_status.py --issues /tmp/issues.json --detail
 ```
+
+It ships in the runtime bundle rather than in this skill's own folder because
+the session-start protocol in `AGENTS.md` runs the board every session without
+loading any skill — a `${CLAUDE_SKILL_DIR}` path would be undefined there.
 
 State comes from the issues and the graph comes from `arsenal/tasks/`, which is exactly
 what the selector reads — so the board can never disagree with what a worker will pick up

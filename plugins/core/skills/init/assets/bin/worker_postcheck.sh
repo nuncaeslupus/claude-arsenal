@@ -68,7 +68,7 @@ _record_rescue_ref() {
     printf '%s\n' "${RESCUED_REF}" >> "${dir}/rescue_refs" 2>/dev/null || true
 }
 
-# Persist the isolation verdict for queue_batch.sh (QIC-6). `ok` confirms the
+# Persist the isolation verdict for task_select.py (QIC-6). `ok` confirms the
 # worker really ran in its own worktree (the orchestrator's HEAD never moved) →
 # parallel fan-out is safe. `restored` means isolation was silently ignored and
 # the worker ran in-place → record `unavailable` so the next batch is clamped to

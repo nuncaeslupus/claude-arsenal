@@ -49,8 +49,8 @@ marker, and the exclusion rationale):
 Full install guide and update/uninstall flow:
 [`docs/INSTALL.md`](docs/INSTALL.md).
 File-ownership table and customisation rule: [`docs/UPDATE.md`](docs/UPDATE.md).
-Operating the task queue (orchestrator vs worker, fan-out, per-task PRs,
-token-budget stop): [`docs/orchestrator-guide.md`](docs/orchestrator-guide.md).
+How the task queue works (task files, issue handles, atomic claims, fan-out,
+per-task PRs, migration): [`docs/queue.md`](docs/queue.md).
 
 ---
 

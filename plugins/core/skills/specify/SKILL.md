@@ -105,7 +105,7 @@ When the spec is ready for stakeholder review, generate a phone-friendly, self-c
 uv run --with markdown python3 "${CLAUDE_SKILL_DIR}/scripts/create_reader.py"
 ```
 
-Auto-discovers the spec source (workspace mode: `claude-arsenal/project/*/spec.md`; single mode: `status/specification.md`). Outputs `spec-reader.html` and `spec-annotated.md` to the output directory (next to the spec in single mode, `docs/spec-reader/` in workspace mode).
+Auto-discovers the spec source (workspace mode: `arsenal/project/*/spec.md`; single mode: `status/specification.md`). Outputs `spec-reader.html` and `spec-annotated.md` to the output directory (next to the spec in single mode, `docs/spec-reader/` in workspace mode).
 
 The HTML reader auto-saves notes in the browser and exports them as a Markdown file the reviewer sends back. The Markdown copy has a `> ✎ Notes` slot after every section for annotation in any text editor. To re-seed a rebuilt reader with notes from a previous export, place the returned file at `{output-dir}/notes.json`.
 
@@ -120,4 +120,4 @@ Commit the generated files so reviewers can open the HTML directly from the repo
 
 ## Workspace-aware paths
 
-When `claude-arsenal/project/<WORKSPACE>/` exists, write the spec to `claude-arsenal/project/<WORKSPACE>/spec.md` instead of `status/specification.md`, and in the same pass generate a ≤200-word worker brief at `claude-arsenal/project/<WORKSPACE>/context.md` (the orientation a queue worker reads before touching the task). Otherwise use `status/` as above. The validator takes the path via `--input`; point it at whichever spec file was written.
+When `arsenal/project/<WORKSPACE>/` exists, write the spec to `arsenal/project/<WORKSPACE>/spec.md` instead of `status/specification.md`, and in the same pass generate a ≤200-word worker brief at `arsenal/project/<WORKSPACE>/context.md` (the orientation a queue worker reads before touching the task). Otherwise use `status/` as above. The validator takes the path via `--input`; point it at whichever spec file was written.

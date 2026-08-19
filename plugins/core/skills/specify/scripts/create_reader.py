@@ -4,7 +4,7 @@
 Auto-discovers spec source(s):
   1. --input FILE      single specification file
   2. --input-dir DIR   scans DIR/*/spec.md (workspace mode)
-  3. auto (no flags): looks for claude-arsenal/project/*/spec.md,
+  3. auto (no flags): looks for arsenal/project/*/spec.md,
                       then falls back to status/specification.md
 
 Outputs (--output-dir, default: directory of the single spec, or docs/spec-reader/ in
@@ -24,7 +24,7 @@ Usage (run from repo root):
     uv run --with markdown python3 "$CLAUDE_SKILL_DIR/scripts/create_reader.py" \\
         --input status/specification.md --output-dir status
     uv run --with markdown python3 "$CLAUDE_SKILL_DIR/scripts/create_reader.py" \\
-        --input-dir claude-arsenal/project --output-dir docs/spec-reader
+        --input-dir arsenal/project --output-dir docs/spec-reader
 """
 
 import argparse
@@ -248,15 +248,19 @@ def collect_parts_workspace(workspace_dir: Path) -> list[tuple[str, dict]]:
 
 def auto_discover(cwd: Path) -> tuple[str, list[tuple[str, dict]]]:
     """Detect mode and collect parts; returns (mode, parts)."""
-    ws_dir = cwd / "claude-arsenal" / "project"
-    if ws_dir.is_dir() and any(ws_dir.glob("*/spec.md")):
-        return "workspace", collect_parts_workspace(ws_dir)
+    # arsenal/ first: that is where specs live now, in the host's own tree. The
+    # old location is still checked so a repo that has not run the migration yet
+    # gets its spec read rather than a "no spec found" that looks like an empty
+    # project.
+    for ws_dir in (cwd / "arsenal" / "project", cwd / "claude-arsenal" / "project"):
+        if ws_dir.is_dir() and any(ws_dir.glob("*/spec.md")):
+            return "workspace", collect_parts_workspace(ws_dir)
     single = cwd / "status" / "specification.md"
     if single.is_file():
         return "single", collect_parts_single(single)
     print(
         "✗ No spec found. Run from the repo root with a status/specification.md or "
-        "claude-arsenal/project/*/spec.md present, or pass --input / --input-dir.",
+        "arsenal/project/*/spec.md present, or pass --input / --input-dir.",
         file=sys.stderr,
     )
     sys.exit(1)

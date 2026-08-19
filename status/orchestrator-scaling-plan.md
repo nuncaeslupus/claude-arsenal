@@ -1,5 +1,10 @@
 # Plan: Orchestrator scaling — per-task PRs, parallel fan-out, token-budget stop, tag/workspace scoping (+ operator guide)
 
+> **ARCHIVED** — describes the coordination-branch queue (`arsenal-queue`, `tasks.jsonl`, `queue_eval.sh`/`claim.sh`/`release.sh`),
+> replaced in v0.25.0 by task files, issue handles and atomic claim refs.
+> Kept as the record of how the design got here; see `docs/queue.md` for what
+> actually runs. Script names below no longer exist.
+
 ## Context
 
 The `claude-arsenal` queue orchestrator currently runs a **strictly serial** loop: one

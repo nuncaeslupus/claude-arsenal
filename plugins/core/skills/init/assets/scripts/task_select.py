@@ -25,6 +25,12 @@ since every byte lands in a model's context:
 
     {"id":"t-3f8a91c2","title":"...","path":"arsenal/tasks/t-3f8a91c2.md","priority":2,"gate":true}
 
+`--max N` selects a batch for parallel fan-out. That batch can never contain a
+task that depends on another task in it, because a dep that is not yet `done`
+disqualifies its dependent outright — and it is capped at one task when the
+worktree-isolation sentinel reads `unavailable`, since workers without separate
+worktrees share one tree and clobber each other.
+
 Exit: 0 always (an empty selection is an answer, not an error).
 """
 
@@ -32,6 +38,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -45,6 +52,21 @@ GATE_BLOCK_RE = re.compile(r"^[ \t]*```bash\b", re.MULTILINE)
 TASK_MARKER_RE = re.compile(r"<!--\s*arsenal-task:\s*([A-Za-z0-9._-]+)\s*-->")
 
 TERMINAL = {"done", "merged"}
+
+# Where worktree_probe.sh and worker_postcheck.sh record whether git worktrees
+# actually work on this surface.
+ISOLATION_SENTINEL = Path("arsenal/session/worktree_isolation")
+
+
+def isolation_verdict(sentinel: Path) -> str:
+    """Return `available`, `unavailable`, or `unknown`."""
+    override = os.environ.get("ARSENAL_WORKTREE_ISOLATION", "").strip()
+    if override:
+        return override
+    try:
+        return sentinel.read_text(encoding="utf-8").strip() or "unknown"
+    except OSError:
+        return "unknown"
 
 
 def state_from_issues(
@@ -238,6 +260,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--tag", action="append", default=[])
     parser.add_argument("--max", type=int, default=1, dest="limit")
     parser.add_argument(
+        "--isolation-sentinel",
+        type=Path,
+        default=ISOLATION_SENTINEL,
+        help="file holding the worktree-isolation verdict; a batch is capped at "
+        "one task when it reads `unavailable`",
+    )
+    parser.add_argument(
+        "--no-isolation-clamp",
+        action="store_true",
+        help="return the full batch even without worktree isolation (unsafe; for tests)",
+    )
+    parser.add_argument(
         "--all", action="store_true", help="list every task with its computed status"
     )
     args = parser.parse_args(argv)
@@ -273,13 +307,28 @@ def main(argv: list[str] | None = None) -> int:
             row = {"id": task["id"], "title": task["title"], "state": state.get(task["id"], "open")}
             print(json.dumps(row, separators=(",", ":")))
     else:
+        limit = max(1, args.limit)
+        # Parallel workers are only safe in separate worktrees. When the probe
+        # has recorded that they do not work here, the batch is capped at one
+        # task *by the selector* rather than by the caller remembering to: the
+        # clamp has to be mechanical, or the round that discovers isolation is
+        # missing has already dispatched two workers into one tree.
+        if limit > 1 and not args.no_isolation_clamp:
+            verdict = isolation_verdict(args.isolation_sentinel)
+            if verdict == "unavailable":
+                warnings.append(
+                    f"worktree isolation is {verdict} — batch capped at 1 task "
+                    "(serialized in-place mode)"
+                )
+                limit = 1
+
         selection, sel_warnings = select(
             tasks,
             state,
             capabilities=set(args.capability),
             workspace=args.workspace,
             tags=set(args.tag) or None,
-            limit=max(1, args.limit),
+            limit=limit,
         )
         warnings += sel_warnings
         for task in selection:

@@ -99,7 +99,7 @@ test:  ## run every plugin's behaviour tests (plugins/*/tests/*.sh) + repo-tool 
 	done
 
 queue-doctor:  ## dogfood: audit this repo's own task files (arsenal/tasks) the way a consumer would
-	uv run python plugins/core/skills/queue-status/scripts/query_status.py \
+	uv run python plugins/core/skills/init/assets/scripts/query_status.py \
 		--tasks-dir arsenal/tasks --detail --fail-on-problems
 
 sync-dupes:  ## sync_duplicates.py --check across plugins/*/scripts/_shared/

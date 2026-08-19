@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """gate_evidence.py — enforce a task payload's structured numeric evidence gate.
 
-A task payload (claude-arsenal/queue/<id>.md) may declare a machine-checkable
+A task file (arsenal/tasks/<id>.md) may declare a machine-checkable
 gate inside its ``## Acceptance gate`` section as a fenced ``gate`` block:
 
     ```gate

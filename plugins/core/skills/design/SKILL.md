@@ -85,4 +85,4 @@ It checks the plan has the required sections (Technical solution, Implementation
 
 ## Workspace-aware paths
 
-When `claude-arsenal/project/<WORKSPACE>/` exists, write the plan to `claude-arsenal/project/<WORKSPACE>/plan.md` (and the contracts/risks tail to the workspace's `spec.md`) instead of `status/plan.md`. Otherwise use `status/` as above. The validator takes the path via `--input`; point it at whichever file was written.
+When `arsenal/project/<WORKSPACE>/` exists, write the plan to `arsenal/project/<WORKSPACE>/plan.md` (and the contracts/risks tail to the workspace's `spec.md`) instead of `status/plan.md`. Otherwise use `status/` as above. The validator takes the path via `--input`; point it at whichever file was written.

@@ -19,7 +19,7 @@
 
 set -uo pipefail
 
-# Record the isolation verdict where queue_batch.sh reads it, so an `unavailable`
+# Record the isolation verdict where task_select.py reads it, so an `unavailable`
 # probe mechanically clamps the batch width to 1 (serialized in-place mode) —
 # the orchestrator no longer has to remember to pass --max 1 (QIC-6). Only a
 # negative probe is persisted: a passing git-level probe does NOT prove the Task

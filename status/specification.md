@@ -1,5 +1,10 @@
 # Specification: Loop Orchestrator Plugin
 
+> **ARCHIVED** — describes the coordination-branch queue (`arsenal-queue`, `tasks.jsonl`, `queue_eval.sh`/`claim.sh`/`release.sh`),
+> replaced in v0.25.0 by task files, issue handles and atomic claim refs.
+> Kept as the record of how the design got here; see `docs/queue.md` for what
+> actually runs. Script names below no longer exist.
+
 **Date**: 2026-06-12
 **Source**: `loop-orchestrator_v1.8.md` (research complete, queue empty)
 **Author**: imarcos@gmail.com
