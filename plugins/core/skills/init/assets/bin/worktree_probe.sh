@@ -26,7 +26,7 @@ set -uo pipefail
 # tool honors `isolation: worktree`, so `available` is confirmed later by
 # worker_postcheck.sh after the first worker returns.
 _record_isolation() {
-    local dir="${ARSENAL_SESSION_DIR:-claude-arsenal/session}"
+    local dir="${ARSENAL_SESSION_DIR:-${ARSENAL_HOME:-arsenal}/session}"
     mkdir -p "${dir}" 2>/dev/null || return 0
     printf '%s\n' "$1" > "${dir}/worktree_isolation" 2>/dev/null || true
 }

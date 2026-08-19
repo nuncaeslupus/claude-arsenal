@@ -1,0 +1,167 @@
+#!/usr/bin/env python3
+"""new_task.py — create a task file, and print the issue handle to open for it.
+
+A task is a file in the repository: versioned, reviewed in the pull request
+that adds it, and readable with no network. This script writes that file and
+then prints the issue body its handle needs, because creating the issue itself
+requires GitHub access that differs by surface — the caller makes that call
+with whatever channel it has.
+
+    new_task.py --title "Extract the surface probe" --priority 5 --deps t-aaaa1111
+
+Ids are random rather than derived from the title. The previous scheme hashed
+the title to four hex characters and checked uniqueness against the local file
+only, so two agents adding a task with the same title minted the *same* id and
+neither could see the other's. Random ids need no coordination, which is what
+lets several agents add tasks at once.
+
+Exit: 0 on success, 2 on a validation failure (an unknown dep, or an id clash).
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import secrets
+import sys
+from pathlib import Path
+
+TASK_MARKER = "<!-- arsenal-task: {task_id} -->"
+
+TEMPLATE = """\
+---
+id: {task_id}
+title: {title}
+priority: {priority}
+{extra}---
+
+{body}
+## Acceptance gate
+
+<!-- Replace this with a fenced bash block. A gate that is only prose runs
+     nothing, and a gate that runs nothing passes everything — `task_select.py`
+     reports gate: false for a task with no block, so an unenforced gate is
+     visible rather than quietly inert. -->
+
+```bash
+# e.g. bash tests/surface_probe_test.sh
+false  # fail until a real check replaces this
+```
+"""
+
+
+def new_task_id() -> str:
+    return f"t-{secrets.token_hex(4)}"
+
+
+def existing_ids(tasks_dir: Path) -> set[str]:
+    ids: set[str] = set()
+    if not tasks_dir.is_dir():
+        return ids
+    pattern = re.compile(r"^id:\s*([A-Za-z0-9._-]+)\s*$", re.MULTILINE)
+    for path in tasks_dir.glob("*.md"):
+        match = pattern.search(path.read_text(encoding="utf-8"))
+        if match:
+            ids.add(match.group(1))
+    return ids
+
+
+def build(
+    tasks_dir: Path,
+    *,
+    title: str,
+    priority: int,
+    deps: list[str],
+    requires: list[str],
+    tags: list[str],
+    workspace: str | None,
+    max_attempts: int | None,
+    body: str,
+) -> tuple[str, str]:
+    """Return (task_id, file contents). Raises ValueError on a bad dep."""
+    known = existing_ids(tasks_dir)
+
+    # A dep that does not exist would silently block the task forever: the
+    # selector treats unknown deps as unsatisfied, on purpose. Catching it here
+    # turns a task that never runs into an error at the moment of the typo.
+    unknown = [d for d in deps if d not in known]
+    if unknown:
+        raise ValueError(
+            f"unknown dep(s): {', '.join(unknown)} — no task file declares them in {tasks_dir}"
+        )
+
+    task_id = new_task_id()
+    while task_id in known:  # pragma: no cover — 2^32 space, but cheap to be sure
+        task_id = new_task_id()
+
+    extra = ""
+    if deps:
+        extra += f"deps: [{', '.join(deps)}]\n"
+    if requires:
+        extra += f"requires: [{', '.join(requires)}]\n"
+    if tags:
+        extra += f"tags: [{', '.join(tags)}]\n"
+    if workspace:
+        extra += f"workspace: {workspace}\n"
+    if max_attempts is not None and max_attempts != 3:
+        extra += f"max-attempts: {max_attempts}\n"
+
+    text = TEMPLATE.format(
+        task_id=task_id,
+        title=json.dumps(title),
+        priority=priority,
+        extra=extra,
+        body=(body.strip() + "\n\n") if body.strip() else "",
+    )
+    return task_id, text
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument("--title", required=True)
+    parser.add_argument("--priority", type=int, default=0, help="higher runs sooner")
+    parser.add_argument("--deps", action="append", default=[], help="repeatable task id")
+    parser.add_argument("--requires", action="append", default=[], help="e.g. surface:cli")
+    parser.add_argument("--tag", action="append", default=[], dest="tags")
+    parser.add_argument("--workspace")
+    parser.add_argument("--max-attempts", type=int, dest="max_attempts")
+    parser.add_argument("--body", default="", help="task detail placed above the gate")
+    parser.add_argument("--tasks-dir", type=Path, default=Path("arsenal/tasks"))
+    args = parser.parse_args(argv)
+
+    try:
+        task_id, text = build(
+            args.tasks_dir,
+            title=args.title,
+            priority=args.priority,
+            deps=args.deps,
+            requires=args.requires,
+            tags=args.tags,
+            workspace=args.workspace,
+            max_attempts=args.max_attempts,
+            body=args.body,
+        )
+    except ValueError as exc:
+        print(f"new_task: {exc}", file=sys.stderr)
+        return 2
+
+    args.tasks_dir.mkdir(parents=True, exist_ok=True)
+    path = args.tasks_dir / f"{task_id}.md"
+    path.write_text(text, encoding="utf-8")
+
+    print(task_id)
+    print(f"file: {path}", file=sys.stderr)
+    print("", file=sys.stderr)
+    print("Open its issue handle with your GitHub tools:", file=sys.stderr)
+    print(f"  title: {args.title}", file=sys.stderr)
+    print("  labels: arsenal:task", file=sys.stderr)
+    print(f"  body:  Task `{task_id}` — defined in `{path}`", file=sys.stderr)
+    print(f"         {TASK_MARKER.format(task_id=task_id)}", file=sys.stderr)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -16,7 +16,7 @@ tmpdir=$(mktemp -d)
 cleanup() { rm -rf "${tmpdir}"; }
 trap cleanup EXIT
 
-mkdir -p "${tmpdir}/claude-arsenal/queue"
+mkdir -p "${tmpdir}/arsenal/tasks"
 
 run_gate() {
     # Run gate_run.sh from tmpdir so relative paths work
@@ -29,7 +29,7 @@ if (cd "${tmpdir}" && bash "${GATE_RUN}" "lo-missing" 2>/dev/null); then
 fi
 
 # Gate 2: payload with no ## Acceptance gate section → exit 0 (pass through)
-cat > "${tmpdir}/claude-arsenal/queue/lo-no-gate.md" <<'EOF'
+cat > "${tmpdir}/arsenal/tasks/lo-no-gate.md" <<'EOF'
 # T1: No gate
 
 ## Tests
@@ -40,7 +40,7 @@ if ! run_gate "lo-no-gate"; then
 fi
 
 # Gate 3: prose-only gate (no bash block) → exit 0
-cat > "${tmpdir}/claude-arsenal/queue/lo-prose.md" <<'EOF'
+cat > "${tmpdir}/arsenal/tasks/lo-prose.md" <<'EOF'
 # T2: Prose gate
 
 ## Acceptance gate
@@ -54,7 +54,7 @@ if ! run_gate "lo-prose"; then
 fi
 
 # Gate 4: mechanical gate that passes → exit 0
-cat > "${tmpdir}/claude-arsenal/queue/lo-pass.md" <<'EOF'
+cat > "${tmpdir}/arsenal/tasks/lo-pass.md" <<'EOF'
 # T3: Passing gate
 
 ## Acceptance gate
@@ -69,7 +69,7 @@ if ! run_gate "lo-pass"; then
 fi
 
 # Gate 5: mechanical gate that fails → exit 1
-cat > "${tmpdir}/claude-arsenal/queue/lo-fail.md" <<'EOF'
+cat > "${tmpdir}/arsenal/tasks/lo-fail.md" <<'EOF'
 # T4: Failing gate
 
 ## Acceptance gate
@@ -84,7 +84,7 @@ if run_gate "lo-fail" 2>/dev/null; then
 fi
 
 # Gate 6: multi-line gate command → runs as a script
-cat > "${tmpdir}/claude-arsenal/queue/lo-multi.md" <<'EOF'
+cat > "${tmpdir}/arsenal/tasks/lo-multi.md" <<'EOF'
 # T5: Multi-line gate
 
 ## Acceptance gate
@@ -104,7 +104,7 @@ fi
 
 # Gate 7: hardened-by-default env (CA-02) — the gate's $HOME is a throwaway dir,
 # not the caller's real HOME. The gate writes its HOME to a file we inspect.
-cat > "${tmpdir}/claude-arsenal/queue/lo-home.md" <<'EOF'
+cat > "${tmpdir}/arsenal/tasks/lo-home.md" <<'EOF'
 # T6: HOME isolation
 
 ## Acceptance gate
@@ -192,7 +192,7 @@ echo "PASS: ARSENAL_GATE_REQUIRE_BLOCK=1 fails vacuous gates and passes real one
 # thereby loses the exit status to the pipeline — still sees that nothing ran.
 
 # Gate 14: a gate whose command does not exist → exit 3, banner on stdout.
-cat > "${tmpdir}/claude-arsenal/queue/lo-cannotrun.md" <<'EOF'
+cat > "${tmpdir}/arsenal/tasks/lo-cannotrun.md" <<'EOF'
 # T7: Unrunnable gate
 
 ## Acceptance gate
@@ -230,7 +230,7 @@ cat > "${tmpdir}/fakehome/bin/node" <<'EOF'
 printf 'arsenal-shim'
 EOF
 chmod +x "${tmpdir}/fakehome/bin/node"
-cat > "${tmpdir}/claude-arsenal/queue/lo-pkgmgr.md" <<'EOF'
+cat > "${tmpdir}/arsenal/tasks/lo-pkgmgr.md" <<'EOF'
 # T8: Package manager on PATH
 
 ## Acceptance gate
@@ -254,7 +254,7 @@ echo "PASS: the package manager / runtime dir survives PATH hardening"
 # makes corepack re-download the pinned package manager on every gate run, and
 # fail outright offline. It is a package cache, not a credential store.
 mkdir -p "${tmpdir}/corepack-cache"
-cat > "${tmpdir}/claude-arsenal/queue/lo-corepack.md" <<'EOF'
+cat > "${tmpdir}/arsenal/tasks/lo-corepack.md" <<'EOF'
 # T9: corepack cache
 
 ## Acceptance gate
@@ -271,57 +271,49 @@ if [[ "$(cat "${tmpdir}/corepack_seen.txt" 2>/dev/null || echo "")" != "${tmpdir
 fi
 echo "PASS: COREPACK_HOME is forwarded to the hardened gate env"
 
-# --- Payload resolution from the coordination ref ----------------------------
-# Gate 17: a caller whose tree predates the payload's seeding commit (the
-# orchestrator on the default branch, a worker on an older base) has no file on
-# disk. Read it from arsenal-queue — into a temp file OUTSIDE the repo, since
-# open_task_pr.sh's `git add -A` would otherwise sweep it into the PR diff.
+# --- Task-file resolution from the default branch ----------------------------
+# Gate 17: a worktree cut from an older base may predate the commit that added
+# the task file. Read it from the default branch — into a temp file OUTSIDE the
+# repo, since open_task_pr.sh's `git add -A` would otherwise sweep it into the
+# PR diff. (Under the coordination-branch design this fallback existed because
+# the payload lived on a ref the worker was never on; now it is only about an
+# out-of-date worktree.)
 refrepo="${tmpdir}/refrepo"
 git init -q -b main "${refrepo}"
 git -C "${refrepo}" config user.email "test@arsenal.example"
 git -C "${refrepo}" config user.name "Arsenal Test"
 git -C "${refrepo}" config commit.gpgsign false
-mkdir -p "${refrepo}/claude-arsenal/queue"
+mkdir -p "${refrepo}/arsenal/tasks"
 echo "seed" > "${refrepo}/README"
 git -C "${refrepo}" add -A
 git -C "${refrepo}" commit -q -m "seed default branch"
-git -C "${refrepo}" checkout -q -b arsenal-queue
-cat > "${refrepo}/claude-arsenal/queue/lo-onref.md" <<'EOF'
-# T10: Payload only on the coordination ref
+cat > "${refrepo}/arsenal/tasks/t-onref.md" <<'EOF'
+---
+id: t-onref
+title: "Only on the default branch"
+---
 
 ## Acceptance gate
-Passes.
 
 ```bash
 true
 ```
 EOF
 git -C "${refrepo}" add -A
-git -C "${refrepo}" commit -q -m "seed coordination branch"
-git -C "${refrepo}" checkout -q main
-if [[ -f "${refrepo}/claude-arsenal/queue/lo-onref.md" ]]; then
-    echo "FAIL: test setup — payload should not be on the default branch" >&2; exit 1
+git -C "${refrepo}" commit -q -m "add the task"
+# Simulate a stale worktree: the file is committed but absent from the checkout.
+rm "${refrepo}/arsenal/tasks/t-onref.md"
+if ! (cd "${refrepo}" && ARSENAL_DEFAULT_BRANCH=main bash "${GATE_RUN}" "t-onref" >/dev/null 2>&1); then
+    echo "FAIL: a task file present only in the default branch should be resolved and run" >&2; exit 1
 fi
-if ! (cd "${refrepo}" && bash "${GATE_RUN}" "lo-onref" >/dev/null 2>&1); then
-    echo "FAIL: payload present only on arsenal-queue should be resolved and run" >&2; exit 1
+# The property that matters: nothing was materialized INSIDE the repo, or
+# open_task_pr.sh's `git add -A` would sweep it into the PR diff. (The deleted
+# task file itself shows as a tracked deletion; that is the simulated staleness,
+# not residue.)
+if git -C "${refrepo}" status --porcelain --untracked-files=all | grep -q '^??'; then
+    echo "FAIL: resolving the task file left an untracked file in the repo tree" >&2; exit 1
 fi
-if [[ -e "${refrepo}/claude-arsenal/queue/lo-onref.md" ]]; then
-    echo "FAIL: the coordination-ref fallback must not materialize the payload in the repo tree" >&2
-    exit 1
-fi
-echo "PASS: payload resolved from the coordination ref without touching the tree"
-
-# Gate 18: no payload on disk NOR on the coordination ref → still exit 2.
-if (cd "${refrepo}" && bash "${GATE_RUN}" "lo-nowhere" >/dev/null 2>&1); then
-    echo "FAIL: a payload missing everywhere should exit non-zero" >&2; exit 1
-fi
-set +e
-(cd "${refrepo}" && bash "${GATE_RUN}" "lo-nowhere" >/dev/null 2>&1); rc=$?
-set -e
-if [[ "${rc}" -ne 2 ]]; then
-    echo "FAIL: a payload missing everywhere should exit 2, got ${rc}" >&2; exit 1
-fi
-echo "PASS: a payload missing everywhere still exits 2"
+echo "PASS: task file resolves from the default branch without dirtying the tree"
 
 echo "PASS: gate_run_test — all gates passed"
 exit 0

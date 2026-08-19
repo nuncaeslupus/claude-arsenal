@@ -1,0 +1,95 @@
+#!/usr/bin/env bash
+# worker_postcheck_test.sh — behaviour test for worker_postcheck.sh.
+#
+# This script runs `git reset --hard` + `git clean -fd` in the host's own tree,
+# so its two safety properties are worth pinning precisely:
+#
+#   1. It restores to the branch the SESSION started on — never a hardcoded
+#      `main`. On Claude Code on the web a session is pinned to its own branch,
+#      and resetting to `main` would throw away exactly the work it was doing.
+#   2. It snapshots a dirty tree to a rescue ref BEFORE destroying anything, so
+#      a wrong assumption costs a ref lookup rather than the work.
+#
+# Exit: 0 on PASS, 1 on FAIL.
+
+set -uo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BIN="${SCRIPT_DIR}/../skills/init/assets/bin"
+POSTCHECK="${BIN}/worker_postcheck.sh"
+[[ -f "${POSTCHECK}" ]] || { echo "SKIP: ${POSTCHECK} not found" >&2; exit 0; }
+
+tmp=$(mktemp -d)
+trap 'rm -rf "${tmp}"' EXIT
+fail() { echo "FAIL: $1" >&2; exit 1; }
+
+repo="${tmp}/repo"
+git init -q -b main "${repo}"
+cd "${repo}"
+git config user.email "test@arsenal.example"
+git config user.name "Arsenal Test"
+git config commit.gpgsign false
+echo "seed" > README
+# `/init` gitignores the session's machine-local files, and it must be in the
+# SEED commit so every branch carries it. That is load-bearing, not decoration:
+# host_branch is written by this very script, so on a branch where it is not
+# ignored the tree looks permanently dirty and the script restores endlessly.
+printf 'arsenal/session/host_branch\narsenal/session/rescue_refs\narsenal/session/worktree_isolation\n' > .gitignore
+git add -A && git commit -q -m "seed"
+
+# The session is pinned to its own branch, exactly as a web session would be.
+git checkout -q -b claude/web-session-xyz
+echo "session work" > session.txt
+git add -A && git commit -q -m "session commit"
+
+mkdir -p arsenal/session
+
+# --- 1: first run records the branch it found, rather than guessing ---
+out=$(bash "${POSTCHECK}" 2>/dev/null)
+[[ "${out}" == "ok" ]] || fail "clean tree on its own branch should report ok, got '${out}'"
+recorded=$(cat arsenal/session/host_branch 2>/dev/null || true)
+[[ "${recorded}" == "claude/web-session-xyz" ]] \
+    || fail "should record the session's own branch, recorded '${recorded}'"
+
+# --- 2: a worker that moved HEAD is restored to THAT branch, not to main ---
+git checkout -q -b arsenal/t-abc123-some-task
+echo "worker residue" > residue.txt
+out=$(bash "${POSTCHECK}" 2>/dev/null)
+[[ "${out}" == "restored" ]] || fail "a moved HEAD should report restored, got '${out}'"
+now=$(git rev-parse --abbrev-ref HEAD)
+[[ "${now}" == "claude/web-session-xyz" ]] \
+    || fail "must restore to the session's branch, not '${now}' (restoring to main loses the session's work)"
+[[ -f residue.txt ]] && fail "worker residue should have been cleaned"
+[[ -f session.txt ]] || fail "the session's own committed work must survive the restore"
+
+# --- 3: a dirty tree is snapshotted before anything is destroyed ---
+git checkout -q -b arsenal/t-def456-another
+echo "PRECIOUS UNCOMMITTED WORK" > precious.txt
+bash "${POSTCHECK}" >/dev/null 2>&1
+[[ -f precious.txt ]] && fail "test setup: the file should have been cleaned"
+if ! git for-each-ref --format='%(refname)' | grep -q 'arsenal-rescue'; then
+    fail "a dirty tree must be snapshotted to a rescue ref before the restore"
+fi
+found_precious=0
+for ref in $(git for-each-ref --format='%(refname)' | grep 'arsenal-rescue'); do
+    if git ls-tree -r --name-only "${ref}" 2>/dev/null | grep -q 'precious.txt'; then
+        found_precious=1; break
+    fi
+done
+[[ "${found_precious}" == "1" ]] || fail "a rescue ref should contain the destroyed work"
+
+# --- 4: an explicit override still wins, for an orchestrator that knows better ---
+git checkout -q -b arsenal/t-ghi789-third
+out=$(ARSENAL_DEFAULT_BRANCH=main bash "${POSTCHECK}" 2>/dev/null)
+[[ "${out}" == "restored" ]] || fail "explicit override should restore, got '${out}'"
+now=$(git rev-parse --abbrev-ref HEAD)
+[[ "${now}" == "main" ]] || fail "ARSENAL_DEFAULT_BRANCH should win, HEAD is '${now}'"
+
+# --- 5: a clean tree already on the right branch is never touched ---
+git checkout -q claude/web-session-xyz
+before=$(git rev-parse HEAD)
+out=$(bash "${POSTCHECK}" 2>/dev/null)
+[[ "${out}" == "ok" ]] || fail "expected ok on a clean, correct tree, got '${out}'"
+[[ "$(git rev-parse HEAD)" == "${before}" ]] || fail "a clean tree must not be disturbed"
+
+echo "PASS: worker_postcheck_test — all gates passed"

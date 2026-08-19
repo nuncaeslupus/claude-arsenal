@@ -17,9 +17,9 @@ fi
 tmp=$(mktemp -d)
 trap 'rm -rf "${tmp}"' EXIT
 cd "${tmp}"
-mkdir -p claude-arsenal/queue
+mkdir -p arsenal/tasks
 
-cat > claude-arsenal/queue/lo-p.md <<'MD'
+cat > arsenal/tasks/lo-p.md <<'MD'
 # P
 ## Acceptance gate
 ```gate
@@ -29,7 +29,7 @@ key: totals.percent_covered
 ```
 MD
 
-run() { python3 "${GE}" claude-arsenal/queue/lo-p.md >/dev/null 2>&1; echo $?; }
+run() { python3 "${GE}" arsenal/tasks/lo-p.md >/dev/null 2>&1; echo $?; }
 
 echo '{"totals":{"percent_covered":0.93}}' > coverage.json
 [[ "$(run)" == "0" ]] || { echo "FAIL: satisfied gate should exit 0" >&2; exit 1; }
@@ -43,17 +43,17 @@ rm -f coverage.json
 [[ "$(run)" == "2" ]] || { echo "FAIL: missing evidence should exit 2" >&2; exit 1; }
 echo "PASS: missing evidence file → 2 (hard fail, never vacuous)"
 
-cat > claude-arsenal/queue/lo-n.md <<'MD'
+cat > arsenal/tasks/lo-n.md <<'MD'
 # N
 ## Acceptance gate
 prose only — nothing machine-checkable
 MD
-python3 "${GE}" claude-arsenal/queue/lo-n.md >/dev/null 2>&1
+python3 "${GE}" arsenal/tasks/lo-n.md >/dev/null 2>&1
 [[ "$?" == "0" ]] || { echo "FAIL: no gate block should exit 0" >&2; exit 1; }
 echo "PASS: no evidence gate declared → 0"
 
 # Scientific-notation threshold + quoted evidence/key values.
-cat > claude-arsenal/queue/lo-sci.md <<'MD'
+cat > arsenal/tasks/lo-sci.md <<'MD'
 # SCI
 ## Acceptance gate
 ```gate
@@ -63,10 +63,10 @@ key: "stats.p"
 ```
 MD
 echo '{"stats":{"p":0.0005}}' > metrics.json
-python3 "${GE}" claude-arsenal/queue/lo-sci.md >/dev/null 2>&1
+python3 "${GE}" arsenal/tasks/lo-sci.md >/dev/null 2>&1
 [[ "$?" == "0" ]] || { echo "FAIL: 0.0005 <= 1e-3 should pass (sci notation + quotes)" >&2; exit 1; }
 echo '{"stats":{"p":0.005}}' > metrics.json
-python3 "${GE}" claude-arsenal/queue/lo-sci.md >/dev/null 2>&1
+python3 "${GE}" arsenal/tasks/lo-sci.md >/dev/null 2>&1
 [[ "$?" == "1" ]] || { echo "FAIL: 0.005 <= 1e-3 should fail" >&2; exit 1; }
 echo "PASS: scientific-notation threshold + quoted values handled"
 

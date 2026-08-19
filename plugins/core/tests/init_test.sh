@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # init_test.sh — integration test for init.py.
 # Verifies that after running init, the host repo has:
-#   claude-arsenal/AGENTS.md, claude-arsenal/queue/tasks.jsonl (empty),
-#   the session-protocol marker in CLAUDE.md, and surface_profile.json.
+#   claude-arsenal/AGENTS.md (upstream), the arsenal/ host tree with its
+#   config.toml, the session-protocol marker in CLAUDE.md, and
+#   surface_profile.json — plus the property that matters most: a re-run must
+#   never overwrite anything host-owned.
 # Exit: 0 on PASS, 1 on FAIL.
 
 set -euo pipefail
@@ -33,13 +35,15 @@ if [[ ! -f "${tmpdir}/claude-arsenal/AGENTS.md" ]]; then
     echo "FAIL: claude-arsenal/AGENTS.md missing" >&2; exit 1
 fi
 
-# Gate 2: claude-arsenal/queue/tasks.jsonl exists and is empty
-if [[ ! -f "${tmpdir}/claude-arsenal/queue/tasks.jsonl" ]]; then
-    echo "FAIL: claude-arsenal/queue/tasks.jsonl missing" >&2; exit 1
+# Gate 2: the host-owned tree is scaffolded, with a config a consumer can edit
+if [[ ! -d "${tmpdir}/arsenal/tasks" ]]; then
+    echo "FAIL: arsenal/tasks/ missing" >&2; exit 1
 fi
-QUEUE_CONTENT=$(cat "${tmpdir}/claude-arsenal/queue/tasks.jsonl")
-if [[ -n "${QUEUE_CONTENT}" ]]; then
-    echo "FAIL: tasks.jsonl is not empty: ${QUEUE_CONTENT}" >&2; exit 1
+if [[ ! -f "${tmpdir}/arsenal/config.toml" ]]; then
+    echo "FAIL: arsenal/config.toml missing" >&2; exit 1
+fi
+if ! grep -q 'merge-policy' "${tmpdir}/arsenal/config.toml"; then
+    echo "FAIL: arsenal/config.toml carries no merge-policy" >&2; exit 1
 fi
 
 # Gate 3: CLAUDE.md contains the session-protocol marker
@@ -59,31 +63,31 @@ if [[ "${MARKER_COUNT}" -ne 1 ]]; then
 fi
 
 # Gate 4b: surface_profile.json was created
-if [[ ! -f "${tmpdir}/claude-arsenal/session/surface_profile.json" ]]; then
+if [[ ! -f "${tmpdir}/arsenal/session/surface_profile.json" ]]; then
     echo "FAIL: surface_profile.json missing" >&2; exit 1
 fi
 SURFACE=$(python3 -c "import json,sys; d=json.load(open(sys.argv[1])); print(d['surface'])" \
-    "${tmpdir}/claude-arsenal/session/surface_profile.json")
+    "${tmpdir}/arsenal/session/surface_profile.json")
 if [[ "${SURFACE}" != "unknown" ]]; then
     echo "FAIL: surface_profile.json surface is '${SURFACE}', expected 'unknown'" >&2; exit 1
 fi
 
-# Gate 5: claude-arsenal/session/handover.md exists
-if [[ ! -f "${tmpdir}/claude-arsenal/session/handover.md" ]]; then
-    echo "FAIL: claude-arsenal/session/handover.md missing" >&2; exit 1
+# Gate 5: arsenal/session/handover.md exists
+if [[ ! -f "${tmpdir}/arsenal/session/handover.md" ]]; then
+    echo "FAIL: arsenal/session/handover.md missing" >&2; exit 1
 fi
 
 # Gate 5b: a re-run must NOT overwrite host-owned session/handover.md (data loss).
 SENTINEL="REAL-HANDOVER-DO-NOT-CLOBBER-$$"
-echo "${SENTINEL}" > "${tmpdir}/claude-arsenal/session/handover.md"
+echo "${SENTINEL}" > "${tmpdir}/arsenal/session/handover.md"
 python3 "${INIT_PY}" --repo-path "${tmpdir}" --bundle-dir "${BUNDLE_DIR}" --silent
-if ! grep -qF "${SENTINEL}" "${tmpdir}/claude-arsenal/session/handover.md"; then
+if ! grep -qF "${SENTINEL}" "${tmpdir}/arsenal/session/handover.md"; then
     echo "FAIL: init re-run clobbered host-owned session/handover.md (data loss)" >&2; exit 1
 fi
 echo "PASS: re-run preserves host-owned session/handover.md (no data loss)"
 
 # Gate 6: .gitignore has surface_profile.json entry
-if ! grep -q "claude-arsenal/session/surface_profile.json" "${tmpdir}/.gitignore" 2>/dev/null; then
+if ! grep -q "arsenal/session/surface_profile.json" "${tmpdir}/.gitignore" 2>/dev/null; then
     echo "FAIL: .gitignore missing surface_profile.json entry" >&2; exit 1
 fi
 

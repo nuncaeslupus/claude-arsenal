@@ -2,18 +2,20 @@
 
 Task-tool subagent spawned by the orchestrator for each claimed task.
 Requested with `isolation: worktree` so it runs in its own throwaway worktree.
-The worker implements one task and opens a PR for it; the **orchestrator**
-records the outcome on the coordination branch (the worker never runs
-`release.sh` — it is on a feature branch, and `release.sh` guards on
-`arsenal-queue`).
+The worker implements one task and opens its PR. The **orchestrator** owns the
+claim; you never touch it.
 
-> **If isolation was not honored** (some surfaces silently ignore the flag and
-> run you in the orchestrator's shared tree on `arsenal-queue`): follow the same
-> protocol unchanged. `open_task_pr.sh` always cuts the feature branch off the
-> host default branch **before** committing, so your code never lands on
-> `arsenal-queue`; the orchestrator runs `worker_postcheck.sh` after you return
-> to restore its HEAD and clean the tree. **Never `git commit` (or
-> `git add -A && git commit`) while HEAD is on `arsenal-queue`** — the only way
+The PR body must contain **`Closes #<issue>`** for the task's issue. That is what
+records completion: GitHub closes the issue when the PR merges, so there is no
+separate "update the queue" step for anyone to forget. If the PR's base is not the
+default branch (a stacked PR), put `Closes #<issue>` in the **commit message**
+instead — the PR-body keyword only fires on a merge into the default branch.
+
+> **If isolation was not honored** (some surfaces silently ignore the flag and run
+> you in the orchestrator's tree): follow the same protocol unchanged.
+> `open_task_pr.sh` always cuts the feature branch off the host default branch
+> **before** committing, and the orchestrator runs `worker_postcheck.sh` after you
+> return to restore a clean tree. **Never `git commit` directly** — the only way
 > your code is committed is through `open_task_pr.sh`.
 
 ## Launch parameters
@@ -34,21 +36,11 @@ Verify `pwd` at the start of the task if unsure.
 
 ## Task execution protocol
 
-The worktree starts on the orchestrator's `arsenal-queue` HEAD, so the queue
-payload is present **now** but disappears once you branch off the default
-branch. Capture it first.
-
-1. **Cache the payload before switching branches.** Read
-   `claude-arsenal/queue/<task_id>.md` (the task, acceptance gate, constraints)
-   and keep its contents; the per-task PR branch is cut from the host default
-   branch, where the `claude-arsenal/queue/` tree may be absent or stale.
-   If the payload already contains `## Attempt N failure` sections, read them
-   before implementing — they record what prior approaches were tried and why
-   they failed.
-   - **If the file is not on disk**, your worktree predates the commit that
-     seeded it. Read it from the branch instead:
-     `git show arsenal-queue:claude-arsenal/queue/<task_id>.md`. Do not report
-     the task as unworkable over a missing payload file.
+1. **Read the task file** — `arsenal/tasks/<task_id>.md`. It carries the task,
+   its acceptance gate, and its constraints, and it is ordinary versioned content
+   on the default branch, so it is present in any worktree cut from there. If it
+   contains `## Attempt N failure` sections, read them first: they record what
+   previous attempts tried and why they failed.
    - A worktree cut from an older base can also carry stale dependencies (a
      `node_modules` missing a devDependency added by an already-merged PR),
      which breaks the host's typecheck or tests in ways unrelated to your
@@ -70,9 +62,8 @@ branch. Capture it first.
    commit or switch branches yourself yet.
 
 4. **Run the gates:** the host lint gate if one exists (`make lint`,
-   `npm run lint`, …), then `claude-arsenal/bin/gate_run.sh <task_id>`. You do
-   not need the payload on disk — `gate_run.sh` reads it from `arsenal-queue`
-   itself when it is absent, so never write one into your tree to run a gate.
+   `npm run lint`, …), then `claude-arsenal/bin/gate_run.sh <task_id>`, which
+   executes the fenced bash block in the task file.
    - **Gate fails** (lint or `gate_run.sh` exit non-zero) → **open no PR.**
      Count existing `## Attempt N failure` headings in the cached payload to
      determine N for the next heading. Return outcome `open` to the orchestrator
@@ -97,15 +88,15 @@ branch. Capture it first.
    claude-arsenal/bin/open_task_pr.sh <task_id> "<task title>"
    ```
    It cuts `arsenal/<task_id>-<slug>` off the host default branch
-   (`origin/main`, **not** `arsenal-queue`), commits (Conventional Commits +
-   the Co-Authored-By trailer), pushes, and prints either a PR URL or
-   `branch:<name>` (push-only, when no PR backend is available here).
+   (`origin/main`), commits (Conventional Commits + the Co-Authored-By
+   trailer), pushes, and prints either a PR URL or `branch:<name>` (push-only,
+   when no PR backend is available here). Make sure the PR body carries
+   `Closes #<issue>` — that is what closes the task when it merges.
 6. **Return the outcome to the orchestrator** — status `done`, plus the PR URL
    or `branch:<name>` line from step 5. A `branch:<name>` means the branch was
    pushed but **no PR was opened** (no PR backend in this worktree); it is not a
-   completed task on its own — the orchestrator opens the PR before recording
-   `done`. Do **not** call `release.sh`; the orchestrator records the result on
-   `arsenal-queue`. Exit; do not pick up the next task.
+   completed task on its own — the orchestrator opens the PR before the task
+   can close. Exit; do not pick up the next task.
 
 ## On failure
 
@@ -138,11 +129,10 @@ and report it — do not commit through it.
 
 - Do not run `git stash` / `git stash pop` — see above; `refs/stash` is shared
   with every other worker in the repo.
-- Do not run `claim.sh` — the orchestrator already claimed the task.
-- Do not run `release.sh` — you are on a feature-branch worktree; `release.sh`
-  guards on `arsenal-queue`. The orchestrator records the outcome.
-- Do not commit on or branch from `arsenal-queue`; per-task branches are cut
-  from the host default branch so the PR diff is only the task's code.
+- Do not claim or release anything — the orchestrator owns the claim, and
+  completion is recorded by the PR merging, not by a command.
+- Cut per-task branches from the host default branch only, so the PR diff is
+  only the task's code.
 - Do not access files outside the worktree root using absolute paths.
 - Do not spawn additional subagents (one worker per task).
-- Do not modify `claude-arsenal/queue/tasks.jsonl` directly.
+- Do not edit the task's own file to mark it done; merging the PR does that.

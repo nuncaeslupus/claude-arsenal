@@ -75,8 +75,8 @@ echo "PASS: guard is not unlocked by the caller's own ARSENAL_SURFACE claim"
 # Gate 0c: the orchestrator's recorded serialized in-place mode unlocks it —
 # that sentinel is written by worktree_probe.sh / worker_postcheck.sh and is
 # what clamps the batch to a single worker, so no concurrent worker exists.
-mkdir -p "${tmpwork}/claude-arsenal/session"
-echo "unavailable" > "${tmpwork}/claude-arsenal/session/worktree_isolation"
+mkdir -p "${tmpwork}/arsenal/session"
+echo "unavailable" > "${tmpwork}/arsenal/session/worktree_isolation"
 if ! ARSENAL_COAUTHOR="" bash "${HELPER}" lo-guard-inplace "Guard inplace" >/dev/null 2>&1; then
     echo "FAIL: recorded serialized in-place mode should permit git add -A" >&2; exit 1
 fi

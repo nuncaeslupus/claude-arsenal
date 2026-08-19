@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # open_task_pr.sh <task_id> <title> [<type>]
 # Commit a worker's task changes on a feature branch cut from the host DEFAULT
-# branch (origin/main, NOT arsenal-queue), push it, and open a PR.
+# branch (origin/main), push it, and open a PR that closes the task's issue.
 #
 # Prints ONE line on stdout, consumed by the caller and recorded on the queue
-# row via `release.sh done --pr <value>`:
+# task's issue via the PR body's `Closes #<issue>` line:
 #   <pr-url>            — a PR was created (a `gh` backend was available).
 #   branch:<name>       — the branch was pushed but no PR backend exists here;
 #                         the orchestrator/operator opens the PR (github skill /
@@ -59,7 +59,7 @@ BRANCH="arsenal/${TASK_ID}-${slug}"
 
 # Resolve the host default branch from the remote's published HEAD symref, then
 # fetch it so we branch off its real tip. NEVER fall back to the current HEAD:
-# the worker runs on arsenal-queue, and branching off it would drag the entire
+# the worker may run in the orchestrator's tree, and branching off it would drag the entire
 # queue-coordination history into the PR. Fail fast instead.
 default_branch="$(git ls-remote --symref "${REMOTE}" HEAD 2>/dev/null \
     | sed -n 's|^ref:[[:space:]]*refs/heads/\([^[:space:]]*\).*|\1|p')"
@@ -150,7 +150,7 @@ fi
 #   3. Otherwise refuse. ARSENAL_ALLOW_SHARED_ADD=1 is the operator escape
 #      hatch for a bespoke setup, named so it reads as what it is.
 _isolation_sentinel() {
-    local dir="${ARSENAL_SESSION_DIR:-claude-arsenal/session}"
+    local dir="${ARSENAL_SESSION_DIR:-${ARSENAL_HOME:-arsenal}/session}"
     [[ -f "${dir}/worktree_isolation" ]] || return 1
     [[ "$(tr -d '[:space:]' < "${dir}/worktree_isolation" 2>/dev/null)" == "unavailable" ]]
 }
@@ -161,7 +161,7 @@ elif [[ "${ARSENAL_WORKTREE_ISOLATION:-}" == "unavailable" ]] || _isolation_sent
 elif [[ "${ARSENAL_ALLOW_SHARED_ADD:-}" == "1" ]]; then
     :
 else
-    echo "open_task_pr: git add -A refused on shared checkout — not running in a linked git worktree and serialized in-place mode is not recorded (claude-arsenal/session/worktree_isolation). Run from an isolated worktree, or set ARSENAL_ALLOW_SHARED_ADD=1 if you have verified no other worker shares this checkout." >&2
+    echo "open_task_pr: git add -A refused on shared checkout — not running in a linked git worktree and serialized in-place mode is not recorded (arsenal/session/worktree_isolation). Run from an isolated worktree, or set ARSENAL_ALLOW_SHARED_ADD=1 if you have verified no other worker shares this checkout." >&2
     exit 1
 fi
 git add -A

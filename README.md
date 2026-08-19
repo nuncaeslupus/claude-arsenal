@@ -59,7 +59,7 @@ token-budget stop): [`docs/orchestrator-guide.md`](docs/orchestrator-guide.md).
 | Plugin | Role |
 |---|---|
 | `skill-creator` | Meta-skill. Validates SKILL.md + references + scripts against the rubric. Hooks block unguarded edits inside `skills/` folders. |
-| `core` | Engineering workflows: `specify`, `design`, `execution`, `review`, `ship`, `github`, `lsp-setup`, `session-end`; plus Python toolchain skills `python-bootstrap`, `pypi-release`, `coverage-gaps`, `dep-upgrade`, `mutmut-report`; plus the git-backed DAG task queue (`init`, `continue`, `queue-add`, `queue-status`) that fans out work to parallel worker subagents and tracks progress in `claude-arsenal/queue/tasks.jsonl`. |
+| `core` | Engineering workflows: `specify`, `design`, `execution`, `review`, `ship`, `github`, `lsp-setup`, `session-end`; plus Python toolchain skills `python-bootstrap`, `pypi-release`, `coverage-gaps`, `dep-upgrade`, `mutmut-report`; plus the task queue (`init`, `continue`, `queue-add`, `queue-status`) that fans out work to parallel worker subagents. Tasks are files in `arsenal/tasks/`; a GitHub issue is each task's handle, and claiming is an atomic ref creation, so several sessions can work the same repo without colliding. See `docs/queue.md`. |
 
 The active rubric is at
 [`plugins/skill-creator/skills/skill-creator/references/skill-rules.md`](plugins/skill-creator/skills/skill-creator/references/skill-rules.md),

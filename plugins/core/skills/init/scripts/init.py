@@ -15,16 +15,41 @@ CLAUDE_MD_BLOCK = """\
 
 Every session, without waiting to be asked:
 
-1. Read `claude-arsenal/project/overview.md` (project + workspace index).
-2. Read `claude-arsenal/session/handover.md` for last session activity.
-3. Run `claude-arsenal/bin/queue_eval.sh`.
-   - **Tasks available** → start worker loop (see `@claude-arsenal/AGENTS.md`).
-   - **Queue empty + workspace plans exist** → seed from each workspace's plan, then workers.
-   - **Queue empty + `status/plan.md` exists** → seed from it, then workers.
-   - **Nothing** → ask what to work on.
-4. After any session with tasks: update workspace handover + global session handover.
+1. Read `arsenal/session/handover.md` for the previous session's context.
+2. List the repository's issues labelled `arsenal:task` — **open and closed** — and
+   save the JSON. Use whatever GitHub access this surface has; run
+   `claude-arsenal/bin/github_channel.sh --detect` to find out which.
+3. Run `python3 claude-arsenal/scripts/query_status.py --issues <that file>` for the
+   board, and report anything it flags.
+4. Pick up work: `python3 claude-arsenal/scripts/task_select.py --issues <that file>`
+   returns the next unblocked task, then
+   `bash claude-arsenal/bin/claim_task.sh <id>` takes it (see `@claude-arsenal/AGENTS.md`).
+   - **Nothing returned + workspace plans exist** → seed tasks from each plan.
+   - **Nothing at all** → ask what to work on.
+5. Open each task's PR with `Closes #<issue>` so merging it closes the task by itself.
+6. After any session with tasks: update `arsenal/session/handover.md`.
 
 @claude-arsenal/AGENTS.md"""
+
+_CONFIG_TEMPLATE = """\
+# claude-arsenal host configuration — yours; upstream never rewrites this file.
+
+# How far must a task PR get before it may be merged?
+#   always | after-ci | after-ci-and-review | never
+merge-policy = "after-ci"
+
+# test-first writes a failing test before the change; test-after writes tests
+# alongside it.
+test-discipline = "test-first"
+
+# What /session-end leaves behind: handoff | ticket | none
+session-end = "handoff"
+
+# The skills-listing character budget the auditor enforces. Raise it if your
+# surface's real budget differs, rather than deleting skills to fit a number
+# that is not yours.
+listing-budget = 8000
+"""
 
 DEFAULT_SURFACE_PROFILE = {
     "surface": "unknown",
@@ -121,7 +146,7 @@ def _has_shebang(path: Path) -> bool:
 # on every `init --silent` at session start. Only session/ ships a template
 # today; project/ and queue/ are listed defensively so a future bundle file
 # under them can't introduce the same data loss.
-_SCAFFOLD_ONCE = ("session/", "project/", "queue/")
+_SCAFFOLD_ONCE = ("session/", "project/")
 
 
 def _refresh_bundle(bundle: Path, target: Path, silent: bool = False) -> None:
@@ -229,7 +254,7 @@ def _inject_claude_md(repo_path: Path) -> None:
 
 
 def _upsert_overview(repo_path: Path, workspace: str, root: str, spec: str, plan: str) -> None:
-    overview = repo_path / "claude-arsenal" / "project" / "overview.md"
+    overview = repo_path / "arsenal" / "project" / "overview.md"
     if not overview.exists():
         overview.write_text(OVERVIEW_HEADER, encoding="utf-8")
     content = overview.read_text(encoding="utf-8")
@@ -269,23 +294,31 @@ def init_base(
     # Version check — prints upgrade banner when behind the plugin source
     _check_bundle_version(bundle, arsenal)
 
-    # Scaffold directories
-    for d in ["bin", "project", "queue", "session", "agents"]:
+    # Scaffold directories. `claude-arsenal/` is upstream's and may be
+    # overwritten freely; `arsenal/` is the host's and is created once, never
+    # written again by an upgrade — that separation is what lets a consumer
+    # vendor the bundle without an update ever touching their tasks or config.
+    for d in ["bin", "scripts", "agents"]:
         (arsenal / d).mkdir(parents=True, exist_ok=True)
+    home = repo_path / "arsenal"
+    for d in ["tasks", "specs", "plans", "project", "session"]:
+        (home / d).mkdir(parents=True, exist_ok=True)
 
     # Refresh bundle files
     if not silent:
         print("Refreshing bundle files:")
     _refresh_bundle(bundle, arsenal, silent=silent)
 
-    # Create empty queue
-    queue_file = arsenal / "queue" / "tasks.jsonl"
-    if not queue_file.exists():
-        queue_file.write_text("", encoding="utf-8")
-        print(f"  created: {queue_file.relative_to(repo_path)}")
+    # Host configuration. Seeded once and never rewritten, so a preference set
+    # here survives every bundle upgrade — unlike one stored in a vendored skill,
+    # which is build output and gets replaced.
+    config = home / "config.toml"
+    if not config.exists():
+        config.write_text(_CONFIG_TEMPLATE, encoding="utf-8")
+        print(f"  created: {config.relative_to(repo_path)}")
 
     # Create session handover
-    handover = arsenal / "session" / "handover.md"
+    handover = home / "session" / "handover.md"
     if not handover.exists():
         handover.write_text(
             "# Session Handover\n\n<!-- Written at session end. -->\n",
@@ -294,7 +327,7 @@ def init_base(
         print(f"  created: {handover.relative_to(repo_path)}")
 
     # Default surface profile (gitignored — overwritten by detect_surface.sh hook)
-    profile = arsenal / "session" / "surface_profile.json"
+    profile = home / "session" / "surface_profile.json"
     if not profile.exists():
         profile.write_text(
             json.dumps(DEFAULT_SURFACE_PROFILE, indent=2) + "\n", encoding="utf-8"
@@ -303,11 +336,17 @@ def init_base(
 
     # .gitignore — surface profile, the statusLine-written rate-limit snapshot,
     # and the per-session dispatch-round counter (all live, machine-local state)
-    _add_gitignore_entry(repo_path, "claude-arsenal/session/surface_profile.json")
-    _add_gitignore_entry(repo_path, "claude-arsenal/session/rate_limits.json")
-    _add_gitignore_entry(repo_path, "claude-arsenal/session/budget_iterations.json")
-    _add_gitignore_entry(repo_path, "claude-arsenal/session/worktree_isolation")
-    _add_gitignore_entry(repo_path, "claude-arsenal/session/host_branch")
+    for entry in (
+        "arsenal/session/surface_profile.json",
+        "arsenal/session/rate_limits.json",
+        "arsenal/session/budget_iterations.json",
+        "arsenal/session/worktree_isolation",
+        "arsenal/session/host_branch",
+        # Rescue metadata is machine-local too; it was previously omitted, so a
+        # forced-restore snapshot could be swept into a task commit (#140).
+        "arsenal/session/rescue_refs",
+    ):
+        _add_gitignore_entry(repo_path, entry)
 
     # statusLine command feeding budget_check.sh (token-budget stop)
     _register_statusline(repo_path)
@@ -347,7 +386,7 @@ def init_workspace(
     if not (arsenal / "bin").is_dir():
         init_base(repo_path, bundle_override)
 
-    ws_dir = arsenal / "project" / workspace
+    ws_dir = repo_path / "arsenal" / "project" / workspace
     ws_dir.mkdir(parents=True, exist_ok=True)
     print(f"Registering workspace {workspace!r}...")
 

@@ -139,6 +139,12 @@ def load_tasks(tasks_dir: Path) -> tuple[list[dict[str, Any]], list[str]]:
         return tasks, [f"no task directory at {tasks_dir}"]
     seen: dict[str, Path] = {}
     for path in sorted(tasks_dir.glob("*.md")):
+        # `_`- and `.`-prefixed files are notes that live alongside the tasks —
+        # the migration's `_migrated-history.md`, a `_README.md` — not tasks.
+        # Without this they would each warn about a missing `id:` on every run,
+        # and a warning that fires every time is one people stop reading.
+        if path.name.startswith(("_", ".")):
+            continue
         text = path.read_text(encoding="utf-8")
         meta = parse_front_matter(text)
         task_id = meta.get("id")

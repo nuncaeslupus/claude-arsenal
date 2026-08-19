@@ -1,10 +1,10 @@
 # Orchestrator guide
 
-> **Superseded in part.** The queue described below runs on the `arsenal-queue`
-> coordination branch. That mechanism is being replaced by repo-defined task
-> files with GitHub issue handles and atomic claim refs — see **`docs/queue.md`**
-> for the current model and `docs/design/0001-issues-as-the-queue.md` for why.
-> The worker-dispatch, budget and PR sections below still apply.
+> **Superseded.** The queue described below ran on the `arsenal-queue`
+> coordination branch, which no longer exists. See **`docs/queue.md`** for the
+> current model and `docs/design/0001-issues-as-the-queue.md` for why it changed.
+> The worker-dispatch, budget and PR sections below still describe how the loop
+> fans out, but every queue command named here has been replaced.
 
 
 How to operate the `claude-arsenal` task queue: one **orchestrator** session

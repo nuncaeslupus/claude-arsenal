@@ -40,9 +40,9 @@ to list targets.
 ### Dogfooding the queue
 
 This repo tracks its own review backlog as a real queue at `status/queue/`
-(`tasks.jsonl` + per-task payloads, one per open review issue) so the queue
+(task files under `arsenal/tasks/`, one per open review issue) so the queue
 tooling runs against this project, not only against consumers. `make
-queue-doctor` (and the `queue doctor` CI job) runs `queue_doctor.py` over it on
+queue-doctor` (and the `queue doctor` CI job) runs `query_status.py` over it on
 every push — orphan payloads, broken deps, false-`done`, or a leaked secret in a
 payload fail the build. Each task carries an `issue` field; `--closed-issues`
 flags any task whose linked GitHub issue is already closed, so the backlog and

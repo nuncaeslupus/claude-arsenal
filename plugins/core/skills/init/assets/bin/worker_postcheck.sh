@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # worker_postcheck.sh
-# Run by the orchestrator after EVERY worker returns and BEFORE release.sh.
+# Run by the orchestrator after EVERY worker returns.
 # Restores and asserts the one invariant the coordination protocol depends on:
 # HEAD is back on the queue branch and the working tree is clean.
 #
@@ -9,7 +9,7 @@
 # runs in the orchestrator's shared tree instead: open_task_pr.sh checks out a
 # feature branch (moving the orchestrator's HEAD off the coordination branch),
 # and a gate-failed worker can leave uncommitted edits sitting on the
-# append-only ledger. release.sh then refuses to run (it guards on the queue
+# orchestrator's own tree. Subsequent steps then run from the wrong branch (it guards on the recorded host
 # branch), and a stray `git commit -a` could sweep task code onto the queue
 # branch. This script makes the post-worker state safe either way:
 #   - In a real worktree the orchestrator's HEAD never moved → cheap no-op that
@@ -40,7 +40,6 @@
 
 set -uo pipefail
 
-QUEUE_BRANCH="${ARSENAL_QUEUE_BRANCH:-arsenal-queue}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd 2>/dev/null || echo .)"
 
 # Snapshot the working tree to a rescue ref before a destructive restore, and
@@ -64,7 +63,7 @@ _rescue_before_restore() {
 _record_rescue_ref() {
     local dir
     [[ -n "${RESCUED_REF}" ]] || return 0
-    dir="${ARSENAL_SESSION_DIR:-claude-arsenal/session}"
+    dir="${ARSENAL_SESSION_DIR:-${ARSENAL_HOME:-arsenal}/session}"
     mkdir -p "${dir}" 2>/dev/null || return 0
     printf '%s\n' "${RESCUED_REF}" >> "${dir}/rescue_refs" 2>/dev/null || true
 }
@@ -75,94 +74,65 @@ _record_rescue_ref() {
 # the worker ran in-place → record `unavailable` so the next batch is clamped to
 # a single worker without relying on the orchestrator to remember to clamp.
 _record_isolation() {
-    local dir="${ARSENAL_SESSION_DIR:-claude-arsenal/session}"
+    local dir="${ARSENAL_SESSION_DIR:-${ARSENAL_HOME:-arsenal}/session}"
     mkdir -p "${dir}" 2>/dev/null || return 0
     printf '%s\n' "$1" > "${dir}/worktree_isolation" 2>/dev/null || true
 }
 
-# In worktree mode the main tree SHOULD stay on whatever branch it was on when
-# queue_branch.sh set up the coordination worktree ("the host branch"), but if
-# the Task tool silently ignores isolation: worktree the worker runs in-place
-# and can move the main HEAD. Check and restore the main tree first so the
-# orchestrator can detect this (a `restored` result clamps ARSENAL_MAX_WORKERS=1).
-if [[ -n "${ARSENAL_QUEUE_DIR:-}" ]]; then
-    # The host branch is NOT assumed to be `main` — on Claude Code on the web a
-    # session is typically pinned to its own designated branch (e.g.
-    # `claude/web-continuation-xxx`). queue_branch.sh persists the main tree's
-    # actual branch to this session file; only fall back to the literal `main`
-    # when neither an explicit override nor a recorded value is available
-    # (e.g. queue_branch.sh predates #128). ARSENAL_DEFAULT_BRANCH still wins
-    # when the orchestrator sets it explicitly.
-    session_dir="${ARSENAL_SESSION_DIR:-claude-arsenal/session}"
-    recorded_branch=""
-    if [[ -f "${session_dir}/host_branch" ]]; then
-        recorded_branch="$(cat "${session_dir}/host_branch" 2>/dev/null || true)"
-    fi
-    default_branch="${ARSENAL_DEFAULT_BRANCH:-${recorded_branch:-main}}"
-    current_main="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
-    dirty_main="$(git status --porcelain 2>/dev/null)"
-
-    # Only reset when the branch actually moved — a dirty-but-correct-branch
-    # state means the user has uncommitted edits, which must NOT be destroyed.
-    if [[ "${current_main}" != "${default_branch}" ]]; then
-        # The branch moved, but that does NOT mean the tree holds only worker
-        # residue: the orchestrator (or a human) may have cut a local branch in
-        # the main tree over genuine WIP. Snapshot before discarding.
-        if [[ -n "${dirty_main}" ]]; then
-            _rescue_before_restore "worker_postcheck: main tree on '${current_main}', restoring to '${default_branch}'"
-        fi
-        git reset -q --hard >/dev/null 2>&1 || true
-        git clean -fdq >/dev/null 2>&1 || true
-        git checkout -f "${default_branch}" >/dev/null 2>&1 || true
-        _record_rescue_ref
-        _record_isolation unavailable
-        echo "restored"
-        exit 0
-    fi
-
-    wt_branch="$(git -C "${ARSENAL_QUEUE_DIR}" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
-    if [[ "${wt_branch}" == "${QUEUE_BRANCH}" ]]; then
-        _record_isolation available
-        echo "ok"
-        exit 0
-    fi
-    echo "worker_postcheck: queue worktree '${ARSENAL_QUEUE_DIR}' is on '${wt_branch:-unknown}', expected '${QUEUE_BRANCH}'; re-run queue_branch.sh" >&2
-    exit 2
-fi
-
-# Legacy (non-worktree) mode: ensure the main tree's HEAD is on the
-# coordination branch and the tree is clean before release.sh runs.
+# There is one invariant now: the session's tree must still be on the branch it
+# started on, and it must be clean. The coordination branch is gone, so there is
+# no second tree to reconcile against and no "legacy mode" — just this.
+#
+# The host branch is NOT assumed to be `main`: on Claude Code on the web a
+# session is pinned to its own designated branch (e.g. `claude/web-…`), so
+# resetting to `main` would throw away the session's own work (#128). It is
+# recorded on first run and reused from then on; an explicit
+# ARSENAL_DEFAULT_BRANCH always wins.
+session_dir="${ARSENAL_SESSION_DIR:-${ARSENAL_HOME:-arsenal}/session}"
 current="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
 dirty="$(git status --porcelain 2>/dev/null)"
 
-if [[ "${current}" == "${QUEUE_BRANCH}" && -z "${dirty}" ]]; then
+recorded_branch=""
+if [[ -f "${session_dir}/host_branch" ]]; then
+    recorded_branch="$(cat "${session_dir}/host_branch" 2>/dev/null || true)"
+fi
+host_branch="${ARSENAL_DEFAULT_BRANCH:-${recorded_branch}}"
+if [[ -z "${host_branch}" ]]; then
+    # First run of the session: whatever we are on now IS the host branch.
+    # Recording it here rather than guessing is what stops a later restore from
+    # dragging the session onto a branch it never asked for.
+    host_branch="${current:-main}"
+    mkdir -p "${session_dir}" 2>/dev/null || true
+    printf '%s\n' "${host_branch}" > "${session_dir}/host_branch" 2>/dev/null || true
+fi
+
+if [[ "${current}" == "${host_branch}" && -z "${dirty}" ]]; then
     _record_isolation available
     echo "ok"
     exit 0
 fi
 
-# Recover. Discard any uncommitted worktree changes — the worker's code lives on
-# its pushed feature branch (a `done`) or is an abandoned gate failure, exactly
-# what a real worktree's cleanup would have thrown away. `reset --hard` leaves
-# gitignored session files (rate_limits.json, surface_profile.json) untouched;
-# `clean -fdq` removes untracked files but NOT ignored ones (no -x).
+# Recover. Discard uncommitted changes — the worker's code lives on its pushed
+# feature branch, or it is an abandoned gate failure, exactly what a real
+# worktree's cleanup would have thrown away. `reset --hard` leaves gitignored
+# session files untouched; `clean -fdq` removes untracked but not ignored files.
 #
-# "Exactly what a real worktree's cleanup would have thrown away" is the
-# INTENT — but this runs in the host's shared tree, where the assumption can be
-# wrong. Snapshot first so a wrong assumption costs a ref lookup, not the work.
+# That is the INTENT — but this runs in the host's shared tree, where the
+# assumption can be wrong. Snapshot first, so a wrong assumption costs a ref
+# lookup rather than the work.
 if [[ -n "${dirty}" ]]; then
-    _rescue_before_restore "worker_postcheck: legacy-mode restore of '${current:-unknown}' to '${QUEUE_BRANCH}'"
+    _rescue_before_restore "worker_postcheck: restoring '${current:-unknown}' to '${host_branch}'"
 fi
 git reset -q --hard >/dev/null 2>&1 || true
 git clean -fdq >/dev/null 2>&1 || true
-if [[ "${current}" != "${QUEUE_BRANCH}" ]]; then
-    git checkout -f "${QUEUE_BRANCH}" >/dev/null 2>&1 || true
+if [[ "${current}" != "${host_branch}" ]]; then
+    git checkout -f "${host_branch}" >/dev/null 2>&1 || true
 fi
 
 current="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
 dirty="$(git status --porcelain 2>/dev/null)"
-if [[ "${current}" != "${QUEUE_BRANCH}" || -n "${dirty}" ]]; then
-    echo "worker_postcheck: could not restore HEAD to '${QUEUE_BRANCH}' / clean tree (HEAD=${current:-unknown})" >&2
+if [[ "${current}" != "${host_branch}" || -n "${dirty}" ]]; then
+    echo "worker_postcheck: could not restore HEAD to '${host_branch}' / clean tree (HEAD=${current:-unknown})" >&2
     exit 2
 fi
 

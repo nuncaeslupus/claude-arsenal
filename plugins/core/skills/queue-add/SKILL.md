@@ -2,12 +2,15 @@
 name: queue-add
 description: When the user wants to add a task to the claude-arsenal queue. Do NOT use to update or remove existing tasks.
 user-invocable: true
-argument-hint: "--title TITLE [--priority N] [--workspace NAME] [--tag TAG] [--requires surface:X] [--deps lo-XXXX] [--max-attempts N]"
+argument-hint: "--title TITLE [--priority N] [--workspace NAME] [--tag TAG] [--requires surface:X] [--deps t-XXXXXXXX] [--max-attempts N]"
 ---
 
 # queue-add
 
-Appends a new task row to `claude-arsenal/queue/tasks.jsonl` with a hash-based ID, title, priority, optional workspace scope, surface requirements, and dependency edges. Validates schema and dependency edges before writing.
+Creates a task as a file in the repository — `arsenal/tasks/<id>.md` — carrying its
+title, priority, dependencies, and acceptance gate, then prints the issue handle to open
+for it. The file is the task; the issue is only a handle, so agents can claim it and the
+board stays visible.
 
 CANARY: queue-add-loaded-2026-06-13-fb78d23e-c3d4e5f6a7b8c9d0
 
@@ -22,45 +25,61 @@ Load this skill when:
 ## How to use
 
 ```bash
-python3 "${CLAUDE_SKILL_DIR}/scripts/create_task.py" \
-  --title "Implement claim.sh" \
-  --priority 10 \
-  --workspace BACKEND \
-  --tag CLI \
+python3 "${CLAUDE_SKILL_DIR}/scripts/new_task.py" \
+  --title "Extract the surface probe into its own script" \
+  --priority 5 \
+  --deps t-aaaa1111 \
   --requires "surface:cli" \
-  --deps lo-a1b2 \
-  --max-attempts 3
+  --tag CLI \
+  --workspace BACKEND
 ```
 
-The script generates a `lo-XXXX` hash ID, writes the row, and prints the assigned ID.
-Use the printed ID as a `--deps` argument when adding dependent tasks.
+It prints the new task id on stdout and, on stderr, the exact issue to open. Create that
+issue with whatever GitHub access this surface offers — the built-in GitHub tools, `gh`,
+or the REST API — with the `arsenal:task` label and the `<!-- arsenal-task: <id> -->` marker in the
+body. **The marker is what links issue to task**; without it the task is invisible to the
+selector, and without the label the issue is never treated as claimable work.
 
-## Writing the payload file
+Use the printed id as a `--deps` argument when adding dependent tasks.
 
-After `create_task.py` prints the new ID, create `claude-arsenal/queue/<id>.md`.
-The payload is the first thing a worker reads; include a gate line, the test
-function names the worker must write RED first (copied from the plan's Tests column),
-and one reference anchor per spec section, decision record, or sibling pattern
-needed to start — spare them the grep.
+## Write a real gate
 
-Load `${CLAUDE_SKILL_DIR}/references/payload-template.md` when writing the payload file for a new task.
+The generated file contains a deliberately failing gate. Replace it before the task is
+claimed:
 
-Example:
+````markdown
+## Acceptance gate
 
-```markdown
-**Gate**: metric_name ≥ threshold on held-out test set
-
-## References
-- Spec: `spec.md §7.3` — table defining the gate formula
-- Decision: `DECISIONS.md #1` — rationale for approach chosen in design
-- Sibling: `<subproject>/path/to/sibling.py` — pattern to reuse for implementation
+```bash
+bash <the test that proves this task is done>
 ```
+````
+
+The fenced block is what makes a gate mechanical. Prose, and inline `single-backtick`
+commands, are never executed — so a gate written as prose runs nothing, and a gate that
+runs nothing passes everything. One consumer audit found 0 of 70 payloads carried a
+fenced block, meaning an entire gate layer had been inert for months. `task_select.py`
+reports `gate: false` for a task with no block, so the problem is visible rather than
+silent, and the placeholder fails until it is replaced rather than passing by default.
+
+Load `${CLAUDE_SKILL_DIR}/references/payload-template.md` for the fuller task-body shape:
+the test names a worker should write failing first, and one reference anchor per spec
+section or sibling pattern needed to start — spare them the grep.
 
 ## Gotchas
 
-- **Deps must already exist in the queue.** The script rejects `--deps` values that do not match an existing task ID.
-- **`requires` values are exact strings.** Use `surface:cli` or `surface:web`; unrecognised values pass through but will never match a worker's surface profile.
-- **`--workspace` scopes the task.** When set, `queue_eval.sh` with `LOOP_WORKSPACE=X` will only return tasks for that workspace.
-- **`--tag` (repeatable) adds free-form labels.** `/continue CLI` scopes the loop to tasks carrying tag `CLI` (multiple tags AND together via `LOOP_TAGS`). Tags are orthogonal to `--workspace` and `--requires`.
-- **`--max-attempts N` (default 3) sets the per-task retry cap.** After N consecutive gate failures the task auto-escalates to `escalated` status and leaves the eligible pool. Set higher for tasks known to be environment-sensitive; set to 1 for tasks that need manual review after any failure. `queue-status` shows escalated counts and per-task attempt budget in `--detail`.
-- **Tasks authored in a feature PR land on the default branch, not `arsenal-queue`.** Running `/queue-add` during a feature-branch session (no active orchestrator, `ARSENAL_QUEUE_DIR` unset) writes rows to the main working tree — committed to that branch, not to the coordination branch. Once the PR merges, those rows are on the default branch but absent from `arsenal-queue`. The orchestrator runs `queue_sync.sh` automatically at step 1b of every session start to close this gap. To port missing rows manually before `/continue`, run `queue_sync.sh` with `ARSENAL_QUEUE_DIR` set to the coordination worktree path. To avoid the mismatch entirely, seed the queue on the coordination branch by running `queue_branch.sh` first.
+- **Deps must already exist.** `--deps` is rejected if no task file declares that id. The
+  selector treats an unknown dep as unsatisfied, so a typo would otherwise block the task
+  forever and silently.
+- **Ids are random, not derived from the title.** Two agents adding tasks at the same time
+  cannot collide, and no coordination is needed to mint one.
+- **`requires` values are exact strings.** `surface:cli` or `surface:web`; an unrecognised
+  value passes through but will never match a surface, so the task never becomes eligible.
+- **`--tag` (repeatable) adds free-form labels.** `/continue CLI` scopes the loop to tasks
+  carrying tag `CLI`. Tags are orthogonal to `--workspace` and `--requires`.
+- **`--max-attempts N` (default 3) caps retries.** Each retry claims the next attempt ref;
+  past the cap the task stops being offered and needs a human.
+- **The task file must be merged to the default branch to count.** Task files are read
+  from the default branch so every agent computes the same graph — a task on an unmerged
+  branch is not yet part of the queue. That is the same rule as any other change to the
+  project.

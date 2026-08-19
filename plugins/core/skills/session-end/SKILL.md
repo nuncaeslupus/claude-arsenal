@@ -74,7 +74,7 @@ Format and rubric for the proposal block live in [retrospective-rubric](referenc
 
 ## Step 3 — PR audit (always when queue exists)
 
-Collect every task in `done` or `in_progress` status from `claude-arsenal/queue/tasks.jsonl`
+Collect every claimed task and every task whose PR is open, from the `arsenal:task` issues
 that carries a `pr` field, then check each PR for CI, review comments, and merge conflicts.
 
 **When `gh` CLI is available:**
@@ -97,7 +97,7 @@ Mark any PR as **BLOCKED** if: CI is failing, there are `CHANGES_REQUESTED` revi
 Print the PR URL list directly from the queue, with task IDs and titles, so the user can check them manually:
 ```
 PRs from this session requiring human review:
-  lo-a3f8  #42  https://github.com/…/pull/42  — T1: Implement claim.sh
+  t-3f8a91c2  #42  https://github.com/…/pull/42  — Extract the surface probe
   lo-b2c1  #43  https://github.com/…/pull/43  — T2: Auth gate
 ```
 
@@ -105,7 +105,7 @@ PRs from this session requiring human review:
 ```
 Escalated tasks (exhausted retry cap — no PR opened):
   lo-c3d4  attempts=3/3  T3: Data migration
-  → Recovery: release.sh lo-c3d4 open --reset-attempts  (from claude-arsenal/bin/)
+  → Recovery: the next attempt claims <id>.a2; past max-attempts a human decides
 ```
 
 ## Auto-fire (opt-in)

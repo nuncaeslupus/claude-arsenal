@@ -1,11 +1,9 @@
 # The task queue
 
-> **Status:** the scripts described here ship as of v0.24.0. The session
-> protocol in `AGENTS.md` and the `/queue-*` skills still drive the older
-> coordination-branch queue; they are rewired in the next change. Until then,
-> use this page to understand the model and `arsenal_migrate.py` to prepare a
-> repo. `docs/orchestrator-guide.md` describes the old mechanism and is
-> superseded by this page.
+> **Status:** live as of v0.25.0. The session protocol, the `/queue-*` skills and
+> the worker all run on the model described here; the coordination branch and its
+> machinery are gone. Existing repos migrate with `arsenal_migrate.py` (below).
+> `docs/orchestrator-guide.md` is superseded by this page.
 
 Two ideas, and everything else follows from them.
 
@@ -40,7 +38,7 @@ freely, so an upgrade can never touch your queue, your plans, or your settings.
 
 ## A task file
 
-```markdown
+````markdown
 ---
 id: t-3f8a91c2
 title: "Extract the surface probe into its own script"
@@ -54,7 +52,7 @@ tags: [CLI]
 ```bash
 bash tests/surface_probe_test.sh
 ```
-```
+````
 
 `deps` is the dependency graph. Because it lives in the file, the graph is part
 of the project: it changes through a pull request like anything else, and every
@@ -78,7 +76,7 @@ Reading the queue is one command. The session fetches its `arsenal:task` issues
 with whatever GitHub access it has, saves them, and asks for the next task:
 
 ```bash
-python3 .claude/skills/init/assets/scripts/task_select.py \
+python3 claude-arsenal/scripts/task_select.py \
     --tasks-dir arsenal/tasks --issues /tmp/issues.json --capability surface:cli
 ```
 
@@ -151,7 +149,7 @@ once at `/init`, then never again.
 Inspect the effective values and where each came from:
 
 ```bash
-python3 .claude/skills/init/assets/scripts/arsenal_config.py --explain
+python3 claude-arsenal/scripts/arsenal_config.py --explain
 ```
 
 A threshold whose value is invisible is one nobody can tell has been quietly
@@ -182,8 +180,8 @@ silent no-ops: the queue looked healthy while nothing happened.
 ## Migrating an existing repo
 
 ```bash
-python3 .claude/skills/init/assets/scripts/arsenal_migrate.py            # dry run
-python3 .claude/skills/init/assets/scripts/arsenal_migrate.py --apply
+python3 claude-arsenal/scripts/arsenal_migrate.py            # dry run
+python3 claude-arsenal/scripts/arsenal_migrate.py --apply
 ```
 
 It converts task rows into task files (ids preserved, so `deps` keep resolving),
