@@ -114,5 +114,42 @@ out="$(run_check)" || fail "check_update.sh exited non-zero on a real update"
     || fail "a newer tag (v0.22.0) did not trigger the update path, stdout: '${out}'"
 echo "PASS: a strictly newer tag still triggers the update path"
 
+# --- 6: the assembled-bundle dir and the subtree prefix are separate paths ---
+#     One variable served both, and the layout vendor-skills.sh exists to support
+#     keeps them apart: the subtree is vendored whole at vendor/claude-arsenal/
+#     and the bundle assembled at claude-arsenal/. No single value satisfied both
+#     readings — the default found the version but could not merge, and pointing
+#     it at the subtree merged but read version 0.0.0, so every run claimed an
+#     update was due.
+setup_repo_at() {  # $1 = bundle dir holding .bundle-version, $2 = installed version
+    rm -rf "${tmp}/split"; mkdir -p "${tmp}/split/$1"
+    cd "${tmp}/split"
+    git init -q -b main .
+    git config user.email t@e.x; git config user.name T; git config commit.gpgsign false
+    printf '%s\n' "$2" > "$1/.bundle-version"
+    mkdir -p bin && cp "${CHECK}" bin/check_update.sh
+    git add -A && git commit -q -m init
+}
+
+setup_repo_at "claude-arsenal" "0.26.0"
+out=$(ARSENAL_BUNDLE_DIR=claude-arsenal ARSENAL_PREFIX=vendor/claude-arsenal \
+      ARSENAL_REMOTE=nope bash bin/check_update.sh 2>&1 || true)
+grep -q "0.0.0" <<<"${out}" \
+    && fail "ARSENAL_BUNDLE_DIR must locate .bundle-version independently of the subtree prefix: ${out}"
+
+# --- 7: --check-only reports without writing history ---
+#     The session protocol documents this as a status report, but the happy path
+#     merged and committed into the tree the worker loop needs clean.
+setup_repo_at "claude-arsenal" "0.1.0"
+before=$(git rev-parse HEAD)
+out=$(ARSENAL_REMOTE=nope bash bin/check_update.sh --check-only 2>&1 || true)
+[[ "$(git rev-parse HEAD)" == "${before}" ]] || fail "--check-only must not write a commit"
+git diff --quiet || fail "--check-only must leave the working tree clean"
+
+# --- 8: an unknown argument does not abort a session ---
+out=$(ARSENAL_REMOTE=nope bash bin/check_update.sh --bogus 2>&1; echo "rc=$?")
+grep -q "rc=0" <<<"${out}" || fail "an unknown argument must never abort a session: ${out}"
+grep -q "unknown argument" <<<"${out}" || fail "an unknown argument should say so: ${out}"
+
 echo "PASS: check_update_test — all gates passed"
 exit 0

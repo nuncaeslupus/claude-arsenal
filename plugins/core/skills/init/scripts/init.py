@@ -287,12 +287,22 @@ def _replace_managed_block(content: str) -> str | None:
     if end != -1:
         end += len(CLAUDE_MD_END_MARKER)
     else:
-        legacy = content.find(LEGACY_BLOCK_TAIL, start)
-        if legacy == -1:
+        # The tail string also appears *inline*, inside step 4 of the block
+        # itself. An unanchored find() therefore stops at that mention and cuts
+        # the block in half, stranding the rest of it — steps 5 and 6 and the
+        # real import — below the closing marker as if it were host content.
+        # Only a line that IS the import terminates the block, and if the block
+        # names it more than once, the last such line is the end of it.
+        offsets, pos = [], 0
+        for line in content[start:].splitlines(keepends=True):
+            if line.strip() == LEGACY_BLOCK_TAIL:
+                offsets.append(start + pos + len(line.rstrip("\r\n")))
+            pos += len(line)
+        if not offsets:
             # An opening marker with no recognisable end: replacing to the end of
             # the file would eat host-owned content, so leave it and say so.
             return ""
-        end = legacy + len(LEGACY_BLOCK_TAIL)
+        end = offsets[-1]
     return content[:start] + CLAUDE_MD_BLOCK + content[end:]
 
 
