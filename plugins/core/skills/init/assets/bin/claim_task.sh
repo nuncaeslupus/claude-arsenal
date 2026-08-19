@@ -65,8 +65,25 @@ sha="$(git rev-parse "refs/remotes/${REMOTE}/${default_branch}" 2>/dev/null || g
 # Attempt number in the ref name, because a claim ref cannot be deleted from a
 # sandboxed session. A crashed session therefore blocks nothing: the next
 # attempt takes the next ref rather than waiting for a lease to expire.
+#
+# But the escape hatch and the lock shared a key. A suffixed ref is a ref nobody
+# else is contending for, so the 422-on-existing-ref collision — the whole
+# mechanism — was evaluated against the wrong name, and `claim_task.sh <id> 2`
+# reported `won` while another session legitimately held the task. A documented
+# prohibition is not a lock. So a retry now has to say that it knows the base
+# claim exists and is stale, and that acknowledgement is a deliberate act:
 ref="refs/heads/${PREFIX}/${TASK_ID}"
-[[ "${ATTEMPT}" != "1" ]] && ref="refs/heads/${PREFIX}/${TASK_ID}.a${ATTEMPT}"
+if [[ "${ATTEMPT}" != "1" ]]; then
+    if [[ "${ARSENAL_CLAIM_STALE_OK:-}" != "1" ]]; then
+        echo "error: attempt ${ATTEMPT} would claim ${PREFIX}/${TASK_ID}.a${ATTEMPT}, a ref no" >&2
+        echo "       other session contends for, so the atomic collision cannot arbitrate it." >&2
+        echo "       Establish that the base claim is stale — its session is gone and the task" >&2
+        echo "       is not in progress — then re-run with ARSENAL_CLAIM_STALE_OK=1." >&2
+        exit 2
+    fi
+    ref="refs/heads/${PREFIX}/${TASK_ID}.a${ATTEMPT}"
+    echo "warning: bypassing the base claim ${PREFIX}/${TASK_ID} (declared stale)" >&2
+fi
 
 body="$(printf '{"ref":"%s","sha":"%s"}' "${ref}" "${sha}")"
 path="/repos/${slug}/git/refs"

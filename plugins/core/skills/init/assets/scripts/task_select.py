@@ -45,13 +45,21 @@ from pathlib import Path
 from typing import Any
 
 FRONT_MATTER_RE = re.compile(r"\A---\r?\n(.*?)\r?\n---\r?\n", re.DOTALL)
-GATE_BLOCK_RE = re.compile(r"^[ \t]*```bash\b", re.MULTILINE)
+# Must accept exactly what gate_run.sh executes. When these two disagree the
+# board reports "no gate" for a task whose gate runs fine, which is the
+# direction that gets a working payload rewritten or the warning ignored.
+GATE_BLOCK_RE = re.compile(r"^[ \t]*```(?:bash|sh)\b", re.MULTILINE)
 # The marker an issue carries to say which task file it is a handle for. Kept
 # in the issue body rather than the task file so a task file never has to be
 # rewritten to learn its issue number.
 TASK_MARKER_RE = re.compile(r"<!--\s*arsenal-task:\s*([A-Za-z0-9._-]+)\s*-->")
 
 TERMINAL = {"done", "merged"}
+
+# Finished tasks keep their file here. They are not work — they are what makes
+# a dep on completed work resolve instead of reading as unknown, and what keeps
+# a finished task's gate on disk for a host check that re-asserts it.
+HISTORY_DIRNAME = "_history"
 
 # Where worktree_probe.sh and worker_postcheck.sh record whether git worktrees
 # actually work on this surface.
@@ -70,7 +78,10 @@ def isolation_verdict(sentinel: Path) -> str:
 
 
 def state_from_issues(
-    issues: list[dict[str, Any]], *, claimed_label: str = "arsenal:claimed"
+    issues: list[dict[str, Any]],
+    *,
+    claimed_label: str = "arsenal:claimed",
+    cancelled_label: str = "arsenal:cancelled",
 ) -> dict[str, str]:
     """Derive the task state map from GitHub issues.
 
@@ -79,10 +90,10 @@ def state_from_issues(
     selector needs. That split is what lets one script call answer "what
     next", instead of a protocol the model walks step by step.
 
-    A task is `done` only when its issue was closed **as completed**. An issue
-    closed by hand, or as not-planned, leaves the task blocked rather than
-    unblocking everything downstream — a stray close should not release work
-    that was never actually done.
+    A closed issue reads as `done` unless it says otherwise, and the portable
+    way to say otherwise is the `arsenal:cancelled` label: a stray close should
+    not release work that was never actually done, and a label is the only
+    signal every surface can see. `state_reason` is honoured when present.
     """
     state: dict[str, str] = {}
     for issue in issues:
@@ -96,8 +107,21 @@ def state_from_issues(
             for label in (issue.get("labels") or [])
         }
         if str(issue.get("state", "")).lower() == "closed":
-            reason = str(issue.get("state_reason") or "completed").lower()
-            state[task_id] = "done" if reason == "completed" else "cancelled"
+            # `state_reason` is the precise signal, but not every surface can
+            # return it: the GitHub MCP tools a cloud session uses have no such
+            # field, so on that surface it is absent for *every* issue, closed
+            # as completed or not. Reading absent as "not done" would stall the
+            # queue everywhere it is unavailable; reading it as "done" silently
+            # loses the distinction. So a label carries it instead — every
+            # surface can read labels — and `state_reason` refines the answer
+            # when it happens to be there.
+            reason = issue.get("state_reason")
+            if cancelled_label in labels:
+                state[task_id] = "cancelled"
+            elif reason is None:
+                state[task_id] = "done"
+            else:
+                state[task_id] = "done" if str(reason).lower() == "completed" else "cancelled"
         elif claimed_label in labels or issue.get("assignee") or issue.get("assignees"):
             state[task_id] = "claimed"
         else:
@@ -160,7 +184,12 @@ def load_tasks(tasks_dir: Path) -> tuple[list[dict[str, Any]], list[str]]:
     if not tasks_dir.is_dir():
         return tasks, [f"no task directory at {tasks_dir}"]
     seen: dict[str, Path] = {}
-    for path in sorted(tasks_dir.glob("*.md")):
+    # Live tasks first, then the history dir. A finished task is loaded so its
+    # id resolves — a dep pointing at completed work must not read as unknown —
+    # but it carries a terminal `status`, so it is never selected.
+    candidates = sorted(tasks_dir.glob("*.md"))
+    candidates += sorted((tasks_dir / HISTORY_DIRNAME).glob("*.md"))
+    for path in candidates:
         # `_`- and `.`-prefixed files are notes that live alongside the tasks —
         # the migration's `_migrated-history.md`, a `_README.md` — not tasks.
         # Without this they would each warn about a missing `id:` on every run,
@@ -191,9 +220,25 @@ def load_tasks(tasks_dir: Path) -> tuple[list[dict[str, Any]], list[str]]:
                 "workspace": meta.get("workspace"),
                 "tags": [str(t) for t in (meta.get("tags") or [])],
                 "gate": bool(GATE_BLOCK_RE.search(text)),
+                # A status in the file is a fact about finished work, recorded
+                # where it cannot drift: the issue may be long gone.
+                "status": str(meta["status"]).lower() if meta.get("status") else None,
             }
         )
     return tasks, warnings
+
+
+def effective_state(
+    tasks: list[dict[str, Any]], state: dict[str, str]
+) -> dict[str, str]:
+    """Merge the file-declared status of finished tasks over the issue-derived
+    state. A task file that records `status: merged` is the record of work that
+    is done; there may be no issue left to say so."""
+    merged = dict(state)
+    for task in tasks:
+        if task.get("status") in TERMINAL:
+            merged[task["id"]] = str(task["status"])
+    return merged
 
 
 def select(
@@ -208,6 +253,7 @@ def select(
     """Choose eligible tasks, best first. Returns (selection, warnings)."""
     warnings: list[str] = []
     known = {t["id"] for t in tasks}
+    state = effective_state(tasks, state)
 
     for task in tasks:
         for dep in task["deps"]:
@@ -218,6 +264,9 @@ def select(
 
     eligible: list[dict[str, Any]] = []
     for task in tasks:
+        # Finished work is loaded to resolve deps, never to be handed back out.
+        if task.get("status") in TERMINAL:
+            continue
         if state.get(task["id"], "open") != "open":
             continue
         # An unknown dep blocks rather than unblocks: guessing that a missing
@@ -303,8 +352,13 @@ def main(argv: list[str] | None = None) -> int:
     tasks, warnings = load_tasks(args.tasks_dir)
 
     if args.all:
+        merged = effective_state(tasks, state)
         for task in sorted(tasks, key=lambda t: (-int(t["priority"]), t["id"])):
-            row = {"id": task["id"], "title": task["title"], "state": state.get(task["id"], "open")}
+            row = {
+                "id": task["id"],
+                "title": task["title"],
+                "state": merged.get(task["id"], "open"),
+            }
             print(json.dumps(row, separators=(",", ":")))
     else:
         limit = max(1, args.limit)

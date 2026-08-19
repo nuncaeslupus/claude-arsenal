@@ -202,4 +202,54 @@ n=$(ARSENAL_WORKTREE_ISOLATION=unavailable python3 "${SELECT_PY}" --tasks-dir "$
         --max 9 --isolation-sentinel "${sentinel}" </dev/null 2>/dev/null | wc -l)
 [[ "${n}" -eq 1 ]] || fail "ARSENAL_WORKTREE_ISOLATION must override the sentinel (got ${n})"
 
+# --- 17: a ```sh gate counts as a gate, because gate_run.sh executes one ---
+#         When the two disagree the board reports "no gate" for a task whose
+#         gate runs fine — the direction that gets a working payload rewritten,
+#         or teaches people to ignore the next real warning.
+cat > "${TASKS}/t-dddd4444.md" <<'EOF'
+---
+id: t-dddd4444
+title: "Gate written as sh"
+priority: 20
+---
+
+## Acceptance gate
+```sh
+true
+```
+EOF
+out=$(echo '{}' | python3 "${SELECT_PY}" --tasks-dir "${TASKS}" 2>/dev/null | head -1)
+python3 -c 'import sys,json
+t=json.loads(sys.stdin.readline())
+assert t["id"]=="t-dddd4444", t["id"]
+assert t["gate"] is True, "an sh-fenced gate must count as a gate"' <<<"${out}" \
+    || fail "an sh-fenced gate must be recognised"
+rm -f "${TASKS}/t-dddd4444.md"
+
+# --- 18: a closed issue whose reason is unavailable still reads as done ---
+#         The GitHub MCP tools a cloud session uses return no state_reason at
+#         all. Reading absent as "not done" would stall the queue on that
+#         surface; the cancelled LABEL carries the distinction instead, because
+#         labels are the one signal every surface can see.
+cat > "${tmpdir}/issues-noreason.json" <<'EOF'
+[{"number": 1, "state": "CLOSED", "body": "handle <!-- arsenal-task: t-aaaa1111 -->"}]
+EOF
+out=$(python3 "${SELECT_PY}" --tasks-dir "${TASKS}" --issues "${tmpdir}/issues-noreason.json" --max 9 2>/dev/null)
+grep -q 't-bbbb2222' <<<"${out}" || fail "a closed issue with no state_reason must unblock its dependent"
+
+cat > "${tmpdir}/issues-cancelled.json" <<'EOF'
+[{"number": 1, "state": "CLOSED", "body": "handle <!-- arsenal-task: t-aaaa1111 -->",
+  "labels": [{"name": "arsenal:cancelled"}]}]
+EOF
+out=$(python3 "${SELECT_PY}" --tasks-dir "${TASKS}" --issues "${tmpdir}/issues-cancelled.json" --max 9 2>/dev/null)
+grep -q 't-bbbb2222' <<<"${out}" && fail "arsenal:cancelled must NOT release the dependent"
+
+# state_reason still wins where a surface can supply it
+cat > "${tmpdir}/issues-notplanned2.json" <<'EOF'
+[{"number": 1, "state": "CLOSED", "state_reason": "not_planned",
+  "body": "handle <!-- arsenal-task: t-aaaa1111 -->"}]
+EOF
+out=$(python3 "${SELECT_PY}" --tasks-dir "${TASKS}" --issues "${tmpdir}/issues-notplanned2.json" --max 9 2>/dev/null)
+grep -q 't-bbbb2222' <<<"${out}" && fail "state_reason=not_planned must still block the dependent"
+
 echo "PASS: task_select_test — all gates passed"

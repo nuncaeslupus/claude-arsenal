@@ -77,11 +77,56 @@ grep -q 'merge-policy = "after-ci"' "${REPO}/arsenal/config.toml" || fail "confi
 echo "EDITED BY HAND" >> "${REPO}/arsenal/tasks/lo-a3f8.md"
 python3 "${MIGRATE_PY}" --repo-root "${REPO}" --apply >/dev/null
 grep -q "EDITED BY HAND" "${REPO}/arsenal/tasks/lo-a3f8.md" || fail "re-run clobbered an existing task file"
-count=$(find "${REPO}/arsenal/tasks" -name '*.md' -not -name '_*' | wc -l | tr -d ' ')
-[[ "${count}" == "2" ]] || fail "expected 2 task files after re-run, found ${count}"
+count=$(find "${REPO}/arsenal/tasks" -maxdepth 1 -name '*.md' -not -name '_*' | wc -l | tr -d ' ')
+[[ "${count}" == "2" ]] || fail "expected 2 live task files after re-run, found ${count}"
 
 # --- 9: the manual steps a sandbox cannot do are stated, not attempted ---
 out=$(python3 "${MIGRATE_PY}" --repo-root "${REPO}")
 grep -q "delete arsenal-queue" <<<"${out}" || fail "should tell the user to delete the coordination branch"
+
+# --- 10: a dep on completed work resolves, instead of blocking forever ---
+#     The reported failure: terminal rows became prose, so every dep pointing at
+#     finished work read as "unknown", and the selector blocks unknown deps by
+#     design. On a real board 15 of 27 live tasks became permanently
+#     unselectable — the reward for having your prerequisites done.
+REPO2="${tmpdir}/repo2"
+Q2="${REPO2}/claude-arsenal/queue"
+mkdir -p "${Q2}"
+cat > "${Q2}/tasks.jsonl" <<'EOF'
+{"id":"lo-done1","title":"Finished earlier","status":"merged","priority":1,"deps":[],"payload":"lo-done1.md","pr":"https://github.com/o/r/pull/3"}
+{"id":"lo-next1","title":"Ready once its dep is merged","status":"open","priority":9,"deps":[{"id":"lo-done1","type":"blocks"}],"payload":"lo-next1.md"}
+EOF
+cat > "${Q2}/lo-done1.md" <<'EOF'
+# Finished earlier
+
+## Acceptance gate
+```bash
+bash tests/done1_gate.sh
+```
+EOF
+cat > "${Q2}/lo-next1.md" <<'EOF'
+# Ready now
+
+## Acceptance gate
+```bash
+true
+```
+EOF
+
+python3 "${MIGRATE_PY}" --repo-root "${REPO2}" --apply >/dev/null
+out=$(echo '{}' | python3 "${SELECT_PY}" --tasks-dir "${REPO2}/arsenal/tasks" 2>"${tmpdir}/warn.txt")
+id=$(python3 -c 'import sys,json
+line=sys.stdin.readline().strip()
+print(json.loads(line)["id"] if line else "NONE")' <<<"${out}")
+[[ "${id}" == "lo-next1" ]] || fail "a task whose dep is merged must be selectable, got '${id}'"
+grep -q "unknown task" "${tmpdir}/warn.txt" && fail "a dep on migrated-terminal work must not warn as unknown"
+
+# --- 11: the finished task keeps its gate, and is never handed back as work ---
+[[ -f "${REPO2}/arsenal/tasks/_history/lo-done1.md" ]] || fail "terminal task file missing"
+grep -q "bash tests/done1_gate.sh" "${REPO2}/arsenal/tasks/_history/lo-done1.md" \
+    || fail "the finished task's gate was dropped — a re-assertion check would find nothing"
+grep -q "^status: merged" "${REPO2}/arsenal/tasks/_history/lo-done1.md" || fail "no status recorded"
+out=$(echo '{}' | python3 "${SELECT_PY}" --tasks-dir "${REPO2}/arsenal/tasks" --max 9 2>/dev/null)
+grep -q '"id":"lo-done1"' <<<"${out}" && fail "finished work must never be selected again"
 
 echo "PASS: arsenal_migrate_test — all gates passed"
