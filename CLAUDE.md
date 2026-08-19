@@ -118,18 +118,47 @@ Two things now cover it:
   `v<.bundle-version>`, skips if it exists, refuses a version lower than the
   latest tag, mirroring the workflow).
 
-After merging a version bump, **verify the tag exists** (`git ls-remote --tags
-origin 'refs/tags/v*'`) rather than assuming the workflow ran. Consumers cannot
-re-vendor a version that has no tag.
+### Tagging is NOT automatic when Actions is down — ask the user to do it
+
+**After merging any version bump, run `make release-check`.** It asks the remote
+— not the local repo — whether `v<.bundle-version>` is published. Never assume
+the workflow ran.
+
+When it reports `NO TAG`, **a Claude session usually cannot fix it**: the git
+proxy in a cloud session (web, desktop and mobile apps, Claude Tag, routines)
+rejects pushes to `refs/tags/*`, so `make tag` will create the tag locally and
+fail to publish it. Verified, not assumed.
+
+So in that situation the rule is: **stop and ask the user to run it from their
+own machine.** Say it plainly, with the command and the reason:
+
+> `v<version>` is merged but not tagged, and I cannot push tags from this
+> session. Consumers gate updates on the newest remote tag, so until this runs
+> they will keep being told the previous version is current:
+> ```
+> git checkout main && git pull && make tag
+> ```
+
+Do not treat this as a minor loose end and do not let it fall off the end of a
+session — an untagged release looks completely fine from inside this repo while
+being invisible to every consumer of it. That is exactly how `v0.20.4` and
+`v0.21.0` shipped untagged.
+
+Never work around it by editing `check_update.sh`, moving a consumer's pin to a
+branch, or telling the user the release is done. The only fix is a real tag on
+the remote.
 
 Bump rules:
 - **Patch** (`x.y.Z`) — bug fixes, doc corrections, validator tweaks.
 - **Minor** (`x.Y.0`) — new skills, new workflow steps, new hooks, new flags.
 - **Major** (`X.0.0`) — breaking changes to skill interfaces or plugin layout.
 
-PRs that only touch `CLAUDE.md`, `docs/`, CI config, or `pyproject.toml`
-dev tooling may skip the bump. All other PRs must include the bump commit
-or the reviewer should request it before merging.
+PRs that only touch `CLAUDE.md`, `docs/`, CI config, the `Makefile`, or
+`pyproject.toml` dev tooling may skip the bump — none of it is vendored by a
+consumer, which is exactly what the `version bump` CI job checks: it requires a
+bump only when `plugins/*/skills/`, `plugins/*/.claude-plugin/` or
+`.claude-plugin/` changes. All other PRs must include the bump commit, or the
+reviewer should request it before merging.
 
 ---
 
