@@ -1,5 +1,12 @@
 # Orchestrator guide
 
+> **Superseded in part.** The queue described below runs on the `arsenal-queue`
+> coordination branch. That mechanism is being replaced by repo-defined task
+> files with GitHub issue handles and atomic claim refs — see **`docs/queue.md`**
+> for the current model and `docs/design/0001-issues-as-the-queue.md` for why.
+> The worker-dispatch, budget and PR sections below still apply.
+
+
 How to operate the `claude-arsenal` task queue: one **orchestrator** session
 fans out work to many **worker** subagents, each task lands as a reviewable
 PR, and the loop throttles itself before exhausting your token quota.

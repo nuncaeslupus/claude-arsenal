@@ -127,4 +127,44 @@ grep -q 'merge-policy.*always.*config.toml' <<<"${out}" \
 grep -q 'test-discipline.*default' <<<"${out}" \
     || fail "--explain should mark unset keys as default"
 
+# --- 12: state derived from GitHub issues, the way a session actually gets it ---
+cat > "${tmpdir}/issues.json" <<'EOF'
+[
+  {"number": 1, "state": "closed", "state_reason": "completed",
+   "body": "Task\n\n<!-- arsenal-task: t-aaaa1111 -->", "labels": [{"name": "arsenal:task"}]},
+  {"number": 2, "state": "open",
+   "body": "<!-- arsenal-task: t-bbbb2222 -->", "labels": [{"name": "arsenal:task"}]},
+  {"number": 3, "state": "open",
+   "body": "an ordinary issue somebody filed, no marker", "labels": []}
+]
+EOF
+out=$(python3 "${SELECT_PY}" --tasks-dir "${TASKS}" --issues "${tmpdir}/issues.json" 2>/dev/null)
+id=$(python3 -c 'import sys,json;print(json.loads(sys.stdin.readline())["id"])' <<<"${out}")
+[[ "${id}" == "t-bbbb2222" ]] || fail "issue-derived state should unblock the dependent, got '${id}'"
+
+# --- 13: an issue closed by hand (not completed) must NOT unblock dependents ---
+cat > "${tmpdir}/issues-notplanned.json" <<'EOF'
+[
+  {"number": 1, "state": "closed", "state_reason": "not_planned",
+   "body": "<!-- arsenal-task: t-aaaa1111 -->", "labels": [{"name": "arsenal:task"}]}
+]
+EOF
+out=$(python3 "${SELECT_PY}" --tasks-dir "${TASKS}" --issues "${tmpdir}/issues-notplanned.json" --max 9 2>/dev/null)
+grep -q 't-bbbb2222' <<<"${out}" && fail "a not_planned close must not unblock dependents"
+
+# --- 14: a claimed issue is not offered, so two agents do not both pick it ---
+cat > "${tmpdir}/issues-claimed.json" <<'EOF'
+[
+  {"number": 1, "state": "open", "body": "<!-- arsenal-task: t-aaaa1111 -->",
+   "labels": [{"name": "arsenal:task"}, {"name": "arsenal:claimed"}]}
+]
+EOF
+out=$(python3 "${SELECT_PY}" --tasks-dir "${TASKS}" --issues "${tmpdir}/issues-claimed.json" --max 9 2>/dev/null)
+grep -q 't-aaaa1111' <<<"${out}" && fail "a claimed issue must not be selected"
+
+# --- 15: issues without the marker are ignored entirely ---
+#         (this is what keeps ordinary user-filed issues out of the queue)
+out=$(python3 "${SELECT_PY}" --tasks-dir "${TASKS}" --issues "${tmpdir}/issues.json" --max 9 2>/dev/null)
+grep -q '"number"' <<<"${out}" && fail "selector must emit tasks, never raw issues"
+
 echo "PASS: task_select_test — all gates passed"

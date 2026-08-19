@@ -39,8 +39,48 @@ from typing import Any
 
 FRONT_MATTER_RE = re.compile(r"\A---\r?\n(.*?)\r?\n---\r?\n", re.DOTALL)
 GATE_BLOCK_RE = re.compile(r"^[ \t]*```bash\b", re.MULTILINE)
+# The marker an issue carries to say which task file it is a handle for. Kept
+# in the issue body rather than the task file so a task file never has to be
+# rewritten to learn its issue number.
+TASK_MARKER_RE = re.compile(r"<!--\s*arsenal-task:\s*([A-Za-z0-9._-]+)\s*-->")
 
 TERMINAL = {"done", "merged"}
+
+
+def state_from_issues(
+    issues: list[dict[str, Any]], *, claimed_label: str = "arsenal:claimed"
+) -> dict[str, str]:
+    """Derive the task state map from GitHub issues.
+
+    Deliberately pure: the caller fetches the issues with whatever GitHub
+    channel its surface offers, and this turns them into the small map the
+    selector needs. That split is what lets one script call answer "what
+    next", instead of a protocol the model walks step by step.
+
+    A task is `done` only when its issue was closed **as completed**. An issue
+    closed by hand, or as not-planned, leaves the task blocked rather than
+    unblocking everything downstream — a stray close should not release work
+    that was never actually done.
+    """
+    state: dict[str, str] = {}
+    for issue in issues:
+        body = issue.get("body") or ""
+        marker = TASK_MARKER_RE.search(body)
+        if not marker:
+            continue
+        task_id = marker.group(1)
+        labels = {
+            label["name"] if isinstance(label, dict) else str(label)
+            for label in (issue.get("labels") or [])
+        }
+        if str(issue.get("state", "")).lower() == "closed":
+            reason = str(issue.get("state_reason") or "completed").lower()
+            state[task_id] = "done" if reason == "completed" else "cancelled"
+        elif claimed_label in labels or issue.get("assignee") or issue.get("assignees"):
+            state[task_id] = "claimed"
+        else:
+            state[task_id] = "open"
+    return state
 
 
 def _parse_scalar(raw: str) -> Any:
@@ -180,6 +220,12 @@ def main(argv: list[str] | None = None) -> int:
         "--state", type=Path, help="JSON file of {task_id: state}; omit to read stdin"
     )
     parser.add_argument(
+        "--issues",
+        type=Path,
+        help="JSON array of GitHub issues (as your GitHub tools return them); "
+        "state is derived from them, so no --state is needed",
+    )
+    parser.add_argument(
         "--capability", action="append", default=[], help="repeatable, e.g. surface:cli"
     )
     parser.add_argument("--workspace")
@@ -190,16 +236,29 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    raw_state = ""
-    if args.state:
-        raw_state = args.state.read_text(encoding="utf-8")
-    elif not sys.stdin.isatty():
-        raw_state = sys.stdin.read()
-    try:
-        state: dict[str, str] = json.loads(raw_state) if raw_state.strip() else {}
-    except json.JSONDecodeError as exc:
-        print(f"task_select: --state is not valid JSON — {exc}", file=sys.stderr)
-        return 2
+    state: dict[str, str] = {}
+    if args.issues:
+        try:
+            payload = json.loads(args.issues.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            print(f"task_select: --issues is not valid JSON — {exc}", file=sys.stderr)
+            return 2
+        # Accept either a bare array or the {"issues": [...]} envelope some
+        # GitHub tools wrap results in, so the caller can save what it got.
+        if isinstance(payload, dict):
+            payload = payload.get("issues", [])
+        state = state_from_issues([i for i in payload if isinstance(i, dict)])
+    else:
+        raw_state = ""
+        if args.state:
+            raw_state = args.state.read_text(encoding="utf-8")
+        elif not sys.stdin.isatty():
+            raw_state = sys.stdin.read()
+        try:
+            state = json.loads(raw_state) if raw_state.strip() else {}
+        except json.JSONDecodeError as exc:
+            print(f"task_select: --state is not valid JSON — {exc}", file=sys.stderr)
+            return 2
 
     tasks, warnings = load_tasks(args.tasks_dir)
 
