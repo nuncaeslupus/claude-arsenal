@@ -1,6 +1,6 @@
 # Design 0001 — Repo-defined tasks, issue handles, atomic claims
 
-**Status:** Proposed (revision 3) — awaiting decision before implementation
+**Status:** Proposed (revision 4) — awaiting decision before implementation
 **Supersedes:** the `arsenal-queue` coordination branch (`AGENTS.md` § *Queue coordination branch*)
 **Addresses:** #137, #139, #142, #143, #144, #145, #146
 
@@ -8,9 +8,14 @@
 > Issues and host state into a hidden `.arsenal/`; measurement and the
 > maintainer's requirements ruled both out. Rev 2 kept tasks in the repo but
 > claimed them with an ordered-comment "bakery" lock, which was not atomic. Rev 3
-> replaces that with a real compare-and-swap — `POST /git/refs` returns 422 when
-> the ref exists — and settles the vendoring question by experiment (§ 6). The
-> conclusion that has held throughout: the coordination branch has to go.
+> replaced that with a real compare-and-swap — `POST /git/refs` returns 422 when
+> the ref exists — and settled the vendoring question by experiment (§ 6). Rev 4
+> answers four questions rev 3 left implicit: which commit the DAG is read from
+> and how a task file finds its issue (§ 3.1), how agents identify themselves
+> (§ 3.3), and why merging a PR now updates the queue by itself (§ 3.4). It also
+> retracts an overclaim: there *is* one small, one-directional sync step, and
+> § 3.1 says so. The conclusion that has held throughout: the coordination
+> branch has to go.
 
 ---
 
@@ -137,6 +142,44 @@ the PR that adds the task, and readable with no network. Ordering is a pure
 function over that set plus the claim state, so **"take tasks in order" never
 depends on a network call being available**, only on which tasks are claimed.
 
+**Which version of the repo?** Always the **default branch**, fetched at session
+start — never the session's own working branch. Every agent therefore computes
+the identical DAG no matter what branch it happens to be on. A task is not part
+of the graph until its file is merged, which is the same rule as any other
+change to the project.
+
+**How a task file finds its issue.** The issue body carries a marker:
+
+```
+<!-- arsenal-task: T-0042 -->
+```
+
+Scanning the `arsenal:task` issues yields the whole task-id → issue-number map,
+so nothing has to be written back into the task file. That matters: the file
+stays pure project content, and there is no chicken-and-egg between "create the
+issue to learn its number" and "commit the file that stores it".
+
+**The one sync step, stated honestly.** A task file merged to the default branch
+with no issue yet is invisible work. So there *is* a reconcile — "for every task
+file without an `arsenal:task` issue, create one" — and earlier revisions of this
+document oversold "no sync at all". The difference from `queue_sync.sh` is what
+it does: this one is **one-directional** (files → issues) and **idempotent**,
+creating a missing handle and nothing else. It never reconciles *state* in two
+directions, which is where the old script's conflicts and path-traversal bug
+(#139) came from. If it fails to run, work is delayed, never corrupted.
+
+**Why not put the deps in the issues instead?** It is the obvious alternative and
+it does remove the mapping entirely — `Depends: #123` in the issue body, or
+native sub-issues. It is rejected because it moves the dependency graph out of
+the project: it stops being versioned, stops being reviewable in the PR that
+introduces it, and stops being readable offline. That is requirement 5. The
+issue may still *mirror* the deps as `#`-references so GitHub renders the links,
+but the files remain authoritative.
+
+**Blocked means "closed as completed by a merged PR"** — not merely "closed". An
+issue closed by hand, or as not-planned, must not unblock its dependents, or a
+stray close silently releases work that was never done.
+
 This is also why there is no `queue_sync.sh` any more. Tasks arrive the way every
 other file arrives: on a branch, through a PR, onto the default branch. There is
 no second copy on a coordination branch to reconcile against.
@@ -211,6 +254,26 @@ verified), so a claim ref is not released — it is superseded. Attempt *n* clai
 `arsenal/claims/T-0042.a<n>`, bounded by the task's `max-attempts`. A crashed
 session therefore blocks nothing: the next attempt takes the next ref.
 
+**Agent identity.** The claim is recorded on the issue as a comment naming the
+session, so a human can always see *which* agent holds a task and open it:
+
+```
+Claimed by session cse_01VXiATzWWmYhFYV6ZqXpG18
+https://claude.ai/code/cse_01VXiATzWWmYhFYV6ZqXpG18
+```
+
+The identifier resolves in this order: `CLAUDE_CODE_REMOTE_SESSION_ID` (a
+`cse_…` id that is also a session URL, so the claim is clickable), then
+`CLAUDE_CODE_SESSION_ID` (a local session uuid), then a hard failure.
+
+**There is no `CLAUDE_SESSION_ID`, and the current code depends on it.**
+`claim.sh:24` reads `${CLAUDE_SESSION_ID:-"session-$$"}`; that variable is not
+set on this surface — verified — so every claim today is attributed to a
+**process id**. That is why the ledger carries meaningless assignees and why
+`queue_doctor` needs a "crashed claim (no assignee)" check. Falling back to `$$`
+must be removed rather than carried over: an identifier that does not identify
+anything is worse than refusing to claim.
+
 **The cost, stated plainly.** Claim refs accumulate — roughly one per task ever
 claimed, grouped under `arsenal/claims/` so they collapse in GitHub's branch
 UI. They can be pruned from a CLI session or a scheduled job, never from a cloud
@@ -228,7 +291,31 @@ on:
     branches-ignore: ['arsenal/**']
 ```
 
-### 3.4 The public-repo concern is withdrawn
+### 3.4 Completion is a property of merging
+
+This is the failure the current design has that nothing else fixes: **merging a
+PR and updating the queue are two separate acts, and the second gets forgotten.**
+`release.sh` has to be run, `reconcile_merged.sh` has to be run, and on cloud
+sessions `reconcile_merged.sh` cannot run at all because it is `gh`-gated (§ 2).
+
+With an issue handle, the PR body carries `Closes #N` and **GitHub closes the
+issue itself when the PR merges**. There is no second act to forget. That single
+property removes `release.sh`'s status bookkeeping, `reconcile_merged.sh`
+entirely, and the whole false-`done` class of bug (#137) — a task cannot be
+recorded complete without a real merged PR, because the recording *is* the merge.
+
+Two caveats that must be documented, or this quietly does not work:
+
+1. **Only into the default branch.** GitHub closes linked issues when the PR
+   merges into the repository's *default* branch. A PR merged into some other
+   base does not close anything.
+2. **Stacked PRs need the keyword in the commit message.** This repo's own
+   `CLAUDE.md` mandates stacking for multi-PR work, where intermediate PRs target
+   the previous branch rather than `main`. For those, a `Closes #N` in the *PR
+   body* never fires. Put it in the **commit message**, which closes the issue
+   when that commit finally lands on the default branch.
+
+### 3.5 The public-repo concern is withdrawn
 
 Revision 1 raised it because *task content* was moving into issues: on a public
 repo, private ledger rows would have become public. Under this design the issue
@@ -236,7 +323,7 @@ is a stub — a title, a pointer to the task file, and a label. The content it
 points at is already in the repository, at the same visibility. Nothing is
 exposed that was not exposed before. Disregard that open question.
 
-### 3.5 Layout
+### 3.6 Layout
 
 ```
 arsenal/                 # host-owned. Project content: visible, versioned, yours
@@ -254,7 +341,7 @@ Upstream owns `.claude/skills/` and may overwrite it freely; it scaffolds
 the vendored prefix contains only upstream content — reached without hiding the
 consumer's own work.
 
-### 3.6 Configuration that survives updates
+### 3.7 Configuration that survives updates
 
 Everything a consumer can tune lives in `arsenal/config.toml`, which upstream
 never rewrites. Skills read it; nobody edits a skill to configure behaviour.
@@ -318,7 +405,7 @@ Yes, and it has a concrete bug.
    Projects v2 is GraphQL-only: "Claude can't reach GitHub APIs that exist only
    in GraphQL, such as Projects v2, through the proxy." The flag currently
    promises something unreachable on half the surfaces.
-3. **It owns `merge-policy`** (§ 3.6) — reading it, and refusing to merge beyond
+3. **It owns `merge-policy`** (§ 3.7) — reading it, and refusing to merge beyond
    what the consumer authorised.
 
 ---
@@ -396,3 +483,7 @@ shows the branch machinery was accidental complexity, not a requirement.
 5. **Delete** the coordination-branch machinery and its tests.
 6. **Harden vendoring** — reject a `.claude/skills/` subdirectory with no
    top-level `SKILL.md`, per § 6.
+
+Two fixes worth pulling forward into stage 2, because they are live bugs rather
+than design work: the `CLAUDE_SESSION_ID` fallback to `$$` (§ 3.3), and the
+`gh`-gated steps that silently no-op on cloud sessions (§ 5).
