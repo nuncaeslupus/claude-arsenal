@@ -1,6 +1,6 @@
 # Claude Arsenal
 
-<!-- claude-arsenal v0.28.0 — imported via @claude-arsenal/AGENTS.md -->
+<!-- claude-arsenal v0.29.0 — imported via @claude-arsenal/AGENTS.md -->
 
 This file is imported by the host repo's `CLAUDE.md` via the session-protocol block
 that `/init` injects. It provides the mechanics behind the proactive directives
@@ -13,11 +13,17 @@ in that block: queue seeding, worker dispatch, credit guards, and state layout.
 At the start of every session (fresh start, context compaction, or cold restart):
 
 0. **Refresh the bundle**:
-   a. If `claude-arsenal/bin/check_update.sh` exists, run it. It reports being
-      current, a missing `arsenal` remote, a bundle ahead of the newest tag, and —
-      the one that has bitten consumers — an `UNTAGGED UPSTREAM RELEASE`, where
-      upstream's default branch ships a version whose tag was never pushed. Surface
-      any of those; the fix for an untagged release is upstream (`make tag`), not here.
+   a. If `claude-arsenal/bin/check_update.sh` exists, run it **with
+      `--check-only`**. It reports being current, a missing `arsenal` remote, a
+      bundle ahead of the newest tag, an `UPDATE AVAILABLE`, and — the one that has
+      bitten consumers — an `UNTAGGED UPSTREAM RELEASE`, where upstream's default
+      branch ships a version whose tag was never pushed. Surface any of those; the
+      fix for an untagged release is upstream (`make tag`), not here.
+
+      `--check-only` matters: without it the script merges the new subtree and
+      commits. That is a history-writing side effect from a step described as a
+      report, and it lands in the same main working tree the worker loop requires
+      to be clean. Pull the update deliberately, not as a side effect of reading.
    b. Run `python3 .claude/skills/init/scripts/init.py --repo-path . --silent` to
       refresh any stale bundle script. Report anything it refreshes. Skip (a) and (b)
       when that script is not present.

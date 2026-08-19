@@ -32,21 +32,23 @@ for old in claim.sh release.sh queue_eval.sh queue_batch.sh; do
 done
 printf '#!/usr/bin/env python3\n' > "${REPO}/claude-arsenal/scripts/queue_doctor.py"
 
-cat > "${REPO}/CLAUDE.md" <<'EOF'
-# My project
+# The legacy block is DERIVED from what init.py itself writes, minus the end
+# marker that older releases had no concept of. A hand-written stub was what let
+# a corruption bug ship: the real block mentions `@claude-arsenal/AGENTS.md`
+# inline in step 4 as well as standalone at the end, and a fixture that omitted
+# the inline mention could not exercise the case that broke.
+legacy_block=$(python3 -c "
+import importlib.util
+s = importlib.util.spec_from_file_location('m', '${INIT_PY}')
+m = importlib.util.module_from_spec(s); s.loader.exec_module(m)
+print(m.CLAUDE_MD_BLOCK.replace(m.CLAUDE_MD_END_MARKER, '').rstrip())
+") || fail "could not derive the legacy block from init.py"
 
-Host-owned notes that must survive.
-
-<!-- claude-arsenal: auto-managed -->
-## Automatic session protocol
-
-1. Read `claude-arsenal/session/handover.md` for last session activity.
-2. Run `claude-arsenal/bin/queue_eval.sh`.
-
-@claude-arsenal/AGENTS.md
-
-More host-owned content below the block.
-EOF
+{
+    printf '# My project\n\nHost-owned notes that must survive.\n\n'
+    printf '%s\n' "${legacy_block}"
+    printf '\nMore host-owned content below the block.\n'
+} > "${REPO}/CLAUDE.md"
 
 python3 "${INIT_PY}" --repo-path "${REPO}" --bundle-dir "${BUNDLE}" >"${tmpdir}/out.txt" 2>&1 \
     || fail "init.py failed: $(cat "${tmpdir}/out.txt")"
@@ -60,6 +62,20 @@ grep -q 'arsenal/session/handover.md' "${REPO}/CLAUDE.md" || fail "handover path
 grep -q 'Host-owned notes that must survive' "${REPO}/CLAUDE.md" || fail "content above the block was lost"
 grep -q 'More host-owned content below the block' "${REPO}/CLAUDE.md" \
     || fail "content below the block was eaten — the legacy tail match ran too far"
+
+# --- 2b: and the opposite failure — a tail match that stops too EARLY ---
+#     `@claude-arsenal/AGENTS.md` appears inline inside step 4 as well as
+#     standalone at the end. Matching the first occurrence cut the block in half
+#     and stranded steps 5 and 6 below the closing marker, where they read as
+#     host content and were duplicated on the next upgrade.
+for step in '5\. Open each task' '6\. After any session'; do
+    n=$(grep -c "^${step}" "${REPO}/CLAUDE.md")
+    [[ "${n}" -eq 1 ]] || fail "protocol step matching /${step}/ appears ${n} times — the block was duplicated into host content"
+done
+n=$(grep -c '^@claude-arsenal/AGENTS.md$' "${REPO}/CLAUDE.md")
+[[ "${n}" -eq 1 ]] || fail "the AGENTS.md import appears ${n} times after the upgrade"
+n=$(grep -c 'claude-arsenal: auto-managed' "${REPO}/CLAUDE.md")
+[[ "${n}" -eq 2 ]] || fail "expected exactly one open+close marker pair, found ${n} marker lines"
 
 # --- 3: retired scripts are gone, current ones are present ---
 for gone in claim.sh release.sh queue_eval.sh queue_batch.sh; do

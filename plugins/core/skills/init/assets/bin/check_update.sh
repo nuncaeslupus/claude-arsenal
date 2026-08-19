@@ -27,7 +27,13 @@
 #
 # Env overrides (all optional):
 #   ARSENAL_REMOTE   git remote name pointing to claude-arsenal (default: arsenal)
-#   ARSENAL_PREFIX   git subtree prefix used when the subtree was added (default: claude-arsenal)
+#   ARSENAL_PREFIX   git subtree prefix used when the subtree was ADDED (default: claude-arsenal)
+#   ARSENAL_BUNDLE_DIR  where the ASSEMBLED bundle lives, holding .bundle-version
+#                    (default: ARSENAL_PREFIX). These are the same directory in a
+#                    plain install and different ones when the subtree is
+#                    vendored whole (say at vendor/claude-arsenal/) and the
+#                    bundle assembled out of it — a layout with no single value
+#                    that could satisfy both readings.
 #   ARSENAL_UPSTREAM_VERSION_PATH  path of .bundle-version inside the marketplace
 #                    repo, for the untagged-release probe
 #
@@ -35,9 +41,27 @@
 
 set -euo pipefail
 
+# `--check-only` reports and changes nothing. The session-start protocol
+# documents this script as reporting status, but the happy path performs a
+# subtree merge and commits — a history-writing side effect from a step
+# described as a read, landing in the very working tree the worker loop
+# requires to be clean.
+CHECK_ONLY=0
+for arg in "$@"; do
+    case "${arg}" in
+        --check-only) CHECK_ONLY=1 ;;
+        *) echo "check_update.sh: unknown argument '${arg}'" >&2; exit 0 ;;
+    esac
+done
+
 REMOTE="${ARSENAL_REMOTE:-arsenal}"
+# Two different paths that a single variable used to conflate. `PREFIX` is what
+# `git subtree merge --prefix` needs; `BUNDLE_DIR` is where the assembled bundle
+# records its version. Defaulting one to the other keeps every single-directory
+# install behaving exactly as before.
 PREFIX="${ARSENAL_PREFIX:-claude-arsenal}"
-VERSION_FILE="${PREFIX}/.bundle-version"
+BUNDLE_DIR="${ARSENAL_BUNDLE_DIR:-${PREFIX}}"
+VERSION_FILE="${BUNDLE_DIR}/.bundle-version"
 UPSTREAM_VERSION_PATH="${ARSENAL_UPSTREAM_VERSION_PATH:-plugins/core/skills/init/assets/.bundle-version}"
 
 _warn() { echo "check_update.sh: $*" >&2; }
@@ -147,6 +171,13 @@ if ! _semver_gt "${latest}" "${installed}"; then
     exit 0
 fi
 
+_manual_hint="git fetch ${REMOTE} refs/tags/v${latest}:refs/tags/v${latest} && git subtree merge --prefix=${PREFIX} \"v${latest}^{commit}\" --squash"
+if [[ ${CHECK_ONLY} -eq 1 ]]; then
+    echo "claude-arsenal: installed=v${installed}, latest=v${latest} — UPDATE AVAILABLE"
+    echo "  run without --check-only, or: ${_manual_hint}"
+    exit 0
+fi
+
 echo "claude-arsenal: installed=v${installed}, latest=v${latest} — pulling update…"
 
 # Ensure the working tree is clean before the subtree update
@@ -160,6 +191,14 @@ fi
 # bundle matches the version the latest-tag check gated on. Fetch the tag ref
 # explicitly first — this creates the local tag and sidesteps `git subtree` not
 # dereferencing annotated tags — then merge its dereferenced commit.
+# A prefix that was never added as a subtree cannot be merged into, and no retry
+# fixes it. Saying so beats a `fatal:` that reads like a transient failure and a
+# manual command carrying the same wrong prefix.
+if ! git log --grep="git-subtree-dir: ${PREFIX}\(/\)\?$" --max-count=1 --format=%H 2>/dev/null | grep -q .; then
+    _warn "'${PREFIX}' was never added as a git subtree, so it cannot be updated by merge. If the subtree lives elsewhere, set ARSENAL_PREFIX to it (and ARSENAL_BUNDLE_DIR to where .bundle-version is)."
+    exit 0
+fi
+
 if ! git fetch "${REMOTE}" "refs/tags/v${latest}:refs/tags/v${latest}" 2>&1 \
     || ! git subtree merge --prefix="${PREFIX}" "v${latest}^{commit}" --squash \
         -m "chore: update claude-arsenal to v${latest}" 2>&1; then
