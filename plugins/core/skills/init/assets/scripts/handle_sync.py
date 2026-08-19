@@ -32,17 +32,13 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from task_select import TASK_MARKER_RE, load_tasks
+from task_select import load_tasks, task_id_from_issue
 
 
 def missing_handles(
     tasks: list[dict[str, Any]], issues: list[dict[str, Any]], *, label: str
 ) -> list[dict[str, Any]]:
-    handled = {
-        match.group(1)
-        for issue in issues
-        if (match := TASK_MARKER_RE.search(issue.get("body") or ""))
-    }
+    handled = {task_id for issue in issues if (task_id := task_id_from_issue(issue))}
     out: list[dict[str, Any]] = []
     for task in tasks:
         if task["id"] in handled:

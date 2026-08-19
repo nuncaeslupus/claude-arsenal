@@ -36,7 +36,7 @@ python3 "${CLAUDE_SKILL_DIR}/scripts/new_task.py" \
 
 It prints the new task id on stdout and, on stderr, the exact issue to open. Create that
 issue with whatever GitHub access this surface offers — the built-in GitHub tools, `gh`,
-or the REST API — with the `arsenal:task` label and the `<!-- arsenal-task: <id> -->` marker in the
+or the REST API — with the `arsenal:task` label and a visible `` `arsenal-task: <id>` `` line in the
 body. **The marker is what links issue to task**; without it the task is invisible to the
 selector, and without the label the issue is never treated as claimable work.
 
