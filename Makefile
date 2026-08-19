@@ -42,17 +42,27 @@ endif
 audit-rule-drift:  ## diff rule IDs in references/skill-rules.md vs docs/research/claude-skill-system_v1.17.md
 	uv run python $(AUDIT_DRIFT)
 
-tag:  ## create+push v<.bundle-version> tag from HEAD if missing — manual fallback for tag-release.yml
+tag:  ## publish v<.bundle-version> as a remote tag from HEAD — manual fallback for tag-release.yml
 	@v=$$(tr -d '[:space:]' < plugins/core/skills/init/assets/.bundle-version); t="v$$v"; \
 	if [ -z "$$v" ]; then echo "make tag: .bundle-version is empty" >&2; exit 1; fi; \
-	git fetch --tags --quiet; \
-	if git ls-remote --exit-code --tags origin "refs/tags/$$t" >/dev/null 2>&1; then \
-		echo "make tag: $$t already published — nothing to release"; \
-	else latest=$$(git tag -l 'v*.*.*' --sort=v:refname | tail -1 | sed 's/^v//'); \
-		if [ -n "$$latest" ] && ! python3 -c "import sys; p=lambda x: list(map(int, x.split('.'))); sys.exit(0 if p(sys.argv[1]) >= p(sys.argv[2]) else 1)" "$$v" "$$latest"; then \
-			echo "make tag: $$t is lower than latest v$$latest — refusing" >&2; exit 1; fi; \
-		git rev-parse "$$t" >/dev/null 2>&1 || git tag -a "$$t" -m "Release $$t"; \
-		git push origin "$$t" && echo "make tag: published $$t"; fi
+	git fetch --tags --quiet 2>/dev/null || true; \
+	git ls-remote --exit-code --tags origin "refs/tags/$$t" >/dev/null 2>&1; s=$$?; \
+	if [ $$s -eq 0 ]; then echo "make tag: $$t already published — nothing to release"; exit 0; fi; \
+	if [ $$s -ne 2 ]; then \
+		echo "make tag: could not query origin (git ls-remote exit $$s) — refusing to guess" >&2; exit 1; fi; \
+	latest=$$(git tag -l 'v*.*.*' --sort=v:refname | tail -1 | sed 's/^v//'); \
+	if [ -n "$$latest" ] && ! python3 -c "import sys; p=lambda x: list(map(int, x.split('.'))); sys.exit(0 if p(sys.argv[1]) >= p(sys.argv[2]) else 1)" "$$v" "$$latest"; then \
+		echo "make tag: $$t is lower than latest v$$latest — refusing" >&2; exit 1; fi; \
+	if git rev-parse --verify --quiet "refs/tags/$$t" >/dev/null 2>&1; then \
+		have=$$(git rev-parse "refs/tags/$$t^{commit}"); want=$$(git rev-parse "HEAD^{commit}"); \
+		if [ "$$have" != "$$want" ]; then \
+			echo "make tag: local tag $$t points at $$have, but HEAD is $$want." >&2; \
+			echo "  Publishing it would ship that commit to every consumer, since they fetch the" >&2; \
+			echo "  exact commit the tag names. Delete it (git tag -d $$t) and re-run from the" >&2; \
+			echo "  commit you mean to release." >&2; exit 1; fi; \
+		echo "make tag: reusing local $$t (a previous push did not reach origin)"; \
+	else git tag -a "$$t" -m "Release $$t"; fi; \
+	git push origin "refs/tags/$$t:refs/tags/$$t" && echo "make tag: published $$t"
 
 bump:  ## bump .bundle-version (LEVEL=patch|minor|major, default patch) and sync every derived copy
 	@level="$${LEVEL:-patch}"; vfile=plugins/core/skills/init/assets/.bundle-version; \
@@ -64,11 +74,17 @@ bump:  ## bump .bundle-version (LEVEL=patch|minor|major, default patch) and sync
 
 release-check:  ## verify the released version is published as a REMOTE tag — run after merging to main
 	@v=$$(tr -d '[:space:]' < plugins/core/skills/init/assets/.bundle-version); \
-	if git ls-remote --exit-code --tags origin "refs/tags/v$$v" >/dev/null 2>&1; then \
-		echo "release-check: v$$v is published — consumers can fetch it."; \
-	else echo "release-check: v$$v has NO TAG."; \
-	     echo "  Consumers gate updates on the newest tag, so an untagged release is invisible to them"; \
-	     echo "  and they keep being told the previous version is current. Run: make tag"; exit 1; fi
+	git ls-remote --exit-code --tags origin "refs/tags/v$$v" >/dev/null 2>&1; s=$$?; \
+	if [ $$s -eq 0 ]; then echo "release-check: v$$v is published — consumers can fetch it."; \
+	elif [ $$s -eq 2 ]; then \
+		echo "release-check: v$$v has NO TAG."; \
+		echo "  Consumers gate updates on the newest tag, so an untagged release is invisible to them"; \
+		echo "  and they keep being told the previous version is current. Run: make tag"; exit 1; \
+	else \
+		echo "release-check: could not query origin (git ls-remote exit $$s)." >&2; \
+		echo "  This says nothing about whether v$$v is published — it is a connectivity," >&2; \
+		echo "  credential, or remote-configuration problem. Fix that and re-run; do not run" >&2; \
+		echo "  'make tag' on the strength of this result." >&2; exit 2; fi
 
 sync-version:  ## write the canonical .bundle-version into both plugin manifests + AGENTS.md
 	uv run python scripts/sync_version.py

@@ -127,9 +127,12 @@ Bump rules:
 - **Minor** (`x.Y.0`) — new skills, new workflow steps, new hooks, new flags.
 - **Major** (`X.0.0`) — breaking changes to skill interfaces or plugin layout.
 
-PRs that only touch `CLAUDE.md`, `docs/`, CI config, or `pyproject.toml`
-dev tooling may skip the bump. All other PRs must include the bump commit
-or the reviewer should request it before merging.
+PRs that only touch `CLAUDE.md`, `docs/`, CI config, the `Makefile`, or
+`pyproject.toml` dev tooling may skip the bump — none of it is vendored by a
+consumer, which is exactly what the `version bump` CI job checks: it requires a
+bump only when `plugins/*/skills/`, `plugins/*/.claude-plugin/` or
+`.claude-plugin/` changes. All other PRs must include the bump commit, or the
+reviewer should request it before merging.
 
 ---
 
