@@ -95,4 +95,22 @@ else
     echo "SKIP: audit_library.py or uv unavailable — listing-budget gate not run" >&2
 fi
 
+# Gate 5 (#186): the title written into the task file is the real title, not
+# how the transport spelled it. The GitHub MCP tools HTML-escape `<`, `>` and
+# `&` in `title`, and `json.dumps` escapes every non-ASCII character — bake
+# either into the file and the task's title no longer equals its issue's, which
+# is exactly what stopped the bodyless board resolving.
+fresh="${tmp}/tasks2"
+mkdir -p "${fresh}"
+cat > "${tmp}/issues-spelling.json" <<'JSON'
+[{"number": 60, "state": "open", "labels": [{"name": "arsenal:queue"}],
+  "html_url": "https://example/60", "body": "x",
+  "title": "T42: annotations/&lt;offer_id&gt;.json &amp; \u20ac/month"}]
+JSON
+python3 "${IMPORT}" --issues "${tmp}/issues-spelling.json" --tasks-dir "${fresh}" --apply >/dev/null
+written=$(cat "${fresh}"/*.md)
+grep -q 'title: "T42: annotations/<offer_id>.json & €/month"' <<<"${written}" \
+    || fail "the imported title must hold the real characters: ${written}"
+echo "PASS: an imported title is stored as written, not as the transport spelled it"
+
 echo "PASS: issue_import_test — all gates passed"

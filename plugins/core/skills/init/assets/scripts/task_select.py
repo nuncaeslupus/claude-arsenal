@@ -37,6 +37,7 @@ Exit: 0 always (an empty selection is an answer, not an error).
 from __future__ import annotations
 
 import argparse
+import html
 import json
 import os
 import re
@@ -72,8 +73,37 @@ TASK_PATH_RE = re.compile(
 
 
 def normalise_title(text: str) -> str:
-    """Fold a title to the form two sources can be compared on."""
-    return re.sub(r"\s+", " ", str(text)).strip().casefold()
+    """Fold a title to the form two sources can be compared on.
+
+    The unescape is the whole reason this is more than a `.split()`: the two
+    sources do not spell the same title the same way. The MCP `list_issues`
+    tool a cloud session fetches its board with HTML-escapes `<`, `>` and `&`
+    in the `title` field it returns, so a task file holding
+    `annotations/<offer_id>.json` comes back as
+    `annotations/&lt;offer_id&gt;.json`, and the two never compare equal. It
+    is the same sanitizer `TASK_MARKER_RE` above already accounts for — it
+    escapes titles where it strips bodies — and the title fallback walked
+    straight into it.
+
+    `html.unescape` is idempotent on text that carries no entities, so it is
+    safe on both sides and costs nothing on the common path.
+    """
+    return re.sub(r"\s+", " ", html.unescape(str(text))).strip().casefold()
+
+
+def loose_title_key(text: str) -> str:
+    """A deliberately lossy fold, for asking *could* these be the same title.
+
+    Never for attributing state — only for refusing to act. `normalise_title`
+    is the identity comparison and it is conservative on purpose; this one
+    drops angle-bracketed spans (a sanitizer may remove them outright rather
+    than escape them) and every non-alphanumeric character, so it says yes to
+    pairs that differ only in punctuation. That is far too coarse to mark a
+    task done on, and exactly right for `handle_sync.py` deciding whether an
+    unresolved issue might already be the handle it was about to duplicate.
+    """
+    stripped = re.sub(r"<[^>]*>", " ", html.unescape(str(text)))
+    return re.sub(r"[^0-9a-z]+", "", stripped.casefold())
 
 
 def title_index(tasks: list[dict[str, Any]]) -> dict[str, str | None]:
@@ -233,6 +263,21 @@ def _parse_scalar(raw: str) -> Any:
     all a task file needs, and depending on PyYAML would break consumers who
     run these scripts with a bare `python3` and no site-packages."""
     text = raw.strip()
+    if len(text) >= 2 and text[0] == '"' == text[-1]:
+        # A double-quoted scalar carries escapes, and arsenal's own writers put
+        # them there: `issue_import.py` and `arsenal_migrate.py` render a title
+        # with `json.dumps`, whose default `ensure_ascii` spells a euro sign
+        # `\u20ac`. Returning the quoted text verbatim left the task's title as
+        # those six literal characters while its issue carried the real one —
+        # invisible until the title fallback compared the two. A real YAML
+        # parser decodes here, so this does too; a scalar that is not valid
+        # JSON (a lone backslash, a Windows path) falls back to the literal
+        # reading rather than failing the whole file.
+        try:
+            decoded = json.loads(text)
+        except ValueError:
+            return text[1:-1]
+        return decoded if isinstance(decoded, str) else text[1:-1]
     if text.startswith(("'", '"')) and text.endswith(("'", '"')) and len(text) >= 2:
         return text[1:-1]
     if text.lower() in {"true", "false"}:
