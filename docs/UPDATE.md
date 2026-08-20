@@ -16,7 +16,11 @@ merging, opening issue handles for new task files, and sweeping claims left by
 crashed sessions. `/init` prints what it installed and which permissions it asks
 GitHub for, and never overwrites a copy you have edited.
 
-Delete it to opt out. Merging still completes a task without it, because
+Delete it to opt out — `/init` records that choice as `queue-automation = false`
+in `arsenal/config.toml` and never reinstalls it (the session-start protocol runs
+`init --silent` every session, so a file-only check would undo the deletion on
+every start). Set the key back to `true` to restore it. Merging still completes a
+task without the workflow, because
 `open_task_pr.sh` now writes `Closes #<issue>` and archives the task file inside
 the PR — what is lost is the cleanup that happens when no session is running.
 

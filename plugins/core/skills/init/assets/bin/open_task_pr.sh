@@ -267,16 +267,32 @@ fi
 _archive_task_file() {
     local live="${ARSENAL_HOME}/tasks/${TASK_ID}.md"
     local hist_dir="${ARSENAL_HOME}/tasks/_history"
+    local dest="${hist_dir}/${TASK_ID}.md"
+
+    # An unlinked PR closes nothing, so archiving would record work as merged
+    # while its issue stays open — a contradiction this script exists to prevent.
+    # Leave the task file live: the PR is then just code, and the task is still
+    # open, which is the truth.
+    if [[ -z "${ISSUE}" ]]; then
+        echo "open_task_pr: unlinked PR — leaving ${live} live, since merging it completes nothing" >&2
+        return 0
+    fi
+
+    # No task file is legitimate (a task worked from a payload elsewhere); a
+    # file that exists and cannot be archived is not. Every failure below is
+    # fatal, because the PR body promises the archive and a half-done one leaves
+    # exactly the drift this whole change removes.
     [[ -f "${live}" ]] || return 0
 
-    mkdir -p "${hist_dir}" || return 0
-    if ! git mv "${live}" "${hist_dir}/${TASK_ID}.md" 2>/dev/null; then
-        mv "${live}" "${hist_dir}/${TASK_ID}.md" 2>/dev/null || return 0
+    mkdir -p "${hist_dir}" || { echo "open_task_pr: cannot create ${hist_dir}" >&2; return 1; }
+    if ! git mv "${live}" "${dest}" 2>/dev/null; then
+        mv "${live}" "${dest}" 2>/dev/null \
+            || { echo "open_task_pr: cannot move ${live} to ${dest}" >&2; return 1; }
     fi
 
     # Stamp the terminal status inside the front matter, so the record survives
     # even if the issue is later deleted or the repo is read without GitHub.
-    python3 - "${hist_dir}/${TASK_ID}.md" <<'PY' || true
+    python3 - "${dest}" <<'PY' || { echo "open_task_pr: cannot stamp 'status: merged' into ${dest}" >&2; return 1; }
 import re
 import sys
 from pathlib import Path
@@ -293,9 +309,19 @@ else:
     front = front + "\nstatus: merged"
 path.write_text(text[: match.start(1)] + front + text[match.end(1) :], encoding="utf-8")
 PY
-    echo "open_task_pr: archived ${live} -> ${hist_dir}/${TASK_ID}.md (status: merged)" >&2
+    # Assert the outcome rather than assume it: the PR body tells a reader the
+    # gate lives at the archived path, and `task_select.py` only treats the file
+    # as finished work when it parses a terminal `status`.
+    if [[ ! -f "${dest}" ]] || ! grep -q '^status: merged$' "${dest}"; then
+        echo "open_task_pr: ${dest} is not a complete archive (missing, or no 'status: merged')" >&2
+        return 1
+    fi
+    echo "open_task_pr: archived ${live} -> ${dest} (status: merged)" >&2
 }
-_archive_task_file
+if ! _archive_task_file; then
+    echo "open_task_pr: refusing to open a PR whose task file could not be archived — the merge would close the issue and leave the task file live. Fix the error above and re-run; nothing has been committed." >&2
+    exit 1
+fi
 
 # Stage and commit — the shared-checkout guard above already cleared `git add
 # -A`, and a dynamic Co-Authored-By is added only when supplied.
@@ -334,8 +360,13 @@ fi
 # trailer, because a squash merge that truncates the body still keeps the top.
 closes_line=""
 [[ -n "${ISSUE}" ]] && closes_line="Closes #${ISSUE}"
-BODY="$(printf '## Summary\n\n%s\n\n%s\n\n## Test plan\n\nAcceptance gate in `%s/tasks/_history/%s.md` (archived by this PR); it passed before the PR was opened.\n' \
-    "${closes_line}" "${TITLE}" "${ARSENAL_HOME}" "${TASK_ID}")"
+if [[ -n "${ISSUE}" ]]; then
+    gate_note="$(printf 'Acceptance gate in `%s/tasks/_history/%s.md` (archived by this PR); it passed before the PR was opened.' "${ARSENAL_HOME}" "${TASK_ID}")"
+else
+    gate_note="$(printf 'Acceptance gate in `%s/tasks/%s.md`; it passed before the PR was opened. This PR closes no issue, so merging it does NOT complete the task.' "${ARSENAL_HOME}" "${TASK_ID}")"
+fi
+BODY="$(printf '## Summary\n\n%s\n\n%s\n\n## Test plan\n\n%s\n' \
+    "${closes_line}" "${TITLE}" "${gate_note}")"
 PR_TITLE="${TYPE}: ${TITLE}"
 
 # Open the PR over whichever channel exists. `gh` first, then REST — the REST

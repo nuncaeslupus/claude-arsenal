@@ -587,9 +587,13 @@ that ended badly:
 | Task PR opened with no closing keyword | Fails its check **before** the merge |
 
 `/init` installs the workflow and prints what it does and what it can touch. It never runs
-code from a pull request. A repo without it still works — the merge path is unchanged —
-but a session there has to expect stale claims and unhandled task files, and fix them
-before starting.
+code from a pull request, and only a merge into the **default** branch completes a task —
+a stacked PR merging into another branch is not done yet, exactly as the keyword itself
+behaves. Deleting the file opts out for good: `/init` records `queue-automation = false` in
+`arsenal/config.toml` rather than reinstalling it on the next session start.
+
+A repo without the workflow still works — the merge path is unchanged — but a session there
+has to expect stale claims and unhandled task files, and fix them before starting.
 
 So the session-start protocol's job is genuinely to read the board and pick up work. If
 step 3 or 4 reports problems in a repo that has the workflow, that is a signal something

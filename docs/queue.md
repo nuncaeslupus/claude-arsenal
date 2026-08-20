@@ -153,7 +153,9 @@ Each of those was previously a line in a protocol asking an agent to tidy up
 before ending a session, which is the worst possible place for it: the sessions
 that most need the cleanup are the ones that ended badly. The workflow needs
 `issues: write` and `contents: write`, and never runs code from a pull request.
-Delete it to opt out — the merge path is unchanged without it.
+Deleting the file opts out: `/init` records `queue-automation = false` in
+`arsenal/config.toml` and stops reinstalling it. The merge path is unchanged
+without the workflow.
 
 ---
 

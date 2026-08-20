@@ -198,5 +198,38 @@ if ! git ls-remote --exit-code --heads origin "${EXPECT_BRANCH}" >/dev/null 2>&1
 fi
 echo "PASS: feature branch pushed to remote"
 
+# Gate 6: an archive that cannot complete is fatal, not silent. The PR body
+# tells a reader the gate lives at the archived path, and the whole point of
+# this flow is that a merge never half-completes a task.
+git checkout -q main 2>/dev/null || git checkout -q -B main origin/main
+git branch -qD "${EXPECT_BRANCH}" 2>/dev/null || true
+cat > "${tmpwork}/issues2.json" <<'JSON'
+[{"number": 78, "state": "open", "body": "`arsenal-task: lo-x002`\n\nTask defined in `arsenal/tasks/lo-x002.md`"}]
+JSON
+mkdir -p arsenal/tasks
+printf -- '---\nid: lo-x002\ntitle: "Blocked archive"\n---\n\n## Acceptance gate\n```bash\ntrue\n```\n' \
+    > arsenal/tasks/lo-x002.md
+git add arsenal/tasks/lo-x002.md && git commit -q -m "chore: seed second task"
+# Push it: the helper cuts its branch off the REMOTE default branch, so a task
+# file that exists only locally would not be in the tree it archives from.
+git push -q origin main
+# A regular file where the history DIRECTORY must go: mkdir -p fails, so the
+# archive cannot happen.
+rm -rf arsenal/tasks/_history
+: > arsenal/tasks/_history
+echo "feature2" > feature2.txt
+before=$(git rev-parse HEAD)
+if err=$(ARSENAL_ISSUES_JSON="${tmpwork}/issues2.json" ARSENAL_ALLOW_SHARED_ADD=1 \
+         ARSENAL_COAUTHOR="" bash "${HELPER}" lo-x002 "Blocked archive" 2>&1); then
+    echo "FAIL: expected a failed archive to abort, got exit 0: ${err}" >&2; exit 1
+fi
+if ! echo "${err}" | grep -q "could not be archived"; then
+    echo "FAIL: expected a 'could not be archived' refusal, got: ${err}" >&2; exit 1
+fi
+if git log --oneline "${before}..HEAD" 2>/dev/null | grep -q .; then
+    echo "FAIL: a commit was made despite the archive failing" >&2; exit 1
+fi
+echo "PASS: a task file that cannot be archived aborts before committing"
+
 echo "PASS: open_task_pr_test — all gates passed"
 exit 0

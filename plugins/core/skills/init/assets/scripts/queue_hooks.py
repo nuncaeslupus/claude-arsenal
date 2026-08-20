@@ -97,14 +97,29 @@ def plan_pr_closed(
 ) -> list[dict[str, Any]]:
     """What a closed PR means for the queue.
 
-    A merge is a completion; a close without a merge is a release. Both are
-    facts GitHub already knows, so neither needs a session to record it.
+    A merge **into the default branch** is a completion; a close without a merge
+    is a release. Both are facts GitHub already knows, so neither needs a session
+    to record it.
+
+    The default-branch condition is not a detail. A stacked PR merges into the
+    previous branch in the stack, and its work has not reached the default branch
+    yet — closing the task there would mark it done while the code is still one
+    or more merges away from landing. GitHub's own `Closes` keyword has exactly
+    this rule, and a backstop looser than the mechanism it backs up would quietly
+    undo it.
     """
     pull = event.get("pull_request") or {}
     number = pull.get("number")
     url = pull.get("html_url") or f"#{number}"
     merged = bool(pull.get("merged"))
     head_ref = str((pull.get("head") or {}).get("ref") or "")
+    base_ref = str((pull.get("base") or {}).get("ref") or "")
+    default_branch = str(
+        (event.get("repository") or {}).get("default_branch")
+        or (pull.get("base") or {}).get("repo", {}).get("default_branch")
+        or ""
+    )
+    into_default = bool(default_branch) and base_ref == default_branch
 
     known = {t["id"] for t in tasks}
     task_id = task_id_from_branch(head_ref, known)
@@ -127,6 +142,18 @@ def plan_pr_closed(
         ]
     issue = _find_issue(issue_number, issues) or {}
     is_open = str(issue.get("state", "open")).lower() == "open"
+
+    if merged and not into_default:
+        return [
+            {
+                "kind": "note",
+                "message": (
+                    f"PR {url}: merged into '{base_ref}', not the default branch "
+                    f"'{default_branch or '?'}' — task {task_id} is not done until that "
+                    "commit lands on the default branch"
+                ),
+            }
+        ]
 
     if merged:
         actions: list[dict[str, Any]] = []
@@ -316,11 +343,16 @@ def apply_action(action: dict[str, Any], api: Api | None, *, tasks_dir: Path) ->
         print(f"queue_hooks: no API token — cannot apply {kind}", file=sys.stderr)
         return False
 
-    raw_number = action.get("issue")
-    if not isinstance(raw_number, int):
-        print(f"queue_hooks: {kind} carries no issue number — skipped", file=sys.stderr)
-        return False
-    number: int = raw_number
+    # `create-issue` is the one action with no issue number — it is what creates
+    # one. Validating the number before dispatching by kind made that branch
+    # unreachable, so `sync-handles` could plan a handle and never open it.
+    number = -1
+    if kind != "create-issue":
+        raw_number = action.get("issue")
+        if not isinstance(raw_number, int):
+            print(f"queue_hooks: {kind} carries no issue number — skipped", file=sys.stderr)
+            return False
+        number = raw_number
     try:
         if kind == "close-issue":
             comment = {"body": action["comment"]}

@@ -50,8 +50,9 @@ JSON
 
 pr_event() {  # pr_event <head-ref> <merged true|false> > file
     cat <<JSON
-{"pull_request": {"number": 5, "html_url": "https://example/pull/5",
-  "merged": $2, "body": "", "head": {"ref": "$1"}}}
+{"repository": {"default_branch": "main"},
+ "pull_request": {"number": 5, "html_url": "https://example/pull/5",
+  "merged": $2, "body": "", "head": {"ref": "$1"}, "base": {"ref": "main"}}}
 JSON
 }
 
@@ -66,6 +67,24 @@ echo "${plan}" | grep -q '"kind":"close-issue"' || fail "merged PR did not plan 
 echo "${plan}" | grep -q '"issue":10' || fail "closed the wrong issue: ${plan}"
 echo "${plan}" | grep -q '"kind":"archive-task"' || fail "merged PR did not plan to archive its task file: ${plan}"
 echo "PASS: a merged task PR closes and archives its task"
+
+# Gate 1b: a merge into a NON-default branch completes nothing. A stacked PR
+# targets the previous branch in the stack, so its work has not landed yet —
+# GitHub's own `Closes` keyword has this rule, and a backstop looser than the
+# mechanism it backs up would quietly undo it.
+cat > "${tmp}/event.json" <<'JSON'
+{"repository": {"default_branch": "main"},
+ "pull_request": {"number": 6, "html_url": "https://example/pull/6", "merged": true,
+   "body": "", "head": {"ref": "arsenal/t-aaaa1111-do-the-thing"},
+   "base": {"ref": "arsenal/t-bbbb2222-earlier-task"}}}
+JSON
+plan=$(python3 "${HOOKS}" pr-closed --tasks-dir "${tasks}" --issues "${tmp}/issues.json" \
+        --event "${tmp}/event.json" --dry-run)
+if echo "${plan}" | grep -qE '"kind":"(close-issue|archive-task)"'; then
+    fail "a stacked merge completed the task before it reached the default branch: ${plan}"
+fi
+echo "${plan}" | grep -q '"kind":"note"' || fail "stacked merge should plan a note: ${plan}"
+echo "PASS: a merge into a non-default branch completes nothing"
 
 # Gate 2: a PR closed WITHOUT merging releases the claim. The task is not done,
 # so leaving the label on would hide it from every future selector.
@@ -147,5 +166,45 @@ echo "${out}" | grep -q "archived as merged but #20 is still open" \
 echo "${out}" | grep -q "#21 is closed as completed but the task file is still live" \
     || fail "closed-but-not-archived drift not reported: ${out}"
 echo "PASS: query_status fails on a task and its issue disagreeing"
+
+# Gate 8: `create-issue` reaches the API. It is the one action with no issue
+# number — it is what creates one — so a guard that validated the number before
+# dispatching by kind made the whole branch unreachable and `sync-handles` could
+# plan a handle it would never open. Dry-run coverage cannot see that, so this
+# drives apply_action against a stub API.
+python3 - "${HOOKS}" <<'PY' || fail "create-issue does not reach the API"
+import importlib.util
+import sys
+from pathlib import Path
+
+spec = importlib.util.spec_from_file_location("queue_hooks", sys.argv[1])
+mod = importlib.util.module_from_spec(spec)
+sys.path.insert(0, str(Path(sys.argv[1]).parent))
+spec.loader.exec_module(mod)
+
+calls = []
+
+
+class StubApi:
+    repo = "o/r"
+
+    def request(self, method, path, body=None):
+        calls.append((method, path, body))
+        return {"number": 99}
+
+
+ok = mod.apply_action(
+    {"kind": "create-issue", "task": "t-x", "title": "T", "body": "b", "labels": ["arsenal:task"]},
+    StubApi(),
+    tasks_dir=Path("."),
+)
+assert ok, "apply_action rejected a create-issue action"
+assert any(m == "POST" and p.endswith("/issues") for m, p, _ in calls), calls
+
+# And an action that genuinely needs a number is still refused without one.
+assert not mod.apply_action({"kind": "close-issue", "task": "t-x", "comment": "c"},
+                            StubApi(), tasks_dir=Path("."))
+PY
+echo "PASS: create-issue reaches the API; close-issue without a number does not"
 
 echo "PASS: queue_hooks_test — all gates passed"
