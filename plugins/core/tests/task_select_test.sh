@@ -190,11 +190,25 @@ python3 "${SELECT_PY}" --tasks-dir "${TASKS}" --capability surface:cli --max 9 -
     </dev/null 2>&1 >/dev/null | grep -q "capped at 1" \
     || fail "the clamp must say why the batch shrank"
 
-# a missing sentinel is not a clamp: an unprobed surface is not a known-bad one
+# A missing sentinel DOES clamp, and this expectation is the inverse of what it
+# used to be (#147). "Unprobed is not known-bad" reads as caution but is the
+# unsafe direction here: the sentinel is absent precisely on the first round,
+# before anything has shown that workers get their own tree, and the cost of
+# guessing wrong is N workers dispatched into one shared checkout. Only a proven
+# `available` — recorded from the worker's own toplevel, not from a branch name
+# that need not have changed — permits fan-out. It also makes the protocol's
+# "dispatch the first batch as a single worker" mechanical instead of a step the
+# orchestrator has to remember.
 rm -f "${sentinel}"
 n=$(python3 "${SELECT_PY}" --tasks-dir "${TASKS}" --capability surface:cli --max 9 \
         --isolation-sentinel "${sentinel}" </dev/null 2>/dev/null | wc -l)
-[[ "${n}" -gt 1 ]] || fail "an absent sentinel must not clamp the batch (got ${n})"
+[[ "${n}" -eq 1 ]] || fail "an unproven sentinel must clamp the batch to 1 (got ${n})"
+
+# ...and a proven `available` is what lifts it.
+printf 'available\n' > "${sentinel}"
+n=$(python3 "${SELECT_PY}" --tasks-dir "${TASKS}" --capability surface:cli --max 9 \
+        --isolation-sentinel "${sentinel}" </dev/null 2>/dev/null | wc -l)
+[[ "${n}" -gt 1 ]] || fail "a proven 'available' must permit a parallel batch (got ${n})"
 
 # the environment override wins over the file, for a surface probed by hand
 echo "available" > "${sentinel}"

@@ -92,4 +92,47 @@ out=$(bash "${POSTCHECK}" 2>/dev/null)
 [[ "${out}" == "ok" ]] || fail "expected ok on a clean, correct tree, got '${out}'"
 [[ "$(git rev-parse HEAD)" == "${before}" ]] || fail "a clean tree must not be disturbed"
 
+# --- #147: the positive verdict needs proof, not an unmoved branch name ------
+# A worker can run in the orchestrator's tree without ever moving HEAD (a
+# surface that pins pushes to one branch; a worker that fails before
+# open_task_pr.sh). `available` is what permits ramping to N workers, so
+# recording it on that evidence licenses the parallel-fan-out-into-one-tree the
+# clamp exists to prevent.
+iso_file="${repo}/arsenal/session/worktree_isolation"
+SELECT="${SCRIPT_DIR}/../skills/init/assets/scripts/task_select.py"
+
+# Clean tree, on the host branch, worker reports THIS tree → in-place.
+rm -f "${iso_file}"
+out=$(ARSENAL_WORKER_TOPLEVEL="$(pwd -P)" bash "${POSTCHECK}" 2>/dev/null)
+[[ "${out}" == "ok" ]] || fail "expected ok (nothing to restore), got '${out}'"
+[[ "$(cat "${iso_file}" 2>/dev/null)" == "unavailable" ]] \
+    || fail "a worker in the orchestrator's own tree must record unavailable, got '$(cat "${iso_file}" 2>/dev/null)'"
+echo "PASS: a worker sharing the orchestrator's tree records unavailable"
+
+# Same state, but the worker reports a different root → genuinely isolated.
+rm -f "${iso_file}"
+out=$(ARSENAL_WORKER_TOPLEVEL="/some/other/worktree" bash "${POSTCHECK}" 2>/dev/null)
+[[ "${out}" == "ok" ]] || fail "expected ok, got '${out}'"
+[[ "$(cat "${iso_file}" 2>/dev/null)" == "available" ]] \
+    || fail "a worker in its own worktree must record available, got '$(cat "${iso_file}" 2>/dev/null)'"
+echo "PASS: a worker in a separate tree records available"
+
+# No report at all → unproven. Recording `available` here is what the issue
+# called an unproven condition recorded as proven.
+rm -f "${iso_file}"
+out=$(bash "${POSTCHECK}" 2>/dev/null)
+[[ "${out}" == "ok" ]] || fail "expected ok, got '${out}'"
+if [[ -f "${iso_file}" ]]; then
+    fail "with no worker root reported, nothing may be recorded (got '$(cat "${iso_file}")')"
+fi
+echo "PASS: an unreported worker root records nothing rather than 'available'"
+
+# And the selector treats that unknown as clamping, so the safe default is safe.
+mkdir -p arsenal/tasks
+echo '{}' > "${tmp}/state.json"
+sel=$(python3 "${SELECT}" --tasks-dir arsenal/tasks --state "${tmp}/state.json" --max 4 2>&1 >/dev/null </dev/null || true)
+echo "${sel}" | grep -q "batch capped at 1 task" \
+    || fail "unknown isolation must clamp the batch, stderr was: ${sel}"
+echo "PASS: unknown isolation clamps the batch to one worker"
+
 echo "PASS: worker_postcheck_test — all gates passed"

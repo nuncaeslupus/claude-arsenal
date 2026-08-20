@@ -33,7 +33,11 @@
 # rescue_snapshot.sh, prints that ref on stderr, and appends it to
 # `${ARSENAL_SESSION_DIR}/rescue_refs`.
 #
-# Stdout: `ok` | `restored`.
+# Stdout: `ok` | `restored`. NOTE: `ok` means the tree invariant holds, NOT
+#         that worktree isolation is in effect — that verdict is the
+#         `worktree_isolation` sentinel, which the selector reads directly.
+# Env:    ARSENAL_WORKER_TOPLEVEL — the worker's `git rev-parse --show-toplevel`.
+#         Without it isolation cannot be proven and nothing is recorded.
 # Stderr: `worker_postcheck: rescued uncommitted changes to <ref> …` when a
 #         restore had work to save.
 # Exit:   0 invariant holds (possibly after restore); 2 could not restore.
@@ -68,11 +72,26 @@ _record_rescue_ref() {
     printf '%s\n' "${RESCUED_REF}" >> "${dir}/rescue_refs" 2>/dev/null || true
 }
 
-# Persist the isolation verdict for task_select.py (QIC-6). `ok` confirms the
-# worker really ran in its own worktree (the orchestrator's HEAD never moved) →
-# parallel fan-out is safe. `restored` means isolation was silently ignored and
-# the worker ran in-place → record `unavailable` so the next batch is clamped to
-# a single worker without relying on the orchestrator to remember to clamp.
+# Persist the isolation verdict for task_select.py (QIC-6).
+#
+# `restored` is proof of in-place execution: the orchestrator's HEAD had moved,
+# so something ran in its tree → `unavailable`, and the next batch is clamped to
+# one worker without relying on the orchestrator to remember.
+#
+# The positive verdict needs real evidence, and "HEAD did not move" is not it.
+# A worker can run in the orchestrator's tree without ever moving HEAD: on a
+# surface that restricts pushes to the session's designated branch, the branch
+# the worker should be on IS the branch the orchestrator is on; and a worker
+# that fails before reaching open_task_pr.sh never switches branch either. Both
+# leave the invariant intact and used to be recorded as `available` — which is
+# what PERMITS ramping to ARSENAL_MAX_WORKERS > 1, so an unproven condition
+# licensed the exact parallel-fan-out-into-one-tree it exists to prevent (#147).
+#
+# So the answer comes from the worker itself: ARSENAL_WORKER_TOPLEVEL carries
+# the `git rev-parse --show-toplevel` the worker returns. Different root → it
+# genuinely ran elsewhere → `available`. Same root → in-place → `unavailable`,
+# whatever the branch did. Absent → nothing is recorded, and `unknown` keeps the
+# selector clamped, because the safe reading of unproven is not "proven".
 _record_isolation() {
     local dir="${ARSENAL_SESSION_DIR:-${ARSENAL_HOME:-arsenal}/session}"
     mkdir -p "${dir}" 2>/dev/null || return 0
@@ -106,8 +125,32 @@ if [[ -z "${host_branch}" ]]; then
     printf '%s\n' "${host_branch}" > "${session_dir}/host_branch" 2>/dev/null || true
 fi
 
+# Did the worker run in a different tree? Answered from the worker's own root,
+# never inferred from a branch name that need not have changed.
+_isolation_from_worker_root() {
+    local worker_root="${ARSENAL_WORKER_TOPLEVEL:-}"
+    local own_root
+    [[ -n "${worker_root}" ]] || { echo "unknown"; return 0; }
+    own_root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+    [[ -n "${own_root}" ]] || { echo "unknown"; return 0; }
+    if [[ "${worker_root}" == "${own_root}" ]]; then
+        echo "unavailable"
+    else
+        echo "available"
+    fi
+}
+
 if [[ "${current}" == "${host_branch}" && -z "${dirty}" ]]; then
-    _record_isolation available
+    verdict="$(_isolation_from_worker_root)"
+    case "${verdict}" in
+        available|unavailable) _record_isolation "${verdict}" ;;
+        *)
+            echo "worker_postcheck: no ARSENAL_WORKER_TOPLEVEL from the worker, so isolation is unproven — recording nothing, and the selector stays clamped to one worker. Have the worker return 'git rev-parse --show-toplevel' (agents/worker.md) and pass it through." >&2
+            ;;
+    esac
+    if [[ "${verdict}" == "unavailable" ]]; then
+        echo "worker_postcheck: the worker ran in this tree (${ARSENAL_WORKER_TOPLEVEL}) — isolation is NOT in effect; staying serialized in-place" >&2
+    fi
     echo "ok"
     exit 0
 fi

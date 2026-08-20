@@ -54,6 +54,12 @@ false  # fail until a real check replaces this
 """
 
 
+
+# The documented meaning of `priority`: task size, larger runs sooner. Kept here
+# rather than in prose so `--size` and the board's convention check agree on one
+# set of values.
+SIZE_PRIORITY = {"S": 10, "M": 5, "L": 1}
+
 def new_task_id() -> str:
     return f"t-{secrets.token_hex(4)}"
 
@@ -125,7 +131,17 @@ def main(argv: list[str] | None = None) -> int:
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument("--title", required=True)
-    parser.add_argument("--priority", type=int, default=0, help="higher runs sooner")
+    parser.add_argument(
+        "--size",
+        choices=sorted(SIZE_PRIORITY),
+        help="task size — the documented meaning of priority (S=10, M=5, L=1)",
+    )
+    parser.add_argument(
+        "--priority",
+        type=int,
+        default=None,
+        help="raw priority override; prefer --size, which writes the documented value",
+    )
     parser.add_argument("--deps", action="append", default=[], help="repeatable task id")
     parser.add_argument("--requires", action="append", default=[], help="e.g. surface:cli")
     parser.add_argument("--tag", action="append", default=[], dest="tags")
@@ -135,11 +151,24 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--tasks-dir", type=Path, default=Path("arsenal/tasks"))
     args = parser.parse_args(argv)
 
+    # `priority` means task size, and only that. Build order is already
+    # expressible — `deps` is a DAG, which is what the selector runs on and what
+    # survives re-planning — so encoding rank here duplicates that information in
+    # a form nothing validates against the graph. Both conventions did end up in
+    # the same column, and because a rank scale's floor sits above the size
+    # scale's ceiling, every rank-encoded task outranked every size-encoded one
+    # unconditionally: an ordering nobody chose, decided by when a row was
+    # written (#146). --size writes the documented value; --priority stays for a
+    # deliberate override.
+    if args.size and args.priority is not None:
+        parser.error("--size and --priority are mutually exclusive; --size writes the value")
+    priority = SIZE_PRIORITY[args.size] if args.size else (args.priority or 0)
+
     try:
         task_id, text = build(
             args.tasks_dir,
             title=args.title,
-            priority=args.priority,
+            priority=priority,
             deps=args.deps,
             requires=args.requires,
             tags=args.tags,

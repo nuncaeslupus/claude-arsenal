@@ -326,7 +326,12 @@ def build_html(parts: list[tuple[str, dict]], title: str, gen_date: str, seed_no
                 f'<{tag} class="sec-h"><span class="chip">{esc(it["chip"])}</span>'
                 f'<span class="sec-title">{it["title_html"]}</span></{tag}>'
             )
-            body.append(f'<div class="sec-body">{it["body_html"]}</div>')
+            # Splitting on ## and ### is what gives each option its own note
+            # slot, so a heading immediately followed by a subheading has no
+            # body of its own. Emitting the wrapper anyway leaves an empty div
+            # under the anchor, which reads as a generator fault.
+            if it["body_html"]:
+                body.append(f'<div class="sec-body">{it["body_html"]}</div>')
             body.append(
                 f'<div class="note" data-for="{it["domid"]}">'
                 f'<div class="note-head"><span class="note-ico">✎</span>'
@@ -537,7 +542,9 @@ JS = r"""
   var SEED=(typeof SPEC_SEED_NOTES!=='undefined')?SPEC_SEED_NOTES:{};
   tas.forEach(function(t){
     try{var v=localStorage.getItem(NS+t.dataset.key);
-        if(v!=null){t.value=v;}else if(Object.prototype.hasOwnProperty.call(SEED,t.dataset.key)){t.value=SEED[t.dataset.key];}}catch(e){}
+        if(v!=null){t.value=v;}
+        else if(Object.prototype.hasOwnProperty.call(SEED,t.dataset.key)){
+          var sv=SEED[t.dataset.key];if(typeof sv==='string'){t.value=sv;}}}catch(e){}
     autoGrow(t);setFilled(t);
     t.addEventListener('input',function(){
       autoGrow(t);setFilled(t);updateCount();
@@ -611,12 +618,21 @@ JS = r"""
   document.getElementById('modal-close').addEventListener('click',closeModal);
   modal.addEventListener('click',function(e){if(e.target===modal)closeModal();});
 
+  // buildExport only ever writes strings, but an import takes whatever the file
+  // holds: an object arrives as "[object Object]", an array joins on commas,
+  // null becomes "null" — each then persisted over notes the reviewer wrote.
+  // The realistic trigger is a hand-edited or truncated export, not an attack;
+  // it just fails in the least useful way, silently and destructively. Skip
+  // anything that is not a string and say how many were skipped.
   function applyData(obj){
-    var applied=0;
+    var applied=0,skipped=0;
     tas.forEach(function(t){
-      if(Object.prototype.hasOwnProperty.call(obj,t.dataset.key)){t.value=obj[t.dataset.key];save(t);autoGrow(t);setFilled(t);applied++;}
+      if(!Object.prototype.hasOwnProperty.call(obj,t.dataset.key))return;
+      var v=obj[t.dataset.key];
+      if(typeof v!=='string'){skipped++;return;}
+      t.value=v;save(t);autoGrow(t);setFilled(t);applied++;
     });
-    updateCount();return applied;
+    updateCount();return{applied:applied,skipped:skipped};
   }
   document.getElementById('file-import').addEventListener('change',function(e){
     var f=e.target.files[0];if(!f)return;
@@ -630,7 +646,9 @@ JS = r"""
         else{obj=JSON.parse(txt);}
       }catch(err){obj=null;}
       if(!obj){toast('Could not read notes from that file');return;}
-      var k=applyData(obj);toast('Imported '+k+' note'+(k===1?'':'s'));
+      var r=applyData(obj);
+      toast('Imported '+r.applied+' note'+(r.applied===1?'':'s')+
+            (r.skipped?' ('+r.skipped+' skipped — not text)':''));
     };
     rd.readAsText(f);e.target.value='';
   });

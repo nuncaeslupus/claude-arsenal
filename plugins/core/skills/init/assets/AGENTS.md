@@ -1,6 +1,6 @@
 # Claude Arsenal
 
-<!-- claude-arsenal v0.32.0 — imported via @claude-arsenal/AGENTS.md -->
+<!-- claude-arsenal v0.33.0 — imported via @claude-arsenal/AGENTS.md -->
 
 This file is imported by the host repo's `CLAUDE.md` via the session-protocol block
 that `/init` injects. It provides the mechanics behind the proactive directives
@@ -56,6 +56,26 @@ At the start of every session (fresh start, context compaction, or cold restart)
    This is the only sync in the system: one-directional and idempotent, so a failure
    delays work rather than corrupting it.
 
+4b. **Import issues filed between sessions** — list open issues carrying the
+   import label (default `arsenal:queue`; set `import-label` in
+   `arsenal/config.toml` to change it), save the JSON, then:
+   `python3 claude-arsenal/scripts/issue_import.py --issues /tmp/arsenal-import.json --apply`
+
+   It writes a task file per labelled issue that is not already a handle, and
+   prints an `arsenal-task: <id>` line to append to that issue's body — which
+   turns the existing issue into the task's handle rather than opening a second
+   one. Apply those, and commit the new task files.
+
+   Why this step exists: issues get filed between sessions, from a phone, with
+   no session open to seed a task, and until now nothing read them. The selector
+   sees only task files, so an empty selection was reported as "no work" in a
+   repo carrying a dozen open issues.
+
+   An imported task carries `requires: [human:gate]` and is therefore **visible
+   but never dispatched** — its gate is the issue's prose, and a gate that runs
+   nothing passes everything. Writing a real gate and deleting that line is what
+   makes it claimable, which is a human's call, not a worker's.
+
 5. **Read handover** — if `arsenal/session/handover.md` has content beyond the template
    placeholder, read it for the previous session's context.
    > The handover is a snapshot from compaction time, not current state. Never resume a
@@ -89,21 +109,30 @@ The table columns are: `T# | Description | Location | Size | Depends | Gate | Te
 
 **Steps:**
 
-1. Add tasks with no dependencies first, capturing each printed ID
-   (priority: S=10, M=5, L=1):
+1. Add tasks with no dependencies first, capturing each printed ID. Pass the
+   size from the table's Size column and let `--size` write the value:
    ```bash
    python3 .claude/skills/queue-add/scripts/new_task.py \
      --title "T1: <Description>" \
-     --priority 10 \
+     --size S \
      --workspace FRONTEND \
    # → prints e.g. t-3f8a91c2, and the issue handle to open on stderr
    ```
+
+   > **Ordering goes in `deps`; size goes in `priority`.** Transcribing an
+   > ordered `T1 … T50` table tempts you to encode rank here — T1 gets 100, T2
+   > gets 95 — and nothing rejects it. But a rank scale's floor sits above the
+   > size scale's ceiling, so once both are on one board every rank-encoded task
+   > outranks every sized one unconditionally, and dispatch order comes to
+   > reflect when a row was written rather than anything anyone chose. `deps` is
+   > the DAG the selector actually runs on and the thing that survives
+   > re-planning; use it. `query_status.py` reports a board carrying both.
 
 2. Add tasks whose deps are now in the queue:
    ```bash
    python3 .claude/skills/queue-add/scripts/new_task.py \
      --title "T3: <Description>" \
-     --priority 5 \
+     --size M \
      --workspace FRONTEND \
      --deps t-3f8a91c2 \
    ```
@@ -164,12 +193,15 @@ The table columns are: `T# | Description | Location | Size | Depends | Gate | Te
 
 **Steps:**
 
-1. Add tasks with no dependencies first, capturing each printed ID
-   (priority: S=10, M=5, L=1):
+1. Add tasks with no dependencies first, capturing each printed ID. Pass the
+   size from the table's Size column and let `--size` write the value —
+   **ordering goes in `deps`, size goes in `priority`** (see the note in
+   *Queue seeding from workspace plans* for why rank-in-priority silently
+   reorders the board):
    ```bash
    python3 .claude/skills/queue-add/scripts/new_task.py \
      --title "T1: <Description>" \
-     --priority 10 \
+     --size S \
    # → prints e.g. t-3f8a91c2, and the issue handle to open on stderr
    ```
 
@@ -177,7 +209,7 @@ The table columns are: `T# | Description | Location | Size | Depends | Gate | Te
    ```bash
    python3 .claude/skills/queue-add/scripts/new_task.py \
      --title "T3: <Description>" \
-     --priority 5 \
+     --size M \
      --deps t-3f8a91c2 \
    ```
 
@@ -275,14 +307,23 @@ dispatches that many workers at once. Run when the queue has open tasks:
      `ARSENAL_MAX_WORKERS=1` and run **serialized in-place mode** for the whole
      session (one worker at a time; `worker_postcheck.sh` keeps the branch clean
      between them).
-   - If it prints `available`, dispatch the **first batch as a single worker**
-     regardless of `ARSENAL_MAX_WORKERS`, then inspect the post-worker assertion
-     (step 6): if it reports `restored` rather than `ok`, the Task tool did
-     **not** honor `isolation: worktree` (it ran in-place and the orchestrator's
-     HEAD had to be recovered) → clamp `ARSENAL_MAX_WORKERS=1` and stay in
-     serialized in-place mode for the rest of the session. Only ramp to the
-     configured `ARSENAL_MAX_WORKERS` once a worker has returned with `ok`,
-     confirming real worktrees are in effect.
+   - If it prints `available`, dispatch the **first batch as a single worker**.
+     You no longer have to remember to: `task_select.py` returns one task unless
+     the sentinel reads a proven `available`, and the first round is always
+     `unknown`, so the first batch is clamped mechanically.
+
+     Isolation is then confirmed from the worker's own root, not from whether
+     HEAD moved. Pass `ARSENAL_WORKER_TOPLEVEL` to `worker_postcheck.sh` (step
+     6) and it records `available` only when that root differs from the
+     orchestrator's. A `restored` result, or a worker root equal to yours, both
+     mean the Task tool did **not** honor `isolation: worktree` → serialized
+     in-place for the rest of the session.
+
+     **`ok` is about the tree, not about isolation.** It says nothing had to be
+     restored. The verdict that governs fan-out is the
+     `arsenal/session/worktree_isolation` sentinel, and the selector reads it
+     itself — which is what stops an unproven condition from licensing a
+     parallel batch.
 1. Apply credit guards (see below) if not already set this session.
 2. **Budget check** — `claude-arsenal/bin/budget_check.sh`.
    - exit `0` → under quota (or quota unobservable; fail-open) AND under the
@@ -340,10 +381,11 @@ dispatches that many workers at once. Run when the queue has open tasks:
    - `isolation: worktree`
    - Inject the relative-path directive and the task payload path.
 6. **Wait for all workers.** Then, for each returned outcome:
-   - **Assert the tree invariant first** —
-     `claude-arsenal/bin/worker_postcheck.sh`. It guarantees HEAD is back on the
-     session's own branch and the tree is clean. In a real worktree this is a
-     no-op (`ok`);
+   - **Assert the tree invariant first** — pass the worker's reported root so
+     isolation is measured rather than inferred:
+     `ARSENAL_WORKER_TOPLEVEL=<worker's toplevel> claude-arsenal/bin/worker_postcheck.sh`.
+     It guarantees HEAD is back on the session's own branch and the tree is clean.
+     In a real worktree this is a no-op (`ok`);
      if it prints `restored`, the worker ran in-place — clamp
      `ARSENAL_MAX_WORKERS=1` per step 0. Exit 2 (could not restore) → stop the
      loop and surface to the user.
@@ -647,7 +689,8 @@ through a pull request like anything else. **Task files are read from the defaul
 branch**, never the session's working branch — that is what makes every agent compute the
 same order regardless of what it is working on.
 
-`priority` is a plain integer, larger runs sooner. Only `id` and `title` are required.
+`priority` encodes **task size** — S=10, M=5, L=1, larger runs sooner — and nothing else.
+Build order belongs in `deps`. Only `id` and `title` are required.
 
 **Ids are random** (`t-` plus eight hex characters). They used to be a hash of the title
 truncated to four characters, checked for uniqueness against the local file only — so two
@@ -697,6 +740,7 @@ claude-arsenal/        ← upstream. /init owns it and may overwrite it freely
     task_select.py     ← pure selector: graph + issues → the next task
     query_status.py    ← the board (and the drift report: task vs issue disagreeing)
     handle_sync.py     ← task files with no issue handle yet
+    issue_import.py    ← the other direction: labelled issues with no task yet
     issue_for_task.py  ← task id → its issue number, so `Closes #N` can be written
     queue_hooks.py     ← the transitions GitHub runs: close, release, sync, sweep
     arsenal_config.py  ← reads arsenal/config.toml
