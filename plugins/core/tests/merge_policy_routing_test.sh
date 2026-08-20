@@ -30,15 +30,31 @@ REF="${ASSETS}/references/github-automation.md"
 fail=0
 note() { echo "FAIL: $1" >&2; fail=1; }
 
+# Both checks below read a SECTION, not a file. A whole-file grep would accept
+# the lookup living anywhere — including a paragraph a merging session never
+# reaches — which is the failure being fixed, passing itself off as the fix.
+section() {  # $1 = file, $2 = header prefix; prints that section's body
+    awk -v want="$2" '
+        /^## / { inside = (index($0, want) == 1); next }
+        inside { print }
+    ' "$1"
+}
+
+completion="$(section "${AGENTS}" '## Completion')"
+policy="$(section "${REF}" '## Merge policy')"
+
+[[ -n "${completion}" ]] || note "AGENTS.md has no '## Completion' section to read the policy in"
+[[ -n "${policy}" ]] || note "github-automation.md has no '## Merge policy' section"
+
 # --- 1: the merge step names the command, so the read has a data path ---
 # `AGENTS.md` is the file resident at the moment the question is asked. A pointer
 # to a reference is not enough on its own: the reference is only opened by someone
 # who already knows the key exists, which is exactly what nobody did.
-grep -q 'arsenal_config.py --get merge-policy' "${AGENTS}" \
-    || note "AGENTS.md never names the command that reads merge-policy"
-grep -q 'github-automation.md' "${AGENTS}" \
+grep -q 'arsenal_config.py --get merge-policy' <<<"${completion}" \
+    || note "AGENTS.md § Completion never names the command that reads merge-policy"
+grep -q 'github-automation.md' <<<"${completion}" \
     || note "AGENTS.md § Completion does not route to github-automation.md"
-grep -q 'arsenal_config.py --get merge-policy' "${REF}" \
+grep -q 'arsenal_config.py --get merge-policy' <<<"${policy}" \
     || note "github-automation.md documents the policy without the command to read it"
 
 # --- 2: every value in the enum has a rule written for it ---
@@ -63,9 +79,12 @@ PY
 [[ ${#values[@]} -eq 5 ]] \
     || note "expected 5 merge-policy values from arsenal_config.py, parsed ${#values[@]}"
 
+# A value must have a ROW in the decision table, with a non-empty rule beside it.
+# Matching the value anywhere in the section passes on a passing mention — the
+# prose below the table names three of the five while ruling on none of them.
 for value in "${values[@]}"; do
-    grep -q "\`${value}\`" "${REF}" \
-        || note "merge-policy value '${value}' has no rule in github-automation.md"
+    grep -qE "^\| \`${value}\` \| *[^ |].*\|" <<<"${policy}" \
+        || note "merge-policy value '${value}' has no table row stating when it may merge"
 done
 
 # --- 3: the two questions the values do not answer by themselves ---
@@ -73,9 +92,9 @@ done
 # a bot in its own config has a policy that goes stale the day it swaps vendors.
 # `after-ci` does not say what an absent CI run means, which is the state the
 # `after-review` value was added for in the first place.
-grep -qi 'counts as a review' "${REF}" \
+grep -qi 'counts as a review' <<<"${policy}" \
     || note "github-automation.md never says what satisfies 'after-review'"
-grep -qi 'cannot report' "${REF}" \
+grep -qi 'cannot report' <<<"${policy}" \
     || note "github-automation.md never says what to do when CI cannot report at all"
 
 # --- 4: end to end — the command in the prose actually returns a value ---
