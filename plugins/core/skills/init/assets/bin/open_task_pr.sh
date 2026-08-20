@@ -78,9 +78,19 @@ _gate_fail() {
 #
 # 1. The host's own gate, when the repo declares one. Absent by default, so a
 #    repo without one is unaffected.
+# Anchored to the git root, not the cwd: this script is routinely invoked from a
+# worktree or a subdirectory, and arsenal_config.py resolves arsenal/config.toml
+# relative to --repo-root (default: cwd). And errors are NOT swallowed — a
+# malformed config or a missing python3 must not read as "no gate declared".
+# Silently skipping the enforcement is the exact failure this whole change
+# exists to remove; it would just move it one layer out.
 host_gate=""
 if [[ -f "${BUNDLE_SCRIPTS}/arsenal_config.py" ]]; then
-    host_gate="$(python3 "${BUNDLE_SCRIPTS}/arsenal_config.py" --get host-gate 2>/dev/null || true)"
+    _repo_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+    if ! host_gate="$(python3 "${BUNDLE_SCRIPTS}/arsenal_config.py" \
+            --repo-root "${_repo_root}" --get host-gate 2>&1)"; then
+        _gate_fail "could not read host-gate from ${_repo_root}/arsenal/config.toml: ${host_gate}"
+    fi
 fi
 if [[ -n "${host_gate}" ]]; then
     echo "open_task_pr: running host gate: ${host_gate}" >&2
@@ -95,11 +105,16 @@ if [[ -f "${SCRIPT_DIR}/gate_run.sh" ]]; then
     # Gate chatter goes to stderr: this script's stdout is a contract that
     # callers parse (`branch:…`, the PR URL), and a `gate: passed` line in it
     # breaks them.
-    bash "${SCRIPT_DIR}/gate_run.sh" "${TASK_ID}" >&2
+    # Resolve the task file from the default branch where it exists there: the
+    # gate is a precondition the board sets, and a worker that could edit its
+    # own gate on its own branch would be certifying itself. gate_run.sh still
+    # falls back to the working copy for a task that has not merged yet.
+    ARSENAL_GATE_FROM_DEFAULT=1 bash "${SCRIPT_DIR}/gate_run.sh" "${TASK_ID}" >&2
     _rc=$?
     case ${_rc} in
         0) ;;
         3) _gate_fail "the task gate could not run or reports its metric unmeasured (exit 3); nothing was verified" ;;
+        2) _gate_fail "the task gate could not read ${ARSENAL_HOME}/tasks/${TASK_ID}.md (gate_run.sh exit 2). A repo still on the pre-v0.25 claude-arsenal/queue/ layout must run arsenal_migrate.py first" ;;
         *) _gate_fail "the task gate failed (gate_run.sh exit ${_rc})" ;;
     esac
 fi

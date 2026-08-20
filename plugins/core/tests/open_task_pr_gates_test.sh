@@ -105,4 +105,24 @@ printf 'merge-policy = "after-ci"\n' > arsenal/config.toml
 sout=$(ARSENAL_COAUTHOR="" bash "${HELPER}" t-gate-out "Clean stdout" 2>/dev/null || true)
 grep -q "^gate:" <<<"${sout}" && fail "gate chatter must not appear on stdout: ${sout}"
 
+# --- 8: a broken config refuses, rather than reading as "no gate declared" ---
+#     Suppressing the config error would move the silent skip one layer out:
+#     enforcement would quietly stop for a repo that declares a gate.
+write_task t-gate-cfg "true"
+printf 'merge-policy = "not-a-real-policy"\n' > arsenal/config.toml
+out=$(ARSENAL_COAUTHOR="" bash "${HELPER}" t-gate-cfg "Broken config" 2>&1); rc=$?
+[[ ${rc} -ne 0 ]] || fail "an unreadable config must not silently skip the host gate"
+grep -q "could not read host-gate" <<<"${out}" || fail "the refusal should name the config: ${out}"
+printf 'merge-policy = "after-ci"\n' > arsenal/config.toml
+
+# --- 9: the config is found from a subdirectory ---
+#     arsenal_config.py resolves the config relative to --repo-root, defaulting
+#     to the cwd; this script is routinely run from a worktree or subdirectory.
+mkdir -p sub/dir
+printf 'host-gate = "exit 4"\n' > arsenal/config.toml
+out=$(cd sub/dir && ARSENAL_COAUTHOR="" bash "${HELPER}" t-gate-cfg "From subdir" 2>&1); rc=$?
+grep -q "host gate failed" <<<"${out}" \
+    || fail "the host gate must be found when run from a subdirectory: ${out}"
+printf 'merge-policy = "after-ci"\n' > arsenal/config.toml
+
 echo "PASS: open_task_pr_gates_test — all gates passed"
