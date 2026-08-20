@@ -38,8 +38,13 @@ from typing import Any
 # Defaults live here rather than being scattered through the scripts that read
 # them, so `--explain` can always say what the fallback is.
 DEFAULTS: dict[str, Any] = {
-    # How far a task PR must get before it may be merged. See the `github`
-    # skill, which is the only thing that acts on this.
+    # How far a task PR must get before it may be merged. Read at the merge
+    # step itself — `AGENTS.md` § Completion, expanded in
+    # `references/github-automation.md`, which maps each value to a check.
+    # It pointed at the `github` skill for six versions while nothing there,
+    # or anywhere else in the bundle, ever read the key (#192): a policy
+    # nothing consults decides nothing, and the cost is quiet — every merge
+    # stops to ask a question the host already answered.
     "merge-policy": "after-ci",
     # Shell command run by open_task_pr.sh before a task PR is opened, refusing
     # on non-zero. Empty by default: a repo with no gate is unaffected. This is

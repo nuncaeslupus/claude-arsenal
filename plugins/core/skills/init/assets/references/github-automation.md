@@ -34,6 +34,50 @@ without closing anything, so it stops before touching git, leaving the worker's 
 intact. Pass `ARSENAL_TASK_ISSUE=<n>` (the orchestrator has the number from step 2 of the
 session-start protocol in `AGENTS.md`) or create the handle with `handle_sync.py`. Do not reach for
 `ARSENAL_ALLOW_UNLINKED_PR=1` to get past it — that is the old silent failure, opted into.
+
+---
+
+## Merge policy — the host's standing answer to "may I merge this?"
+
+`arsenal/config.toml` carries `merge-policy`, and this is the step that reads it:
+
+```bash
+python3 claude-arsenal/scripts/arsenal_config.py --get merge-policy
+```
+
+One bare word, one of five. It is a decision the host already made and wrote down, so
+both directions are failures: merging past what it allows, and stopping to ask a
+question the file answers.
+
+| Value | Merge when |
+|---|---|
+| `always` | The PR is open and `open_task_pr.sh`'s gates passed. Nothing further to wait for. |
+| `after-ci` | Every required check on the head commit has **reported**, and is green. |
+| `after-review` | A review has landed **and** every comment it raised is fixed or answered. CI is not consulted. |
+| `after-ci-and-review` | Both rows above. |
+| `never` | Never, by an agent. Report the PR as ready and stop; the human merges. |
+
+**What counts as a review.** Whatever GitHub reports on the PR itself: a review submitted
+by a human collaborator, or by any review bot installed on the repo. Read the PR's
+reviews — do not match a name. A policy that names its reviewer in prose goes stale the
+day the repo swaps one bot for another, and then blocks forever on a reviewer nobody has
+installed. A PR with no reviews at all does not satisfy `after-review`, and waiting is the
+correct behaviour.
+
+"Fixed or answered" is the bar the review loop already enforces: a fix paired with a reply,
+or a reply explaining the disagreement. An unresolved thread is an unmet policy, not a
+judgement call.
+
+**When CI cannot report at all.** Absent is not green. A repo out of runner minutes, with
+no workflows, or whose jobs die in seconds with no runner assigned has produced no
+evidence — so `after-ci` and `after-ci-and-review` are unsatisfied, and stay that way for
+as long as the outage lasts. Do not read "no failures" as success. Say what is missing and
+stop: that state is precisely why `after-review` exists, and the fix is the host changing
+one line in `arsenal/config.toml`, not an agent deciding at merge time that today the gate
+did not mean anything.
+
+---
+
 ## Upkeep GitHub does — `.github/workflows/arsenal-queue.yml`
 
 Merging covers a task that finished. Four things it cannot cover happen when **no session

@@ -210,7 +210,10 @@ listing-budget  = 8000         # the skills-listing budget the auditor enforces
 ```
 
 `merge-policy` answers "what do you need before a task PR may merge?" — asked
-once at `/init`, then never again.
+once at `/init`, then never again. It is read at the merge step itself
+(`AGENTS.md` § Completion); `references/github-automation.md` maps each value
+to a check, including what counts as a review and what to do when CI cannot
+report at all.
 
 The two middle values are different axes, not degrees: `after-ci` is "the
 machines agree", `after-review` is "a reader agrees". A repo can require either,

@@ -1,6 +1,6 @@
 # Claude Arsenal
 
-<!-- claude-arsenal v0.36.1 — imported via @claude-arsenal/AGENTS.md -->
+<!-- claude-arsenal v0.37.0 — imported via @claude-arsenal/AGENTS.md -->
 
 This file is imported by the host repo's `CLAUDE.md` via the session-protocol block
 that `/init` injects, so it sits in context on **every turn of every session**. It
@@ -172,6 +172,10 @@ what closes the issue for a **stacked** PR whose base is another branch.
 If the helper refuses, it found no resolvable issue handle — a PR that would merge closing
 nothing. Pass `ARSENAL_TASK_ISSUE=<n>` or create the handle with `handle_sync.py`; do not
 reach for `ARSENAL_ALLOW_UNLINKED_PR=1`, which is the old silent failure, opted into.
+
+**Merging is the one step with a configured answer.** Before merging, run
+`python3 claude-arsenal/scripts/arsenal_config.py --get merge-policy` and do not merge
+beyond what it allows — nor ask the user a question the host already answered there.
 → `claude-arsenal/references/github-automation.md`
 
 ---
@@ -186,6 +190,6 @@ Each is a plain file to open, not an import. Nothing below is in context until y
 | `references/queue-seeding.md` | The queue is empty: seeding from a plan table, importing filed issues, seeding a `D-N` divergence |
 | `references/evidence-gates.md` | Writing or trusting a gate: the fence rule, hardened execution, numeric evidence, `unmeasured` |
 | `references/claiming-internals.md` | A claim misbehaves: why ref creation is the lock, attempt refs, ref accumulation, `on: push` cost |
-| `references/github-automation.md` | Completion or `arsenal-queue.yml`: the five transitions GitHub runs, and opting out |
+| `references/github-automation.md` | Completion: what `merge-policy` requires, the five transitions GitHub runs, opting out |
 | `references/quota-governance.md` | The loop stopped before dispatch: quota windows, fail-open, the round cap |
 | `references/state-layout.md` | A lookup: where a file lives, what a task state means |
