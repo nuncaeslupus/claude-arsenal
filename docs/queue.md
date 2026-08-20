@@ -209,8 +209,12 @@ session-end     = "handoff"    # handoff | ticket | none
 listing-budget  = 8000         # the skills-listing budget the auditor enforces
 ```
 
-`merge-policy` answers "what do you need before a task PR may merge?" — asked
-once at `/init`, then never again.
+`merge-policy` answers "what do you need before a task PR may merge?" You are
+prompted for it once, at `/init`, and never asked again — but the value is read
+**on every merge** (`AGENTS.md` § Completion), and
+`references/github-automation.md` maps each value to a check, including what
+counts as a review and what to do when CI cannot report at all. Set once, read
+every time; it shipped for six versions with only the first half of that.
 
 The two middle values are different axes, not degrees: `after-ci` is "the
 machines agree", `after-review` is "a reader agrees". A repo can require either,
