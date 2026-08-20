@@ -48,6 +48,77 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd 2>/dev/null || echo .)"
 BUNDLE_SCRIPTS="$(cd "${SCRIPT_DIR}/../scripts" && pwd 2>/dev/null || echo "${SCRIPT_DIR}/../scripts")"
 ARSENAL_HOME="${ARSENAL_HOME:-arsenal}"
 
+# ---------------------------------------------------------------------------
+# Gates, before anything touches git.
+#
+# worker.md step 4 asks a worker to run the host lint gate and then gate_run.sh,
+# and to open no PR if either fails. AGENTS.md goes further and states the
+# payload gate "is a hard precondition" because this script re-runs it. Neither
+# was true: nothing here ran either gate, so both were instructions with no data
+# path behind them — which this project already names as the thing that makes a
+# step not happen. A worker that forgot step 4, or ran only the `make lint` the
+# prose gives as its example, opened a perfectly valid PR over a red repo.
+#
+# The refusal is the load-bearing half. A worker that *cannot* open a PR over a
+# red repo needs no discipline; one that is asked to check first needs it every
+# single time — and one handed a skip flag reaches for it precisely when the
+# repo is red.
+#
+# SECURITY: host-gate runs verbatim, like a payload's gate block. It comes from
+# arsenal/config.toml, which is host-owned and reviewed like any other file in
+# the repo — but it is code, not data.
+_gate_fail() {
+    echo "open_task_pr: $1 — no PR opened" >&2
+    echo "open_task_pr: fix it and re-run; this is the same refusal a failing payload gate gets" >&2
+    exit 1
+}
+
+# There is deliberately no way to skip this. An escape hatch would be reached
+# for exactly when a repo is red, which is the case the refusal exists for.
+#
+# 1. The host's own gate, when the repo declares one. Absent by default, so a
+#    repo without one is unaffected.
+# Anchored to the git root, not the cwd: this script is routinely invoked from a
+# worktree or a subdirectory, and arsenal_config.py resolves arsenal/config.toml
+# relative to --repo-root (default: cwd). And errors are NOT swallowed — a
+# malformed config or a missing python3 must not read as "no gate declared".
+# Silently skipping the enforcement is the exact failure this whole change
+# exists to remove; it would just move it one layer out.
+host_gate=""
+if [[ -f "${BUNDLE_SCRIPTS}/arsenal_config.py" ]]; then
+    _repo_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+    if ! host_gate="$(python3 "${BUNDLE_SCRIPTS}/arsenal_config.py" \
+            --repo-root "${_repo_root}" --get host-gate 2>&1)"; then
+        _gate_fail "could not read host-gate from ${_repo_root}/arsenal/config.toml: ${host_gate}"
+    fi
+fi
+if [[ -n "${host_gate}" ]]; then
+    echo "open_task_pr: running host gate: ${host_gate}" >&2
+    if ! bash -c "${host_gate}" >&2; then
+        _gate_fail "host gate failed (${host_gate})"
+    fi
+fi
+
+# 2. The task's own mechanical gate — the precondition AGENTS.md already claims
+#    this script enforces.
+if [[ -f "${SCRIPT_DIR}/gate_run.sh" ]]; then
+    # Gate chatter goes to stderr: this script's stdout is a contract that
+    # callers parse (`branch:…`, the PR URL), and a `gate: passed` line in it
+    # breaks them.
+    # Resolve the task file from the default branch where it exists there: the
+    # gate is a precondition the board sets, and a worker that could edit its
+    # own gate on its own branch would be certifying itself. gate_run.sh still
+    # falls back to the working copy for a task that has not merged yet.
+    ARSENAL_GATE_FROM_DEFAULT=1 bash "${SCRIPT_DIR}/gate_run.sh" "${TASK_ID}" >&2
+    _rc=$?
+    case ${_rc} in
+        0) ;;
+        3) _gate_fail "the task gate could not run or reports its metric unmeasured (exit 3); nothing was verified" ;;
+        2) _gate_fail "the task gate could not read ${ARSENAL_HOME}/tasks/${TASK_ID}.md (gate_run.sh exit 2). A repo still on the pre-v0.25 claude-arsenal/queue/ layout must run arsenal_migrate.py first" ;;
+        *) _gate_fail "the task gate failed (gate_run.sh exit ${_rc})" ;;
+    esac
+fi
+
 # Snapshot the working tree to a permanent refs/arsenal-rescue/… ref. Used
 # before the stale-base replay below, which force-moves HEAD across the tree.
 # Echoes the ref (empty when the tree is clean or the helper is unavailable).

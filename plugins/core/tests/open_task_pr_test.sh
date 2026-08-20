@@ -15,6 +15,18 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 HELPER="${SCRIPT_DIR}/../skills/init/assets/bin/open_task_pr.sh"
 
+# open_task_pr.sh refuses to open a PR unless the task's gate passes, and there
+# is no skip flag — an escape hatch would be reached for exactly when a repo is
+# red. These fixtures therefore carry a real, trivially passing gate: the cases
+# below are about git and PR-body behaviour, not about what a gate decides.
+_seed_gates() {  # $1 = repo root
+    mkdir -p "$1/arsenal/tasks"
+    for _t in lo-guard-inplace lo-guard-selfcert lo-guard-unset lo-noissue lo-stale lo-x001 lo-x002; do
+        printf '%s\n' "---" "id: ${_t}" "title: \"fixture\"" "priority: 1" "---" "" \
+            "## Acceptance gate" '```bash' "true" '```' > "$1/arsenal/tasks/${_t}.md"
+    done
+}
+
 if [[ ! -f "${HELPER}" ]]; then
     echo "SKIP: open_task_pr.sh not found at ${HELPER}" >&2; exit 0
 fi
@@ -48,6 +60,7 @@ git push -q -u origin main
 # Worker clones (sets origin/HEAD + origin/main) and makes an uncommitted change.
 git clone -q "${tmpremote}" "${tmpwork}"
 cd "${tmpwork}"
+_seed_gates "${tmpwork}"
 git config user.email "test@arsenal.example"
 git config user.name "Arsenal Test"
 main_sha=$(git rev-parse origin/main)
@@ -85,6 +98,7 @@ echo "PASS: recorded serialized in-place mode permits git add -A"
 git checkout -q main 2>/dev/null || git checkout -q -B main origin/main
 git branch -qD arsenal/lo-guard-inplace-guard-inplace 2>/dev/null || true
 rm -rf "${tmpwork}/claude-arsenal"
+_seed_gates "${tmpwork}"
 echo "feature" > feature.txt
 
 # Gate 0d: with no issue handle resolvable, the helper refuses BEFORE touching

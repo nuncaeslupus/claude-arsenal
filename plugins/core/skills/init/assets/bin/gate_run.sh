@@ -73,13 +73,26 @@ trap cleanup EXIT
 HOME_DIR="${ARSENAL_HOME:-arsenal}"
 PAYLOAD="${HOME_DIR}/tasks/${TASK_ID}.md"
 
-if [[ ! -f "${PAYLOAD}" ]]; then
+# ARSENAL_GATE_FROM_DEFAULT=1 prefers the default branch's copy over the one on
+# disk. open_task_pr.sh sets it, because there the gate is an enforcement
+# precondition rather than a convenience: a worker whose own branch supplies the
+# gate it is being held to is certifying itself. Everywhere else the working
+# copy is what the author wants to run, so the default is unchanged.
+_prefer_default=0
+[[ "${ARSENAL_GATE_FROM_DEFAULT:-}" == "1" && -f "${PAYLOAD}" ]] && _prefer_default=1
+
+if [[ ! -f "${PAYLOAD}" || ${_prefer_default} -eq 1 ]]; then
     # Fall back to reading it from the default branch: a worktree cut from an
     # older base can predate the commit that added the task.
     REMOTE="${ARSENAL_QUEUE_REMOTE:-origin}"
     DEFAULT_BRANCH="${ARSENAL_DEFAULT_BRANCH:-}"
     if [[ -z "${DEFAULT_BRANCH}" ]]; then
-        DEFAULT_BRANCH="$(git symbolic-ref --short "refs/remotes/${REMOTE}/HEAD" 2>/dev/null | sed "s#^${REMOTE}/##")"
+        # `|| true`: under `set -euo pipefail` a failing git here (no remote
+        # HEAD configured, which is normal in a fresh clone or a test repo) took
+        # the whole script down with git's exit 128 instead of falling through to
+        # the `main` default below. Latent until something made this path run
+        # while the task file was present.
+        DEFAULT_BRANCH="$(git symbolic-ref --short "refs/remotes/${REMOTE}/HEAD" 2>/dev/null | sed "s#^${REMOTE}/##" || true)"
     fi
     DEFAULT_BRANCH="${DEFAULT_BRANCH:-main}"
     # Materialize OUTSIDE the repo tree: a file written inside it would be swept
@@ -95,8 +108,16 @@ if [[ ! -f "${PAYLOAD}" ]]; then
         fi
     done
     if [[ ${found} -eq 0 ]]; then
-        echo "gate_run: task file not found: ${HOME_DIR}/tasks/${TASK_ID}.md" >&2
-        exit 2
+        if [[ ${_prefer_default} -eq 1 ]]; then
+            # Not on the default branch yet — a task added by this very PR. The
+            # working copy is all there is, so use it and say so.
+            rm -f "${PAYLOAD_TMP}"; PAYLOAD_TMP=""
+            PAYLOAD="${HOME_DIR}/tasks/${TASK_ID}.md"
+            echo "gate_run: ${TASK_ID} is not on the default branch yet — gating on the working copy" >&2
+        else
+            echo "gate_run: task file not found: ${HOME_DIR}/tasks/${TASK_ID}.md" >&2
+            exit 2
+        fi
     fi
 fi
 
