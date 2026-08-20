@@ -14,6 +14,18 @@ gate inside its ``## Acceptance gate`` section as a fenced ``gate`` block:
   the gate-check skill uses; ops: < <= > >= == !=).
 - ``evidence`` is a path to a committed JSON file holding the measurement.
 - ``key`` is a dotted path into that JSON to the measured number.
+- ``status-key`` is optional: a dotted path to a string that may read
+  ``unmeasured``, for the state "the check ran, and what it found is that this
+  cannot be scored yet". That is not a pass and not a fail — a numeric gate is
+  routinely in it before its prerequisite data exists — and without somewhere to
+  put it, the honest evidence (a null) lands in the non-numeric branch and reads
+  as a hard failure, which pressures the author into weakening the gate to
+  something measurable. Exactly the pressure these gates exist to remove.
+
+  It must be **positively asserted** in the evidence file. Treating any missing
+  or null value as "unmeasured" would let a gate stop checking by omission,
+  which is the vacuous-pass hole these gates were added to close, reopened
+  somewhere new.
 
 This asserts ``measured <op> threshold`` over the committed evidence file. It
 exists to close the false-"done" hole (CA-12): a numeric gate can no longer pass
@@ -21,7 +33,9 @@ just because no runnable check was attached — a declared evidence gate with no
 evidence file, or evidence that contradicts the threshold, is a hard failure.
 
 Exit: 0 pass OR no evidence gate declared; 1 assertion failed; 2 evidence gate
-declared but missing/unreadable file, key not found, or non-numeric value.
+declared but missing/unreadable file, key not found, or non-numeric value;
+3 declared unmeasured via ``status-key`` — `gate_run.sh` already treats 3 as
+"could not run" rather than as a verdict.
 """
 
 from __future__ import annotations
@@ -113,6 +127,19 @@ def main() -> None:
         data = json.loads(ev_path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError) as exc:
         _fail(f"could not read evidence JSON {ev_path}: {exc}", 2)
+
+    # Checked before the value is read: a metric declared unmeasured has no
+    # number to read, and that is the whole point.
+    status_key = fields.get("status-key")
+    if status_key:
+        raw_status = _dig(data, status_key)
+        if isinstance(raw_status, str) and raw_status.strip().lower() == "unmeasured":
+            print(
+                f"gate_evidence: UNMEASURED — {status_key}={raw_status!r} in {ev_path}; "
+                f"{key} cannot be scored yet",
+                file=sys.stderr,
+            )
+            sys.exit(3)
 
     raw_measured = _dig(data, key)
     if isinstance(raw_measured, bool) or not isinstance(raw_measured, int | float):

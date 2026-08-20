@@ -83,5 +83,42 @@ if [[ -f "${GR}" ]]; then
     echo "PASS: gate_run passes a satisfied evidence gate"
 fi
 
+# --- unmeasured: a metric that positively declares it cannot be scored yet ---
+#     Without this the honest evidence (a null) lands in the non-numeric branch
+#     and reads as a hard failure, so the only way forward is weakening the gate
+#     to something measurable — the pressure these gates exist to remove.
+cat > "${tmp}/arsenal/tasks/lo-u.md" <<'MD'
+# Unmeasurable yet
+
+## Acceptance gate
+```gate
+extraction_macro_f1 >= 0.75
+evidence: extraction.json
+key: extraction_macro_f1
+status-key: extraction_status
+```
+MD
+runu() { python3 "${GE}" arsenal/tasks/lo-u.md >/dev/null 2>&1; echo $?; }
+
+echo '{"extraction_macro_f1": null, "extraction_status": "unmeasured"}' > extraction.json
+[[ "$(runu)" == "3" ]] || { echo "FAIL: a declared-unmeasured metric should exit 3" >&2; exit 1; }
+echo "PASS: declared unmeasured → 3 (not a verdict)"
+
+# not reachable by omission: that would reopen the vacuous-pass hole elsewhere
+echo '{"extraction_macro_f1": null}' > extraction.json
+[[ "$(runu)" == "2" ]] || { echo "FAIL: a null with no positive status assertion must stay exit 2" >&2; exit 1; }
+echo "PASS: a bare null is still a hard failure"
+
+# a status that does not say unmeasured does not excuse a failing number
+echo '{"extraction_macro_f1": 0.4, "extraction_status": "measured"}' > extraction.json
+[[ "$(runu)" == "1" ]] || { echo "FAIL: a measured value below threshold must still exit 1" >&2; exit 1; }
+echo "PASS: a measured value below threshold still fails"
+
+# gate_run must propagate 3 rather than collapsing it into a verdict
+echo '{"extraction_macro_f1": null, "extraction_status": "unmeasured"}' > extraction.json
+bash "${GR}" lo-u >/dev/null 2>&1
+[[ $? -eq 3 ]] || { echo "FAIL: gate_run should propagate exit 3 for an unmeasured gate" >&2; exit 1; }
+echo "PASS: gate_run propagates unmeasured as 3"
+
 echo "PASS: gate_evidence_test — all gates passed"
 exit 0

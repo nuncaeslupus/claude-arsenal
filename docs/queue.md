@@ -80,6 +80,13 @@ from the title, which meant two agents adding a task with the same title minted
 the same id. Random ids need no coordination, so several agents can create tasks
 at once.
 
+**A numeric gate may declare itself unmeasurable.** An evidence gate can carry
+`status-key:`, pointing at a field that reads `unmeasured`; the gate then exits
+3 — "the check ran, and what it found is that this cannot be scored yet" — which
+is neither a pass nor a fail. It has to be asserted positively in the evidence
+file: inferring it from a missing or null value would let a gate stop checking
+by omission, which is the hole evidence gates exist to close.
+
 **The gate must be a fenced ` ```bash ` block.** Prose is not executable, and a
 gate that runs nothing passes everything. `task_select.py` reports `gate: false`
 for a task that has no block, so a queue full of unenforced gates is visible

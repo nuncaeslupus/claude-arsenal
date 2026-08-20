@@ -19,6 +19,7 @@
 # a `gate:` line and, when nothing ran, warned about on stderr:
 #
 #   gate: passed      a block was found and it exited 0
+#   gate: unmeasured  the evidence file declares the metric unmeasured (exit 3)
 #   gate: prose-only  an ## Acceptance gate section exists with no fenced block
 #   gate: none        no ## Acceptance gate section at all
 #
@@ -104,9 +105,24 @@ fi
 # file or a measurement that violates the threshold fails the gate right here,
 # before the prose/bash-block path can let it through.
 GATE_EVIDENCE_PY="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../scripts/gate_evidence.py"
-if [[ -f "${GATE_EVIDENCE_PY}" ]] && ! python3 "${GATE_EVIDENCE_PY}" "${PAYLOAD}"; then
-    echo "gate_run: evidence gate failed for ${TASK_ID}" >&2
-    exit 1
+if [[ -f "${GATE_EVIDENCE_PY}" ]]; then
+    python3 "${GATE_EVIDENCE_PY}" "${PAYLOAD}"
+    _ev=$?
+    # 3 means the evidence file positively declares the metric unmeasured: the
+    # check ran and found that this cannot be scored yet. That is not a verdict,
+    # and collapsing it into 1 would make the one honest answer a hard failure —
+    # which is what pressures an author into weakening a gate to something
+    # measurable. Propagated as 3, the same code this script already uses for
+    # "the gate could not run".
+    if [[ ${_ev} -eq 3 ]]; then
+        echo "gate: unmeasured"
+        echo "gate_run: ${TASK_ID} declares its metric unmeasured — nothing was verified" >&2
+        exit 3
+    fi
+    if [[ ${_ev} -ne 0 ]]; then
+        echo "gate_run: evidence gate failed for ${TASK_ID}" >&2
+        exit 1
+    fi
 fi
 
 python3 - "${PAYLOAD}" "${TASK_ID}" <<'PY'

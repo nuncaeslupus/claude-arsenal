@@ -151,5 +151,25 @@ out=$(ARSENAL_REMOTE=nope bash bin/check_update.sh --bogus 2>&1; echo "rc=$?")
 grep -q "rc=0" <<<"${out}" || fail "an unknown argument must never abort a session: ${out}"
 grep -q "unknown argument" <<<"${out}" || fail "an unknown argument should say so: ${out}"
 
+# --- 9: "updated" is never printed while the bundle version did not move ---
+#     In the split layout the update path merged the subtree and re-ran init.py,
+#     which faithfully reassembled the bundle out of the PRE-upgrade vendored
+#     skills — nothing had refreshed those. The subtree said the new version,
+#     the assembled bundle said the old one, and the run reported success. The
+#     success message is the part that hid it.
+setup_repo_at "claude-arsenal" "0.29.1"
+mkdir -p vendor/claude-arsenal/plugins/core/skills/init/assets
+printf '0.30.0\n' > vendor/claude-arsenal/plugins/core/skills/init/assets/.bundle-version
+git add -A && git commit -q -m "vendored subtree at the newer version"
+
+# no vendor-skills.sh and no init.py here, so nothing can move the bundle:
+# exactly the situation the old code called a success.
+out=$(ARSENAL_BUNDLE_DIR=claude-arsenal ARSENAL_PREFIX=vendor/claude-arsenal \
+      ARSENAL_REMOTE=nope bash bin/check_update.sh 2>&1 || true)
+if grep -q "updated to v" <<<"${out}"; then
+    grep -q "still reads" <<<"${out}" \
+        || fail "must not report a completed update while the bundle version is unchanged: ${out}"
+fi
+
 echo "PASS: check_update_test — all gates passed"
 exit 0
