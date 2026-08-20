@@ -40,7 +40,8 @@ python3 .claude/skills/init/scripts/init.py --repo-path "${tmpdir}" >/dev/null
 
 # Gate 3: claude-arsenal/ was bootstrapped from the flattened bundle.
 for f in claude-arsenal/bin/claim_task.sh claude-arsenal/scripts/task_select.py \
-         claude-arsenal/AGENTS.md arsenal/config.toml arsenal/tasks \
+         claude-arsenal/AGENTS.md claude-arsenal/references/worker-loop.md \
+         arsenal/config.toml arsenal/tasks \
          arsenal/session/handover.md; do
     if [[ ! -e "${tmpdir}/${f}" ]]; then
         echo "FAIL: flattened init did not create ${f}" >&2; exit 1
