@@ -205,8 +205,20 @@ vendored file is a preference an upgrade overwrites:
 ```bash
 export CLAUDE_CODE_DISABLE_1M_CONTEXT=1
 export CLAUDE_CODE_DISABLE_FAST_MODE=1
-export CLAUDE_CODE_SUBAGENT_MODEL="$(python3 claude-arsenal/scripts/arsenal_config.py --get models.workers)"
+
+root="$(git rev-parse --show-toplevel)"
+workers_model="$(python3 "${root}/claude-arsenal/scripts/arsenal_config.py" \
+    --repo-root "${root}" --get models.workers)" \
+  || { echo "arsenal: models.workers is unusable — fix arsenal/config.toml" >&2; exit 1; }
+export CLAUDE_CODE_SUBAGENT_MODEL="${workers_model:?models.workers resolved empty}"
 ```
+
+**Assign, check, then export** — and anchor both paths on the repo root. Written
+as one line, `export VAR="$(cmd)"` reports the exit status of `export`, which
+always succeeds: a rejected model or a script path that did not resolve from a
+subdirectory would set an empty value, `export` would return 0, and the fleet
+would dispatch on whatever model Claude Code defaults to. That is the silent
+fleet the hard error below exists to prevent, arriving by a different door.
 
 `models.workers` defaults to `sonnet` and takes either an alias Claude Code
 resolves (`opus`, `sonnet`, `haiku`) or a full model id. A value that is
