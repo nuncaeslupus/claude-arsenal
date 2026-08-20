@@ -33,8 +33,9 @@ plan actually reflect it — workspace projects keep them at
 queue task before ending — a decision that lives only in handover prose drifts,
 because the handover is a snapshot the next session overwrites while the spec,
 plan, and queue are the ledger. The same rule applies to any blocking spec
-divergence found this session (see the vendored `AGENTS.md` "Divergence
-handling" section): seed it as a queue task, don't leave it in prose.
+divergence found this session (see "Divergence handling" in the vendored
+bundle's `queue-seeding.md`, under `claude-arsenal/references/`): seed it as a
+queue task, don't leave it in prose.
 
 Read the host repo's `CLAUDE.md` and look for one of:
 

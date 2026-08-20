@@ -101,8 +101,8 @@ keep up to date, and exactly one of them is upstream's:
 
 - **`.claude/skills/`** — the flattened skill files; refreshed by
   `make update-skills` (or directly with `<clone>/scripts/vendor-skills.sh`).
-- **`claude-arsenal/`** — the runtime bundle (`AGENTS.md`, `bin/`, `scripts/`);
-  refreshed by re-running `init.py`.
+- **`claude-arsenal/`** — the runtime bundle (`AGENTS.md`, `references/`, `bin/`,
+  `scripts/`); refreshed by re-running `init.py`.
 
 `arsenal/` is **yours** — tasks, specs, plans, config, session state — and no
 update writes to it. That split is the whole point: upstream owns one directory
@@ -112,7 +112,7 @@ and may overwrite it freely, so an upgrade can never touch your work.
 # 1. Re-vendor the skills
 make update-skills
 
-# 2. Refresh claude-arsenal/ (bin/, scripts/, AGENTS.md)
+# 2. Refresh claude-arsenal/ (bin/, scripts/, references/, AGENTS.md)
 python3 .claude/skills/init/scripts/init.py --repo-path .
 
 # 3. Commit both trees

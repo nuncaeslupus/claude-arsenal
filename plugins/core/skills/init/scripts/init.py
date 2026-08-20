@@ -63,6 +63,22 @@ session-end = "handoff"
 # surface's real budget differs, rather than deleting skills to fit a number
 # that is not yours.
 listing-budget = 8000
+
+# Which model runs what. An alias Claude Code resolves (opus | sonnet | haiku)
+# or a full model id.
+#
+# workers is enforced: the orchestrator exports it as CLAUDE_CODE_SUBAGENT_MODEL
+# before dispatching, so it governs every worker subagent in the session.
+#
+# orchestrator is advisory — a session cannot change the model it is already
+# running as. It is read at session start and reported when the running model
+# is not the one named here. Leave it empty for "no opinion".
+#
+# Keep table headers at the end of this file: a bare key written after one
+# lands inside the table instead of at the top level.
+[models]
+orchestrator = ""
+workers = "sonnet"
 """
 
 DEFAULT_SURFACE_PROFILE = {
@@ -110,7 +126,7 @@ WORKSPACE_HANDOVER_STUB = """\
 
 ## How to continue
 
-1. Read `claude-arsenal/AGENTS.md` for the worker loop algorithm.
+1. Read `claude-arsenal/references/worker-loop.md` for the worker loop algorithm.
 2. Fetch the `arsenal:task` issues, then run
    `claude-arsenal/scripts/task_select.py --issues <file>` for the next task.
 3. Claim it with `claude-arsenal/bin/claim_task.sh <task_id>`; `lost` means
@@ -197,7 +213,10 @@ def _refresh_bundle(bundle: Path, target: Path, silent: bool = False) -> None:
 
 # Directories the bundle owns outright: everything in them comes from upstream,
 # so a file there that upstream no longer ships is a leftover, not host data.
-_PRUNABLE_DIRS = ("bin", "scripts")
+# `references/` is swept for the same reason as the script dirs: a retired
+# reference left behind is protocol the bundle no longer means, sitting in the
+# tree a session reads on demand.
+_PRUNABLE_DIRS = ("bin", "scripts", "references")
 
 
 def _prune_bundle(bundle: Path, target: Path) -> None:
@@ -405,7 +424,20 @@ def _record_queue_automation(config: Path, value: str) -> None:
                 flags=re.MULTILINE,
             )
         else:
-            text = text.rstrip("\n") + f"\nqueue-automation = {value}\n"
+            # A bare key has to go above the first [table] header — appended at
+            # the end of a file that ends in `[models]` it would be read as
+            # `models.queue-automation`, an unknown key the loader ignores, so
+            # opting out of the workflow would silently stop working.
+            lines = text.rstrip("\n").split("\n")
+            table_at = next(
+                (i for i, line in enumerate(lines) if line.lstrip().startswith("[")), None
+            )
+            entry = f"queue-automation = {value}"
+            if table_at is None:
+                lines.append(entry)
+            else:
+                lines[table_at:table_at] = [entry, ""]
+            text = "\n".join(lines) + "\n"
     else:
         text = f"queue-automation = {value}\n"
     config.parent.mkdir(parents=True, exist_ok=True)

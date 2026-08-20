@@ -18,7 +18,7 @@
 
 ## How to continue
 
-1. Read `claude-arsenal/AGENTS.md` for the worker loop algorithm.
+1. Read `claude-arsenal/references/worker-loop.md` for the worker loop algorithm.
 2. Run `python3 claude-arsenal/scripts/task_select.py --issues <issues.json>` for the next unblocked task.
 3. If the last task is still `in_progress` with no active assignee, run:
    leave it: the next attempt claims the next attempt ref, so nothing needs requeueing.

@@ -9,9 +9,15 @@ them, so a preference stored in one is a preference that silently disappears.
 Every key has a default, so a repo with no config file behaves sensibly and a
 repo with a partial file only overrides what it names.
 
+Keys are flat, except that a TOML table reads as dotted keys — `[models]`
+with `workers = "sonnet"` is the key `models.workers`. Grouping the model
+choices under one header is what lets a consumer state them the way they think
+of them, rather than as two unrelated top-level strings.
+
 Usage:
     arsenal_config.py                      # print the effective config as JSON
     arsenal_config.py --get merge-policy   # print one value, bare
+    arsenal_config.py --get models.workers # dotted key: a value inside a table
     arsenal_config.py --explain            # show each value and where it came from
 
 Exit: 0 on success, 2 on an invalid value (a typo in a policy name is a
@@ -23,6 +29,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import tomllib
 from pathlib import Path
@@ -67,6 +74,18 @@ DEFAULTS: dict[str, Any] = {
     "task-label": "arsenal:task",
     # Ref namespace for atomic claim refs.
     "claim-prefix": "arsenal/claims",
+    # Which model runs the session that dispatches work. Advisory, and the one
+    # key here nothing can enforce from inside a session: a session cannot
+    # change the model it is already running as, so this is read and reported
+    # at session start for the person launching it (`claude --model <value>`).
+    # Empty means "whatever the session was launched with" — no opinion.
+    "models.orchestrator": "",
+    # Which model runs worker subagents. This one has a data path: the
+    # orchestrator exports it as CLAUDE_CODE_SUBAGENT_MODEL before any Task
+    # dispatch, so it governs every worker in the session. It used to be a
+    # model id hardcoded in the protocol prose, which meant a consumer who
+    # wanted a different one had to edit a vendored file an upgrade overwrites.
+    "models.workers": "sonnet",
 }
 
 ENUMS: dict[str, set[str]] = {
@@ -90,6 +109,36 @@ class ConfigError(Exception):
 
 def _config_path(repo_root: Path, home: str) -> Path:
     return repo_root / home / CONFIG_RELPATH
+
+
+# A model may be an alias Claude Code resolves (`opus`, `sonnet`, `haiku`) or a
+# full model id. Deliberately not an enum: model names change every few months,
+# and a closed set here would reject the model a consumer is actually running
+# — the vendored file would have to ship a new version to allow a name that
+# already works everywhere else. So the check is on shape, not membership: a
+# bare token, because the value ends up inside an exported environment
+# variable, and anything with quotes, spaces or shell metacharacters in it is a
+# typo at best.
+MODEL_VALUE_REGEX = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]*$")
+
+MODEL_KEYS = ("models.orchestrator", "models.workers")
+
+
+def _flatten(raw: dict[str, Any]) -> dict[str, Any]:
+    """One level of TOML table → dotted keys: `[models] workers=` → `models.workers`.
+
+    Only one level, because the config is a flat list of settings that happens
+    to group two of them. Recursing would invite a nesting depth nobody reading
+    `--explain` output could hold in their head.
+    """
+    flat: dict[str, Any] = {}
+    for key, value in raw.items():
+        if isinstance(value, dict):
+            for sub, subvalue in value.items():
+                flat[f"{key}.{sub}"] = subvalue
+        else:
+            flat[key] = value
+    return flat
 
 
 def load(repo_root: Path | None = None) -> tuple[dict[str, Any], dict[str, str]]:
@@ -116,7 +165,7 @@ def load(repo_root: Path | None = None) -> tuple[dict[str, Any], dict[str, str]]
             raw = tomllib.loads(path.read_text(encoding="utf-8"))
         except tomllib.TOMLDecodeError as exc:
             raise ConfigError(f"{path}: not valid TOML — {exc}") from exc
-        for key, value in raw.items():
+        for key, value in _flatten(raw).items():
             if key not in DEFAULTS:
                 # Unknown keys are tolerated rather than fatal: a consumer on
                 # an older bundle should not break when a newer one adds a key,
@@ -134,6 +183,26 @@ def load(repo_root: Path | None = None) -> tuple[dict[str, Any], dict[str, str]]
         raise ConfigError(
             f"listing-budget must be a positive integer, got {values['listing-budget']!r}"
         )
+    for key in MODEL_KEYS:
+        value = values[key]
+        if not isinstance(value, str):
+            raise ConfigError(f"{key} must be a string, got {value!r} (from {sources[key]})")
+        # Empty is meaningful for the orchestrator ("no opinion, use whatever
+        # the session was launched with") and meaningless for workers, which
+        # would export an empty CLAUDE_CODE_SUBAGENT_MODEL and silently get the
+        # default — a setting that looks configured and is not.
+        if value == "":
+            if key == "models.workers":
+                raise ConfigError(
+                    "models.workers cannot be empty — name a model, or remove the key "
+                    f"to get the default {DEFAULTS['models.workers']!r}"
+                )
+            continue
+        if not MODEL_VALUE_REGEX.match(value):
+            raise ConfigError(
+                f"{key}: {value!r} is not a model name — expected an alias like "
+                f"'opus' or a model id like 'claude-sonnet-4-6' (from {sources[key]})"
+            )
 
     return values, sources
 
