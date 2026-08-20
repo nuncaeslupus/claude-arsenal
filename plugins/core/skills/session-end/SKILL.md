@@ -74,6 +74,15 @@ Format and rubric for the proposal block live in [retrospective-rubric](referenc
 
 ## Step 3 — PR audit (always when queue exists)
 
+**This step reports; it does not repair.** Nothing the next session needs depends on it
+running. A merged task PR has already closed and archived its task (`open_task_pr.sh`
+writes `Closes #<issue>` and the `_history/` move into the PR), and an abandoned one has
+already had its claim released by `.github/workflows/arsenal-queue.yml`. So a session that
+ends without ever reaching this skill still leaves a correct queue — which is the point,
+because the sessions that end abruptly are the ones that would have skipped it anyway.
+Anything shaped like "and remember to update X" belongs in the workflow or in a script,
+never in this step.
+
 Collect every claimed task and every task whose PR is open, from the `arsenal:task` issues
 that carries a `pr` field, then check each PR for CI, review comments, and merge conflicts.
 

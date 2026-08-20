@@ -15,9 +15,28 @@
 # ARSENAL_COAUTHOR ("Name <email>") when the caller exports the active model
 # identity supplied by the harness. Absent it, no trailer is written.
 #
+# The PR body AND the commit message both carry `Closes #<issue>`, because that
+# is the whole completion mechanism: GitHub closes the task's issue when the PR
+# merges, so no session has to remember to update the queue afterwards. The
+# number is resolved here rather than left to the caller — this used to be an
+# instruction in the worker's prose ("make sure the body carries Closes #N")
+# with no data path behind it, so every PR this script opened closed nothing and
+# every merged task stayed `claimed` until a human noticed. Both places on
+# purpose: the body fires on a merge into the default branch, the commit message
+# survives a squash and fires for a stacked PR whose base is another branch.
+#
+# It also moves the task file into `tasks/_history/` with `status: merged` as
+# part of the PR's own diff, so the archive lands exactly when the merge does
+# and no follow-up commit is owed to anyone.
+#
 # Env: ARSENAL_QUEUE_REMOTE (default origin); ARSENAL_COAUTHOR (optional);
+#      ARSENAL_TASK_ISSUE (issue number, when the caller already knows it);
+#      ARSENAL_ISSUES_JSON (saved issue list, default /tmp/arsenal-issues.json);
+#      ARSENAL_HOME (task tree, default arsenal);
+#      ARSENAL_ALLOW_UNLINKED_PR=1 (open a PR that closes nothing — see below);
 #      ARSENAL_ALLOW_SHARED_ADD (operator escape hatch, see the guard below).
-# Exit: 0 branch pushed (PR opened or branch emitted), 1 on push failure / usage.
+# Exit: 0 branch pushed (PR opened or branch emitted), 1 on push failure /
+#       usage / an unresolvable issue handle.
 
 set -uo pipefail
 
@@ -26,6 +45,8 @@ TASK_ID="${1:?open_task_pr.sh requires <task_id>}"
 TITLE="${2:?open_task_pr.sh requires <title>}"
 TYPE="${3:-feat}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd 2>/dev/null || echo .)"
+BUNDLE_SCRIPTS="$(cd "${SCRIPT_DIR}/../scripts" && pwd 2>/dev/null || echo "${SCRIPT_DIR}/../scripts")"
+ARSENAL_HOME="${ARSENAL_HOME:-arsenal}"
 
 # Snapshot the working tree to a permanent refs/arsenal-rescue/… ref. Used
 # before the stale-base replay below, which force-moves HEAD across the tree.
@@ -120,20 +141,7 @@ _carry_onto() {
     return 0
 }
 
-current="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
-if [[ "${current}" != "${BRANCH}" ]]; then
-    if git rev-parse --verify --quiet "${BRANCH}" >/dev/null 2>&1; then
-        git checkout "${BRANCH}" >/dev/null 2>&1 || { echo "open_task_pr: cannot switch to ${BRANCH}" >&2; exit 1; }
-    elif ! git checkout -b "${BRANCH}" "${default_ref}" >/dev/null 2>&1; then
-        if ! git rev-parse --verify --quiet "${default_ref}" >/dev/null 2>&1; then
-            echo "open_task_pr: cannot resolve default branch '${default_branch}' (ref '${default_ref}') to branch off" >&2
-            exit 1
-        fi
-        _carry_onto "${BRANCH}" "${default_ref}" || exit 1
-    fi
-fi
-
-# Stage and commit. A dynamic Co-Authored-By is added only when supplied.
+# Refuse a shared checkout BEFORE anything mutates git.
 #
 # Safety guard: git add -A stages everything in the working tree, which risks
 # sweeping a CONCURRENT worker's files or secrets into this commit when workers
@@ -164,8 +172,169 @@ else
     echo "open_task_pr: git add -A refused on shared checkout — not running in a linked git worktree and serialized in-place mode is not recorded (arsenal/session/worktree_isolation). Run from an isolated worktree, or set ARSENAL_ALLOW_SHARED_ADD=1 if you have verified no other worker shares this checkout." >&2
     exit 1
 fi
+
+# ---------------------------------------------------------------------------
+# Resolve the task's issue number BEFORE touching git.
+#
+# Everything below this point mutates the tree, and a PR that cannot close its
+# issue is worse than no PR at all: it merges, the work lands, and the board
+# still shows the task claimed — the exact drift the next session pays to find.
+# Failing here instead leaves the worker's edits untouched and the fix obvious.
+#
+# Three sources, cheapest first. The saved issue list is the common case: the
+# session-start protocol already fetched every `arsenal:task` issue, so the
+# answer is usually sitting on disk.
+_resolve_issue() {
+    local out
+
+    if [[ -n "${ARSENAL_TASK_ISSUE:-}" ]]; then
+        printf '%s' "${ARSENAL_TASK_ISSUE}"
+        return 0
+    fi
+
+    local resolver="${BUNDLE_SCRIPTS}/issue_for_task.py"
+    [[ -f "${resolver}" ]] || return 1
+
+    local saved="${ARSENAL_ISSUES_JSON:-/tmp/arsenal-issues.json}"
+    if [[ -s "${saved}" ]] \
+        && out="$(python3 "${resolver}" --task "${TASK_ID}" --issues "${saved}" 2>/dev/null)"; then
+        printf '%s' "${out}"
+        return 0
+    fi
+
+    # Nothing saved (or the task is newer than the snapshot) — ask GitHub over
+    # whatever channel this surface has. `none` exits 5 here and falls through
+    # to the refusal below, which tells the caller to pass --issue: on a surface
+    # with no scriptable channel the model holds the number, not the script.
+    local slug
+    slug="$(bash "${SCRIPT_DIR}/github_channel.sh" --slug 2>/dev/null)" || return 1
+    if out="$(bash "${SCRIPT_DIR}/github_channel.sh" --api GET \
+                "/repos/${slug}/issues?labels=arsenal:task&state=all&per_page=100" 2>/dev/null)"; then
+        if out="$(printf '%s' "${out}" | python3 "${resolver}" --task "${TASK_ID}" --issues - 2>/dev/null)"; then
+            printf '%s' "${out}"
+            return 0
+        fi
+    fi
+    return 1
+}
+
+ISSUE=""
+if ! ISSUE="$(_resolve_issue)" || [[ -z "${ISSUE}" ]]; then
+    if [[ "${ARSENAL_ALLOW_UNLINKED_PR:-}" == "1" ]]; then
+        ISSUE=""
+        echo "open_task_pr: no issue handle for ${TASK_ID}; opening an UNLINKED PR because ARSENAL_ALLOW_UNLINKED_PR=1 — merging it will NOT close the task, so close the issue by hand" >&2
+    else
+        cat >&2 <<EOF
+open_task_pr: cannot resolve the issue handle for ${TASK_ID}, so a PR opened now
+would merge without closing its task and leave the queue claiming work that is
+already done. Nothing has been committed — your edits are untouched.
+
+Fix one of these, then re-run:
+  * pass the number you already have:  ARSENAL_TASK_ISSUE=<n> open_task_pr.sh ...
+  * point at the session's issue list: ARSENAL_ISSUES_JSON=/tmp/arsenal-issues.json
+  * create the missing handle:         python3 ${BUNDLE_SCRIPTS}/handle_sync.py --issues <file>
+EOF
+        exit 1
+    fi
+fi
+
+current="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+if [[ "${current}" != "${BRANCH}" ]]; then
+    if git rev-parse --verify --quiet "${BRANCH}" >/dev/null 2>&1; then
+        git checkout "${BRANCH}" >/dev/null 2>&1 || { echo "open_task_pr: cannot switch to ${BRANCH}" >&2; exit 1; }
+    elif ! git checkout -b "${BRANCH}" "${default_ref}" >/dev/null 2>&1; then
+        if ! git rev-parse --verify --quiet "${default_ref}" >/dev/null 2>&1; then
+            echo "open_task_pr: cannot resolve default branch '${default_branch}' (ref '${default_ref}') to branch off" >&2
+            exit 1
+        fi
+        _carry_onto "${BRANCH}" "${default_ref}" || exit 1
+    fi
+fi
+
+# Archive the task file as part of THIS PR's diff.
+#
+# A finished task's file is not work any more — it is what makes a dep on
+# completed work resolve instead of reading as unknown, and what keeps its gate
+# on disk. `task_select.py` already reads `tasks/_history/` and already treats a
+# `status: merged` front-matter key as terminal; nothing ever wrote either. So
+# the archive was a step owed to some later session, and later sessions do not
+# run it.
+#
+# Riding it in the PR fixes the timing exactly: the rename lands on the default
+# branch at the moment the merge does, and if the PR never merges the task file
+# never moves. No follow-up commit, no push to a protected branch, nothing to
+# reconcile.
+_archive_task_file() {
+    local live="${ARSENAL_HOME}/tasks/${TASK_ID}.md"
+    local hist_dir="${ARSENAL_HOME}/tasks/_history"
+    local dest="${hist_dir}/${TASK_ID}.md"
+
+    # An unlinked PR closes nothing, so archiving would record work as merged
+    # while its issue stays open — a contradiction this script exists to prevent.
+    # Leave the task file live: the PR is then just code, and the task is still
+    # open, which is the truth.
+    if [[ -z "${ISSUE}" ]]; then
+        echo "open_task_pr: unlinked PR — leaving ${live} live, since merging it completes nothing" >&2
+        return 0
+    fi
+
+    # No task file is legitimate (a task worked from a payload elsewhere); a
+    # file that exists and cannot be archived is not. Every failure below is
+    # fatal, because the PR body promises the archive and a half-done one leaves
+    # exactly the drift this whole change removes.
+    [[ -f "${live}" ]] || return 0
+
+    mkdir -p "${hist_dir}" || { echo "open_task_pr: cannot create ${hist_dir}" >&2; return 1; }
+    if ! git mv "${live}" "${dest}" 2>/dev/null; then
+        mv "${live}" "${dest}" 2>/dev/null \
+            || { echo "open_task_pr: cannot move ${live} to ${dest}" >&2; return 1; }
+    fi
+
+    # Stamp the terminal status inside the front matter, so the record survives
+    # even if the issue is later deleted or the repo is read without GitHub.
+    python3 - "${dest}" <<'PY' || { echo "open_task_pr: cannot stamp 'status: merged' into ${dest}" >&2; return 1; }
+import re
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+text = path.read_text(encoding="utf-8")
+match = re.match(r"\A---\r?\n(.*?)\r?\n---\r?\n", text, re.DOTALL)
+if not match:
+    sys.exit(0)
+front = match.group(1)
+if re.search(r"^status:", front, re.MULTILINE):
+    front = re.sub(r"^status:.*$", "status: merged", front, count=1, flags=re.MULTILINE)
+else:
+    front = front + "\nstatus: merged"
+path.write_text(text[: match.start(1)] + front + text[match.end(1) :], encoding="utf-8")
+PY
+    # Assert the outcome rather than assume it: the PR body tells a reader the
+    # gate lives at the archived path, and `task_select.py` only treats the file
+    # as finished work when it parses a terminal `status`.
+    if [[ ! -f "${dest}" ]] || ! grep -q '^status: merged$' "${dest}"; then
+        echo "open_task_pr: ${dest} is not a complete archive (missing, or no 'status: merged')" >&2
+        return 1
+    fi
+    echo "open_task_pr: archived ${live} -> ${dest} (status: merged)" >&2
+}
+if ! _archive_task_file; then
+    echo "open_task_pr: refusing to open a PR whose task file could not be archived — the merge would close the issue and leave the task file live. Fix the error above and re-run; nothing has been committed." >&2
+    exit 1
+fi
+
+# Stage and commit — the shared-checkout guard above already cleared `git add
+# -A`, and a dynamic Co-Authored-By is added only when supplied.
 git add -A
+
+# `Closes #<issue>` goes in the commit message as well as the PR body. The body
+# form only fires on a merge into the default branch; the commit form survives a
+# squash merge and is what closes the issue for a stacked PR based on another
+# branch. Writing both costs one line and removes a caveat nobody remembers.
 commit_args=(-m "${TYPE}: ${TITLE}")
+if [[ -n "${ISSUE}" ]]; then
+    commit_args+=(-m "Closes #${ISSUE}")
+fi
 if [[ -n "${ARSENAL_COAUTHOR:-}" ]]; then
     commit_args+=(-m "Co-Authored-By: ${ARSENAL_COAUTHOR}")
 fi
@@ -187,16 +356,49 @@ if [[ "${pushed}" -ne 1 ]]; then
     exit 1
 fi
 
-# Open the PR when a CLI backend is present; otherwise hand the branch back so
-# the orchestrator opens it via the github skill / MCP.
+# The PR body. `Closes #<issue>` is the first line of the summary rather than a
+# trailer, because a squash merge that truncates the body still keeps the top.
+closes_line=""
+[[ -n "${ISSUE}" ]] && closes_line="Closes #${ISSUE}"
+if [[ -n "${ISSUE}" ]]; then
+    gate_note="$(printf 'Acceptance gate in `%s/tasks/_history/%s.md` (archived by this PR); it passed before the PR was opened.' "${ARSENAL_HOME}" "${TASK_ID}")"
+else
+    gate_note="$(printf 'Acceptance gate in `%s/tasks/%s.md`; it passed before the PR was opened. This PR closes no issue, so merging it does NOT complete the task.' "${ARSENAL_HOME}" "${TASK_ID}")"
+fi
+BODY="$(printf '## Summary\n\n%s\n\n%s\n\n## Test plan\n\n%s\n' \
+    "${closes_line}" "${TITLE}" "${gate_note}")"
+PR_TITLE="${TYPE}: ${TITLE}"
+
+# Open the PR over whichever channel exists. `gh` first, then REST — the REST
+# leg matters because the push-only outcome is not a completed task: it hands
+# back a branch nobody has opened a PR for, and if the session ends there the
+# task stays claimed with its work sitting on an orphan branch. Every surface
+# that can reach the API should close that gap itself rather than delegate it.
 if command -v gh >/dev/null 2>&1; then
-    body="$(printf '## Summary\n\n%s\n\n## Test plan\n\nSee acceptance gate in arsenal/tasks/%s.md.\n' "${TITLE}" "${TASK_ID}")"
     if url="$(gh pr create --base "${default_base}" --head "${BRANCH}" \
-                --title "${TYPE}: ${TITLE}" --body "${body}" 2>/dev/null)"; then
+                --title "${PR_TITLE}" --body "${BODY}" 2>/dev/null)"; then
         echo "${url}"
         exit 0
     fi
 fi
 
+if slug="$(bash "${SCRIPT_DIR}/github_channel.sh" --slug 2>/dev/null)" && [[ -n "${slug}" ]]; then
+    payload="$(python3 -c 'import json,sys; print(json.dumps({"title":sys.argv[1],"head":sys.argv[2],"base":sys.argv[3],"body":sys.argv[4]}))' \
+        "${PR_TITLE}" "${BRANCH}" "${default_base}" "${BODY}" 2>/dev/null || true)"
+    if [[ -n "${payload}" ]] \
+        && response="$(bash "${SCRIPT_DIR}/github_channel.sh" --api POST "/repos/${slug}/pulls" "${payload}" 2>/dev/null)"; then
+        url="$(printf '%s' "${response}" \
+            | python3 -c 'import json,sys; print(json.load(sys.stdin).get("html_url",""))' 2>/dev/null || true)"
+        if [[ -n "${url}" ]]; then
+            echo "${url}"
+            exit 0
+        fi
+    fi
+fi
+
+# No PR backend at all. Say what still has to happen, including the keyword —
+# the caller opening this PR by hand is the one path where the body is written
+# by someone other than this script.
+echo "open_task_pr: no PR backend here — open the PR for ${BRANCH} with a body containing '${closes_line:-Closes #<issue>}', or the merge will not close the task" >&2
 echo "branch:${BRANCH}"
 exit 0

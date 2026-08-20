@@ -3,6 +3,7 @@
 import argparse
 import hashlib
 import json
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -367,6 +368,124 @@ def _upsert_overview(repo_path: Path, workspace: str, root: str, spec: str, plan
     print(f"  overview.md: added workspace {workspace}")
 
 
+# The queue automation workflow. It lives outside the bundle prefix because
+# GitHub only reads workflows from .github/workflows/, so it is installed
+# rather than vendored — but the copy under claude-arsenal/workflows/ stays the
+# source of truth, and this keeps the installed file identical to it.
+_QUEUE_WORKFLOW = "arsenal-queue.yml"
+
+
+def _queue_automation_setting(config: Path) -> str | None:
+    """The recorded queue-automation decision: `true`, `false`, or None if never set."""
+    if not config.is_file():
+        return None
+    for line in config.read_text(encoding="utf-8").splitlines():
+        match = re.match(r"^\s*queue-automation\s*=\s*(\S+)", line)
+        if match:
+            return match.group(1).strip().strip('"').lower()
+    return None
+
+
+def _record_queue_automation(config: Path, value: str) -> None:
+    """Upsert `queue-automation = <value>` in arsenal/config.toml."""
+    if config.is_file():
+        text = config.read_text(encoding="utf-8")
+        if re.search(r"^\s*queue-automation\s*=", text, re.MULTILINE):
+            text = re.sub(
+                r"^\s*queue-automation\s*=.*$",
+                f"queue-automation = {value}",
+                text,
+                count=1,
+                flags=re.MULTILINE,
+            )
+        else:
+            text = text.rstrip("\n") + f"\nqueue-automation = {value}\n"
+    else:
+        text = f"queue-automation = {value}\n"
+    config.parent.mkdir(parents=True, exist_ok=True)
+    config.write_text(text, encoding="utf-8")
+
+
+def _install_queue_workflow(repo_path: Path, arsenal: Path, silent: bool = False) -> None:
+    """Install .github/workflows/arsenal-queue.yml, and say plainly what it does.
+
+    Installed by default because the whole point is that queue upkeep does not
+    depend on anyone remembering it — a workflow a repo has to opt into is one
+    more setup step to forget, and the sessions that most need the cleanup are
+    the ones that ended badly. But a file that grants itself write access to
+    issues and contents should never appear silently, so the first install
+    prints exactly what it will do and what it can touch.
+
+    Deleting the file has to be a real opt-out, and that needs a record: the
+    session-start protocol runs `init.py --silent` every session, so a purely
+    file-based check would reinstall a workflow the user deliberately removed —
+    on every single start, re-granting write access they had revoked and
+    dirtying their checkout each time. So the decision lives in
+    `arsenal/config.toml`, which an upgrade never overwrites:
+
+      * no key       — never offered here. Install it and record `true`.
+      * `true`, file present — refresh/no-op, as for any vendored file.
+      * `true`, file gone    — deleted since the install. Record `false`, say so
+                               once, and never reinstall.
+      * `false`      — opted out. Do nothing, silently. Set the key back to
+                       `true` to opt in again.
+
+    A workflow the user has edited is left alone — clobbering local changes on
+    every session start is how vendored files lose people's trust.
+    """
+    source = arsenal / "workflows" / _QUEUE_WORKFLOW
+    if not source.is_file():
+        return
+    target = repo_path / ".github" / "workflows" / _QUEUE_WORKFLOW
+    config = repo_path / "arsenal" / "config.toml"
+    setting = _queue_automation_setting(config)
+
+    if setting == "false":
+        return
+
+    if target.exists():
+        if setting is None:
+            _record_queue_automation(config, "true")
+        if _sha256(source) == _sha256(target):
+            if not silent:
+                print(f"  .github/workflows/{_QUEUE_WORKFLOW}: up to date")
+        else:
+            print(
+                f"  .github/workflows/{_QUEUE_WORKFLOW}: differs from the shipped version "
+                f"— left as is. Diff it against {source.relative_to(repo_path)} to pick up "
+                "upstream changes."
+            )
+        return
+
+    if setting == "true":
+        # Installed before, gone now: the user removed it. Honour that.
+        _record_queue_automation(config, "false")
+        print(
+            f"  .github/workflows/{_QUEUE_WORKFLOW}: removed by you — recorded "
+            "`queue-automation = false` in arsenal/config.toml so it is not reinstalled. "
+            "Merging still completes a task; only the automatic upkeep (stale claims, "
+            "missing handles) is off. Set the key back to `true` to restore it."
+        )
+        return
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(source, target)
+    _record_queue_automation(config, "true")
+    print(
+        f"""
+  INSTALLED .github/workflows/{_QUEUE_WORKFLOW} — GitHub now keeps the queue current:
+    * a merged task PR whose `Closes` keyword did not fire closes its task anyway
+    * a task PR closed WITHOUT merging releases its claim, back onto the board
+    * a task file merged to the default branch gets its issue handle immediately
+    * a claim held over 24h with no open PR is released (crashed session)
+    * a task PR that would merge without closing anything fails its check first
+  It asks GitHub for `issues: write` (close/label/comment on task issues) and
+  `contents: write` (archive a merged task file). It never runs code from a pull
+  request. Delete the file to opt out — that choice is recorded in
+  arsenal/config.toml, so it is not reinstalled on the next session start."""
+    )
+
+
 def init_base(
     repo_path: Path,
     bundle_override: Path | None = None,
@@ -434,6 +553,9 @@ def init_base(
         "arsenal/session/rescue_refs",
     ):
         _add_gitignore_entry(repo_path, entry)
+
+    # GitHub-side queue upkeep (see the function's docstring for why by default)
+    _install_queue_workflow(repo_path, arsenal, silent=silent)
 
     # statusLine command feeding budget_check.sh (token-budget stop)
     _register_statusline(repo_path)

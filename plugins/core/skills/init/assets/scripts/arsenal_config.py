@@ -44,6 +44,11 @@ DEFAULTS: dict[str, Any] = {
     # so a consumer whose budget differs can set it here instead of being
     # unable to pass the audit at all (#143).
     "listing-budget": 8000,
+    # Whether `/init` keeps .github/workflows/arsenal-queue.yml installed. Set
+    # to `true` on first install and to `false` when the file is found deleted,
+    # so removing it is a real opt-out rather than something the next session's
+    # `init --silent` quietly undoes.
+    "queue-automation": True,
     # Where host-owned project content lives, relative to the repo root.
     "home": "arsenal",
     # The label that marks an issue as a machine-managed task handle. Anything

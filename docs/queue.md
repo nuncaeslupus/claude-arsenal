@@ -119,11 +119,43 @@ bash claude-arsenal/bin/claim_task.sh t-3f8a91c2
 # won refs/heads/arsenal/claims/t-3f8a91c2
 ```
 
-Work the task, and open the pull request with **`Closes #42`** in the body. When
-it merges, GitHub closes the issue, and the task is done. There is no separate
-"update the queue" step to forget — which is the failure the old design could
-not fix, because the script that reconciled merged PRs was gated on `gh` and
-therefore never ran on the web at all.
+Work the task, then open the pull request with `open_task_pr.sh`. It resolves the
+task's issue number, writes **`Closes #42`** into the PR body *and* the commit
+message, and moves `arsenal/tasks/t-3f8a91c2.md` into `arsenal/tasks/_history/`
+with `status: merged` — all inside the PR's own diff.
+
+So one merge closes the issue, archives the task, and unblocks its dependents.
+There is no separate "update the queue" step to forget, and none to remember at
+the end of a session either.
+
+> For a long time the keyword was only ever *documented*: the protocol told the
+> agent to make sure the body carried it, `open_task_pr.sh` wrote a body without
+> it, and nothing anywhere computed which issue a task belonged to. Every task PR
+> merged closing nothing, and each new session opened by reconciling a board that
+> claimed work already done. An instruction with no data path behind it is not a
+> weak guarantee — it is no guarantee.
+
+### What GitHub keeps current
+
+Merging covers a task that finished. `/init` installs
+`.github/workflows/arsenal-queue.yml` for everything that happens when no
+session is running:
+
+| Event | What happens |
+|---|---|
+| Task PR merged, keyword never fired | The issue closes as completed; the task file is archived |
+| Task PR closed **without** merging | `arsenal:claimed` and the assignee are removed — the task is back on the board |
+| A task file lands on the default branch | Its issue handle is opened immediately |
+| A claim held >24h with no open PR | Released; that session is not coming back |
+| A task PR carries no closing keyword | Its check fails **before** the merge |
+
+Each of those was previously a line in a protocol asking an agent to tidy up
+before ending a session, which is the worst possible place for it: the sessions
+that most need the cleanup are the ones that ended badly. The workflow needs
+`issues: write` and `contents: write`, and never runs code from a pull request.
+Deleting the file opts out: `/init` records `queue-automation = false` in
+`arsenal/config.toml` and stops reinstalling it. The merge path is unchanged
+without the workflow.
 
 ---
 

@@ -80,7 +80,9 @@ if git checkout -b probe-would-fail "${fresh_sha}" >/dev/null 2>&1; then
 fi
 
 # --- The helper, with NO isolation env var: the linked worktree IS the proof --
-out="$(ARSENAL_COAUTHOR="Test Bot <noreply@anthropic.com>" \
+# ARSENAL_TASK_ISSUE stands in for the issue handle: the helper refuses to open a
+# PR it cannot link, and this test is about the stale base, not the handle.
+out="$(ARSENAL_TASK_ISSUE=99 ARSENAL_COAUTHOR="Test Bot <noreply@anthropic.com>" \
        bash "${HELPER}" lo-stale "Stale base task" 2>"${tmp}/err.log")" \
     || fail "open_task_pr.sh failed on a stale base: $(cat "${tmp}/err.log")"
 
