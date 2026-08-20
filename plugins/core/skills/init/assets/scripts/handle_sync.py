@@ -32,7 +32,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from task_select import load_tasks, task_id_from_issue
+from task_select import TERMINAL, load_tasks, task_id_from_issue
 
 
 def missing_handles(
@@ -43,14 +43,24 @@ def missing_handles(
     for task in tasks:
         if task["id"] in handled:
             continue
+        # `load_tasks` includes finished tasks on purpose — their ids must
+        # resolve so dependents unblock and their gates stay on disk. But an
+        # issue handle carries *state*, and a merged task's state is already
+        # final, so it needs no handle. Without this, a repo that has been
+        # running a while proposes an issue for every task it ever completed,
+        # and a session following the protocol literally opens them: dozens of
+        # spurious tasks that read as open and unclaimed, and that a selector
+        # will hand straight back out.
+        if str(task.get("status") or "") in TERMINAL:
+            continue
         out.append(
             {
                 "task": task["id"],
                 "title": task["title"],
                 "labels": [label],
                 "body": (
-                    f"Task `{task['id']}` — defined in `{task['path']}`\n\n"
-                    f"<!-- arsenal-task: {task['id']} -->"
+                    f"`arsenal-task: {task['id']}`\n\n"
+                    f"Task defined in `{task['path']}`"
                 ),
             }
         )

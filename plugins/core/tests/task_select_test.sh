@@ -316,4 +316,38 @@ printf 'merge-policy = "after-reviews"\n' > "${tmpdir}/arsenal/config.toml"
 python3 "${CONFIG_PY}" --repo-root "${tmpdir}" --get merge-policy >/dev/null 2>&1 \
     && fail "a near-miss like after-reviews must still be rejected"
 
+# --- 22: handle_sync proposes no handle for finished work ---
+#         load_tasks includes _history/ so terminal ids resolve; handle_sync
+#         inherited the tasks without inheriting the filter. In a repo that has
+#         been running a while, everything it printed was finished work, and a
+#         session following the protocol opens an issue for each — dozens of
+#         tasks that read as open and unclaimed and get handed straight back out.
+HANDLE_PY="${SCRIPT_DIR}/../skills/init/assets/scripts/handle_sync.py"
+mkdir -p "${TASKS}/_history"
+cat > "${TASKS}/_history/t-old99999.md" <<'EOF'
+---
+id: t-old99999
+title: "Merged weeks ago"
+priority: 1
+status: merged
+pr: https://github.com/o/r/pull/9
+---
+
+## Acceptance gate
+```bash
+true
+```
+EOF
+echo '[]' > "${tmpdir}/issues-none.json"
+out=$(python3 "${HANDLE_PY}" --tasks-dir "${TASKS}" --issues "${tmpdir}/issues-none.json" 2>/dev/null)
+grep -q 't-old99999' <<<"${out}" && fail "a merged task needs no issue handle — its state is already final"
+grep -q 't-aaaa1111' <<<"${out}" || fail "a live task with no handle must still be proposed"
+
+# and the proposed body must carry the VISIBLE marker, not the comment form
+# that a sanitizer strips (see the identity fix): a handle nothing can resolve
+# is worse than no handle.
+grep -q 'arsenal-task: t-aaaa1111' <<<"${out}" || fail "proposed body must name the task visibly: ${out}"
+grep -q '<!-- arsenal-task' <<<"${out}" && fail "proposed body must not use the strippable comment marker"
+rm -rf "${TASKS}/_history"
+
 echo "PASS: task_select_test — all gates passed"

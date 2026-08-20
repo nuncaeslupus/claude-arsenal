@@ -206,10 +206,33 @@ if ! git fetch "${REMOTE}" "refs/tags/v${latest}:refs/tags/v${latest}" 2>&1 \
     exit 0
 fi
 
-echo "claude-arsenal: updated to v${latest}"
+# The subtree has moved. The assembled bundle has not yet — init.py builds it
+# from the vendored skills, and in a layout where those are a separate tree,
+# nothing has refreshed them. Re-vendoring first is what makes the upgrade
+# complete rather than a merge followed by a faithful rebuild of the old
+# version.
+vendor_sh="$(find "${PREFIX}/scripts" .claude/skills -name 'vendor-skills.sh' 2>/dev/null | head -1 || true)"
+if [[ "${BUNDLE_DIR}" != "${PREFIX}" && -n "${vendor_sh}" ]]; then
+    bash "${vendor_sh}" --src "${PREFIX}" --dest .claude/skills --plugins all >/dev/null 2>&1 \
+        || _warn "re-vendoring skills from ${PREFIX} failed; the bundle may still be on the old version"
+fi
 
 # Re-run init.py --silent so any new bundle scripts are propagated
 init_py="$(find .claude/skills -name 'init.py' -path '*/init/scripts/init.py' 2>/dev/null | head -1 || true)"
 if [[ -n "${init_py}" ]]; then
     python3 "${init_py}" --repo-path . --silent
 fi
+
+# Only now is "updated" a claim worth making. A success message that can print
+# while the version did not move is the part that hides a half-finished
+# upgrade: the subtree says the new version, the assembled bundle says the old
+# one, and nothing fails.
+now_installed="$(cat "${VERSION_FILE}" 2>/dev/null || echo "0.0.0")"
+if [[ "${now_installed}" != "${latest}" ]]; then
+    _warn "subtree merged to v${latest} but ${VERSION_FILE} still reads ${now_installed} — the bundle was NOT upgraded. Re-vendor the skills and re-run init.py:
+    bash ${PREFIX}/scripts/vendor-skills.sh --src ${PREFIX} --dest .claude/skills --plugins all
+    python3 .claude/skills/init/scripts/init.py --repo-path . --silent"
+    exit 0
+fi
+
+echo "claude-arsenal: updated to v${latest}"
