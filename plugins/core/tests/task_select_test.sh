@@ -295,4 +295,25 @@ echo '[]' > "${tmpdir}/issues-empty.json"
 err=$(python3 "${SELECT_PY}" --tasks-dir "${TASKS}" --issues "${tmpdir}/issues-empty.json" 2>&1 >/dev/null)
 grep -q "none carries a task id" <<<"${err}" && fail "an empty issue list must not warn"
 
+# --- 21: merge-policy can require review WITHOUT requiring CI ---
+#         Every value naming review also demanded CI, so a repo whose CI is
+#         unavailable rather than red — out of runner minutes, or with no CI at
+#         all — had no honest setting. A policy nothing can satisfy gets waved
+#         through, and that habit survives the outage.
+printf 'merge-policy = "after-review"\n' > "${tmpdir}/arsenal/config.toml"
+val=$(python3 "${CONFIG_PY}" --repo-root "${tmpdir}" --get merge-policy) \
+    || fail "after-review must be a valid merge-policy"
+[[ "${val}" == "after-review" ]] || fail "expected after-review, got '${val}'"
+
+# the other values keep working, and a typo is still rejected
+for policy in always after-ci after-ci-and-review never; do
+    printf 'merge-policy = "%s"\n' "${policy}" > "${tmpdir}/arsenal/config.toml"
+    val=$(python3 "${CONFIG_PY}" --repo-root "${tmpdir}" --get merge-policy) \
+        || fail "${policy} must remain valid"
+    [[ "${val}" == "${policy}" ]] || fail "expected ${policy}, got '${val}'"
+done
+printf 'merge-policy = "after-reviews"\n' > "${tmpdir}/arsenal/config.toml"
+python3 "${CONFIG_PY}" --repo-root "${tmpdir}" --get merge-policy >/dev/null 2>&1 \
+    && fail "a near-miss like after-reviews must still be rejected"
+
 echo "PASS: task_select_test — all gates passed"
