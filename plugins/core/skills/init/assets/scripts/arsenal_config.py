@@ -34,6 +34,12 @@ DEFAULTS: dict[str, Any] = {
     # How far a task PR must get before it may be merged. See the `github`
     # skill, which is the only thing that acts on this.
     "merge-policy": "after-ci",
+    # Shell command run by open_task_pr.sh before a task PR is opened, refusing
+    # on non-zero. Empty by default: a repo with no gate is unaffected. This is
+    # what gives worker.md's "run the host lint gate" a data path — the prose
+    # named `make lint` as its example, so a repo whose real gate is five
+    # commands had four of them enforced by nobody.
+    "host-gate": "",
     # test-first writes a failing test before the change; test-after writes
     # tests alongside it. Read by `execution`.
     "test-discipline": "test-first",

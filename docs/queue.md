@@ -200,6 +200,7 @@ disappears the next time that skill is refreshed.
 
 ```toml
 merge-policy    = "after-ci"   # always | after-review | after-ci | after-ci-and-review | never
+host-gate       = ""           # shell command; non-zero means no task PR is opened
 test-discipline = "test-first" # or test-after
 session-end     = "handoff"    # handoff | ticket | none
 listing-budget  = 8000         # the skills-listing budget the auditor enforces
@@ -217,6 +218,20 @@ is red" — a repo out of runner minutes, or with no CI at all, has no run to wa
 for. Under `after-ci` that leaves two readings, both bad: nothing merges for as
 long as the outage lasts, or everyone learns to wave the gate through, which is
 the habit they keep on the day it starts meaning something again.
+
+### The host gate
+
+`open_task_pr.sh` runs `host-gate` before it touches git, and refuses to open the
+PR if it exits non-zero — the same refusal a failing payload gate gets. Empty by
+default, so a repo without one is unaffected.
+
+Point it at everything the repo actually checks. The instruction it replaces
+named `make lint` as its example, so a repo whose real gate was five commands
+had four of them enforced by nobody — and the four it skipped were the ones that
+catch board drift, evidence drift and a stale bundle, which are exactly the
+failures invisible in a diff.
+
+`ARSENAL_SKIP_GATES=1` opts out for one invocation and says so loudly on stderr.
 
 ### Saying "closed, but not done"
 

@@ -46,6 +46,12 @@ _CONFIG_TEMPLATE = """\
 # gets waved through on the day it starts meaning something again.
 merge-policy = "after-ci"
 
+# Shell command run before any task PR is opened; a non-zero exit means no PR.
+# Empty = no host gate. Point it at everything your repo actually checks, not
+# just lint — whatever is not named here is enforced by nobody.
+#   host-gate = "make lint test evidence"
+host-gate = ""
+
 # test-first writes a failing test before the change; test-after writes tests
 # alongside it.
 test-discipline = "test-first"

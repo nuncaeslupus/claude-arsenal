@@ -48,6 +48,59 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd 2>/dev/null || echo .)"
 BUNDLE_SCRIPTS="$(cd "${SCRIPT_DIR}/../scripts" && pwd 2>/dev/null || echo "${SCRIPT_DIR}/../scripts")"
 ARSENAL_HOME="${ARSENAL_HOME:-arsenal}"
 
+# ---------------------------------------------------------------------------
+# Gates, before anything touches git.
+#
+# worker.md step 4 asks a worker to run the host lint gate and then gate_run.sh,
+# and to open no PR if either fails. AGENTS.md goes further and states the
+# payload gate "is a hard precondition" because this script re-runs it. Neither
+# was true: nothing here ran either gate, so both were instructions with no data
+# path behind them — which this project already names as the thing that makes a
+# step not happen. A worker that forgot step 4, or ran only the `make lint` the
+# prose gives as its example, opened a perfectly valid PR over a red repo.
+#
+# The refusal is the load-bearing half. A worker that *cannot* open a PR over a
+# red repo needs no discipline; one that is asked to check first needs it every
+# single time.
+#
+# SECURITY: host-gate runs verbatim, like a payload's gate block. It comes from
+# arsenal/config.toml, which is host-owned and reviewed like any other file in
+# the repo — but it is code, not data.
+_gate_fail() {
+    echo "open_task_pr: $1 — no PR opened" >&2
+    echo "open_task_pr: fix it and re-run; this is the same refusal a failing payload gate gets" >&2
+    exit 1
+}
+
+if [[ "${ARSENAL_SKIP_GATES:-}" == "1" ]]; then
+    echo "open_task_pr: WARNING — ARSENAL_SKIP_GATES=1, opening a PR with no gate run" >&2
+else
+    # 1. The host's own gate, when the repo declares one. Absent by default, so
+    #    a repo without one is unaffected.
+    host_gate=""
+    if [[ -f "${BUNDLE_SCRIPTS}/arsenal_config.py" ]]; then
+        host_gate="$(python3 "${BUNDLE_SCRIPTS}/arsenal_config.py" --get host-gate 2>/dev/null || true)"
+    fi
+    if [[ -n "${host_gate}" ]]; then
+        echo "open_task_pr: running host gate: ${host_gate}"
+        if ! bash -c "${host_gate}"; then
+            _gate_fail "host gate failed (${host_gate})"
+        fi
+    fi
+
+    # 2. The task's own mechanical gate — the precondition AGENTS.md already
+    #    claims this script enforces.
+    if [[ -f "${SCRIPT_DIR}/gate_run.sh" ]]; then
+        bash "${SCRIPT_DIR}/gate_run.sh" "${TASK_ID}"
+        _rc=$?
+        case ${_rc} in
+            0) ;;
+            3) _gate_fail "the task gate could not run or reports its metric unmeasured (exit 3); nothing was verified" ;;
+            *) _gate_fail "the task gate failed (gate_run.sh exit ${_rc})" ;;
+        esac
+    fi
+fi
+
 # Snapshot the working tree to a permanent refs/arsenal-rescue/… ref. Used
 # before the stale-base replay below, which force-moves HEAD across the tree.
 # Echoes the ref (empty when the tree is clean or the helper is unavailable).

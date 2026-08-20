@@ -1,6 +1,6 @@
 # Claude Arsenal
 
-<!-- claude-arsenal v0.33.0 — imported via @claude-arsenal/AGENTS.md -->
+<!-- claude-arsenal v0.34.0 — imported via @claude-arsenal/AGENTS.md -->
 
 This file is imported by the host repo's `CLAUDE.md` via the session-protocol block
 that `/init` injects. It provides the mechanics behind the proactive directives
@@ -273,8 +273,9 @@ vacuously. This is the machine-checkable half of "`done` means the gate passed"
 (closes the false-`done` hole for `[LAPTOP]`/science gates). The release-side
 half is enforced at the choke point: a worker opens no PR unless
 the PR is opened (not a bare `branch:` ref) and not closed-without-merge; the
-payload's mechanical gate passes (it re-runs `gate_run.sh`, so the evidence/bash
-gate is a hard precondition); and — for a task tagged **`laptop`** — the session
+payload's mechanical gate passes (`open_task_pr.sh` runs `gate_run.sh` itself, so
+the evidence/bash gate is a hard precondition, and so is the host's own
+`host-gate` when the repo declares one); and — for a task tagged **`laptop`** — the session
 is not a cloud session. A cloud worker (`CLAUDE_CODE_REMOTE=true`) physically
 cannot satisfy a `[LAPTOP]`-only gate (model training, CPCV Sharpe, soak,
 paper-trade), so tag such tasks `laptop` (`new_task.py --tag laptop`) and the
@@ -456,8 +457,9 @@ coordination branch). A solo session seeds the task directly.
 ## Per-task PRs
 
 Each worker implements its task in an isolated worktree, cuts a feature branch off
-the **host default branch** via `claude-arsenal/bin/open_task_pr.sh`, runs the host
-lint gate + `gate_run.sh`, and — only if the gate passes — commits (Conventional
+the **host default branch** via `claude-arsenal/bin/open_task_pr.sh`, which runs the
+host gate (`host-gate` in `arsenal/config.toml`) and `gate_run.sh` itself and
+refuses on either failure — and only then commits (Conventional
 Commits + the dynamic `Co-Authored-By` from the `github` skill, never a hardcoded
 model), pushes, and opens a PR. The PR diff is just that task's code.
 

@@ -15,6 +15,11 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 HELPER="${SCRIPT_DIR}/../skills/init/assets/bin/open_task_pr.sh"
 
+# These cases exercise the git/PR-body behaviour, not the gates. The gate
+# refusal now runs before any of it, and these fixtures carry no task file,
+# so they opt out explicitly rather than each growing a passing gate.
+export ARSENAL_SKIP_GATES=1
+
 if [[ ! -f "${HELPER}" ]]; then
     echo "SKIP: open_task_pr.sh not found at ${HELPER}" >&2; exit 0
 fi

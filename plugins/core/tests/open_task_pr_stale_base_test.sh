@@ -20,6 +20,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BIN="${SCRIPT_DIR}/../skills/init/assets/bin"
 HELPER="${BIN}/open_task_pr.sh"
 
+# These cases exercise the git/PR-body behaviour, not the gates. The gate
+# refusal now runs before any of it, and these fixtures carry no task file,
+# so they opt out explicitly rather than each growing a passing gate.
+export ARSENAL_SKIP_GATES=1
+
 [[ -f "${HELPER}" ]] || { echo "SKIP: open_task_pr.sh not found at ${HELPER}" >&2; exit 0; }
 [[ -f "${BIN}/rescue_snapshot.sh" ]] || { echo "SKIP: rescue_snapshot.sh not found" >&2; exit 0; }
 git worktree list >/dev/null 2>&1 || { echo "SKIP: git worktree unavailable" >&2; exit 0; }
