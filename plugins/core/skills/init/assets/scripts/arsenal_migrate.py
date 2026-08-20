@@ -50,8 +50,10 @@ CONFIG_TEMPLATE = """\
 
 # How far must a task PR get before it may be merged?
 #   always              merge as soon as it is open
+#   after-review        merge once a review approves — for a repo with no CI, or
+#                       whose CI is unavailable rather than merely red
 #   after-ci            merge once CI is green
-#   after-ci-and-review also wait for a review, if one exists
+#   after-ci-and-review require both
 #   never               never merge automatically; you review every PR
 merge-policy = "{merge_policy}"
 
@@ -279,7 +281,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--merge-policy",
         default="after-ci",
-        choices=["always", "after-ci", "after-ci-and-review", "never"],
+        choices=["always", "after-review", "after-ci", "after-ci-and-review", "never"],
         help="seed value for the new config file",
     )
     args = parser.parse_args(argv)

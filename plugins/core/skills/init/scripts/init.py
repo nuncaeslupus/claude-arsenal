@@ -39,7 +39,10 @@ _CONFIG_TEMPLATE = """\
 # claude-arsenal host configuration — yours; upstream never rewrites this file.
 
 # How far must a task PR get before it may be merged?
-#   always | after-ci | after-ci-and-review | never
+#   always | after-review | after-ci | after-ci-and-review | never
+# after-review is for a repo with no CI, or whose CI is unavailable rather than
+# failing — a policy nothing can ever satisfy gets waved through, and then it
+# gets waved through on the day it starts meaning something again.
 merge-policy = "after-ci"
 
 # test-first writes a failing test before the change; test-after writes tests

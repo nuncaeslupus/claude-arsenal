@@ -160,7 +160,7 @@ makes it the right place for preferences: a setting stored in a vendored skill
 disappears the next time that skill is refreshed.
 
 ```toml
-merge-policy    = "after-ci"   # always | after-ci | after-ci-and-review | never
+merge-policy    = "after-ci"   # always | after-review | after-ci | after-ci-and-review | never
 test-discipline = "test-first" # or test-after
 session-end     = "handoff"    # handoff | ticket | none
 listing-budget  = 8000         # the skills-listing budget the auditor enforces
@@ -168,6 +168,16 @@ listing-budget  = 8000         # the skills-listing budget the auditor enforces
 
 `merge-policy` answers "what do you need before a task PR may merge?" — asked
 once at `/init`, then never again.
+
+The two middle values are different axes, not degrees: `after-ci` is "the
+machines agree", `after-review` is "a reader agrees". A repo can require either,
+both, or neither.
+
+`after-review` exists because "CI is unavailable" is a different state from "CI
+is red" — a repo out of runner minutes, or with no CI at all, has no run to wait
+for. Under `after-ci` that leaves two readings, both bad: nothing merges for as
+long as the outage lasts, or everyone learns to wave the gate through, which is
+the habit they keep on the day it starts meaning something again.
 
 ### Saying "closed, but not done"
 

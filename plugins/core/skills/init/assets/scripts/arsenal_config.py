@@ -55,7 +55,13 @@ DEFAULTS: dict[str, Any] = {
 }
 
 ENUMS: dict[str, set[str]] = {
-    "merge-policy": {"always", "after-ci", "after-ci-and-review", "never"},
+    # `after-review` is not a weaker `after-ci-and-review` — it is the other
+    # axis. `after-ci` is "the machines agree"; `after-review` is "a reader
+    # agrees"; a repo should be able to require either, both, or neither.
+    # Without it, a repo whose CI is structurally unavailable — out of runner
+    # minutes, or no CI at all — can only choose between a policy that blocks
+    # every merge indefinitely and one that everybody learns to wave through.
+    "merge-policy": {"always", "after-review", "after-ci", "after-ci-and-review", "never"},
     "test-discipline": {"test-first", "test-after"},
     "session-end": {"handoff", "ticket", "none"},
 }
