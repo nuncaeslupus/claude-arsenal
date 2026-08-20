@@ -103,8 +103,16 @@ Verify `pwd` at the start of the task if unsure.
    `ARSENAL_ALLOW_UNLINKED_PR=1`: that opens a PR whose merge closes nothing.
    Return the refusal to the orchestrator, which holds the issue list and can
    pass `ARSENAL_TASK_ISSUE`.
-6. **Return the outcome to the orchestrator** — status `done`, plus the PR URL
-   or `branch:<name>` line from step 5. A `branch:<name>` means the branch was
+6. **Return the outcome to the orchestrator** — status `done`, the PR URL
+   or `branch:<name>` line from step 5, and **`toplevel: <git rev-parse --show-toplevel>`**.
+
+   That last line is how the orchestrator learns whether isolation was real.
+   Some surfaces silently ignore `isolation: worktree` and run you in the
+   orchestrator's own tree; the old detection inferred this from whether its
+   HEAD had moved, which a worker need never cause — on a surface that restricts
+   pushes to one branch, the branch you should be on is the branch it is on. So
+   report the root you actually ran in and let it compare, rather than leaving it
+   to guess and guess wrong in the direction that permits parallel fan-out. A `branch:<name>` means the branch was
    pushed but **no PR was opened** (no PR backend in this worktree); it is not a
    completed task on its own — the orchestrator opens the PR before the task
    can close. Exit; do not pick up the next task.

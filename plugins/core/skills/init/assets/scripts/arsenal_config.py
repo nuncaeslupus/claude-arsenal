@@ -49,6 +49,10 @@ DEFAULTS: dict[str, Any] = {
     # so removing it is a real opt-out rather than something the next session's
     # `init --silent` quietly undoes.
     "queue-automation": True,
+    # The label an issue must carry before `issue_import.py` turns it into a
+    # task. Opt-in on purpose: every open issue becoming claimable work means a
+    # worker opens a PR against a question someone asked.
+    "import-label": "arsenal:queue",
     # Where host-owned project content lives, relative to the repo root.
     "home": "arsenal",
     # The label that marks an issue as a machine-managed task handle. Anything

@@ -25,6 +25,7 @@ import hashlib
 import importlib.util
 import json
 import math
+import os
 import re
 import sys
 from collections import Counter, defaultdict
@@ -47,7 +48,56 @@ sys.modules["skill_creator_validate"] = _validate
 _validate_spec.loader.exec_module(_validate)
 
 
-LISTING_BUDGET_CHARS = 8000
+# The default listing budget, and the only value that is a genuine constant here.
+# 8000 is a real constraint on some surfaces; it is not every consumer's, it has
+# changed over time, and a hardcoded copy in a vendored file is one that gets
+# reverted at the next upgrade — silently. A library that cannot pass the audit
+# is a library that stops running it, taking the per-skill signal (duplication,
+# token overlap, individually oversized descriptions) with it (#143).
+DEFAULT_LISTING_BUDGET_CHARS = 8000
+
+# Resolved once in main() from --listing-budget / env / arsenal config, and read
+# everywhere the cap is applied. The source travels with it so the output can
+# say where the number came from: a configurable threshold whose value is
+# invisible is one nobody can tell has been quietly raised to whatever the
+# library happened to measure.
+LISTING_BUDGET_CHARS = DEFAULT_LISTING_BUDGET_CHARS
+LISTING_BUDGET_SOURCE = "default"
+
+
+def resolve_listing_budget(
+    cli_value: int | None, repo_root: Path | None = None
+) -> tuple[int, str]:
+    """Return (budget, source). Precedence: flag, env, arsenal config, default."""
+    if cli_value is not None:
+        return cli_value, "--listing-budget"
+
+    env = os.environ.get("ARSENAL_LISTING_BUDGET_CHARS", "").strip()
+    if env:
+        try:
+            return int(env), "ARSENAL_LISTING_BUDGET_CHARS"
+        except ValueError:
+            print(
+                f"audit_library: ignoring ARSENAL_LISTING_BUDGET_CHARS={env!r} — not an integer",
+                file=sys.stderr,
+            )
+
+    # arsenal/config.toml already carries `listing-budget`, so a repo that has
+    # set it once should not have to repeat it at every invocation.
+    config = (repo_root or Path.cwd()) / "arsenal" / "config.toml"
+    if config.is_file():
+        try:
+            import tomllib
+
+            value = tomllib.loads(config.read_text(encoding="utf-8")).get("listing-budget")
+            if isinstance(value, int) and value > 0:
+                return value, str(config)
+        except (OSError, ValueError):
+            pass
+
+    return DEFAULT_LISTING_BUDGET_CHARS, "default"
+
+
 DUPLICATION_HEADER_RE = re.compile(
     r"DUPLICATED ACROSS SKILLS(?: \([^)]*\))?:\s*\n((?:\s*[-*]\s+\S.*\n)+)",
     re.IGNORECASE,
@@ -334,6 +384,13 @@ def emit_by_plugin(
         f"  {'total':<{width}}  {grand_chars:>6} chars  ({grand_skills} {skill_word_total})",
         file=sys.stderr,
     )
+    # Say what the cap is and where it came from, every run. A budget that can
+    # be raised but whose effective value never appears in the output is one
+    # nobody can tell has been raised.
+    print(
+        f"  {'budget':<{width}}  {LISTING_BUDGET_CHARS:>6} chars  ({LISTING_BUDGET_SOURCE})",
+        file=sys.stderr,
+    )
     remaining = LISTING_BUDGET_CHARS - grand_chars
     if remaining >= 0:
         headroom_pct = int(remaining * 100 / LISTING_BUDGET_CHARS)
@@ -377,11 +434,22 @@ def main() -> int:
     parser.add_argument("--severity", choices=("warn", "fail"), default="fail")
     parser.add_argument("--json", action="store_true")
     parser.add_argument(
+        "--listing-budget",
+        type=int,
+        default=None,
+        metavar="N",
+        help="skills-listing character cap (default 8000; also "
+        "ARSENAL_LISTING_BUDGET_CHARS, or `listing-budget` in arsenal/config.toml)",
+    )
+    parser.add_argument(
         "--by-plugin",
         action="store_true",
         help="Emit a per-plugin listing-budget breakdown across the supplied libraries.",
     )
     args = parser.parse_args()
+
+    global LISTING_BUDGET_CHARS, LISTING_BUDGET_SOURCE
+    LISTING_BUDGET_CHARS, LISTING_BUDGET_SOURCE = resolve_listing_budget(args.listing_budget)
     resolved_dirs: list[Path] = []
     for raw in args.library_dirs:
         p = Path(raw).resolve()

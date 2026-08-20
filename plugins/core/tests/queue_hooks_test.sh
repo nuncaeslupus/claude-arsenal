@@ -207,4 +207,45 @@ assert not mod.apply_action({"kind": "close-issue", "task": "t-x", "comment": "c
 PY
 echo "PASS: create-issue reaches the API; close-issue without a number does not"
 
+# Gate 9 (#146): a board carrying both priority conventions is reported. Neither
+# scale is wrong alone; the mix is, because a rank scale's floor sits above the
+# size scale's ceiling, so every rank-encoded task outranks every sized one
+# regardless of intent and dispatch order comes to reflect authorship date.
+mixed="${tmp}/mixed"
+mkdir -p "${mixed}"
+write_task t-size1 "${mixed}"
+write_task t-rank1 "${mixed}"
+sed -i.bak 's/^priority: 5$/priority: 95/' "${mixed}/t-rank1.md" && rm -f "${mixed}"/*.bak
+out=$(python3 "${STATUS}" --tasks-dir "${mixed}" 2>&1 >/dev/null)
+echo "${out}" | grep -q "mixed-priority-convention" || fail "a mixed board was not reported: ${out}"
+# A board on one scale throughout stays clean — the finding is about the mix.
+sed -i.bak 's/^priority: 95$/priority: 10/' "${mixed}/t-rank1.md" && rm -f "${mixed}"/*.bak
+out=$(python3 "${STATUS}" --tasks-dir "${mixed}" 2>&1 >/dev/null)
+if echo "${out}" | grep -q "mixed-priority-convention"; then
+    fail "a single-convention board must not be reported: ${out}"
+fi
+echo "PASS: a board mixing size and rank priorities is reported; one scale is not"
+
+# Gate 10 (#171): --json exposes the DERIVED terminal state, so a host's gate
+# verifier stops reading the payload's `status:` and being wrong about every
+# task whose issue closed without the file being stamped. Terminality is the
+# union: either source saying finished is a fact.
+derived="${tmp}/derived"
+mkdir -p "${derived}/_history"
+write_task t-arch "${derived}/_history"
+printf -- '---\nid: t-arch\ntitle: "archived"\npriority: 5\nstatus: merged\n---\n\n```bash\ntrue\n```\n' \
+    > "${derived}/_history/t-arch.md"
+write_task t-live "${derived}"
+cat > "${tmp}/derived-issues.json" <<'JSON'
+[{"number":30,"state":"open","body":"`arsenal-task: t-arch`"},
+ {"number":31,"state":"closed","state_reason":"completed","body":"`arsenal-task: t-live`"}]
+JSON
+rows=$(python3 "${STATUS}" --tasks-dir "${derived}" --issues "${tmp}/derived-issues.json" --json 2>/dev/null)
+echo "${rows}" | grep -q '"id":"t-arch".*"terminal":true' \
+    || fail "a file-archived task must read terminal even with an open issue: ${rows}"
+echo "${rows}" | grep -q '"id":"t-live".*"terminal":true' \
+    || fail "a task whose issue closed as completed must read terminal without a status: field: ${rows}"
+echo "${rows}" | grep -q '"issue":31' || fail "--json should carry the issue number: ${rows}"
+echo "PASS: --json reports terminality derived from either the issue or the file"
+
 echo "PASS: queue_hooks_test — all gates passed"

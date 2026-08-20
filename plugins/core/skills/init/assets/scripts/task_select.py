@@ -411,7 +411,13 @@ def main(argv: list[str] | None = None) -> int:
         # missing has already dispatched two workers into one tree.
         if limit > 1 and not args.no_isolation_clamp:
             verdict = isolation_verdict(args.isolation_sentinel)
-            if verdict == "unavailable":
+            # Anything short of a proven `available` clamps. `unknown` used to
+            # pass, which made the safe default unsafe: nothing had shown that
+            # workers get their own tree, and a batch went out anyway. It also
+            # makes the protocol's "dispatch the first batch as a single worker"
+            # mechanical rather than a step the orchestrator has to remember —
+            # the first round is always unknown, so it always clamps (#147).
+            if verdict != "available":
                 warnings.append(
                     f"worktree isolation is {verdict} — batch capped at 1 task "
                     "(serialized in-place mode)"
