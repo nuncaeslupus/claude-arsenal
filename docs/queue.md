@@ -97,7 +97,10 @@ rather than quietly inert.
 ## The loop
 
 Reading the queue is one command. The session fetches its `arsenal:task` issues
-with whatever GitHub access it has, saves them, and asks for the next task:
+with whatever GitHub access it has — asking for `number`, `title`, `state`,
+`labels`, `assignees` and not `body`, since a task id resolves from the title
+when no body is present and the bodies are the bulk of the fetch — saves them,
+and asks for the next task:
 
 ```bash
 python3 claude-arsenal/scripts/task_select.py \

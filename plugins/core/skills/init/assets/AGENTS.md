@@ -1,6 +1,6 @@
 # Claude Arsenal
 
-<!-- claude-arsenal v0.35.0 — imported via @claude-arsenal/AGENTS.md -->
+<!-- claude-arsenal v0.36.0 — imported via @claude-arsenal/AGENTS.md -->
 
 This file is imported by the host repo's `CLAUDE.md` via the session-protocol block
 that `/init` injects, so it sits in context on **every turn of every session**. It
@@ -40,6 +40,12 @@ At the start of every session (fresh start, context compaction, or cold restart)
 2. **Fetch the task issues** — list issues labelled `arsenal:task`, **open and closed**,
    and save the JSON (e.g. to `/tmp/arsenal-issues.json`). Closed ones are not optional: a
    closed-as-completed issue is what marks a dependency satisfied.
+   > Ask for **`number`, `title`, `state`, `labels`, `assignees` — not `body`.** Every
+   > script below resolves an issue to its task from the `arsenal-task:` line *or* from
+   > the title, so the bodies buy nothing and cost the most: on a surface where the fetch
+   > lands in context, a 40-issue board is ~9k tokens with bodies and ~1.2k without,
+   > charged once per session before any work is read. With the GitHub MCP tools that is
+   > the `fields` argument; with `gh`, `--json number,title,state,labels,assignees`.
 
 3. **Read the board** —
    `python3 claude-arsenal/scripts/query_status.py --issues /tmp/arsenal-issues.json`.

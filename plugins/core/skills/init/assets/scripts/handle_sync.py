@@ -32,13 +32,19 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from task_select import TERMINAL, load_tasks, task_id_from_issue
+from task_select import TERMINAL, load_tasks, task_id_from_issue, title_index
 
 
 def missing_handles(
     tasks: list[dict[str, Any]], issues: list[dict[str, Any]], *, label: str
 ) -> list[dict[str, Any]]:
-    handled = {task_id for issue in issues if (task_id := task_id_from_issue(issue))}
+    # Same resolver, same index as the board: an issue that resolves only by
+    # title is still a handle, and proposing a second one for the task it
+    # already handles is how a narrowed fetch would quietly duplicate the board.
+    titles = title_index(tasks)
+    handled = {
+        task_id for issue in issues if (task_id := task_id_from_issue(issue, titles=titles))
+    }
     out: list[dict[str, Any]] = []
     for task in tasks:
         if task["id"] in handled:

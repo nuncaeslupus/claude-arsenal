@@ -44,6 +44,9 @@ jobs:
       - name: make audit-rule-drift
         run: make audit-rule-drift
 
+      - name: make context-budget
+        run: make context-budget
+
       - name: make sync-version-check
         run: make sync-version-check
 

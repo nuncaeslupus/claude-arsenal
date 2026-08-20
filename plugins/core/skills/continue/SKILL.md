@@ -27,6 +27,11 @@ Load this skill when:
 this surface offers — the built-in GitHub tools, `gh`, or REST — and save the JSON. Closed ones matter: a closed-as-completed issue is what marks a
 dependency satisfied.
 
+Request `number`, `title`, `state`, `labels`, `assignees` — **not `body`**. The resolver reads the
+`arsenal-task:` line when a body is present and falls back to matching the title against the task
+files, so bodies change no answer here while dominating the cost: on a 40-issue board they are the
+difference between ~9k and ~1.2k tokens, spent before the first task is even chosen.
+
 Run `github_channel.sh --detect` (in `claude-arsenal/bin/`); it prints `gh`, `rest`, or `none`.
 
 `none` means no scriptable channel exists here; make the call with the built-in GitHub
