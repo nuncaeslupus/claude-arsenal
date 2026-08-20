@@ -367,6 +367,61 @@ def _upsert_overview(repo_path: Path, workspace: str, root: str, spec: str, plan
     print(f"  overview.md: added workspace {workspace}")
 
 
+# The queue automation workflow. It lives outside the bundle prefix because
+# GitHub only reads workflows from .github/workflows/, so it is installed
+# rather than vendored — but the copy under claude-arsenal/workflows/ stays the
+# source of truth, and this keeps the installed file identical to it.
+_QUEUE_WORKFLOW = "arsenal-queue.yml"
+
+
+def _install_queue_workflow(repo_path: Path, arsenal: Path, silent: bool = False) -> None:
+    """Install .github/workflows/arsenal-queue.yml, and say plainly what it does.
+
+    Installed by default because the whole point is that queue upkeep does not
+    depend on anyone remembering it — a workflow a repo has to opt into is one
+    more setup step to forget, and the sessions that most need the cleanup are
+    the ones that ended badly. But a file that grants itself write access to
+    issues and contents should never appear silently, so the first install
+    prints exactly what it will do and what it can touch. Delete it and the
+    queue still works; only the automatic upkeep goes away.
+
+    A workflow the user has edited is left alone — `init --silent` runs every
+    session, and clobbering local changes on every start is how vendored files
+    lose people's trust.
+    """
+    source = arsenal / "workflows" / _QUEUE_WORKFLOW
+    if not source.is_file():
+        return
+    target = repo_path / ".github" / "workflows" / _QUEUE_WORKFLOW
+
+    if target.exists():
+        if _sha256(source) == _sha256(target):
+            if not silent:
+                print(f"  .github/workflows/{_QUEUE_WORKFLOW}: up to date")
+        else:
+            print(
+                f"  .github/workflows/{_QUEUE_WORKFLOW}: differs from the shipped version "
+                f"— left as is. Diff it against {source.relative_to(repo_path)} to pick up "
+                "upstream changes."
+            )
+        return
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(source, target)
+    print(
+        f"""
+  INSTALLED .github/workflows/{_QUEUE_WORKFLOW} — GitHub now keeps the queue current:
+    * a merged task PR whose `Closes` keyword did not fire closes its task anyway
+    * a task PR closed WITHOUT merging releases its claim, back onto the board
+    * a task file merged to the default branch gets its issue handle immediately
+    * a claim held over 24h with no open PR is released (crashed session)
+    * a task PR that would merge without closing anything fails its check first
+  It asks GitHub for `issues: write` (close/label/comment on task issues) and
+  `contents: write` (archive a merged task file). It never runs code from a pull
+  request. Delete the file to opt out — the queue still works without it."""
+    )
+
+
 def init_base(
     repo_path: Path,
     bundle_override: Path | None = None,
@@ -434,6 +489,9 @@ def init_base(
         "arsenal/session/rescue_refs",
     ):
         _add_gitignore_entry(repo_path, entry)
+
+    # GitHub-side queue upkeep (see the function's docstring for why by default)
+    _install_queue_workflow(repo_path, arsenal, silent=silent)
 
     # statusLine command feeding budget_check.sh (token-budget stop)
     _register_statusline(repo_path)

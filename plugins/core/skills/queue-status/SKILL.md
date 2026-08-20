@@ -61,6 +61,12 @@ exit so a `make` target or CI job can gate on them:
 - **`depends on unknown task`** — a dep id that no task file declares. The selector treats
   unknown deps as unsatisfied, so such a task would never become eligible and would never
   say why.
+- **completion drift** — the task file and its issue disagree about whether the work is
+  finished: a file archived `status: merged` whose issue is still open (the PR merged
+  without closing it), or an issue closed as completed whose task file is still live in
+  `tasks/`. Both mean a merge did half of what it was meant to. `effective_state` hides
+  this from selection on purpose — a merged task must never be handed out again, whatever
+  became of its issue — so the board is the only place it can surface.
 
 ## Gotchas
 
@@ -70,4 +76,6 @@ exit so a `make` target or CI job can gate on them:
   leaves dependents blocked on purpose — a stray close should not release work nobody did.
 - **`claimed` means an agent holds the claim ref**, not that a human is looking at it. The
   issue's assignee and its claim comment name which session, and the session id doubles as
-  a link to it.
+  a link to it. A claim held for over a day with no open PR belonged to a session that
+  crashed; `.github/workflows/arsenal-queue.yml` releases those on a schedule, so a repo
+  with the workflow should not accumulate them.

@@ -77,7 +77,7 @@ echo "PASS: guard is not unlocked by the caller's own ARSENAL_SURFACE claim"
 # what clamps the batch to a single worker, so no concurrent worker exists.
 mkdir -p "${tmpwork}/arsenal/session"
 echo "unavailable" > "${tmpwork}/arsenal/session/worktree_isolation"
-if ! ARSENAL_COAUTHOR="" bash "${HELPER}" lo-guard-inplace "Guard inplace" >/dev/null 2>&1; then
+if ! ARSENAL_TASK_ISSUE=41 ARSENAL_COAUTHOR="" bash "${HELPER}" lo-guard-inplace "Guard inplace" >/dev/null 2>&1; then
     echo "FAIL: recorded serialized in-place mode should permit git add -A" >&2; exit 1
 fi
 echo "PASS: recorded serialized in-place mode permits git add -A"
@@ -87,7 +87,53 @@ git branch -qD arsenal/lo-guard-inplace-guard-inplace 2>/dev/null || true
 rm -rf "${tmpwork}/claude-arsenal"
 echo "feature" > feature.txt
 
-OUT=$(ARSENAL_ALLOW_SHARED_ADD=1 ARSENAL_COAUTHOR="Test Bot <noreply@anthropic.com>" \
+# Gate 0d: with no issue handle resolvable, the helper refuses BEFORE touching
+# git. A PR that merges without closing its task is the drift the whole queue
+# exists to avoid, and the worker's edits must survive the refusal intact.
+before_head=$(git rev-parse HEAD)
+if err=$(ARSENAL_ISSUES_JSON=/nonexistent-issues.json ARSENAL_ALLOW_SHARED_ADD=1 \
+         ARSENAL_COAUTHOR="" bash "${HELPER}" lo-noissue "No handle" 2>&1); then
+    echo "FAIL: expected refusal when no issue handle resolves, got exit 0: ${err}" >&2; exit 1
+fi
+if ! echo "${err}" | grep -q "cannot resolve the issue handle"; then
+    echo "FAIL: expected 'cannot resolve the issue handle' in stderr, got: ${err}" >&2; exit 1
+fi
+if [[ "$(git rev-parse HEAD)" != "${before_head}" ]]; then
+    echo "FAIL: refusal moved HEAD — the worker's edits must be left untouched" >&2; exit 1
+fi
+if [[ ! -f feature.txt ]]; then
+    echo "FAIL: refusal discarded the worker's uncommitted edits" >&2; exit 1
+fi
+echo "PASS: refuses to open a PR that could not close its task"
+
+# Gate 0e: the issue number is resolved from the session's saved issue list, so
+# the caller does not have to know it — the same list the board already fetched.
+cat > "${tmpwork}/issues.json" <<'JSON'
+[{"number": 77, "state": "open", "body": "`arsenal-task: lo-x001`\n\nTask defined in `arsenal/tasks/lo-x001.md`"}]
+JSON
+
+# The task file the PR is expected to archive.
+mkdir -p "${tmpwork}/arsenal/tasks"
+cat > "${tmpwork}/arsenal/tasks/lo-x001.md" <<'MD'
+---
+id: lo-x001
+title: "Add feature thing"
+priority: 5
+---
+
+## Acceptance gate
+```bash
+true
+```
+MD
+git add arsenal/tasks/lo-x001.md
+git commit -q -m "chore: seed task file"
+git push -q origin main
+main_sha=$(git rev-parse HEAD)
+echo "feature" > feature.txt
+
+OUT=$(ARSENAL_ISSUES_JSON="${tmpwork}/issues.json" ARSENAL_ALLOW_SHARED_ADD=1 \
+      ARSENAL_COAUTHOR="Test Bot <noreply@anthropic.com>" \
       bash "${HELPER}" lo-x001 "Add feature thing")
 
 EXPECT_BRANCH="arsenal/lo-x001-add-feature-thing"
@@ -121,6 +167,30 @@ if ! git log -1 --format=%b | grep -q "Co-Authored-By: Test Bot <noreply@anthrop
     echo "FAIL: Co-Authored-By trailer missing" >&2; exit 1
 fi
 echo "PASS: Conventional Commit message + Co-Authored-By trailer"
+
+# Gate 4b: `Closes #<issue>` is in the commit message. The PR body carries it
+# too, but only the commit form survives a squash merge and fires for a stacked
+# PR whose base is not the default branch.
+if ! git log -1 --format=%b | grep -q "Closes #77"; then
+    echo "FAIL: commit message missing 'Closes #77' — merging would not close the task" >&2; exit 1
+fi
+echo "PASS: commit message carries Closes #<issue>"
+
+# Gate 4c: the task file is archived by this PR's own diff, so the queue's
+# record of finished work lands exactly when the merge does.
+if [[ -f arsenal/tasks/lo-x001.md ]]; then
+    echo "FAIL: arsenal/tasks/lo-x001.md still live — the PR did not archive it" >&2; exit 1
+fi
+if [[ ! -f arsenal/tasks/_history/lo-x001.md ]]; then
+    echo "FAIL: arsenal/tasks/_history/lo-x001.md missing — task file was not archived" >&2; exit 1
+fi
+if ! grep -q "^status: merged$" arsenal/tasks/_history/lo-x001.md; then
+    echo "FAIL: archived task file does not record 'status: merged'" >&2; exit 1
+fi
+if ! git log -1 --name-status | grep -q "_history/lo-x001.md"; then
+    echo "FAIL: the archive is not part of the PR commit" >&2; exit 1
+fi
+echo "PASS: task file archived to _history with status: merged, inside the PR"
 
 # Gate 5: the branch landed on the remote.
 if ! git ls-remote --exit-code --heads origin "${EXPECT_BRANCH}" >/dev/null 2>&1; then

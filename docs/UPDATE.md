@@ -7,6 +7,21 @@ edits on the next update.
 
 ---
 
+## What v0.32.0 adds on upgrade
+
+Re-running `/init` after this upgrade writes one new file outside the vendored
+prefix: `.github/workflows/arsenal-queue.yml`. It is the queue's upkeep — closing
+a task whose merge did not close it, releasing the claim on a PR closed without
+merging, opening issue handles for new task files, and sweeping claims left by
+crashed sessions. `/init` prints what it installed and which permissions it asks
+GitHub for, and never overwrites a copy you have edited.
+
+Delete it to opt out. Merging still completes a task without it, because
+`open_task_pr.sh` now writes `Closes #<issue>` and archives the task file inside
+the PR — what is lost is the cleanup that happens when no session is running.
+
+---
+
 ## File ownership
 
 | Path | Owner | Survives `/plugin update`? |

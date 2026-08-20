@@ -26,6 +26,7 @@ from typing import Any
 # by hand.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from issue_for_task import issue_number_for
 from task_select import (
     TERMINAL,
     effective_state,
@@ -55,7 +56,14 @@ def main(argv: list[str] | None = None) -> int:
         issues = [i for i in payload if isinstance(i, dict)]
 
     tasks, warnings = load_tasks(args.tasks_dir)
-    state = effective_state(tasks, state_from_issues(issues, warnings=warnings))
+    # Both readings, deliberately. `effective_state` lets a task file's terminal
+    # status win over its issue, which is right for selection — a merged task
+    # must never be handed out again, whatever became of the issue. But that
+    # same override hides the case worth reporting: the two sources disagreeing
+    # means the completion mechanism did not fire, and the drift is invisible
+    # from inside the queue until someone works a task that was already done.
+    issue_state = state_from_issues(issues, warnings=warnings)
+    state = effective_state(tasks, issue_state)
     handled = {t for i in issues if (t := task_id_from_issue(i))}
 
     counts = {"open": 0, "claimed": 0, "done": 0, "cancelled": 0, "blocked": 0}
@@ -79,6 +87,26 @@ def main(argv: list[str] | None = None) -> int:
         for dep in task["deps"]:
             if dep not in known_ids:
                 problems.append(f"{task['id']}: depends on unknown task {dep}")
+
+    # Completion drift: the task file and its issue disagree about whether the
+    # work is finished. Each direction has one cause worth naming, because each
+    # is a merge that did half of what it was supposed to.
+    for task in tasks:
+        actual = issue_state.get(task["id"])
+        if actual is None:
+            continue
+        number = issue_number_for(task["id"], issues)
+        where = f"#{number}" if number else "its issue"
+        if task.get("status") in TERMINAL and actual in {"open", "claimed"}:
+            problems.append(
+                f"{task['id']}: archived as {task['status']} but {where} is still {actual} — "
+                "the PR merged without closing it; close it as completed"
+            )
+        elif task.get("status") not in TERMINAL and actual == "done":
+            problems.append(
+                f"{task['id']}: {where} is closed as completed but the task file is still live "
+                f"in {args.tasks_dir} — move it to _history/ with `status: merged`"
+            )
 
     print(
         f"tasks: {len(tasks)} — "

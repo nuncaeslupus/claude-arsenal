@@ -72,11 +72,14 @@ Then mark the issue so a human can see which agent holds it: self-assign, add
 `arsenal:claimed`, and comment with the session id from `CLAUDE_CODE_REMOTE_SESSION_ID`
 — a `cse_…` value that doubles as a session URL, so the claim is clickable.
 
-**5. Work the task, then open its PR with `Closes #<issue>` in the body.** When it merges,
-GitHub closes the issue and the task is done — there is no separate "update the queue"
-step for anyone to forget. For a stacked PR whose base is not the default branch, put
-`Closes #<issue>` in the **commit message** instead: the PR-body keyword only fires on a
-merge into the default branch.
+**5. Work the task, then open its PR with `open_task_pr.sh`.** It resolves the task's
+issue number, writes `Closes #<issue>` into the PR body *and* the commit message, and
+moves the task file into `arsenal/tasks/_history/` inside the same diff. Merging therefore
+closes the issue, archives the task, and unblocks its dependents in one act — there is no
+"update the queue" step to forget, and nothing left to verify afterwards.
+
+Both keyword sites matter: the body form fires on a merge into the default branch, the
+commit form survives a squash and covers a stacked PR based on another branch.
 
 **6. Loop back to step 2.**
 
@@ -103,8 +106,12 @@ given.
 - **Task files are read from the default branch.** That is what makes every agent compute
   the same graph regardless of the branch it is working on. A task file on an unmerged
   branch is not yet in the queue.
-- **A task with no issue handle is invisible.** Run `handle_sync.py` (in `claude-arsenal/scripts/`) to list task files
-  that need one, and create them. Missing handles delay work; they never corrupt it.
+- **A task with no issue handle is invisible.** Where `.github/workflows/arsenal-queue.yml`
+  is installed, GitHub opens the handle as soon as the task file lands, so this should
+  never be outstanding. Where it is not, run `handle_sync.py` (in `claude-arsenal/scripts/`)
+  to list task files that need one, and create them. Missing handles delay work; they never
+  corrupt it — and `open_task_pr.sh` refuses to open a PR for a task it cannot link, rather
+  than merging one that closes nothing.
 - **`gate: false` in the selector output means the task has no runnable gate.** A prose-only
   gate executes nothing and therefore passes everything. Fix the task file before working
   it, rather than completing something that nothing checked.

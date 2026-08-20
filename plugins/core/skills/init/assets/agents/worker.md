@@ -5,11 +5,17 @@ Requested with `isolation: worktree` so it runs in its own throwaway worktree.
 The worker implements one task and opens its PR. The **orchestrator** owns the
 claim; you never touch it.
 
-The PR body must contain **`Closes #<issue>`** for the task's issue. That is what
-records completion: GitHub closes the issue when the PR merges, so there is no
-separate "update the queue" step for anyone to forget. If the PR's base is not the
-default branch (a stacked PR), put `Closes #<issue>` in the **commit message**
-instead — the PR-body keyword only fires on a merge into the default branch.
+Completion is recorded by the PR merging. `open_task_pr.sh` resolves the task's
+issue number and writes `Closes #<issue>` into both the PR body and the commit
+message, and moves the task file into `tasks/_history/` as part of the same diff
+— so the merge closes the task and archives it in one act. You do not add the
+keyword, check for it, or update anything afterwards.
+
+This used to be a line asking you to "make sure the body carries `Closes #N`"
+while nothing computed which issue that was, so the keyword was usually absent
+and every merged task stayed `claimed`. If the helper cannot resolve the issue it
+now refuses **before touching git**, with your edits intact — report that refusal
+rather than working around it.
 
 > **If isolation was not honored** (some surfaces silently ignore the flag and run
 > you in the orchestrator's tree): follow the same protocol unchanged.
@@ -88,10 +94,15 @@ Verify `pwd` at the start of the task if unsure.
    claude-arsenal/bin/open_task_pr.sh <task_id> "<task title>"
    ```
    It cuts `arsenal/<task_id>-<slug>` off the host default branch
-   (`origin/main`), commits (Conventional Commits + the Co-Authored-By
-   trailer), pushes, and prints either a PR URL or `branch:<name>` (push-only,
-   when no PR backend is available here). Make sure the PR body carries
-   `Closes #<issue>` — that is what closes the task when it merges.
+   (`origin/main`), archives the task file, commits (Conventional Commits +
+   `Closes #<issue>` + the Co-Authored-By trailer), pushes, opens the PR over
+   `gh` or REST, and prints either a PR URL or `branch:<name>` — the latter only
+   when no channel here can open a PR at all.
+
+   If it refuses because it could not resolve the issue handle, do not retry with
+   `ARSENAL_ALLOW_UNLINKED_PR=1`: that opens a PR whose merge closes nothing.
+   Return the refusal to the orchestrator, which holds the issue list and can
+   pass `ARSENAL_TASK_ISSUE`.
 6. **Return the outcome to the orchestrator** — status `done`, plus the PR URL
    or `branch:<name>` line from step 5. A `branch:<name>` means the branch was
    pushed but **no PR was opened** (no PR backend in this worktree); it is not a
@@ -135,4 +146,6 @@ and report it — do not commit through it.
   only the task's code.
 - Do not access files outside the worktree root using absolute paths.
 - Do not spawn additional subagents (one worker per task).
-- Do not edit the task's own file to mark it done; merging the PR does that.
+- Do not edit the task's own file to mark it done, and do not move it to
+  `_history/` yourself; `open_task_pr.sh` puts the archive in the PR so it lands
+  exactly when the merge does.

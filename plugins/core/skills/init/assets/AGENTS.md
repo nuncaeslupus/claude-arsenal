@@ -1,6 +1,6 @@
 # Claude Arsenal
 
-<!-- claude-arsenal v0.31.0 — imported via @claude-arsenal/AGENTS.md -->
+<!-- claude-arsenal v0.32.0 — imported via @claude-arsenal/AGENTS.md -->
 
 This file is imported by the host repo's `CLAUDE.md` via the session-protocol block
 that `/init` injects. It provides the mechanics behind the proactive directives
@@ -45,7 +45,8 @@ At the start of every session (fresh start, context compaction, or cold restart)
    Report anything it flags: a task with no fenced gate block, a task file with no issue
    handle, or a dep that no task file declares.
 
-4. **Create any missing handles** —
+4. **Create any missing handles** (usually a no-op — `.github/workflows/arsenal-queue.yml`
+   opens them when the task file lands) —
    `python3 claude-arsenal/scripts/handle_sync.py --issues /tmp/arsenal-issues.json`
    prints one JSON object per task file that has no issue yet; create those issues with
    the `arsenal:task` label and a visible `` `arsenal-task: <id>` `` line in the
@@ -67,6 +68,12 @@ At the start of every session (fresh start, context compaction, or cold restart)
 7. **Before ending a session with open work** — audit every task whose issue is claimed or
    whose PR is open (CI, reviews, mergeability), print the table for the user, then write
    `arsenal/session/handover.md`. `/session-end` does this in full; defer to it when loaded.
+
+   This step is **reporting, not repair**. Nothing the next session needs depends on it
+   running: a merged PR has already closed and archived its task, and an abandoned one has
+   already released its claim. A session that ends abruptly — quota stop, crash, a closed
+   window — leaves the queue correct anyway. If you ever find yourself writing "remember to
+   X before the session ends", that belongs in the workflow or in a script, not here.
 
 ## Queue seeding from workspace plans
 
@@ -357,13 +364,14 @@ dispatches that many workers at once. Run when the queue has open tasks:
        `git checkout <ref> -- .`, and **surface it to the user** — do not
        silently continue the loop over rescued work.
    - Then record the outcome:
-     - `done` + **PR URL** → nothing to record. The PR carries `Closes #<issue>`,
-       so merging it closes the task by itself. Check the PR is open and the
-       keyword is present; that is the whole of "recording done".
-       If the worker returned `branch:<name>` instead of a URL (no PR backend was
-       available in its worktree), **open the PR for that branch yourself** with
-       the `Closes #<issue>` line — a pushed branch is not an opened PR, and a
-       task whose PR never opened can never close.
+     - `done` + **PR URL** → nothing to record. `open_task_pr.sh` wrote
+       `Closes #<issue>` and archived the task file into that PR, so merging it
+       closes the task by itself.
+       If the worker returned `branch:<name>` instead of a URL, no channel in its
+       worktree could open a PR: **open it yourself** with the `Closes #<issue>`
+       line. A pushed branch is not an opened PR, and a task whose PR never
+       opened can never close. The keyword-guard check in
+       `.github/workflows/arsenal-queue.yml` fails the PR if you forget it.
      - `open` (gate failed) → append the worker's `## Attempt N failure` notes to
        the task file so the next attempt can read them, and leave the task for a
        retry. The next attempt claims `<id>.a<n+1>`; past `max-attempts` it stops
@@ -540,18 +548,52 @@ The failure the previous design could not fix: merging a PR and updating the que
 two separate acts, and the second got forgotten. Worse, `reconcile_merged.sh` — the script
 meant to catch that — was `gh`-gated and so never ran on the web at all.
 
-Now the PR body carries `Closes #<issue>` and **GitHub closes the issue when the PR
-merges**. There is no second act. A task cannot be recorded complete without a real merged
-PR, because the recording *is* the merge.
+Merging is now the whole of it, and **no step in this protocol asks anyone to finish a
+task**. `open_task_pr.sh` resolves the task's issue number, writes `Closes #<issue>` into
+the PR body *and* the commit message, and moves the task file into `tasks/_history/` with
+`status: merged` inside the same diff. So one merge closes the issue, archives the file,
+and unblocks the dependents.
 
-Two caveats, or this quietly does not work:
+Writing the keyword in both places is not belt-and-braces for its own sake — each covers
+a case the other does not. The body form fires on a merge into the **default** branch; the
+commit form survives a squash and is what closes the issue for a **stacked** PR whose base
+is another branch, when that commit eventually lands.
 
-1. **Only into the default branch.** GitHub closes linked issues when the PR merges into
-   the repository's *default* branch; a merge into any other base closes nothing.
-2. **Stacked PRs need the keyword in the commit message.** For multi-PR work where
-   intermediate PRs target the previous branch, a `Closes #N` in the PR *body* never
-   fires. Put it in the commit message, which closes the issue when that commit finally
-   lands on the default branch.
+> The keyword used to be prose here and in `worker.md` — "make sure the body carries
+> `Closes #<issue>`" — while nothing anywhere computed which issue that was and
+> `open_task_pr.sh` wrote a body without it. An instruction with no data path behind it is
+> a step that does not happen, so every task PR merged closing nothing. If you are reading
+> a protocol that asks you to remember a completion step, that is the bug.
+
+**When the helper refuses.** No resolvable issue handle means a PR that would merge
+without closing anything, so it stops before touching git, leaving the worker's edits
+intact. Pass `ARSENAL_TASK_ISSUE=<n>` (the orchestrator has the number from step 2 of the
+session-start protocol) or create the handle with `handle_sync.py`. Do not reach for
+`ARSENAL_ALLOW_UNLINKED_PR=1` to get past it — that is the old silent failure, opted into.
+
+## Upkeep GitHub does — `.github/workflows/arsenal-queue.yml`
+
+Merging covers a task that finished. Four things it cannot cover happen when **no session
+is running**, and each used to be a line asking an agent to tidy up at the end — the least
+reliable place to put anything, since the sessions that most need cleaning up are the ones
+that ended badly:
+
+| Event | What GitHub does |
+|---|---|
+| Task PR merged, keyword never fired | Closes the issue as completed, archives the task file |
+| Task PR closed **without** merging | Removes `arsenal:claimed` + the assignee, so the task returns to the board |
+| Task file lands on the default branch | Opens its `arsenal:task` issue handle immediately |
+| Claim held >24h with no open PR | Releases it — the session holding it crashed |
+| Task PR opened with no closing keyword | Fails its check **before** the merge |
+
+`/init` installs the workflow and prints what it does and what it can touch. It never runs
+code from a pull request. A repo without it still works — the merge path is unchanged —
+but a session there has to expect stale claims and unhandled task files, and fix them
+before starting.
+
+So the session-start protocol's job is genuinely to read the board and pick up work. If
+step 3 or 4 reports problems in a repo that has the workflow, that is a signal something
+is wrong, not the normal cost of starting.
 
 ## Credit guards — set before any Task-tool dispatch
 
@@ -616,7 +658,7 @@ inert without anyone noticing — one consumer audit found 0 of 70 payloads carr
 ### Task lifecycle
 
 ```
-open ──claim ref created──→ claimed ──PR merged (Closes #N)──→ done
+open ──claim ref created──→ claimed ──PR merged (Closes #N + archive)──→ done
   ↑                            │
   └──── attempt failed ────────┘   (next attempt claims <id>.a2, up to max-attempts)
 ```
@@ -645,10 +687,14 @@ claude-arsenal/        ← upstream. /init owns it and may overwrite it freely
     budget_check.sh    ← quota stop + per-session round cap
     check_update.sh    ← bundle freshness against the upstream tag
     statusline_capture.sh, detect_surface.sh, workspace_list.sh
+  workflows/
+    arsenal-queue.yml  ← installed to .github/workflows/ by /init
   scripts/
     task_select.py     ← pure selector: graph + issues → the next task
-    query_status.py    ← the board
+    query_status.py    ← the board (and the drift report: task vs issue disagreeing)
     handle_sync.py     ← task files with no issue handle yet
+    issue_for_task.py  ← task id → its issue number, so `Closes #N` can be written
+    queue_hooks.py     ← the transitions GitHub runs: close, release, sync, sweep
     arsenal_config.py  ← reads arsenal/config.toml
     arsenal_migrate.py ← one-time move from the old coordination-branch queue
     gate_evidence.py

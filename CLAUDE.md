@@ -49,6 +49,14 @@ handle, or a dep no task file declares fails the build.
 is a guard on the backlog, not evidence there is one. Add task files as review
 work comes in rather than treating a green `queue-doctor` as a full dogfood.
 
+**This repo does not run `arsenal-queue.yml` itself.** The workflow ships in
+`plugins/core/skills/init/assets/workflows/` and `/init` installs it into a
+*consumer's* `.github/workflows/`, where it calls `claude-arsenal/scripts/…`.
+Upstream has no vendored `claude-arsenal/` prefix — it is the source of it — so
+those paths do not resolve here. The dogfood covers the task files and the board;
+the workflow's behaviour is covered by `plugins/core/tests/queue_hooks_test.sh`,
+which exercises its planners directly.
+
 ---
 
 ## Layout
@@ -65,6 +73,7 @@ plugins/
   <plugin>/skills/<skill>/references/   # lazy-loaded references
   <plugin>/skills/<skill>/scripts/      # helper scripts (uv run python …)
   <plugin>/skills/<skill>/evals/        # eval prompts + loading verification
+  core/skills/init/assets/workflows/    # shipped Actions, installed by /init
 Makefile                                # dev entry point
 pyproject.toml                          # uv + ruff + mypy config
 ```
