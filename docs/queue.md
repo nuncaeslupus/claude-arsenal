@@ -231,7 +231,8 @@ had four of them enforced by nobody — and the four it skipped were the ones th
 catch board drift, evidence drift and a stale bundle, which are exactly the
 failures invisible in a diff.
 
-`ARSENAL_SKIP_GATES=1` opts out for one invocation and says so loudly on stderr.
+There is no way to skip it. An escape hatch would be reached for precisely the
+situation the refusal exists for — a red repo with a PR to open.
 
 ### Saying "closed, but not done"
 

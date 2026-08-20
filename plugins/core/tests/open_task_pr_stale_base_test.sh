@@ -20,10 +20,17 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BIN="${SCRIPT_DIR}/../skills/init/assets/bin"
 HELPER="${BIN}/open_task_pr.sh"
 
-# These cases exercise the git/PR-body behaviour, not the gates. The gate
-# refusal now runs before any of it, and these fixtures carry no task file,
-# so they opt out explicitly rather than each growing a passing gate.
-export ARSENAL_SKIP_GATES=1
+# open_task_pr.sh refuses to open a PR unless the task's gate passes, and there
+# is no skip flag — an escape hatch would be reached for exactly when a repo is
+# red. These fixtures therefore carry a real, trivially passing gate: the cases
+# below are about git and PR-body behaviour, not about what a gate decides.
+_seed_gates() {  # $1 = repo root
+    mkdir -p "$1/arsenal/tasks"
+    for _t in lo-guard-inplace lo-guard-selfcert lo-guard-unset lo-noissue lo-stale lo-x001 lo-x002; do
+        printf '%s\n' "---" "id: ${_t}" "title: \"fixture\"" "priority: 1" "---" "" \
+            "## Acceptance gate" '```bash' "true" '```' > "$1/arsenal/tasks/${_t}.md"
+    done
+}
 
 [[ -f "${HELPER}" ]] || { echo "SKIP: open_task_pr.sh not found at ${HELPER}" >&2; exit 0; }
 [[ -f "${BIN}/rescue_snapshot.sh" ]] || { echo "SKIP: rescue_snapshot.sh not found" >&2; exit 0; }
@@ -67,12 +74,14 @@ fresh_sha="$(git rev-parse HEAD)"
 work="${tmp}/work"
 git clone -q "${tmp}/remote.git" "${work}"
 cd "${work}"
+_seed_gates "${work}"
 git config user.email "test@arsenal.example"
 git config user.name "Arsenal Test"
 wt="${tmp}/worker-wt"
 git worktree add -q --detach "${wt}" "${stale_sha}" 2>/dev/null \
     || fail "could not create the worker worktree"
 cd "${wt}"
+_seed_gates "${wt}"
 
 # The worker implements its task: an uncommitted edit to the far end of the
 # same file the base advanced in.

@@ -89,10 +89,20 @@ out=$(ARSENAL_COAUTHOR="" bash "${HELPER}" t-gate-127 "Could not run" 2>&1); rc=
 grep -q "nothing was verified" <<<"${out}" \
     || fail "exit 3 should be reported as nothing verified, not as a plain failure: ${out}"
 
-# --- 6: the opt-out exists, and announces itself ---
-#     Deliberate, loud, and never silent — the same shape as the stale-claim
-#     override rather than a quiet skip.
-out=$(ARSENAL_SKIP_GATES=1 ARSENAL_COAUTHOR="" bash "${HELPER}" t-gate-red "Skipped" 2>&1)
-grep -q "ARSENAL_SKIP_GATES=1" <<<"${out}" || fail "the opt-out must announce itself: ${out}"
+# --- 6: there is no way to skip the gates ---
+#     An escape hatch would be reached for exactly when the repo is red, which
+#     is the case the refusal exists for.
+out=$(ARSENAL_SKIP_GATES=1 ARSENAL_COAUTHOR="" bash "${HELPER}" t-gate-red "Try to skip" 2>&1); rc=$?
+[[ ${rc} -ne 0 ]] || fail "no environment variable may skip a failing gate"
+grep -q "no PR opened" <<<"${out}" || fail "a skip attempt must still be refused: ${out}"
+grep -rq "ARSENAL_SKIP_GATES" "${HELPER}" && fail "the helper must carry no skip flag at all"
+
+# --- 7: gate output never reaches stdout ---
+#     This script's stdout is a contract — callers parse `branch:…` and the PR
+#     URL out of it, and a `gate: passed` line in front of that breaks them.
+write_task t-gate-out "true"
+printf 'merge-policy = "after-ci"\n' > arsenal/config.toml
+sout=$(ARSENAL_COAUTHOR="" bash "${HELPER}" t-gate-out "Clean stdout" 2>/dev/null || true)
+grep -q "^gate:" <<<"${sout}" && fail "gate chatter must not appear on stdout: ${sout}"
 
 echo "PASS: open_task_pr_gates_test — all gates passed"
