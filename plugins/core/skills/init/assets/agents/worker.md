@@ -31,8 +31,14 @@ isolation: worktree
 env:
   CLAUDE_CODE_DISABLE_1M_CONTEXT: "1"
   CLAUDE_CODE_DISABLE_FAST_MODE: "1"
-  CLAUDE_CODE_SUBAGENT_MODEL: "claude-sonnet-4-6"
+  CLAUDE_CODE_SUBAGENT_MODEL: "<models.workers from arsenal/config.toml>"
 ```
+
+The orchestrator resolves that last value before dispatch with
+`python3 claude-arsenal/scripts/arsenal_config.py --get models.workers`
+(default `sonnet`). It is not written literally here because which model runs
+the workers is the host repo's choice, and a value hardcoded in a vendored file
+is one an upgrade silently replaces.
 
 ## Relative-path directive (required)
 
