@@ -42,6 +42,7 @@ Exit: 0 (an empty import is an answer), 2 on unreadable input.
 from __future__ import annotations
 
 import argparse
+import html
 import json
 import sys
 from pathlib import Path
@@ -118,7 +119,14 @@ def render(issue: dict[str, Any], task_id: str) -> str:
     body = (issue.get("body") or "").strip() or "_(no issue body)_"
     return TEMPLATE.format(
         task_id=task_id,
-        title=json.dumps(str(issue.get("title", task_id))),
+        # Two spellings to undo before this lands in the repo, because a task
+        # file is data other tools compare against. `html.unescape` because the
+        # GitHub MCP tools escape `<`, `>` and `&` in the `title` field, and
+        # storing that is storing the transport, not the title.
+        # `ensure_ascii=False` because the default spells a euro sign `\u20ac`
+        # — the parser decodes that now, but a title nobody can read in a diff
+        # is worse for no gain. The file is written UTF-8 either way.
+        title=json.dumps(html.unescape(str(issue.get("title", task_id))), ensure_ascii=False),
         capability=GATE_CAPABILITY,
         url=issue.get("html_url") or f"issue #{issue.get('number')}",
         body=body,

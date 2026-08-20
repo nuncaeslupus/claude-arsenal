@@ -59,7 +59,9 @@ exit so a `make` target or CI job can gate on them:
   over: one consumer audit found 0 of 70 payloads carried a fenced block, so its entire
   gate layer had been inert without anyone noticing.
 - **`no-handle`** — the task file exists but no issue points at it, so no agent can claim
-  it. Run `handle_sync.py` and create the missing issues. This delays work rather than
+  it. Run `handle_sync.py` and create the missing issues. Where it reports a near-identical
+  issue title instead of proposing one, that issue is probably already the handle: add
+  `arsenal-task: <id>` to it rather than opening a second. This delays work rather than
   corrupting it.
 - **`depends on unknown task`** — a dep id that no task file declares. The selector treats
   unknown deps as unsatisfied, so such a task would never become eligible and would never

@@ -18,6 +18,12 @@ channel the surface offers:
 
     {"task":"t-3f8a91c2","title":"…","labels":["arsenal:task"],"body":"…"}
 
+A task whose title is a near-match for an issue that resolved to nothing is
+reported on stderr instead of proposed: since the board resolves handles by
+title as well as by id, "no id resolved" can mean the fold missed rather than
+that no issue exists, and a duplicate handle corrupts state where a delay does
+not.
+
 Exit: 0 when everything has a handle or the missing ones were printed,
 2 on unreadable input.
 """
@@ -32,19 +38,48 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from task_select import TERMINAL, load_tasks, task_id_from_issue, title_index
+from task_select import (
+    TERMINAL,
+    load_tasks,
+    loose_title_key,
+    task_id_from_issue,
+    title_index,
+)
 
 
 def missing_handles(
-    tasks: list[dict[str, Any]], issues: list[dict[str, Any]], *, label: str
+    tasks: list[dict[str, Any]],
+    issues: list[dict[str, Any]],
+    *,
+    label: str,
+    warnings: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     # Same resolver, same index as the board: an issue that resolves only by
     # title is still a handle, and proposing a second one for the task it
     # already handles is how a narrowed fetch would quietly duplicate the board.
     titles = title_index(tasks)
-    handled = {
-        task_id for issue in issues if (task_id := task_id_from_issue(issue, titles=titles))
-    }
+    handled: set[str] = set()
+    unresolved: list[dict[str, Any]] = []
+    for issue in issues:
+        if task_id := task_id_from_issue(issue, titles=titles):
+            handled.add(task_id)
+        else:
+            unresolved.append(issue)
+
+    # The rest of that thought. Resolution by title is a heuristic, so "no id
+    # resolved" no longer means "no issue exists" — it can also mean the fold
+    # missed, and this script is the one wired to an action. Proposing a handle
+    # for a task that already has one puts two issues on the board claiming a
+    # single task's state, which is worse than the delay of not proposing.
+    #
+    # So an issue that resolved to nothing gets one more, much looser look. If
+    # it is a near-match for a task, that task is left alone and reported: a
+    # human adds the `arsenal-task:` line and the ambiguity is gone for good.
+    near: dict[str, Any] = {}
+    for issue in unresolved:
+        if key := loose_title_key(issue.get("title") or ""):
+            near.setdefault(key, issue.get("number", "?"))
+
     out: list[dict[str, Any]] = []
     for task in tasks:
         if task["id"] in handled:
@@ -58,6 +93,15 @@ def missing_handles(
         # spurious tasks that read as open and unclaimed, and that a selector
         # will hand straight back out.
         if str(task.get("status") or "") in TERMINAL:
+            continue
+        if (key := loose_title_key(task["title"])) in near:
+            if warnings is not None:
+                warnings.append(
+                    f"{task['id']}: no handle resolved, but issue #{near[key]} has a "
+                    "near-identical title — not proposing a second handle. Add "
+                    f"`arsenal-task: {task['id']}` to that issue if it is the handle, or "
+                    "make the two titles agree."
+                )
             continue
         out.append(
             {
@@ -94,9 +138,15 @@ def main(argv: list[str] | None = None) -> int:
     for warning in warnings:
         print(f"handle_sync: {warning}", file=sys.stderr)
 
+    proposal_warnings: list[str] = []
     rows = missing_handles(
-        tasks, [i for i in payload if isinstance(i, dict)], label=args.label
+        tasks,
+        [i for i in payload if isinstance(i, dict)],
+        label=args.label,
+        warnings=proposal_warnings,
     )
+    for warning in proposal_warnings:
+        print(f"handle_sync: {warning}", file=sys.stderr)
     for row in rows:
         print(json.dumps(row, separators=(",", ":")))
     if not rows:

@@ -107,7 +107,10 @@ def _yaml_list(values: list[str]) -> str:
 
 def task_markdown(row: dict[str, Any], payload_body: str, *, terminal: bool = False) -> str:
     deps = [str(d.get("id")) for d in row.get("deps", []) if isinstance(d, dict) and d.get("id")]
-    lines = ["---", f"id: {row['id']}", f"title: {json.dumps(str(row.get('title', row['id'])))}"]
+    # `ensure_ascii=False`: the default escapes every non-ASCII character to
+    # `\uXXXX`, which a reader has to decode and a human cannot skim.
+    title = json.dumps(str(row.get("title", row["id"])), ensure_ascii=False)
+    lines = ["---", f"id: {row['id']}", f"title: {title}"]
     priority = row.get("priority", 0)
     lines.append(f"priority: {priority if isinstance(priority, int) else 0}")
     if deps:
