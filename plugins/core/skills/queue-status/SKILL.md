@@ -25,7 +25,10 @@ Load this skill when:
 ## How to use
 
 First fetch the `arsenal:task` issues — open **and** closed — with whatever GitHub access
-this surface has, and save the JSON. Then:
+this surface has, and save the JSON. Ask for `number`, `title`, `state`, `labels`,
+`assignees` and **not `body`**: the board is derived from labels and state, the task id
+resolves from the title when no body is present, and the bodies are the bulk of the fetch.
+Then:
 
 Run `query_status.py` (in `claude-arsenal/scripts/`, beside `task_select.py`):
 

@@ -28,16 +28,22 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from task_select import task_id_from_issue
+from task_select import load_tasks, task_id_from_issue, title_index
 
 
-def issue_number_for(task_id: str, issues: list[dict[str, Any]]) -> int | None:
+def issue_number_for(
+    task_id: str,
+    issues: list[dict[str, Any]],
+    *,
+    titles: dict[str, str | None] | None = None,
+) -> int | None:
     """The number of the issue handling `task_id`, preferring an open one.
 
     A task can end up with more than one handle — a duplicate created while a
@@ -47,7 +53,7 @@ def issue_number_for(task_id: str, issues: list[dict[str, Any]]) -> int | None:
     """
     best: int | None = None
     for issue in issues:
-        if task_id_from_issue(issue) != task_id:
+        if task_id_from_issue(issue, titles=titles) != task_id:
             continue
         number = issue.get("number")
         if not isinstance(number, int):
@@ -76,6 +82,12 @@ def main(argv: list[str] | None = None) -> int:
         required=True,
         help="JSON array of issues, or - to read stdin",
     )
+    parser.add_argument(
+        "--tasks-dir",
+        type=Path,
+        default=Path(os.environ.get("ARSENAL_HOME", "arsenal")) / "tasks",
+        help="task files, used to resolve an issue that carries no body",
+    )
     args = parser.parse_args(argv)
 
     try:
@@ -84,11 +96,17 @@ def main(argv: list[str] | None = None) -> int:
         print(f"issue_for_task: cannot read --issues — {exc}", file=sys.stderr)
         return 2
 
-    number = issue_number_for(args.task, issues)
+    # The saved snapshot this reads is the one the session-start protocol
+    # fetches, and that fetch no longer asks for bodies. Without the title
+    # index a title-only handle resolves to nothing here, and open_task_pr.sh
+    # refuses to open the PR for a task that has a perfectly good issue.
+    tasks, _ = load_tasks(args.tasks_dir)
+    number = issue_number_for(args.task, issues, titles=title_index(tasks))
     if number is None:
         print(
-            f"issue_for_task: no issue carries `arsenal-task: {args.task}` — "
-            "run handle_sync.py and create it before opening the PR",
+            f"issue_for_task: no issue carries `arsenal-task: {args.task}`, and none is "
+            "titled like that task's file — run handle_sync.py and create the handle "
+            "before opening the PR",
             file=sys.stderr,
         )
         return 1

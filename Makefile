@@ -1,4 +1,4 @@
-.PHONY: help sync smoke test queue-doctor tag sync-version sync-version-check validate audit audit-rule-drift sync-dupes lint format dev new-skill update-skills clean
+.PHONY: help sync smoke test context-budget queue-doctor tag sync-version sync-version-check validate audit audit-rule-drift sync-dupes lint format dev new-skill update-skills clean
 
 PLUGIN_DIRS := $(wildcard plugins/*)
 PLUGIN_SKILL_LIBS := $(wildcard plugins/*/skills)
@@ -10,6 +10,10 @@ AUDIT_LIB := $(SC_SCRIPTS)/audit_library.py
 AUDIT_DRIFT := $(SC_SCRIPTS)/audit_rule_drift.py
 SYNC_DUPES := $(SC_SCRIPTS)/sync_duplicates.py
 SMOKE_SH := plugins/skill-creator/skills/skill-creator/tests/skills_smoke.sh
+
+# The resident tier — AGENTS.md plus every skill's listing entry — is what a
+# consumer pays on every turn before any work happens. See CLAUDE.md § Context budget.
+RESIDENT_TOKEN_BUDGET := 5000
 
 help:  ## list available targets
 	@awk 'BEGIN {FS = ":.*##"} /^[a-zA-Z_-]+:.*##/ {printf "  %-18s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -38,6 +42,9 @@ ifeq ($(PLUGIN_SKILL_LIBS),)
 else
 	uv run python $(AUDIT_LIB) $(PLUGIN_SKILL_LIBS) --by-plugin
 endif
+
+context-budget:  ## report what this marketplace costs a consumer's context, and cap the resident tier
+	uv run python scripts/context_budget.py --fail-over $(RESIDENT_TOKEN_BUDGET)
 
 audit-rule-drift:  ## diff rule IDs in references/skill-rules.md vs docs/research/claude-skill-system_v1.17.md
 	uv run python $(AUDIT_DRIFT)

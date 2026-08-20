@@ -33,6 +33,7 @@ from task_select import (
     load_tasks,
     state_from_issues,
     task_id_from_issue,
+    title_index,
 )
 
 # The documented size scale, mirroring queue-add's `--size`. A board mixing this
@@ -72,9 +73,10 @@ def main(argv: list[str] | None = None) -> int:
     # same override hides the case worth reporting: the two sources disagreeing
     # means the completion mechanism did not fire, and the drift is invisible
     # from inside the queue until someone works a task that was already done.
-    issue_state = state_from_issues(issues, warnings=warnings)
+    titles = title_index(tasks)
+    issue_state = state_from_issues(issues, titles=titles, warnings=warnings)
     state = effective_state(tasks, issue_state)
-    handled = {t for i in issues if (t := task_id_from_issue(i))}
+    handled = {t for i in issues if (t := task_id_from_issue(i, titles=titles))}
 
     counts = {"open": 0, "claimed": 0, "done": 0, "cancelled": 0, "blocked": 0}
     problems: list[str] = []
@@ -105,7 +107,7 @@ def main(argv: list[str] | None = None) -> int:
         actual = issue_state.get(task["id"])
         if actual is None:
             continue
-        number = issue_number_for(task["id"], issues)
+        number = issue_number_for(task["id"], issues, titles=titles)
         where = f"#{number}" if number else "its issue"
         if task.get("status") in TERMINAL and actual in {"open", "claimed"}:
             problems.append(
@@ -140,7 +142,7 @@ def main(argv: list[str] | None = None) -> int:
                         "state": current,
                         "terminal": current in TERMINAL,
                         "gate": task["gate"],
-                        "issue": issue_number_for(task["id"], issues),
+                        "issue": issue_number_for(task["id"], issues, titles=titles),
                         "blocked_by": blocking(task, state),
                     },
                     separators=(",", ":"),

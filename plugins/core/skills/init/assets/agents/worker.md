@@ -72,6 +72,13 @@ Verify `pwd` at the start of the task if unsure.
 3. **Implement to green (GREEN).** Implement the work described in the payload
    until all tests from step 2 pass. Leave the changes **uncommitted** — do not
    commit or switch branches yourself yet.
+   - When the task says to follow an existing module, read its *shape* first —
+     `bash claude-arsenal/bin/outline.sh <file>` prints the declarations and
+     nothing else — then open only the body you actually need with
+     `sed -n 'START,ENDp' <file>`. Modules here carry long rationale docstrings
+     on purpose; they are written for someone deciding whether the design is
+     right, not for someone copying a signature, and reading one in full to
+     copy its shape costs 25–33× what the shape costs.
 
 4. **Run the gates.** `open_task_pr.sh` runs them itself before it touches git —
    the repo's own `host-gate` from `arsenal/config.toml` if one is declared,

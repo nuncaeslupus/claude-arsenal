@@ -22,7 +22,9 @@ Every session, without waiting to be asked:
 1. Read `arsenal/session/handover.md` for the previous session's context.
 2. List the repository's issues labelled `arsenal:task` — **open and closed** — and
    save the JSON. Use whatever GitHub access this surface has; run
-   `claude-arsenal/bin/github_channel.sh --detect` to find out which.
+   `claude-arsenal/bin/github_channel.sh --detect` to find out which. Request
+   `number`, `title`, `state`, `labels`, `assignees` and **not `body`** — the bodies
+   are the bulk of that fetch and nothing downstream reads them.
 3. Run `python3 claude-arsenal/scripts/query_status.py --issues <that file>` for the
    board, and report anything it flags.
 4. Pick up work: `python3 claude-arsenal/scripts/task_select.py --issues <that file>`

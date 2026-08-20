@@ -31,6 +31,7 @@ cutover).
 | Touching a SKILL.md / references / scripts inside a plugin | The pre-edit hook blocks unless `skill-creator` is loaded. |
 | Adding a new plugin | Scaffold `plugins/<name>/.claude-plugin/plugin.json`, then add the entry to `.claude-plugin/marketplace.json`. |
 | Running the rule-drift check | `make audit-rule-drift` — diffs `references/skill-rules.md` against `docs/research/claude-skill-system_v1.17.md`. |
+| Checking what a change costs a consumer's context | `make context-budget` — reports the resident/on-invocation/on-demand tiers and fails over the resident cap. |
 | Checking this repo's own queue health | `make queue-doctor` — runs the queue consistency checker on `status/queue/` (dogfood). |
 | Updating dependencies | `uv sync`, then commit `uv.lock`. |
 
@@ -205,6 +206,68 @@ form:
 rubric rows and validator findings only.
 
 ---
+
+## Context budget — the standing constraint
+
+This marketplace is a skill set for working *better* with Claude, and a session's
+context window is the resource it is spending to do that. A skill that occupies
+context it does not earn back makes every session that installs it slightly
+worse at everything else. So context cost is a first-class review criterion
+here, alongside correctness — not a nice-to-have someone gets to later.
+
+**`make context-budget`** puts a number on it. It reports three tiers, which
+matter because they are paid on completely different schedules:
+
+| tier | what is in it | when it is paid |
+|---|---|---|
+| **Resident** | vendored `AGENTS.md` + every skill's `name`/`description` | every turn of every session, forever |
+| **On invocation** | one `SKILL.md` body | once, when that skill triggers |
+| **On demand** | `references/`, agent definitions | only when something opens them |
+
+The resident tier is capped (`RESIDENT_TOKEN_BUDGET` in the Makefile, currently
+5000 tokens) and CI fails over it. When a change pushes it over, move what grew
+behind a reference or into a script — **do not raise the cap.** The cap is the
+composite of two guards that already existed: `bundle_refs_test.sh` holds
+`AGENTS.md` to 250 lines, and `make audit` holds the skills index to 8000
+characters (see *Listing budget* below).
+
+### The four moves, in order of preference
+
+Every token question here has come down to one of these. Reach for them in this
+order, because each is strictly cheaper than the one after it:
+
+1. **A script, not a paragraph.** Anything deterministic — ordering, resolution,
+   parsing, a consistency check — belongs in a script whose output is a line or
+   two, not in prose the model is asked to remember and re-derive. `task_select.py`
+   exists because "which task is next" is a computation, and a computation
+   charged to context is charged on every session that runs it.
+2. **Narrow the fetch, not the reader.** When a step tells a session to pull data
+   in, say which fields. The session-start protocol asks for `number`, `title`,
+   `state`, `labels`, `assignees` and pointedly not `body`: on a 40-issue board
+   that is ~1.2k tokens instead of ~9k, for the same answer. Any new instruction
+   that lands external data in context states its field list.
+3. **Shape before prose.** When a step says to follow an existing file, name the
+   cheap way to read it — `bin/outline.sh` prints declarations only, 25–33×
+   smaller than the file — and open the body only where the logic actually
+   matters. This repo writes long rationale docstrings deliberately; they are
+   for someone judging a design, not for someone copying a signature.
+4. **On demand, not resident.** Content only some sessions need goes in
+   `references/` with a concrete "load this when…" trigger. A reference costs
+   nothing until it is opened; a paragraph in `AGENTS.md` costs every session
+   that never needed it.
+
+### What this asks of a change
+
+State the context cost of anything that adds to the resident tier, or that puts
+data in context on a path a session takes every time. "It is only a few lines"
+is a claim about the diff, not about the cost — the cost is those lines times
+every turn of every session in every consumer repo. If a step genuinely needs
+the tokens, say why it earns them; that is a fine answer, and an unexamined one
+is not.
+
+Cost claims in this repo are measured, not estimated by eye. Both the numbers
+above came from real boards and real files, and `make context-budget` is there
+so the next one can be too.
 
 ## Listing budget
 

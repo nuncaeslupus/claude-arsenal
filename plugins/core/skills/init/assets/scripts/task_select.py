@@ -71,13 +71,71 @@ TASK_PATH_RE = re.compile(
 )
 
 
-def task_id_from_issue(issue: dict[str, Any]) -> str | None:
-    """The task an issue is a handle for, or None."""
+def normalise_title(text: str) -> str:
+    """Fold a title to the form two sources can be compared on."""
+    return re.sub(r"\s+", " ", str(text)).strip().casefold()
+
+
+def title_index(tasks: list[dict[str, Any]]) -> dict[str, str | None]:
+    """Normalised title -> task id, or None where two task files share a title.
+
+    The `None` is the point, not an omission: a title collision must resolve to
+    nothing rather than to whichever file sorted first. Attributing one task's
+    state to another is worse than leaving it unknown — an unknown task reads as
+    `open` and gets looked at, a mis-attributed one is silently marked done.
+    """
+    index: dict[str, str | None] = {}
+    for task in tasks:
+        key = normalise_title(task.get("title") or "")
+        if not key:
+            continue
+        index[key] = None if key in index else task["id"]
+    return index
+
+
+def task_id_from_issue(
+    issue: dict[str, Any],
+    *,
+    titles: dict[str, str | None] | None = None,
+    warnings: list[str] | None = None,
+) -> str | None:
+    """The task an issue is a handle for, or None.
+
+    The body is asked first and always: the `arsenal-task:` line is an exact
+    statement of identity, and a title is a heuristic that must never override
+    one.
+
+    `titles` adds the fallback that lets a caller stop fetching bodies at all.
+    Resolving from the body means the session-start fetch has to request `body`
+    for every task issue, and on a surface where that fetch lands in the model's
+    context — Claude Code on the web, where the GitHub MCP tools are the only
+    channel — the whole board's prose is charged against the context window
+    before any work is read. Measured on a 40-issue board: ~9k tokens with
+    bodies, ~1.2k without, for a payload of one identifier per issue.
+
+    The fallback is safe to lean on because the titles are not independently
+    written: `handle_sync.py` and `arsenal-queue.yml` both title the handle from
+    the task file's `title:`, so they match verbatim. A title edited on GitHub
+    but not in the task file fails to resolve and is reported — which is the
+    existing `handle_sync.py` conversation about drifted handles, not a new one.
+    """
     body = issue.get("body") or ""
     for pattern in (TASK_MARKER_RE, TASK_PATH_RE):
         if match := pattern.search(body):
             return match.group(1)
-    return None
+    if not titles:
+        return None
+    key = normalise_title(issue.get("title") or "")
+    if not key or key not in titles:
+        return None
+    resolved = titles[key]
+    if resolved is None and warnings is not None:
+        warnings.append(
+            f"issue #{issue.get('number', '?')}: title matches more than one task file — "
+            "left unresolved. Give the issue an `arsenal-task: <id>` line, or make the "
+            "task titles distinct."
+        )
+    return resolved
 
 TERMINAL = {"done", "merged"}
 
@@ -105,6 +163,7 @@ def isolation_verdict(sentinel: Path) -> str:
 def state_from_issues(
     issues: list[dict[str, Any]],
     *,
+    titles: dict[str, str | None] | None = None,
     claimed_label: str = "arsenal:claimed",
     cancelled_label: str = "arsenal:cancelled",
     warnings: list[str] | None = None,
@@ -124,7 +183,7 @@ def state_from_issues(
     state: dict[str, str] = {}
     resolved = 0
     for issue in issues:
-        task_id = task_id_from_issue(issue)
+        task_id = task_id_from_issue(issue, titles=titles, warnings=warnings)
         if not task_id:
             continue
         resolved += 1
@@ -162,7 +221,9 @@ def state_from_issues(
         warnings.append(
             f"{len(issues)} issue(s) fetched and none carries a task id — the board is "
             "being read as stateless. Check that bodies still contain their "
-            "`arsenal-task: <id>` line; some GitHub tools strip HTML comments."
+            "`arsenal-task: <id>` line (some GitHub tools strip HTML comments), or, if "
+            "the fetch omitted `body`, that each issue title still matches its task "
+            "file's `title:`."
         )
     return state
 
@@ -363,6 +424,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
+    # Loaded before the issues are read, not after: the title index is built
+    # from the task files, and it is what lets an issue whose body was never
+    # fetched still resolve to its task.
+    tasks, warnings = load_tasks(args.tasks_dir)
+
     state: dict[str, str] = {}
     issue_warnings: list[str] = []
     if args.issues:
@@ -376,7 +442,9 @@ def main(argv: list[str] | None = None) -> int:
         if isinstance(payload, dict):
             payload = payload.get("issues", [])
         state = state_from_issues(
-            [i for i in payload if isinstance(i, dict)], warnings=issue_warnings
+            [i for i in payload if isinstance(i, dict)],
+            titles=title_index(tasks),
+            warnings=issue_warnings,
         )
     else:
         raw_state = ""
@@ -390,7 +458,6 @@ def main(argv: list[str] | None = None) -> int:
             print(f"task_select: --state is not valid JSON — {exc}", file=sys.stderr)
             return 2
 
-    tasks, warnings = load_tasks(args.tasks_dir)
     warnings += issue_warnings
 
     if args.all:

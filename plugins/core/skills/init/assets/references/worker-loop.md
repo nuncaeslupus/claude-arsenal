@@ -7,6 +7,7 @@ A session that never spawns a worker never needs this file.
 
 - [Worker loop algorithm (parallel fan-out)](#worker-loop-algorithm-parallel-fan-out) — the loop itself, steps 0–6
 - [Per-task PRs](#per-task-prs) — what a worker opens, and the web caveat
+- [Reading a precedent](#reading-a-precedent--shape-first-prose-on-demand) — how to follow an existing module without paying for all of it
 - [Credit guards](#credit-guards--set-before-any-task-tool-dispatch) — env to set before any Task-tool dispatch
 - [Tuning knobs](#tuning-knobs) — every `ARSENAL_*` / `LOOP_*` env var
 - [Agent definitions](#agent-definitions)
@@ -153,6 +154,42 @@ dispatches that many workers at once. Run when the queue has open tasks:
        being offered and needs a human.
      - Remove `arsenal:claimed` and your assignment from the issue when you are
        not continuing, so the task is visibly free again.
+
+---
+
+## Reading a precedent — shape first, prose on demand
+
+Most tasks here are told to follow something that already exists: make the gate
+module look like the last one, the evidence file like the last one, the tests
+like the last one. That is deliberate — consistency is what lets a reviewer
+check one module by reading another — but it quietly sets the default action to
+"read the whole file", and a mature repo's modules are long on purpose.
+
+Read the shape first:
+
+```
+bash claude-arsenal/bin/outline.sh src/pkg/previous_module.py
+```
+
+It prints the declarations and nothing else — the constants, the function
+signatures, the naming convention, the trio of helpers a copy has to agree
+with. That is almost always what "follow the existing module" actually means.
+Then open only the body you need:
+
+```
+sed -n '120,180p' src/pkg/previous_module.py
+```
+
+Measured on arsenal's own sources this is a 25–33× reduction, and on a consumer
+repo it was the difference between ~6k tokens and ~400 for a single precedent,
+paid once per gate-writing task.
+
+Read the whole file when the task turns on *how* something works rather than
+what it looks like — a subtle interaction, a bug you are reproducing, a
+docstring that records why a design was chosen. Those docstrings are the reason
+a reviewer can tell a real gate from a decorative one, so they are worth reading
+when the design is the question. They are simply not worth reading to copy a
+function signature.
 
 ---
 
