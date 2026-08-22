@@ -9,7 +9,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCRIPTS="${SCRIPT_DIR}/../skills/init/assets/scripts"
 IMPORT="${SCRIPTS}/issue_import.py"
 SELECT="${SCRIPTS}/task_select.py"
-AUDIT="${SCRIPT_DIR}/../../skill-creator/skills/skill-creator/scripts/audit_library.py"
+AUDIT="${SCRIPT_DIR}/../../skill-workshop/skills/skill-workshop/scripts/audit_library.py"
 
 [[ -f "${IMPORT}" ]] || { echo "SKIP: issue_import.py not found" >&2; exit 0; }
 

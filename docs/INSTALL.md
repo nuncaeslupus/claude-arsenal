@@ -3,7 +3,7 @@
 `claude-arsenal` is a Claude Code marketplace. Installing it gives any
 project two plugins:
 
-- **`skill-creator`** — the meta-skill that gates every authoring or
+- **`skill-workshop`** — the meta-skill that gates every authoring or
   editing change to a skill, plus the validator/auditor/scaffolder
   scripts everything else is checked against.
 - **`core`** — generic engineering workflow skills (`specify`,
@@ -28,7 +28,7 @@ hook fires.
 |---|---|---|
 | Claude Code v2.x+ | Marketplace + plugin loader | `claude --version` |
 | `git` | Marketplace install fetches via git | `git --version` |
-| Python 3.12+ | Scripts shipped under `skill-creator/scripts/` | `python3 --version` |
+| Python 3.12+ | Scripts shipped under `skill-workshop/scripts/` | `python3 --version` |
 | `uv` (optional) | Required only if you want to run `make smoke` / `make audit` on a local checkout | `uv --version` |
 
 Consumers who never run the scripts directly only need Claude Code and
@@ -47,13 +47,13 @@ and registers the two plugins.
 
 ## 3. Install plugins in order
 
-Install `skill-creator` **first**. Its `PreToolUse` hook blocks
+Install `skill-workshop` **first**. Its `PreToolUse` hook blocks
 `Edit|Write|MultiEdit` inside any `plugins/*/skills/*` folder unless
 the meta-skill is loaded — install it before `core` so the gate covers
 `core`'s own skills from the first edit.
 
 ```text
-/plugin install skill-creator@claude-arsenal
+/plugin install skill-workshop@claude-arsenal
 /plugin install core@claude-arsenal
 ```
 
@@ -64,7 +64,7 @@ want the task queue bootstrapped.
 
 | Check | Expected |
 |---|---|
-| Type `Help me create a new skill` | The `skill-creator` skill loads. Body contains the canary line `CANARY: skill-creator-loaded-2026-05-17-35c7fe06977dd6f1`. |
+| Type `Help me create a new skill` | The `skill-workshop` skill loads. Body contains the canary line `CANARY: skill-workshop-loaded-2026-08-22-ceb6dc3efb38428d`. |
 | Type `Investigate why login is slow` | `core:specify` loads. |
 | Type `Set up the task queue in this repo` | `core:init` loads. |
 | (local checkout) `make audit` | Per-plugin listing-budget breakdown prints; `PASS — under cap.` |
@@ -76,7 +76,7 @@ not the canary, run `/plugin update claude-arsenal`.
 ## 5. Optional `/sc` alias
 
 If you want the meta-skill on a short slash, bind `/sc` →
-`/skill-creator:skill-creator` in `~/.claude/keybindings.json`. The
+`/skill-workshop:skill-workshop` in `~/.claude/keybindings.json`. The
 `keybindings-help` skill (built into Claude Code) walks you through the
 JSON shape if you have not edited that file before.
 
@@ -95,11 +95,11 @@ consumer-owned (preserved).
 
 ```text
 /plugin uninstall core@claude-arsenal
-/plugin uninstall skill-creator@claude-arsenal
+/plugin uninstall skill-workshop@claude-arsenal
 /plugin marketplace remove claude-arsenal
 ```
 
-Remove `core` first — `skill-creator`'s gate stops being useful once
+Remove `core` first — `skill-workshop`'s gate stops being useful once
 the plugin it guards is gone, and removing in this order avoids any
 brief window where the gate would block a clean-up edit.
 
@@ -131,13 +131,13 @@ the consuming repo:
       "source": {
         "source": "github",
         "repo": "nuncaeslupus/claude-arsenal",
-        "ref": "v0.39.0"
+        "ref": "v1.0.0"
       }
     }
   },
   "enabledPlugins": {
     "core@claude-arsenal": true,
-    "skill-creator@claude-arsenal": true
+    "skill-workshop@claude-arsenal": true
   }
 }
 ```
@@ -159,6 +159,21 @@ Three things to know:
   the file declares.
 - **It needs network access to reach GitHub.** The default **Trusted**
   network level allows it.
+- **The marketplace repository must be reachable without your credentials.**
+  A cloud session has no `gh auth` — it runs on a fresh clone on a different
+  machine — so a marketplace in a **private** repository fails to fetch at
+  session start, *silently*. Nothing errors; the skills are simply not there,
+  and a session that invokes one by bare name may get an unrelated built-in of
+  the same name instead. Either host the marketplace publicly (what
+  `claude-arsenal` does), or distribute it through **Organization settings →
+  Plugins**, where org sync reads the repository through the Claude GitHub App
+  rather than your git credentials — that needs a Team or Enterprise
+  organization, and any plugin source it cannot authenticate to must itself be
+  public.
+
+  This never bites locally: `/plugin install` uses your existing git credential
+  helpers, so a private marketplace works in your terminal and no-ops in the
+  cloud. That asymmetry is what makes it hard to spot.
 
 ### If you already vendored
 
@@ -195,7 +210,7 @@ yourself).
 
 **What vendoring costs you:** plugin *hooks* do not travel. `vendor-skills.sh`
 copies only folders containing a `SKILL.md`, so
-`plugins/skill-creator/hooks/hooks.json` — the pre-edit gate that blocks edits
+`plugins/skill-workshop/hooks/hooks.json` — the pre-edit gate that blocks edits
 inside a `skills/` folder unless the meta-skill is loaded — is not installed.
 Vendored skill authoring is ungated.
 
@@ -253,8 +268,8 @@ Add this target to the **consuming project's** Makefile:
 
 ```make
 ARSENAL_REPO    ?= https://github.com/nuncaeslupus/claude-arsenal.git
-ARSENAL_REF     ?= v0.39.0           # pin to a tag — upgrade deliberately
-ARSENAL_PLUGINS ?= core  # comma list, or "all" to include skill-creator
+ARSENAL_REF     ?= v1.0.0           # pin to a tag — upgrade deliberately
+ARSENAL_PLUGINS ?= core  # comma list, or "all" to include skill-workshop
 
 update-skills:  ## vendor claude-arsenal skills into .claude/skills (for CC web)
 	@tmp=$$(mktemp -d); trap 'rm -rf $$tmp' EXIT; \
@@ -267,11 +282,11 @@ Then:
 ```bash
 make update-skills          # regenerates .claude/skills/ from the pinned tag
 git add .claude/skills      # commit so the next web session sees them
-git commit -m "chore: vendor claude-arsenal skills @ v0.39.0"
+git commit -m "chore: vendor claude-arsenal skills @ v1.0.0"
 ```
 
 `core` is already the default. To vendor everything including
-`skill-creator`:
+`skill-workshop`:
 
 ```make
 ARSENAL_PLUGINS ?= all
@@ -283,7 +298,7 @@ the new tag dropped, leaving your own `.claude/skills/` entries untouched.
 Run `bash <clone>/scripts/vendor-skills.sh --src <clone> --list` to preview
 what a ref would vendor.
 
-> **`skill-creator` is excluded by default** — you author skills in the
+> **`skill-workshop` is excluded by default** — you author skills in the
 > marketplace, not in a consuming project, and its pre-edit gate is a *plugin*
 > hook that does not run on the web. Pass `--plugins all` only if you really
 > want the meta-skill vendored too (ungated).
@@ -313,7 +328,7 @@ The same auditor works against the cache that `/plugin install` wrote:
 
 ```bash
 uv run python \
-  ~/.claude/plugins/cache/claude-arsenal/plugins/skill-creator/skills/skill-creator/scripts/audit_library.py \
+  ~/.claude/plugins/cache/claude-arsenal/plugins/skill-workshop/skills/skill-workshop/scripts/audit_library.py \
   ~/.claude/plugins/cache/claude-arsenal/plugins/*/skills \
   --by-plugin
 ```
@@ -330,7 +345,7 @@ Once both plugins are installed, the meta-skill is the gate. The
 authoring loop is:
 
 1. Inside a Claude Code session, ask Claude to start work on a skill.
-   The pre-edit hook refuses if `skill-creator` is not loaded — Claude
+   The pre-edit hook refuses if `skill-workshop` is not loaded — Claude
    will load it.
 2. Edit `SKILL.md` / references / scripts.
 3. Claude runs `validate.py <skill-path>` automatically at *work-done*
@@ -342,7 +357,7 @@ If you prefer to run the validator yourself:
 
 ```bash
 uv run python \
-  plugins/skill-creator/skills/skill-creator/scripts/validate.py \
+  plugins/skill-workshop/skills/skill-workshop/scripts/validate.py \
   plugins/core/skills/specify
 ```
 

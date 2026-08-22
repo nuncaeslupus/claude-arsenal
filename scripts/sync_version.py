@@ -56,9 +56,9 @@ def build_targets(root: Path) -> tuple[Target, ...]:
     return (
         Target(root / "plugins/core/.claude-plugin/plugin.json", _JSON_VERSION, "core/plugin.json"),
         Target(
-            root / "plugins/skill-creator/.claude-plugin/plugin.json",
+            root / "plugins/skill-workshop/.claude-plugin/plugin.json",
             _JSON_VERSION,
-            "skill-creator/plugin.json",
+            "skill-workshop/plugin.json",
         ),
         Target(
             root / "plugins/core/skills/init/assets/AGENTS.md",

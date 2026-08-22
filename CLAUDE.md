@@ -14,7 +14,7 @@ marketplace-local conventions on top.
 
 `claude-arsenal` is a Claude Code marketplace. Plugins live at
 `plugins/<name>/`; each plugin ships skills, hooks, and optional agents.
-The `skill-creator` plugin is the meta-skill that gates every other edit
+The `skill-workshop` plugin is the meta-skill that gates every other edit
 inside a `skills/` folder.
 
 The migration plan that built this repo is preserved in the author's
@@ -27,8 +27,8 @@ cutover).
 
 | If the task is… | Use… |
 |---|---|
-| Authoring or modifying a skill | `/skill-creator:skill-creator` — runs the rubric and writes findings. |
-| Touching a SKILL.md / references / scripts inside a plugin | The pre-edit hook blocks unless `skill-creator` is loaded. |
+| Authoring or modifying a skill | `/skill-workshop:skill-workshop` — runs the rubric and writes findings. |
+| Touching a SKILL.md / references / scripts inside a plugin | The pre-edit hook blocks unless `skill-workshop` is loaded. |
 | Adding a new plugin | Scaffold `plugins/<name>/.claude-plugin/plugin.json`, then add the entry to `.claude-plugin/marketplace.json`. |
 | Running the rule-drift check | `make audit-rule-drift` — diffs `references/skill-rules.md` against `docs/research/claude-skill-system_v1.17.md`. |
 | Checking what a change costs a consumer's context | `make context-budget` — reports the resident/on-invocation/on-demand tiers and fails over the resident cap. |
@@ -182,11 +182,11 @@ reviewer should request it before merging.
   `claude-arsenal:<plugin>:<skill>` cite form) live in **this** file.
 - **Skill rubric** (the ~98 author-checkable rule rows that the
   validator enforces) lives in
-  `plugins/skill-creator/skills/skill-creator/references/skill-rules.md`.
+  `plugins/skill-workshop/skills/skill-workshop/references/skill-rules.md`.
   The validator cites rule IDs back to
   `docs/research/claude-skill-system_v1.17.md § <section>`.
 - **Deferred rules** (the ~91 meta-only governance IDs) live one-line-each
-  in `plugins/skill-creator/skills/skill-creator/references/research-coverage.md`
+  in `plugins/skill-workshop/skills/skill-workshop/references/research-coverage.md`
   with `§` anchors back to the research doc.
 
 ---

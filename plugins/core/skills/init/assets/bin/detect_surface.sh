@@ -6,7 +6,7 @@
 # DUPLICATED ACROSS SKILLS:
 # - plugins/core/skills/init/assets/bin/detect_surface.sh (canonical)
 # - plugins/core/hooks/detect_surface.sh
-# Keep both copies in sync. Update via skill-creator's sync_duplicates.py.
+# Keep both copies in sync. Update via skill-workshop's sync_duplicates.py.
 
 STATE_DIR="${ARSENAL_HOME:-arsenal}/session"
 PROFILE="${STATE_DIR}/surface_profile.json"

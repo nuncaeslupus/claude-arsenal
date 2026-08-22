@@ -67,7 +67,7 @@ To customise a skill the marketplace ships:
 
    ```bash
    uv run python \
-     ~/.claude/plugins/cache/claude-arsenal/plugins/skill-creator/skills/skill-creator/scripts/validate.py \
+     ~/.claude/plugins/cache/claude-arsenal/plugins/skill-workshop/skills/skill-workshop/scripts/validate.py \
      <project>/.claude/skills/specify
    ```
 
@@ -84,7 +84,7 @@ headroom:
 
 ```bash
 uv run python \
-  ~/.claude/plugins/cache/claude-arsenal/plugins/skill-creator/skills/skill-creator/scripts/audit_library.py \
+  ~/.claude/plugins/cache/claude-arsenal/plugins/skill-workshop/skills/skill-workshop/scripts/audit_library.py \
   ~/.claude/plugins/cache/claude-arsenal/plugins/*/skills \
   --by-plugin
 ```

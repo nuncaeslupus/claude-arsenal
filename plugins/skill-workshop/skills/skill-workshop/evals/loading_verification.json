@@ -1,0 +1,16 @@
+{
+  "skill": "skill-workshop",
+  "canary": "skill-workshop-loaded-2026-08-22-ceb6dc3efb38428d",
+  "negative_control": "skill-workshop does not call any Anthropic or OpenAI SDK at validation time and does not run an LLM-judge; the validator depends only on PyYAML and (optionally) termcolor.",
+  "load_prompts": [
+    "Help me create a new skill",
+    "Validate this SKILL.md",
+    "Run the audit on plugins/*/skills/",
+    "Why is my skill not loading?"
+  ],
+  "no_load_prompts": [
+    "Add a new endpoint to the API service",
+    "Why is this test failing?",
+    "Open a database tunnel for the staging environment"
+  ]
+}

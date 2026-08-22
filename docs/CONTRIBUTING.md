@@ -21,12 +21,12 @@ working tree (so edits take effect without going through `/plugin
 update`):
 
 ```bash
-make dev             # → claude --plugin-dir ./plugins/skill-creator --plugin-dir ./plugins/core
+make dev             # → claude --plugin-dir ./plugins/skill-workshop --plugin-dir ./plugins/core
 ```
 
 Inside the session, edit a skill, then `/reload-plugins` to pick up
 the change. The pre-edit hook still gates writes — load
-`/skill-creator:skill-creator` before touching anything under
+`/skill-workshop:skill-workshop` before touching anything under
 `plugins/*/skills/*`.
 
 ---
@@ -98,7 +98,7 @@ file:line back-references.
    session:
 
    ```text
-   /skill-creator:skill-creator
+   /skill-workshop:skill-workshop
    # then: "scaffold a new skill called <slug> under plugins/<name>"
    ```
 
@@ -120,7 +120,7 @@ file:line back-references.
 ## Extending the rubric
 
 The author-checkable rubric is
-`plugins/skill-creator/skills/skill-creator/references/skill-rules.md`.
+`plugins/skill-workshop/skills/skill-workshop/references/skill-rules.md`.
 Adding a rule:
 
 1. Pick (or create) the right numbered section (`1. Frontmatter`,
@@ -132,7 +132,7 @@ Adding a rule:
 3. Run `make audit-rule-drift`. The auditor walks every `R-*` ID in
    the rubric and confirms it is grounded in the research doc; rubric
    rows pointing at a non-existent section fail the build.
-4. If the rule needs a mechanical check, extend `scripts/validate.py`
+4. If the rule needs a mechanical check, extend `plugins/skill-workshop/skills/skill-workshop/scripts/validate.py`
    and wire the ID into the finding output. Keep `Q-EVER-1` happy —
    `R-*` and `Q-*` IDs must never appear in SKILL.md *body prose*;
    they live in rubric rows and validator findings only.
@@ -152,10 +152,10 @@ docs/
   INSTALL.md  UPDATE.md  CONTRIBUTING.md
   research/claude-skill-system_v1.17.md   # the upstream research archive
 plugins/
-  skill-creator/                    # the meta-skill plugin
+  skill-workshop/                    # the meta-skill plugin
     .claude-plugin/plugin.json
     hooks/                          # three shell scripts + hooks.json
-    skills/skill-creator/
+    skills/skill-workshop/
       SKILL.md
       assets/                       # SKILL.md template + scaffold templates
       evals/                        # canary + loading verification

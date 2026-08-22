@@ -19,7 +19,7 @@
 #   --list          print the skills that would be vendored, then exit
 #   -h, --help      this help
 #
-# Excludes skill-creator by default (you author skills in the marketplace, not
+# Excludes skill-workshop by default (you author skills in the marketplace, not
 # in a consuming project) — pass --plugins all to include it.
 
 set -euo pipefail

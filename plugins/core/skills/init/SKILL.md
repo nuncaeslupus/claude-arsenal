@@ -51,7 +51,7 @@ The script:
 5. Adds `.gitignore` entries for `surface_profile.json` and the statusLine-written `rate_limits.json`.
 6. Registers `statusline_capture.sh` as the host `statusLine` command (skipped if one already exists) so `budget_check.sh` can read quota.
 7. Injects the session-start protocol block + `@claude-arsenal/AGENTS.md` import into `CLAUDE.md`.
-8. Declares the `claude-arsenal` marketplace and enables `core` + `skill-creator` in `.claude/settings.json`, pinned to `ref: v<bundle-version>`. An existing declaration is left alone — a consumer who pinned an older ref, a fork, or a local directory meant it.
+8. Declares the `claude-arsenal` marketplace and enables `core` + `skill-workshop` in `.claude/settings.json`, pinned to `ref: v<bundle-version>`. An existing declaration is left alone — a consumer who pinned an older ref, a fork, or a local directory meant it.
 
 **Retiring vendored skill copies:**
 ```bash

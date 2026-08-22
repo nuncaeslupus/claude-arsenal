@@ -298,7 +298,13 @@ def _register_statusline(repo_path: Path) -> None:
 # what makes one set of skills work on every surface.
 _MARKETPLACE = "claude-arsenal"
 _MARKETPLACE_REPO = "nuncaeslupus/claude-arsenal"
-_PLUGINS = ("core", "skill-creator")
+_PLUGINS = ("core", "skill-workshop")
+# skill-creator was renamed to skill-workshop in v1.0.0 because the old name
+# collided with a built-in on some surfaces and was silently shadowed by it.
+# A consumer's settings still name the old plugin, and a stale key is not
+# inert: it enables a plugin the marketplace no longer ships, so the gate
+# quietly stops arriving. Rewritten rather than left for them to notice.
+_RENAMED_PLUGINS = {"skill-creator": "skill-workshop"}
 _VENDOR_MARKER = ".arsenal-vendored"
 
 
@@ -347,6 +353,22 @@ def _register_plugins(repo_path: Path, version: str) -> None:
         }
         changed = True
         print(f"  settings.json: declared marketplace {_MARKETPLACE} @ v{version}")
+
+    for was, now in _RENAMED_PLUGINS.items():
+        stale = f"{was}@{_MARKETPLACE}"
+        if stale not in enabled:
+            continue
+        fresh = f"{now}@{_MARKETPLACE}"
+        # Carry the old value over only when the new key is absent. A consumer
+        # who already set the new name migrated by hand and meant that value;
+        # the leftover key is the stale one, so it is dropped, not promoted.
+        if fresh in enabled:
+            enabled.pop(stale)
+            print(f"  settings.json: dropped stale {stale} ({fresh} already set)")
+        else:
+            enabled[fresh] = enabled.pop(stale)
+            print(f"  settings.json: {stale} renamed to {fresh}")
+        changed = True
 
     for plugin in _PLUGINS:
         key = f"{plugin}@{_MARKETPLACE}"

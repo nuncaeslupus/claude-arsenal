@@ -4,12 +4,12 @@ PLUGIN_DIRS := $(wildcard plugins/*)
 PLUGIN_SKILL_LIBS := $(wildcard plugins/*/skills)
 PLUGIN_SKILLS := $(wildcard plugins/*/skills/*)
 
-SC_SCRIPTS := plugins/skill-creator/skills/skill-creator/scripts
+SC_SCRIPTS := plugins/skill-workshop/skills/skill-workshop/scripts
 VALIDATE := $(SC_SCRIPTS)/validate.py
 AUDIT_LIB := $(SC_SCRIPTS)/audit_library.py
 AUDIT_DRIFT := $(SC_SCRIPTS)/audit_rule_drift.py
 SYNC_DUPES := $(SC_SCRIPTS)/sync_duplicates.py
-SMOKE_SH := plugins/skill-creator/skills/skill-creator/tests/skills_smoke.sh
+SMOKE_SH := plugins/skill-workshop/skills/skill-workshop/tests/skills_smoke.sh
 
 # The resident tier — AGENTS.md plus every skill's listing entry — is what a
 # consumer pays on every turn before any work happens. See CLAUDE.md § Context budget.
@@ -134,7 +134,7 @@ else
 endif
 
 new-skill:  ## scaffold a new skill (inside a Claude Code session)
-	@echo "Inside Claude Code: /skill-creator:skill-creator (asks for a skill to scaffold)."
+	@echo "Inside Claude Code: /skill-workshop:skill-workshop (asks for a skill to scaffold)."
 
 update-skills:  ## update the marketplace from inside a Claude Code session
 	@echo "Inside Claude Code: /plugin update claude-arsenal"
