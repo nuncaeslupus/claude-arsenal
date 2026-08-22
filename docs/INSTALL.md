@@ -34,44 +34,86 @@ hook fires.
 Consumers who never run the scripts directly only need Claude Code and
 git — the meta-skill's hooks are plain shell.
 
-## 2. Add the marketplace
+## 2. Set up a project
 
-Inside a Claude Code session:
+**One rule to remember: the skills live in the project repo, committed.**
+That is what makes them work everywhere. A cloud session — Claude Code on the
+web, `claude --cloud`, the desktop and mobile apps, Claude Tag, routines —
+runs on a fresh clone of your repository on a different machine. It never sees
+your `~/.claude/`, and it does not install plugins your repo asks for. What it
+reads is what you committed.
+
+`/init` does the whole thing: it copies the skills into `.claude/skills/`,
+wires the skill-edit gate into `.claude/settings.json`, and creates the
+`claude-arsenal/` runtime tree.
+
+### If you have Claude Code on your machine
 
 ```text
 /plugin marketplace add github:nuncaeslupus/claude-arsenal
-```
-
-Claude clones the repo into `~/.claude/plugins/cache/claude-arsenal/`
-and registers the two plugins.
-
-## 3. Install plugins in order
-
-Install `skill-workshop` **first**. Its `PreToolUse` hook blocks
-`Edit|Write|MultiEdit` inside any `plugins/*/skills/*` folder unless
-the meta-skill is loaded — install it before `core` so the gate covers
-`core`'s own skills from the first edit.
-
-```text
-/plugin install skill-workshop@claude-arsenal
 /plugin install core@claude-arsenal
 ```
 
-After installing `core`, run `/init` once in any project where you
-want the task queue bootstrapped.
+Then, from the project you want set up:
+
+```text
+/init
+```
+
+```bash
+git add .claude claude-arsenal arsenal .github CLAUDE.md .gitignore && git commit -m "chore: add claude-arsenal"
+```
+
+That is it. The plugin gave you `/init`; the commit is what every later
+session — yours, a teammate's, a cloud one — actually loads.
+
+### If you do not (cloud-only, CI, a fresh container)
+
+No plugin needed — the same script runs straight from a clone:
+
+```bash
+git clone --depth 1 --branch v2.0.0 https://github.com/nuncaeslupus/claude-arsenal.git /tmp/arsenal
+python3 /tmp/arsenal/plugins/core/skills/init/scripts/init.py --repo-path .
+git add .claude claude-arsenal arsenal .github CLAUDE.md .gitignore && git commit -m "chore: add claude-arsenal"
+```
+
+Pin `--branch` to a release tag and bump it deliberately.
+
+### Authoring skills? Add `skill-workshop` too
+
+```text
+/plugin install skill-workshop@claude-arsenal
+```
+
+Only needed in repos where you write or edit skills. `/init` already installs
+its **gate** — the hook that blocks a skill edit until the meta-skill is
+loaded — because that ships in the `core` bundle and travels with the commit.
+The meta-skill itself is a plugin, so it is CLI-only.
+
+## 3. Updating
+
+Re-run `/init` (or the `init.py` line above at a newer tag) and commit. It
+refreshes the vendored skills and the `claude-arsenal/` bundle, prunes skills
+the new version no longer ships, and never touches `arsenal/` — your tasks,
+specs, plans and config.
+
+On the CLI, `/plugin update claude-arsenal` refreshes the plugin that gives
+you `/init` itself. That is a separate thing from what your project ships, and
+updating one does not update the other.
 
 ## 4. Verify
 
 | Check | Expected |
 |---|---|
-| Type `Help me create a new skill` | The `skill-workshop` skill loads. Body contains the canary line `CANARY: skill-workshop-loaded-2026-08-22-ceb6dc3efb38428d`. |
-| Type `Investigate why login is slow` | `core:specify` loads. |
-| Type `Set up the task queue in this repo` | `core:init` loads. |
-| (local checkout) `make audit` | Per-plugin listing-budget breakdown prints; `PASS — under cap.` |
+| Type `Investigate why login is slow` | `specify` loads. |
+| Type `Set up the task queue in this repo` | `init` loads. |
+| `ls .claude/skills` | 17 skill folders, each with a `.arsenal-vendored` marker |
+| Ask Claude to edit any `SKILL.md` without loading the meta-skill | **blocked** by the gate |
+| (local checkout) `make audit` | Per-plugin listing-budget breakdown; `PASS — under cap.` |
 
-The canary is the cheapest signal that the plugin loaded the *correct*
-SKILL.md rather than a stale cache. If you see the slash command but
-not the canary, run `/plugin update claude-arsenal`.
+Skills loaded from the project are **unprefixed** (`specify`). If you also
+installed the plugins on the CLI you will additionally see `core:specify`, and
+both are live at once — see *What runs where* below.
 
 ## 5. Optional `/sc` alias
 
@@ -80,18 +122,7 @@ If you want the meta-skill on a short slash, bind `/sc` →
 `keybindings-help` skill (built into Claude Code) walks you through the
 JSON shape if you have not edited that file before.
 
-## 6. Updating
-
-```text
-/plugin update claude-arsenal
-```
-
-This rewrites everything under
-`~/.claude/plugins/cache/claude-arsenal/`. See `docs/UPDATE.md` for the
-table of which files are plugin-owned (wiped on update) vs
-consumer-owned (preserved).
-
-## 7. Uninstall
+## 6. Uninstall
 
 ```text
 /plugin uninstall core@claude-arsenal
@@ -105,205 +136,48 @@ brief window where the gate would block a clean-up edit.
 
 ---
 
-## Use in cloud sessions
+## What runs where
 
-A **cloud session** — Claude Code on the web, `claude --cloud`, the desktop
-and mobile apps, Claude Tag, routines — runs on a fresh clone of your
-repository, on a different machine. It never sees `~/.claude/`, so a plugin
-you installed with `/plugin install` does not reach it: that install state is
-user-scoped, not the plugin system.
+| | CLI / IDE / desktop | Cloud session |
+|---|---|---|
+| Skills committed in `.claude/skills/` | ✅ loads, unprefixed | ✅ loads, unprefixed |
+| Hooks in `.claude/settings.json` | ✅ | ✅ |
+| `claude-arsenal/` runtime tree | ✅ | ✅ |
+| Plugins from `/plugin install` | ✅ namespaced (`core:specify`) | ❌ user-scoped, does not travel |
+| Plugins declared in the repo's `.claude/settings.json` | ✅ registers on trust | ❌ ignored |
+| Plugin hooks (`hooks/hooks.json`) | ✅ | ❌ |
 
-What does reach it is the repo's own committed `.claude/settings.json`.
-Plugins declared there are installed at session start:
+Everything in the committed column works on both. That is why the setup flow
+commits the skills rather than declaring them.
 
-> | Plugins declared in `.claude/settings.json` | Yes | Installed at session start from the marketplace you declared. Requires network access to reach the marketplace source |
-> | Plugins enabled only in your user settings | No | User-scoped `enabledPlugins` lives in `~/.claude/settings.json`. Declare them in the repo's `.claude/settings.json` instead |
->
-> — [Cloud environments § What carries over from your setup](https://code.claude.com/docs/en/cloud-environments#what-carries-over-from-your-setup)
+### Why the repo does not just declare the plugins
 
-`/init` writes that declaration for you. To do it by hand, commit this into
-the consuming repo:
+Claude Code's documentation describes `extraKnownMarketplaces` /
+`enabledPlugins` in a repo's `.claude/settings.json` as installed at session
+start. **On the cloud surface that does not happen**, verified against a live
+session rather than inferred: with a correct declaration committed, the
+marketplace public, and the pinned tag returning `200` from inside the sandbox,
+`~/.claude/plugins/known_marketplaces.json` was absent and
+`installed_plugins.json` was empty. Skills reach that surface through
+account-level sync (`~/.claude/skills/synced/`); the web runtime does not fetch
+a git marketplace on session start the way the CLI does.
 
-```json
-{
-  "extraKnownMarketplaces": {
-    "claude-arsenal": {
-      "source": {
-        "source": "github",
-        "repo": "nuncaeslupus/claude-arsenal",
-        "ref": "v1.1.0"
-      }
-    }
-  },
-  "enabledPlugins": {
-    "core@claude-arsenal": true,
-    "skill-workshop@claude-arsenal": true
-  }
-}
-```
+The failure is silent — no error, just an absent skill — and a bare-name
+invocation can then quietly resolve to an unrelated built-in of the same name.
+So `/init` no longer writes that declaration, and removes one written by
+v1.0.0 through v1.1.0.
 
-`ref` takes a branch or tag. A *marketplace* source supports `ref` but **not**
-`sha` — that is a plugin-source field, and the two are pinned independently.
-**Upgrading is bumping the `ref`** — there is nothing to regenerate and
-nothing to re-commit but that one line.
+### If you install the plugins as well
 
-Three things to know:
+Nothing breaks, but every skill is live twice: `specify` from the commit and
+`core:specify` from the plugin. Claude Code keeps both rather than letting one
+override the other, so you pay the listing budget twice and two skills answer
+the same request. Install `core` on the CLI to *get* `/init`, and let the
+commit be what your project actually runs on.
 
-- **Shared project settings outrank user settings.** Precedence is managed →
-  command line → project-local → **shared project** → user. This declaration
-  therefore wins over a same-named marketplace in your own
-  `~/.claude/settings.json`, including a local `directory` source pointed at a
-  working copy.
-- **`extraKnownMarketplaces` waits for workspace trust.** Until each
-  collaborator trusts the folder, they don't get plugins from a marketplace
-  the file declares.
-- **It needs network access to reach GitHub.** The default **Trusted**
-  network level allows it.
-- **The marketplace repository must be reachable without your credentials.**
-  A cloud session has no `gh auth` — it runs on a fresh clone on a different
-  machine — so a marketplace in a **private** repository fails to fetch at
-  session start, *silently*. Nothing errors; the skills are simply not there,
-  and a session that invokes one by bare name may get an unrelated built-in of
-  the same name instead. Either host the marketplace publicly (what
-  `claude-arsenal` does), or distribute it through **Organization settings →
-  Plugins**, where org sync reads the repository through the Claude GitHub App
-  rather than your git credentials — that needs a Team or Enterprise
-  organization, and any plugin source it cannot authenticate to must itself be
-  public.
-
-  This never bites locally: `/plugin install` uses your existing git credential
-  helpers, so a private marketplace works in your terminal and no-ops in the
-  cloud. That asymmetry is what makes it hard to spot.
-
-### If you already vendored
-
-Repos set up before this have flattened copies under `.claude/skills/`, each
-carrying a `.arsenal-vendored` marker. Leaving them in place alongside the
-plugin means **every skill is live twice** — the plugin's are namespaced
-(`core:specify`), the vendored ones are not (`specify`), and Claude Code keeps
-both rather than letting one override the other. That doubles the listing
-budget and leaves two skills answering the same request.
-
-`/init` detects them, asks, and prunes on `--migrate-plugins yes`. Only
-folders carrying the marker are removed.
-
----
-
-## Vendoring (fallback)
-
-> **Kept as a fallback while the plugin path is being confirmed in the
-> field.** A cloud environment proxies GitHub and scopes API traffic to the
-> repositories attached to the session; whether a marketplace in a *different*
-> repository always resolves under that proxy has not been verified end to
-> end. If a cloud session reports no arsenal skills, vendoring still works —
-> use it, and please say so, because that is the signal for keeping this
-> section.
-
-Vendoring copies the skills into the consuming project's `.claude/skills/`,
-where any session reads them straight from the clone with no marketplace
-fetch. The canonical copies stay here in `plugins/<plugin>/skills/<skill>/`;
-the vendored copies are generated build output you regenerate, never
-hand-edit. `scripts/vendor-skills.sh` flattens the marketplace layout into the
-flat layout and tags each copy with a `.arsenal-vendored` marker (so re-runs
-clean up renamed/removed skills without touching skills you authored
-yourself).
-
-**What vendoring costs you:** plugin *hooks* do not travel. `vendor-skills.sh`
-copies only folders containing a `SKILL.md`, so
-`plugins/skill-workshop/hooks/hooks.json` — the pre-edit gate that blocks edits
-inside a `skills/` folder unless the meta-skill is loaded — is not installed.
-Vendored skill authoring is ungated.
-
-### Agent playbook — vendor into a repo
-
-When the user says *"install/update claude-arsenal from its repo to be used
-in Claude Code web"*, run these steps from the consuming project root. They
-are identical for first-time install and for updates — every step is
-idempotent.
-
-1. **Clone the marketplace** at the ref you want (a release tag, or `main`
-   for the latest):
-
-   ```bash
-   rm -rf /tmp/arsenal && git clone --depth 1 https://github.com/nuncaeslupus/claude-arsenal.git /tmp/arsenal
-   ```
-
-2. **Flatten the skills** into `.claude/skills/`. Re-runs prune skills the
-   marketplace has since dropped or renamed and never touch skills you
-   authored yourself:
-
-   ```bash
-   bash /tmp/arsenal/scripts/vendor-skills.sh --src /tmp/arsenal --dest .claude/skills --plugins core
-   ```
-
-3. **Bootstrap the task queue.** The `init` skill ships its own bundle under
-   `assets/`, so this resolves with no plugin tree present — the key reason
-   the queue works on the web at all:
-
-   ```bash
-   python3 .claude/skills/init/scripts/init.py --repo-path .
-   ```
-
-   This creates `claude-arsenal/` (queue, `bin/` scripts, `AGENTS.md` and the
-   `references/` it points at) and
-   injects the session-protocol block into `CLAUDE.md`. Re-running only
-   refreshes stale `claude-arsenal/bin/` files; your queue and project data
-   are left untouched.
-
-4. **Commit both trees** so the next web session sees them:
-
-   ```bash
-   git add .claude/skills claude-arsenal CLAUDE.md .gitignore
-   git commit -m "chore: vendor + bootstrap claude-arsenal for web"
-   ```
-
-The `make update-skills` target below wraps step 2 for repeatability; steps 3
-and 4 stay explicit because they write into your repo.
-
-For **updating** an already-vendored repo — and the two ways that silently
-fails — see `docs/UPDATE.md` § *Refreshing the vendored `claude-arsenal/`
-runtime tree*.
-
-Add this target to the **consuming project's** Makefile:
-
-```make
-ARSENAL_REPO    ?= https://github.com/nuncaeslupus/claude-arsenal.git
-ARSENAL_REF     ?= v1.1.0           # pin to a tag — upgrade deliberately
-ARSENAL_PLUGINS ?= core  # comma list, or "all" to include skill-workshop
-
-update-skills:  ## vendor claude-arsenal skills into .claude/skills (for CC web)
-	@tmp=$$(mktemp -d); trap 'rm -rf $$tmp' EXIT; \
-	git clone --depth 1 --branch $(ARSENAL_REF) $(ARSENAL_REPO) $$tmp >/dev/null 2>&1 && \
-	bash $$tmp/scripts/vendor-skills.sh --src $$tmp --dest .claude/skills --plugins $(ARSENAL_PLUGINS)
-```
-
-Then:
-
-```bash
-make update-skills          # regenerates .claude/skills/ from the pinned tag
-git add .claude/skills      # commit so the next web session sees them
-git commit -m "chore: vendor claude-arsenal skills @ v1.1.0"
-```
-
-`core` is already the default. To vendor everything including
-`skill-workshop`:
-
-```make
-ARSENAL_PLUGINS ?= all
-```
-
-To **update** later, bump `ARSENAL_REF` to a newer tag and re-run
-`make update-skills` — it overwrites the vendored copies and prunes any that
-the new tag dropped, leaving your own `.claude/skills/` entries untouched.
-Run `bash <clone>/scripts/vendor-skills.sh --src <clone> --list` to preview
-what a ref would vendor.
-
-> **`skill-workshop` is excluded by default** — you author skills in the
-> marketplace, not in a consuming project, and its pre-edit gate is a *plugin*
-> hook that does not run on the web. Pass `--plugins all` only if you really
-> want the meta-skill vendored too (ungated).
-
----
+`skill-workshop` is the exception worth installing per-machine: it is the
+meta-skill you invoke while authoring, its gate already travels with `/init`,
+and it is not something a project's own sessions need.
 
 ## Local checkout (optional)
 

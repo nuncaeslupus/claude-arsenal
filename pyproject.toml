@@ -57,6 +57,11 @@ warn_redundant_casts = true
 warn_unused_ignores = true
 warn_no_return = true
 show_error_codes = true
+# The core bundle ships a copy of gate_target.py, because plugin hooks do not
+# travel with vendored skills. mypy refuses two modules of the same name; the
+# canonical copy under plugins/skill-workshop/hooks/ is the one type-checked,
+# and gate_bash_test.sh fails if the two ever drift.
+exclude = "^plugins/core/skills/init/assets/bin/gate_target\\.py$"
 
 [tool.pytest.ini_options]
 testpaths = ["plugins"]

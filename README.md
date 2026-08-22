@@ -27,24 +27,23 @@ Help me create a new skill          # loads skill-workshop (with the canary phra
 Investigate why login is slow       # loads core:specify
 ```
 
-### Claude Code web (vendoring)
+### Every surface
 
-Claude Code **on the web** (claude.ai/code) has no `/plugin` or marketplace
-support — it only reads skills **committed into the project** at
-`.claude/skills/`. So vendor them there. `docs/INSTALL.md` ships a copy-paste
-`make update-skills` target (clone pinned `ARSENAL_REF` → `scripts/vendor-skills.sh`)
-to add to the **consuming** project; then:
+The skills live **in the project repo, committed**. A cloud session — web,
+`claude --cloud`, the desktop and mobile apps, Claude Tag, routines — runs on a
+fresh clone on another machine; it never sees your `~/.claude/` and does not
+install plugins your repo asks for. It reads what you committed.
+
+`/init` does all of it — copies the skills into `.claude/skills/`, wires the
+skill-edit gate into `.claude/settings.json`, creates `claude-arsenal/`:
 
 ```bash
-make update-skills                  # the target you added from docs/INSTALL.md
-git add .claude/skills && git commit -m "chore: vendor claude-arsenal skills"
+/init
+git add .claude claude-arsenal arsenal .github CLAUDE.md .gitignore && git commit -m "chore: add claude-arsenal"
 ```
 
-The default vendors `core` only; **`skill-workshop` is excluded** (its gate is a
-plugin hook that does not run on the web — pass `--plugins all` to include it
-anyway). Full flow (the `vendor-skills.sh` script, the `.arsenal-vendored`
-marker, and the exclusion rationale):
-[`docs/INSTALL.md`](docs/INSTALL.md#use-on-claude-code-web-vendoring).
+Without Claude Code on the machine, the same script runs from a clone — see
+[`docs/INSTALL.md`](docs/INSTALL.md#2-set-up-a-project).
 
 Full install guide and update/uninstall flow:
 [`docs/INSTALL.md`](docs/INSTALL.md).

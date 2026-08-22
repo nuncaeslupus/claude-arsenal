@@ -32,13 +32,14 @@ SEMVER = r"\d+\.\d+\.\d+"
 
 _JSON_VERSION = re.compile(rf'(?P<pre>"version"\s*:\s*")(?P<ver>{SEMVER})(?P<post>")')
 _AGENTS_HEADER = re.compile(rf"(?P<pre><!-- claude-arsenal v)(?P<ver>{SEMVER})(?P<post>)")
-# The consumer pin in docs/INSTALL.md is a git tag (``vX.Y.Z``). Anchor to the three
-# contexts it appears in — the marketplace ``ref`` in the settings.json example, the
-# Makefile var, and the commit-message example — so unrelated ``vX.Y.Z`` tokens added
-# to the doc later (e.g. a prerequisite tool version) are never silently rewritten to
-# the bundle version.
+# The consumer pin in docs/INSTALL.md is a git tag (``vX.Y.Z``). Anchor to the
+# contexts it appears in — the ``--branch`` of the clone-based setup, the legacy
+# ``ARSENAL_REF`` Makefile var, the marketplace ``ref``, and the commit-message
+# example — so unrelated ``vX.Y.Z`` tokens added to the doc later (e.g. a
+# prerequisite tool version) are never silently rewritten to the bundle version.
 _TAG_PIN = re.compile(
-    rf'(?P<pre>ARSENAL_REF\s*\?=\s*v|skills @ v|"ref"\s*:\s*"v)(?P<ver>{SEMVER})(?P<post>)'
+    rf'(?P<pre>--branch v|ARSENAL_REF\s*\?=\s*v|skills @ v|"ref"\s*:\s*"v)'
+    rf'(?P<ver>{SEMVER})(?P<post>)'
 )
 
 
