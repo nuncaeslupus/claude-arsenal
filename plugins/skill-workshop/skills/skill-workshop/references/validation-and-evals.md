@@ -66,7 +66,7 @@ The eval is consumed today by:
 - Reviewers and skill-workshop's "review this skill" conversational path —
   read load_prompts and no_load_prompts to judge routing.
 
-A future extension of `.claude/skills/skill-workshop/tests/skills_smoke.sh`
+A future extension of `plugins/skill-workshop/skills/skill-workshop/tests/skills_smoke.sh`
 will run live-session probes:
 
 1. Issue a load_prompt to a fresh Claude Code session and assert the
@@ -106,7 +106,7 @@ The negative control is a deliberately false fact. If the model
 
 ## Smoke tests
 
-`.claude/skills/skill-workshop/tests/skills_smoke.sh` runs the
+`plugins/skill-workshop/skills/skill-workshop/tests/skills_smoke.sh` runs the
 mechanical pieces today: per-library `audit_library.py` (which
 invokes `validate.py` per skill plus library-level checks). The
 scripted Claude Code probes described above are a planned

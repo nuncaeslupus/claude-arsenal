@@ -356,10 +356,19 @@ def _register_plugins(repo_path: Path, version: str) -> None:
 
     for was, now in _RENAMED_PLUGINS.items():
         stale = f"{was}@{_MARKETPLACE}"
-        if stale in enabled:
-            enabled[f"{now}@{_MARKETPLACE}"] = enabled.pop(stale)
-            changed = True
-            print(f"  settings.json: {stale} renamed to {now}@{_MARKETPLACE}")
+        if stale not in enabled:
+            continue
+        fresh = f"{now}@{_MARKETPLACE}"
+        # Carry the old value over only when the new key is absent. A consumer
+        # who already set the new name migrated by hand and meant that value;
+        # the leftover key is the stale one, so it is dropped, not promoted.
+        if fresh in enabled:
+            enabled.pop(stale)
+            print(f"  settings.json: dropped stale {stale} ({fresh} already set)")
+        else:
+            enabled[fresh] = enabled.pop(stale)
+            print(f"  settings.json: {stale} renamed to {fresh}")
+        changed = True
 
     for plugin in _PLUGINS:
         key = f"{plugin}@{_MARKETPLACE}"

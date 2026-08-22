@@ -132,7 +132,7 @@ Adding a rule:
 3. Run `make audit-rule-drift`. The auditor walks every `R-*` ID in
    the rubric and confirms it is grounded in the research doc; rubric
    rows pointing at a non-existent section fail the build.
-4. If the rule needs a mechanical check, extend `scripts/validate.py`
+4. If the rule needs a mechanical check, extend `plugins/skill-workshop/skills/skill-workshop/scripts/validate.py`
    and wire the ID into the finding output. Keep `Q-EVER-1` happy —
    `R-*` and `Q-*` IDs must never appear in SKILL.md *body prose*;
    they live in rubric rows and validator findings only.

@@ -159,6 +159,21 @@ Three things to know:
   the file declares.
 - **It needs network access to reach GitHub.** The default **Trusted**
   network level allows it.
+- **The marketplace repository must be reachable without your credentials.**
+  A cloud session has no `gh auth` — it runs on a fresh clone on a different
+  machine — so a marketplace in a **private** repository fails to fetch at
+  session start, *silently*. Nothing errors; the skills are simply not there,
+  and a session that invokes one by bare name may get an unrelated built-in of
+  the same name instead. Either host the marketplace publicly (what
+  `claude-arsenal` does), or distribute it through **Organization settings →
+  Plugins**, where org sync reads the repository through the Claude GitHub App
+  rather than your git credentials — that needs a Team or Enterprise
+  organization, and any plugin source it cannot authenticate to must itself be
+  public.
+
+  This never bites locally: `/plugin install` uses your existing git credential
+  helpers, so a private marketplace works in your terminal and no-ops in the
+  cloud. That asymmetry is what makes it hard to spot.
 
 ### If you already vendored
 

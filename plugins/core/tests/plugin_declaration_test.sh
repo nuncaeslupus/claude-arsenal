@@ -97,4 +97,24 @@ assert e["skill-workshop@claude-arsenal"] is False, f"value not carried over: {e
 PY
 echo "PASS: a stale skill-creator@ key is renamed, keeping the consumer's own value"
 
+# a consumer who already migrated by hand meant the value they set: the stale
+# key is dropped, never promoted over an explicit setting under the new name
+repo3="$tmp/repo3"; mkdir -p "$repo3/.claude"
+cat > "$repo3/.claude/settings.json" <<'JSON'
+{
+  "enabledPlugins": {
+    "skill-creator@claude-arsenal": false,
+    "skill-workshop@claude-arsenal": true
+  }
+}
+JSON
+python3 "$init_py" --repo-path "$repo3" >/dev/null 2>&1
+python3 - "$repo3/.claude/settings.json" <<'PY' || fail "stale key clobbered an explicit setting"
+import json, sys
+e = json.load(open(sys.argv[1]))["enabledPlugins"]
+assert "skill-creator@claude-arsenal" not in e, "stale key not dropped"
+assert e["skill-workshop@claude-arsenal"] is True, f"explicit value overwritten: {e}"
+PY
+echo "PASS: an explicit skill-workshop@ setting survives the stale key"
+
 echo "=== plugin_declaration_test: all passed ==="
