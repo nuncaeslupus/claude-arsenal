@@ -29,13 +29,20 @@ import sys
 # A skill folder — `.claude/skills/<name>` or `plugins/<plugin>/skills/<name>` —
 # or anything beneath it. The root itself counts: `rm -rf …/skills/specify`
 # deletes the skill as surely as editing its SKILL.md does.
+# `(?:.*/)?` rather than a character class: shlex has already resolved quoting,
+# so the prefix is a real directory path and may contain anything a filesystem
+# allows — spaces included. Ending it at `/` keeps the match on a path
+# boundary, so `notplugins/core/skills/x` is not mistaken for a skill.
 SKILL_PATH = re.compile(
-    r"^/?(?:[\w.-]+/)*?(?:\.claude/skills|plugins/[^/]+/skills)/[^/]+(?:/.*)?$"
+    r"^(?:.*/)?(?:\.claude/skills|plugins/[^/]+/skills)/[^/]+(?:/.*)?$"
 )
 
 # The same shape, found anywhere inside a larger string (an interpreter script).
+# Inside an interpreter argument the prefix is unknowable, so only the marker
+# onward is matched — enough for the decision. `(?:^|[\s'"/])` keeps it on a
+# path boundary so `notplugins/core/skills/x` does not trip the gate.
 EMBEDDED_PATH = re.compile(
-    r"/?(?:[\w.-]+/)*?(?:\.claude/skills|plugins/[^/\s'\"]+/skills)/[^/\s'\"]+(?:/[^\s'\"]*)?"
+    r"(?:^|(?<=[\s'\"/]))(?:\.claude/skills|plugins/[^/\s'\"]+/skills)/[^/\s'\"]+(?:/[^\s'\"]*)?"
 )
 
 REDIRECTS = {">", ">>", ">|", "&>", "&>>", "1>", "2>", "1>>", "2>>"}

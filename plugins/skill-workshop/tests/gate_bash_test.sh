@@ -47,8 +47,9 @@ printf x > $ABS
 sed -i s/a/b/ $ABS
 rm -rf /somewhere/repo/plugins/core/skills/specify
 tee $ABS < /tmp/x
+sed -i s/a/b/ "/Users/First Last/repo/plugins/core/skills/specify/SKILL.md"
 CMDS
-echo "PASS: 16 Bash write forms blocked — relative and absolute, >| and folder rm"
+echo "PASS: 17 write forms blocked — relative, absolute, spaced, >| and folder rm"
 
 # --- reads that must stay allowed ------------------------------------------
 while IFS= read -r cmd; do
@@ -70,7 +71,14 @@ echo "PASS: reads of a skill file stay allowed, including redirect-to-elsewhere"
 # --- unrelated paths are none of the gate's business ------------------------
 [ "$(probe "sed -i 's/a/b/' README.md")" = allowed ] || fail "blocked a non-skill path"
 [ "$(probe "rm -rf /tmp/scratch")" = allowed ] || fail "blocked an unrelated command"
-echo "PASS: non-skill paths are untouched"
+# near-misses: the marker must sit on a path boundary, or an unrelated tree
+# whose name merely ends in "plugins" gets caught by a gate it has nothing to
+# do with — the kind of false block that teaches people to work around it
+[ "$(probe "sed -i s/a/b/ notplugins/core/skills/demo/SKILL.md")" = allowed ] \
+    || fail "blocked notplugins/… — marker matched off a path boundary"
+[ "$(probe "python3 -c \"import pathlib; pathlib.Path('notplugins/core/skills/demo/SKILL.md').write_text('x')\"")" = allowed ] \
+    || fail "blocked notplugins/… inside an interpreter argument"
+echo "PASS: non-skill paths are untouched, including notplugins/ near-misses"
 
 # --- with the marker present, writes are allowed ---------------------------
 mkdir -p "$CLAUDE_PLUGIN_DATA" && touch "${CLAUDE_PLUGIN_DATA}/loaded-${SESSION}"
