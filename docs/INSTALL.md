@@ -131,7 +131,7 @@ the consuming repo:
       "source": {
         "source": "github",
         "repo": "nuncaeslupus/claude-arsenal",
-        "ref": "v1.0.1"
+        "ref": "v1.1.0"
       }
     }
   },
@@ -268,7 +268,7 @@ Add this target to the **consuming project's** Makefile:
 
 ```make
 ARSENAL_REPO    ?= https://github.com/nuncaeslupus/claude-arsenal.git
-ARSENAL_REF     ?= v1.0.1           # pin to a tag — upgrade deliberately
+ARSENAL_REF     ?= v1.1.0           # pin to a tag — upgrade deliberately
 ARSENAL_PLUGINS ?= core  # comma list, or "all" to include skill-workshop
 
 update-skills:  ## vendor claude-arsenal skills into .claude/skills (for CC web)
@@ -282,7 +282,7 @@ Then:
 ```bash
 make update-skills          # regenerates .claude/skills/ from the pinned tag
 git add .claude/skills      # commit so the next web session sees them
-git commit -m "chore: vendor claude-arsenal skills @ v1.0.1"
+git commit -m "chore: vendor claude-arsenal skills @ v1.1.0"
 ```
 
 `core` is already the default. To vendor everything including
