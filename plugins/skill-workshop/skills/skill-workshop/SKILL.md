@@ -168,6 +168,7 @@ Each reference covers one topic. Load only what the current task needs.
 - [Refactor cookbook](references/refactor-cookbook.md) — load when restructuring the skill library (split, retire, merge, extract, redirect, duplicate).
 - [Improvements log](references/improvements-log.md) — load when an observed gotcha needs recording, or before planning the next refactor pass.
 - [Research coverage](references/research-coverage.md) — load when the validator misses a real failure mode, when planning to widen the rule set, or when defending a deferred-rule decision.
+- [Bash gate mechanics](references/bash-gate-mechanics.md) — load when a Bash command is blocked for touching a skill folder and the reason is not obvious, or when changing what the gate catches.
 - [Skill rules](references/skill-rules.md) — load before committing any skill change. Canonical ruleset Claude walks against current file state to produce per-skill alignment findings; lists must/should rules grouped by topic plus the gate protocol.
 - [Content quality rules](references/content-quality-rules.md) — load alongside `skill-rules.md` at every gate. Second, interpretive rubric covering prose shape, example currency, reference cost, evergreen-doc-style, and trigger-and-boundary quality. Walked by the same `audit_alignment.py` runner with `--input references/content-quality-rules.md`.
 
@@ -198,6 +199,11 @@ Each reference covers one topic. Load only what the current task needs.
 Real failures observed while authoring or validating skills. Each
 entry says *what* goes wrong AND *why*, not just the prohibition.
 
+- **The gate covers Bash, not just the edit tools.** `sed -i`, `tee`, a
+  heredoc redirect and a `python3 -c` one-liner all reach a SKILL.md without
+  naming it in `file_path`, so a matcher scoped to Edit/Write/MultiEdit was
+  bypassable by the edit style a session is often steered toward. It now keys
+  on what a command *writes*, not what it mentions.
 - **Container directories swallow skills silently.** Skill discovery
   walks one level under `.claude/skills/`. A SKILL.md nested as
   `.claude/skills/<scope>/<name>/SKILL.md` is invisible — no warning,

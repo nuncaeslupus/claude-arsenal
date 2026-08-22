@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
-# PreToolUse hook on Edit / Write / MultiEdit.
+# PreToolUse hook on Edit / Write / MultiEdit / Bash.
 #
 # Blocks any edit inside a skill folder until skill-workshop has been loaded
 # this session. skill-workshop owns the gate ruleset every skill change must
 # pass; this hook guarantees a session that touches a skill file has loaded
 # it. The companion hook mark_skill_workshop_loaded.sh drops the marker after
 # a successful Skill tool call.
+#
+# Bash is covered because it is the hole the other three leave: `sed -i`, `tee`,
+# a heredoc redirect and a python one-liner all reach a SKILL.md without ever
+# naming it in `file_path`. gate_target.py decides what a call actually writes.
 #
 # Exit codes:
 #   0 — path is not in a skill folder, OR skill-workshop is loaded → allow.
@@ -17,19 +21,23 @@
 set -euo pipefail
 
 payload="$(cat)"
-file_path="$(printf '%s' "$payload" | python3 -c 'import json,sys; print(json.loads(sys.stdin.read()).get("tool_input",{}).get("file_path",""))' 2>/dev/null || true)"
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+file_path="$(printf '%s' "$payload" | python3 "${here}/gate_target.py" 2>/dev/null || true)"
 session_id="$(printf '%s' "$payload" | python3 -c 'import json,sys; print(json.loads(sys.stdin.read()).get("session_id",""))' 2>/dev/null || true)"
 
-# Empty file_path → not an edit we care about (some tools pass no path).
+# Empty target → nothing this call would write inside a skill folder.
 [[ -z "$file_path" ]] && exit 0
 
 # Only fire for paths inside a skill folder. Skill folders live at
 # .claude/skills/<name>/ or plugins/<plugin>/skills/<name>/. Match any
 # descendant — references/, scripts/, evals/, assets/, plus any new
 # subfolder or loose file at the skill root (notes.md, findings.md, etc.).
+# A Bash target arrives relative, so match with and without a leading path.
+# One segment past skills/ is enough: the skill folder root is itself a target,
+# because `rm -rf .../skills/specify` deletes the skill as surely as editing it.
 case "$file_path" in
-  */.claude/skills/*/*) ;;
-  */plugins/*/skills/*/*) ;;
+  */.claude/skills/*|.claude/skills/*) ;;
+  */plugins/*/skills/*|plugins/*/skills/*) ;;
   *) exit 0 ;;
 esac
 
@@ -38,7 +46,7 @@ marker="${marker_dir}/loaded-${session_id}"
 [[ -f "$marker" ]] && exit 0
 
 cat >&2 <<EOF
-BLOCKED: about to edit '$file_path', which lives inside a skill folder, but
+BLOCKED: about to modify '$file_path', which lives inside a skill folder, but
 the skill-workshop skill has not been loaded this session.
 
 skill-workshop owns the gate ruleset every skill change must pass
