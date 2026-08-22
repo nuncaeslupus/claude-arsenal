@@ -3,8 +3,8 @@
   "owner": { "name": "nuncaeslupus" },
   "plugins": [
     {
-      "name": "skill-creator",
-      "source": "./plugins/skill-creator",
+      "name": "skill-workshop",
+      "source": "./plugins/skill-workshop",
       "description": "Meta-skill that gates every authoring, editing, or refactoring change to a Claude Code skill. Ships the validator, library auditor, alignment runner, scaffolder, and the rubric every other skill in the marketplace is checked against."
     },
     {

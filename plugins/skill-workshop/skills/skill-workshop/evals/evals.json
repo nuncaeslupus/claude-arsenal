@@ -1,0 +1,34 @@
+{
+  "skill": "skill-workshop",
+  "purpose": "Meta-evals for the skill-workshop surface itself. Loaded by tests/skills_smoke.sh and re-runnable manually.",
+  "evals": [
+    {
+      "id": "validate-self-clean",
+      "kind": "mechanical",
+      "command": "python3 plugins/skill-workshop/skills/skill-workshop/scripts/validate.py plugins/skill-workshop/skills/skill-workshop",
+      "expect_exit": 0,
+      "description": "Self-dogfood — the validator must pass against its own folder."
+    },
+    {
+      "id": "audit-library-runs",
+      "kind": "mechanical",
+      "command": "python3 plugins/skill-workshop/skills/skill-workshop/scripts/audit_library.py plugins/skill-workshop/skills",
+      "expect_exit_max": 1,
+      "description": "Auditor walks the library without erroring out (exit 0 or 1, never 2)."
+    },
+    {
+      "id": "validate-memory-runs",
+      "kind": "mechanical",
+      "command": "python3 plugins/skill-workshop/skills/skill-workshop/scripts/validate_memory.py --root .",
+      "expect_exit_max": 1,
+      "description": "Memory-layer validator walks the repo without erroring out."
+    },
+    {
+      "id": "init-skill-scaffolds",
+      "kind": "mechanical",
+      "command": "python3 plugins/skill-workshop/skills/skill-workshop/scripts/init_skill.py probe-temp --library /tmp/skill-workshop-evals && rm -rf /tmp/skill-workshop-evals",
+      "expect_exit": 0,
+      "description": "init_skill scaffolds a fresh skill folder from templates."
+    }
+  ]
+}

@@ -24,7 +24,7 @@ src = s["extraKnownMarketplaces"]["claude-arsenal"]["source"]
 assert src["source"] == "github", src
 assert src["ref"] == f"v{sys.argv[2]}", src
 assert s["enabledPlugins"]["core@claude-arsenal"] is True
-assert s["enabledPlugins"]["skill-creator@claude-arsenal"] is True
+assert s["enabledPlugins"]["skill-workshop@claude-arsenal"] is True
 PY
 echo "PASS: marketplace declared and pinned to v$ver"
 
@@ -76,5 +76,25 @@ s = json.load(open(sys.argv[1]))
 assert s["extraKnownMarketplaces"]["claude-arsenal"]["source"]["ref"] == "v0.0.1", "clobbered a consumer's pin"
 PY
 echo "PASS: an existing marketplace pin is left alone"
+
+# a consumer's stale skill-creator@ key is rewritten, not left to rot: the old
+# plugin no longer ships, so leaving the key means the gate quietly stops arriving
+repo2="$tmp/repo2"; mkdir -p "$repo2/.claude"
+cat > "$repo2/.claude/settings.json" <<'JSON'
+{
+  "enabledPlugins": {
+    "core@claude-arsenal": true,
+    "skill-creator@claude-arsenal": false
+  }
+}
+JSON
+python3 "$init_py" --repo-path "$repo2" >/dev/null 2>&1
+python3 - "$repo2/.claude/settings.json" <<'PY' || fail "stale skill-creator key not migrated"
+import json, sys
+e = json.load(open(sys.argv[1]))["enabledPlugins"]
+assert "skill-creator@claude-arsenal" not in e, "stale key still present"
+assert e["skill-workshop@claude-arsenal"] is False, f"value not carried over: {e}"
+PY
+echo "PASS: a stale skill-creator@ key is renamed, keeping the consumer's own value"
 
 echo "=== plugin_declaration_test: all passed ==="

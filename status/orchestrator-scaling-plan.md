@@ -44,8 +44,8 @@ loop self-throttles before exhausting quota — with a docs page explaining how 
 - `statusLine.rate_limits` (Pro/Max only, CC ≥ ~v2.1.132) is delivered **only** to a statusLine
   command's **stdin JSON**: `rate_limits.five_hour.used_percentage` (0–100), `.resets_at` (epoch),
   same for `seven_day`. Not available via env var / CLI / file unless a statusLine script writes it out.
-- **Editing these files is gated** by the `skill-creator` pre-edit hook (`plugins/*/skills/*`).
-  In a normal session, start with `/skill-creator` so the marker drops, then edit.
+- **Editing these files is gated** by the `skill-workshop` pre-edit hook (`plugins/*/skills/*`).
+  In a normal session, start with `/skill-workshop` so the marker drops, then edit.
 - Reuse sources: `plugins/core/skills/execution/SKILL.md` (worktree/branch pattern, lines 27–42),
   `plugins/core/skills/github/SKILL.md` (Conventional Commits, `feat/`–`fix/` naming, dynamic
   Co-Authored-By, PR body template, pre-PR lint gate), `plugins/core/skills/github/scripts/query_pr_state.py`.
@@ -233,7 +233,7 @@ and a tag → resolve as workspace first (documented).
 - **Bundle propagation:** new `bin/*.sh` (`queue_batch.sh`, `open_task_pr.sh`, `budget_check.sh`,
   `statusline_capture.sh`) are picked up by `init.py`'s existing `assets/bin/*` copy — confirm they're
   in the copy set and `chmod +x`. Add each to the `bin/` listing in `AGENTS.md` § State directory layout.
-- **`skill-creator` gate:** begin the implementation session with `/skill-creator` (drops the marker) before
+- **`skill-workshop` gate:** begin the implementation session with `/skill-workshop` (drops the marker) before
   editing anything under `plugins/*/skills/*`.
 - **New env knobs** (document in `AGENTS.md` and the operator guide):
   `ARSENAL_MAX_WORKERS` (default 2), `ARSENAL_QUOTA_STOP_PCT` (default 90), `LOOP_TAGS` (selection

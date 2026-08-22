@@ -22,7 +22,7 @@ trap cleanup EXIT
 # --- Build a fake repo tree with every version-bearing file, all drifted. ---
 mkdir -p "${tmp}/plugins/core/skills/init/assets" \
          "${tmp}/plugins/core/.claude-plugin" \
-         "${tmp}/plugins/skill-creator/.claude-plugin" \
+         "${tmp}/plugins/skill-workshop/.claude-plugin" \
          "${tmp}/docs"
 
 printf '0.15.0\n' > "${tmp}/plugins/core/skills/init/assets/.bundle-version"
@@ -35,10 +35,10 @@ cat > "${tmp}/plugins/core/.claude-plugin/plugin.json" <<'JSON'
 }
 JSON
 
-# skill-creator uses a one-line author object — formatting must survive the sync.
-cat > "${tmp}/plugins/skill-creator/.claude-plugin/plugin.json" <<'JSON'
+# skill-workshop uses a one-line author object — formatting must survive the sync.
+cat > "${tmp}/plugins/skill-workshop/.claude-plugin/plugin.json" <<'JSON'
 {
-  "name": "skill-creator",
+  "name": "skill-workshop",
   "version": "0.1.0",
   "author": { "name": "nuncaeslupus" }
 }
@@ -64,7 +64,7 @@ fail() { echo "FAIL: $1" >&2; exit 1; }
 # --- Gate 1: --check reports drift on every target and exits 1. ---
 out="$(python3 "${SYNC}" --repo-root "${tmp}" --check 2>&1)"; rc=$?
 [[ "${rc}" -eq 1 ]] || fail "drifted tree should --check exit 1, got ${rc}: ${out}"
-for label in "core/plugin.json" "skill-creator/plugin.json" "AGENTS.md header" \
+for label in "core/plugin.json" "skill-workshop/plugin.json" "AGENTS.md header" \
              "INSTALL.md ARSENAL_REF pin"; do
     printf '%s' "${out}" | grep -qF "${label}" || fail "--check did not name '${label}': ${out}"
 done
@@ -74,8 +74,8 @@ echo "PASS: --check names every drifted target and exits 1"
 python3 "${SYNC}" --repo-root "${tmp}" >/dev/null || fail "apply exited non-zero"
 grep -q '"version": "0.15.0"' "${tmp}/plugins/core/.claude-plugin/plugin.json" \
     || fail "core/plugin.json not synced to 0.15.0"
-grep -q '"version": "0.15.0"' "${tmp}/plugins/skill-creator/.claude-plugin/plugin.json" \
-    || fail "skill-creator/plugin.json not synced to 0.15.0"
+grep -q '"version": "0.15.0"' "${tmp}/plugins/skill-workshop/.claude-plugin/plugin.json" \
+    || fail "skill-workshop/plugin.json not synced to 0.15.0"
 grep -q "<!-- claude-arsenal v0.15.0 " "${tmp}/plugins/core/skills/init/assets/AGENTS.md" \
     || fail "AGENTS.md header not synced to 0.15.0"
 # Both INSTALL.md pins must land on the canonical version (no stale token left behind).
@@ -87,8 +87,8 @@ echo "PASS: apply rewrites every target to the canonical version"
 
 # --- Gate 3: formatting around the version token is preserved. ---
 grep -qF '"author": { "name": "nuncaeslupus" }' \
-    "${tmp}/plugins/skill-creator/.claude-plugin/plugin.json" \
-    || fail "apply reformatted the skill-creator author line"
+    "${tmp}/plugins/skill-workshop/.claude-plugin/plugin.json" \
+    || fail "apply reformatted the skill-workshop author line"
 grep -qF "— imported via @claude-arsenal/AGENTS.md -->" \
     "${tmp}/plugins/core/skills/init/assets/AGENTS.md" \
     || fail "apply mangled the AGENTS.md header comment tail"
