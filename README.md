@@ -4,7 +4,7 @@ A Claude Code marketplace. One install gives any project the
 `skill-creator` meta-skill (which gates every authoring or editing
 change inside a `skills/` folder against a rubric) plus a generic
 engineering-workflow plugin (`core`: specify → design → execution →
-review → ship, plus `github`, `lsp-setup`, `session-end`, and the
+review → ship, plus `github`, `session-end`, and the
 Python toolchain skills `python-bootstrap`, `pypi-release`,
 `coverage-gaps`, `dep-upgrade`, and `mutmut-report`).
 
@@ -59,7 +59,7 @@ per-task PRs, migration): [`docs/queue.md`](docs/queue.md).
 | Plugin | Role |
 |---|---|
 | `skill-creator` | Meta-skill. Validates SKILL.md + references + scripts against the rubric. Hooks block unguarded edits inside `skills/` folders. |
-| `core` | Engineering workflows: `specify`, `design`, `execution`, `review`, `ship`, `github`, `lsp-setup`, `session-end`; plus Python toolchain skills `python-bootstrap`, `pypi-release`, `coverage-gaps`, `dep-upgrade`, `mutmut-report`; plus the task queue (`init`, `continue`, `queue-add`, `queue-status`) that fans out work to parallel worker subagents. Tasks are files in `arsenal/tasks/`; a GitHub issue is each task's handle, and claiming is an atomic ref creation, so several sessions can work the same repo without colliding. See `docs/queue.md`. |
+| `core` | Engineering workflows: `specify`, `design`, `execution`, `review`, `ship`, `github`, `session-end`; plus Python toolchain skills `python-bootstrap`, `pypi-release`, `coverage-gaps`, `dep-upgrade`, `mutmut-report`; plus the task queue (`init`, `continue`, `queue-add`, `queue-status`) that fans out work to parallel worker subagents. Tasks are files in `arsenal/tasks/`; a GitHub issue is each task's handle, and claiming is an atomic ref creation, so several sessions can work the same repo without colliding. See `docs/queue.md`. |
 
 The active rubric is at
 [`plugins/skill-creator/skills/skill-creator/references/skill-rules.md`](plugins/skill-creator/skills/skill-creator/references/skill-rules.md),

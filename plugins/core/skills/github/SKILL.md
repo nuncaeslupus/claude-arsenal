@@ -1,6 +1,6 @@
 ---
 name: github
-description: Use whenever the user is creating commits, opening pull requests, or waiting on PR review/CI feedback — applies Conventional Commits + branch naming, then polls the open PR for review-bot reactions and CI status, addresses each comment inline or replies, and reports when the PR is ready to merge. Triggers — "open a PR", "address review comments", "wait for Gemini / CodeRabbit", "is CI done?". Owns scripts — query_pr_state.py, query_project_type.py. Do NOT use for engineering review of a diff (see review), generic git mechanics like branching/worktrees (see execution), or hardcoding a Co-Authored-By model name (refused — the harness supplies model identity).
+description: Use whenever the user is creating commits, opening pull requests, or waiting on PR review/CI feedback — applies Conventional Commits + branch naming, then polls the PR for review-bot comments and CI status until it is ready to merge. Triggers — "open a PR", "address review comments". Do NOT use for engineering review of a diff (see review) or generic git mechanics (see execution).
 metadata:
   type: workflow
 ---

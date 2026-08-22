@@ -1,6 +1,6 @@
 ---
 name: gate-check
-description: Use whenever the user wants an objective PASS/FAIL on a task's measurable acceptance gate from status/plan.md, with the measured numbers — runs run_gate.py to read the gate (metric, op, threshold) and recorded evidence, or audit every task's gate at once. Triggers — "did this task pass its gate", "verify the acceptance condition", "are all gates met". Owns scripts — run_gate. The generic engine a project wraps with its own measurement. Do NOT use to write code (see execution) or rank missing tests (see coverage-gaps).
+description: Use whenever the user wants an objective PASS/FAIL on a task's measurable acceptance gate from status/plan.md, with the measured numbers — reads the gate (metric, op, threshold) and recorded evidence, or audits every task's gate at once. Triggers — "did this task pass its gate", "are all gates met". Do NOT use to write code (see execution) or rank missing tests (see coverage-gaps).
 user-invocable: true
 ---
 
