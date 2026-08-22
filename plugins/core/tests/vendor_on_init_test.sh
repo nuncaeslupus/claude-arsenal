@@ -60,13 +60,24 @@ echo "PASS: re-run prunes what we no longer ship, keeps what we never owned"
 # Everything /init writes must be covered by the git-add the docs hand out.
 # A path missing there is committed by nobody and fails silently later — the
 # queue workflow simply never runs, and nothing says so.
-written="$(cd "$repo" && ls -A | grep -v '^\.git$')"
+# A glob into an array, not `ls` piped into word-splitting: the paths /init
+# writes happen to be tame today, but a name with a space would silently split
+# into two entries that both "match" nothing and pass.
+shopt -s dotglob nullglob
+written=()
+for entry in "$repo"/*; do
+    name="$(basename "$entry")"
+    [ "$name" = ".git" ] && continue
+    written+=("$name")
+done
+shopt -u dotglob nullglob
+[ ${#written[@]} -gt 0 ] || fail "/init wrote nothing into the repo"
 checked=0
 while IFS= read -r line; do
     [ -z "$line" ] && continue
     checked=$((checked + 1))
     doc_paths=" ${line#git add } "
-    for top in $written; do
+    for top in "${written[@]}"; do
         case "$doc_paths" in
             *" $top "*) ;;
             *) fail "/init writes '$top', omitted by: $line" ;;
