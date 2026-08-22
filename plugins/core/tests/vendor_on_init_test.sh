@@ -57,4 +57,18 @@ python3 "$init_py" --repo-path "$repo" >/dev/null 2>&1 || fail "re-run exited no
 [ -f "$repo/.claude/skills/mine/SKILL.md" ] || fail "re-run clobbered the consumer's skill"
 echo "PASS: re-run prunes what we no longer ship, keeps what we never owned"
 
+# Everything /init writes must be covered by the git-add the docs hand out.
+# A path missing there is committed by nobody and fails silently later — the
+# queue workflow simply never runs, and nothing says so.
+doc_paths="$(grep -ho 'git add [^&]*' "$here/../../../README.md" "$here/../../../docs/INSTALL.md" \
+    | head -1 | sed 's/git add //')"
+written="$(cd "$repo" && git init -q 2>/dev/null; cd "$repo" && ls -A | grep -v '^\.git$')"
+for top in $written; do
+    case " $doc_paths " in
+        *" $top "*) ;;
+        *) fail "/init writes '$top' but the documented 'git add' omits it: $doc_paths" ;;
+    esac
+done
+echo "PASS: the documented git add covers every top-level path /init writes"
+
 echo "=== vendor_on_init_test: all passed ==="

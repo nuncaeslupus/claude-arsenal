@@ -100,7 +100,7 @@ Re-run `/init` and commit. One command refreshes everything upstream owns:
 
 ```bash
 /init                      # or: python3 <clone>/plugins/core/skills/init/scripts/init.py --repo-path .
-git add .claude claude-arsenal && git commit -m "chore: update claude-arsenal"
+git add .claude claude-arsenal .github && git commit -m "chore: update claude-arsenal"
 ```
 
 It re-copies the skills into `.claude/skills/`, prunes any the new version no
@@ -148,7 +148,7 @@ update that did not happen. `/init` from an installed plugin no longer has that
 failure mode, but the clone-based form still takes a `--branch`, so check it:
 
 ```bash
-git ls-remote --tags https://github.com/nuncaeslupus/claude-arsenal.git 'refs/tags/v*' \
+git ls-remote --refs --tags https://github.com/nuncaeslupus/claude-arsenal.git 'refs/tags/v*' \
   | sed 's|.*refs/tags/||' | sort -V | tail -1
 ```
 

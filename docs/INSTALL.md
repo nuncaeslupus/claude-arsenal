@@ -61,7 +61,7 @@ Then, from the project you want set up:
 ```
 
 ```bash
-git add .claude claude-arsenal CLAUDE.md .gitignore && git commit -m "chore: add claude-arsenal"
+git add .claude claude-arsenal arsenal .github CLAUDE.md .gitignore && git commit -m "chore: add claude-arsenal"
 ```
 
 That is it. The plugin gave you `/init`; the commit is what every later
@@ -74,7 +74,7 @@ No plugin needed — the same script runs straight from a clone:
 ```bash
 git clone --depth 1 --branch v2.0.0 https://github.com/nuncaeslupus/claude-arsenal.git /tmp/arsenal
 python3 /tmp/arsenal/plugins/core/skills/init/scripts/init.py --repo-path .
-git add .claude claude-arsenal CLAUDE.md .gitignore && git commit -m "chore: add claude-arsenal"
+git add .claude claude-arsenal arsenal .github CLAUDE.md .gitignore && git commit -m "chore: add claude-arsenal"
 ```
 
 Pin `--branch` to a release tag and bump it deliberately.
@@ -147,8 +147,8 @@ brief window where the gate would block a clean-up edit.
 | Plugins declared in the repo's `.claude/settings.json` | ✅ registers on trust | ❌ ignored |
 | Plugin hooks (`hooks/hooks.json`) | ✅ | ❌ |
 
-Everything in the committed column works on both. That is why `/init` commits
-rather than declares.
+Everything in the committed column works on both. That is why the setup flow
+commits the skills rather than declaring them.
 
 ### Why the repo does not just declare the plugins
 

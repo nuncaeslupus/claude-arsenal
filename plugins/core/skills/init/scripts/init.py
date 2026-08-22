@@ -354,7 +354,9 @@ def _vendor_skills(repo_path: Path, silent: bool = False) -> None:
 
     # Prune skills a previous version vendored that this one no longer ships.
     removed = []
-    for d in dest.iterdir():
+    # Materialised first: iterdir() walks a live scandir, and rmtree inside the
+    # loop can make it skip the entry that follows a deleted one.
+    for d in sorted(dest.iterdir()):
         if d.is_dir() and (d / _VENDOR_MARKER).is_file() and d.name not in available:
             shutil.rmtree(d)
             removed.append(d.name)

@@ -39,7 +39,7 @@ skill-edit gate into `.claude/settings.json`, creates `claude-arsenal/`:
 
 ```bash
 /init
-git add .claude claude-arsenal CLAUDE.md .gitignore && git commit -m "chore: add claude-arsenal"
+git add .claude claude-arsenal arsenal .github CLAUDE.md .gitignore && git commit -m "chore: add claude-arsenal"
 ```
 
 Without Claude Code on the machine, the same script runs from a clone — see
