@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+# vendor_on_init_test.sh — /init produces a repo that works on every surface:
+# skills committed where a cloud session can read them, and the skill-edit gate
+# wired into settings.json because plugin hooks do not travel with vendoring.
+set -uo pipefail
+
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+init_py="$here/../skills/init/scripts/init.py"
+tmp="$(mktemp -d)" || { echo "FAIL: mktemp -d failed" >&2; exit 1; }
+trap 'rm -rf "$tmp"' EXIT
+fail() { echo "FAIL: $1" >&2; exit 1; }
+
+repo="$tmp/repo"; mkdir -p "$repo/.claude"
+# a consumer arriving from v1.0.0–v1.1.0, whose settings declare the plugins
+cat > "$repo/.claude/settings.json" <<'JSON'
+{
+  "extraKnownMarketplaces": {"claude-arsenal": {"source": {"source": "github", "repo": "nuncaeslupus/claude-arsenal", "ref": "v1.1.0"}}},
+  "enabledPlugins": {"core@claude-arsenal": true, "skill-workshop@claude-arsenal": true}
+}
+JSON
+# a skill the consumer wrote — never ours to touch
+mkdir -p "$repo/.claude/skills/mine" && echo "x" > "$repo/.claude/skills/mine/SKILL.md"
+
+python3 "$init_py" --repo-path "$repo" >/dev/null 2>&1 || fail "init exited non-zero"
+
+[ -f "$repo/.claude/skills/init/SKILL.md" ] || fail "skills were not vendored"
+[ -f "$repo/.claude/skills/specify/.arsenal-vendored" ] || fail "vendor marker missing"
+[ -f "$repo/.claude/skills/mine/SKILL.md" ] || fail "clobbered a skill the consumer authored"
+[ ! -f "$repo/.claude/skills/mine/.arsenal-vendored" ] || fail "marked a skill we do not own"
+echo "PASS: skills vendored, consumer's own skill untouched"
+
+python3 - "$repo/.claude/settings.json" <<'PY' || fail "settings.json is wrong after init"
+import json, sys
+s = json.load(open(sys.argv[1]))
+assert "extraKnownMarketplaces" not in s, "plugin declaration not retired"
+assert "enabledPlugins" not in s, "enabledPlugins not retired"
+pre = s["hooks"]["PreToolUse"][0]
+assert pre["matcher"] == "Edit|Write|MultiEdit|Bash", pre
+assert "check_skill_workshop_loaded.sh" in pre["hooks"][0]["command"], pre
+PY
+echo "PASS: plugin declaration retired, gate hook registered"
+
+# the gate must actually fire from the bundle it just installed
+[ -x "$repo/claude-arsenal/bin/check_skill_workshop_loaded.sh" ] || fail "gate script not installed"
+[ -f "$repo/claude-arsenal/bin/gate_target.py" ] || fail "gate_target.py not installed"
+export CLAUDE_PLUGIN_DATA="$tmp/markers"
+payload='{"session_id":"s1","tool_name":"Bash","tool_input":{"command":"sed -i s/a/b/ .claude/skills/specify/SKILL.md"}}'
+if printf '%s' "$payload" | (cd "$repo" && bash claude-arsenal/bin/check_skill_workshop_loaded.sh) >/dev/null 2>&1; then
+    fail "the vendored gate allowed a skill edit with no marker"
+fi
+echo "PASS: the vendored gate blocks a Bash skill edit — plugin hooks never travelled"
+
+# re-running is idempotent, and prunes a skill we no longer ship
+mkdir -p "$repo/.claude/skills/retired" && touch "$repo/.claude/skills/retired/.arsenal-vendored"
+python3 "$init_py" --repo-path "$repo" >/dev/null 2>&1 || fail "re-run exited non-zero"
+[ ! -d "$repo/.claude/skills/retired" ] || fail "stale vendored skill not pruned"
+[ -f "$repo/.claude/skills/mine/SKILL.md" ] || fail "re-run clobbered the consumer's skill"
+echo "PASS: re-run prunes what we no longer ship, keeps what we never owned"
+
+echo "=== vendor_on_init_test: all passed ==="

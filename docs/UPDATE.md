@@ -94,58 +94,29 @@ A breach prints `OVER cap by N chars` and a hint to `/plugin disable
 
 ---
 
-## Upgrading when the skills come from the plugin
+## Upgrading
 
-Since v0.39.0 a consuming repo declares the marketplace in its own
-`.claude/settings.json`, so cloud sessions install the plugin at session start
-and there is nothing to re-vendor. Upgrading is two steps:
+Re-run `/init` and commit. One command refreshes everything upstream owns:
 
 ```bash
-# 1. Bump the pin in .claude/settings.json
-#      "ref": "v0.38.0"  ->  "ref": "v0.39.0"
-
-# 2. Refresh the runtime bundle (AGENTS.md, references/, bin/, scripts/)
-python3 .claude/skills/init/scripts/init.py --repo-path .   # or /init
+/init                      # or: python3 <clone>/plugins/core/skills/init/scripts/init.py --repo-path .
+git add .claude claude-arsenal && git commit -m "chore: update claude-arsenal"
 ```
 
-`claude-arsenal/` is still upstream's and still refreshed by `init.py`;
-`arsenal/` is still yours and still never written to.
+It re-copies the skills into `.claude/skills/`, prunes any the new version no
+longer ships, and refreshes `claude-arsenal/` (`AGENTS.md`, `references/`,
+`bin/`, `scripts/`). It never writes into `arsenal/` — your tasks, specs,
+plans, config and session state are yours and no upgrade touches them.
 
-If the repo has leftover `.claude/skills/` copies from before the switch, `/init`
-reports them and prunes on `--migrate-plugins yes` — leaving them means every
-skill is live twice, namespaced and not.
+On the CLI, `/plugin update claude-arsenal` refreshes the plugin that gives you
+`/init` itself. That is a different thing from what your project ships:
+updating one does not update the other, and it is the project commit that every
+session actually loads.
 
----
-
-## Refreshing the vendored trees (fallback)
-
-Consumers still using the [vendoring fallback](INSTALL.md#vendoring-fallback)
-have two trees to keep up to date, and exactly one of them is upstream's:
-
-- **`.claude/skills/`** — the flattened skill files; refreshed by
-  `make update-skills` (or directly with `<clone>/scripts/vendor-skills.sh`).
-- **`claude-arsenal/`** — the runtime bundle (`AGENTS.md`, `references/`, `bin/`,
-  `scripts/`); refreshed by re-running `init.py`.
-
-`arsenal/` is **yours** — tasks, specs, plans, config, session state — and no
-update writes to it. That split is the whole point: upstream owns one directory
-and may overwrite it freely, so an upgrade can never touch your work.
-
-```bash
-# 1. Re-vendor the skills
-make update-skills
-
-# 2. Refresh claude-arsenal/ (bin/, scripts/, references/, AGENTS.md)
-python3 .claude/skills/init/scripts/init.py --repo-path .
-
-# 3. Commit both trees
-git add .claude/skills claude-arsenal
-git commit -m "chore: vendor claude-arsenal @ vX.Y.Z"
-```
-
-`init.py --repo-path .` is idempotent: it overwrites stale bundle files and
-scaffolds anything missing under `arsenal/`, but never rewrites an `arsenal/`
-file that already exists.
+> **Before v2.0.0** the skills were vendored by a separate `vendor-skills.sh`
+> step, and v1.0.0–v1.1.0 additionally declared the plugins in the host repo's
+> `.claude/settings.json`. Cloud sessions ignore that declaration, so `/init`
+> now removes it and does the vendoring itself. Nothing to do but re-run it.
 
 ### Coming from a release before v0.25.0
 
@@ -169,19 +140,20 @@ session cannot do for you (deleting the old branch and worktree).
 
 Both were hit by a real consumer repo in one session:
 
-**A stale `ARSENAL_REF` makes `make update-skills` a successful no-op.** The pin
-is a literal in the consumer's Makefile and nothing compares it against the
-latest tag, so a repo pinned three releases back re-vendors the *same old
-version* and reports `vendored N skill(s)` — a success message for an update
-that did not happen. `check_update.sh` is the automated counterpart, but it is
-**inert unless the consumer added an `arsenal` git remote**, which vendoring
-consumers have no reason to do. Check the pin against the tag list before
-assuming you are current:
+**An old pin re-installs the same version and reports success.** Before v2.0.0
+the pin was a literal `ARSENAL_REF` in the consumer's Makefile, and nothing
+compared it against the latest tag: a repo three releases behind re-vendored the
+*same old version* and printed `vendored N skill(s)` — a success message for an
+update that did not happen. `/init` from an installed plugin no longer has that
+failure mode, but the clone-based form still takes a `--branch`, so check it:
 
 ```bash
 git ls-remote --tags https://github.com/nuncaeslupus/claude-arsenal.git 'refs/tags/v*' \
   | sed 's|.*refs/tags/||' | sort -V | tail -1
 ```
+
+`check_update.sh` is the automated counterpart, but it is **inert unless the
+consumer added an `arsenal` git remote**, which most have no reason to do.
 
 **A local edit to `claude-arsenal/bin/` is reverted by the next `init.py`.**
 "Only overwrites stale scripts" reads like a safety guarantee, and for your

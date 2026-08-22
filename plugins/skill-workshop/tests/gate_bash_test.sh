@@ -85,4 +85,14 @@ mkdir -p "$CLAUDE_PLUGIN_DATA" && touch "${CLAUDE_PLUGIN_DATA}/loaded-${SESSION}
 [ "$(probe "sed -i 's/a/b/' $SKILL")" = allowed ] || fail "still blocked after the skill loaded"
 echo "PASS: once skill-workshop is loaded, Bash writes go through"
 
+# gate_target.py ships in the core bundle too, because plugin hooks do not
+# travel with vendored skills. sync_duplicates.py only scans *.sh and a skill's
+# own scripts/, so this pair would drift unnoticed without an explicit check.
+canonical="$here/../hooks/gate_target.py"
+shipped="$here/../../core/skills/init/assets/bin/gate_target.py"
+if ! cmp -s "$canonical" "$shipped"; then
+    fail "gate_target.py has drifted from its copy in the core bundle"
+fi
+echo "PASS: the bundled copy of gate_target.py matches the canonical one"
+
 echo "=== gate_bash_test: all passed ==="

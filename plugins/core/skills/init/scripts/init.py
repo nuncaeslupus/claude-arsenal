@@ -289,23 +289,22 @@ def _register_statusline(repo_path: Path) -> None:
     print("  settings.json: registered statusLine (statusline_capture.sh)")
 
 
-# --- plugin declaration ----------------------------------------------------
-# Cloud sessions (web, desktop/mobile apps, Claude Tag, routines) run on a
-# fresh clone and never see ~/.claude/, so a plugin installed with `/plugin
-# install` does not reach them: that install state is user-scoped. What does
-# reach them is the repo's own .claude/settings.json — Claude Code installs
-# plugins declared there at session start. Declaring the marketplace here is
-# what makes one set of skills work on every surface.
+# --- vendoring --------------------------------------------------------------
+# Vendoring is the only mechanism that reaches every surface. A cloud session
+# runs on a fresh clone and never sees ~/.claude/, and — verified against a live
+# session, not inferred from docs — it does not act on a repo's
+# `extraKnownMarketplaces` / `enabledPlugins` either: skills there arrive by
+# account-level sync, and the web runtime never fetches a git marketplace at
+# session start. What it does read is `.claude/skills/` and the hooks in
+# `.claude/settings.json`, both of which are part of the clone.
+#
+# So the skills are copied in, and the gate that plugin hooks would otherwise
+# provide is written into settings.json alongside them.
 _MARKETPLACE = "claude-arsenal"
-_MARKETPLACE_REPO = "nuncaeslupus/claude-arsenal"
-_PLUGINS = ("core", "skill-workshop")
-# skill-creator was renamed to skill-workshop in v1.0.0 because the old name
-# collided with a built-in on some surfaces and was silently shadowed by it.
-# A consumer's settings still name the old plugin, and a stale key is not
-# inert: it enables a plugin the marketplace no longer ships, so the gate
-# quietly stops arriving. Rewritten rather than left for them to notice.
-_RENAMED_PLUGINS = {"skill-creator": "skill-workshop"}
 _VENDOR_MARKER = ".arsenal-vendored"
+_GATE_HOOK = "claude-arsenal/bin/check_skill_workshop_loaded.sh"
+_MARK_HOOK = "claude-arsenal/bin/mark_skill_workshop_loaded.sh"
+_MARK_PROMPT_HOOK = "claude-arsenal/bin/mark_skill_workshop_loaded_from_prompt.sh"
 
 
 def _read_settings(settings_path: Path) -> dict | None:
@@ -319,154 +318,131 @@ def _read_settings(settings_path: Path) -> dict | None:
     return settings if isinstance(settings, dict) else {}
 
 
-def _register_plugins(repo_path: Path, version: str) -> None:
-    """Declare the marketplace + plugins in the host repo's .claude/settings.json.
+def _source_skills_dir() -> Path:
+    """The skills/ directory this script's own skill lives in.
 
-    Pinned to `ref: v<version>` — the same tag a consumer used to pin with
-    ARSENAL_REF. An existing declaration is never rewritten: a consumer who
-    pinned an older ref, or pointed the marketplace at a fork or a local
-    directory, meant it, and an upgrade silently moving their pin is exactly
-    the surprise that makes vendored files lose people's trust.
+    Works from the plugin cache and from a vendored copy alike: init is always
+    `<skills>/init/scripts/init.py`, so its grandparent is the library to copy.
+    """
+    return Path(__file__).resolve().parent.parent.parent
+
+
+def _vendor_skills(repo_path: Path, silent: bool = False) -> None:
+    """Copy the sibling skills into .claude/skills/ so every surface can load them.
+
+    Only folders carrying the marker are ever replaced or removed — a skill the
+    consumer authored is not ours to touch. Vendoring into itself (running from
+    an already-vendored copy) is a no-op refresh.
+    """
+    source = _source_skills_dir()
+    dest = repo_path / ".claude" / "skills"
+    if source.resolve() == dest.resolve():
+        return  # running from the vendored copy; nothing to copy in
+
+    available = {d.name for d in source.iterdir() if (d / "SKILL.md").is_file()}
+    dest.mkdir(parents=True, exist_ok=True)
+
+    for name in sorted(available):
+        target = dest / name
+        if target.exists() and not (target / _VENDOR_MARKER).is_file():
+            print(f"  skills: {name} exists and is not arsenal-vendored — left alone")
+            continue
+        if target.exists():
+            shutil.rmtree(target)
+        shutil.copytree(source / name, target)
+        (target / _VENDOR_MARKER).write_text("", encoding="utf-8")
+
+    # Prune skills a previous version vendored that this one no longer ships.
+    removed = []
+    for d in dest.iterdir():
+        if d.is_dir() and (d / _VENDOR_MARKER).is_file() and d.name not in available:
+            shutil.rmtree(d)
+            removed.append(d.name)
+
+    if not silent or removed:
+        print(f"  skills: vendored {len(available)} into .claude/skills/")
+    for name in removed:
+        print(f"  skills: pruned {name} (no longer shipped)")
+
+
+def _register_gate_hook(repo_path: Path) -> None:
+    """Wire the skill-edit gate into .claude/settings.json.
+
+    A plugin ships this as a plugin hook, but plugin hooks do not travel with
+    vendored skills — which is why vendored skill authoring was ungated for as
+    long as vendoring has existed. Settings hooks are part of the clone, so they
+    reach a cloud session too.
     """
     settings_path = repo_path / ".claude" / "settings.json"
     settings = _read_settings(settings_path)
     if settings is None:
-        print("  settings.json: unparseable — skipping plugin registration")
+        print("  settings.json: unparseable — skipping gate-hook registration")
         return
 
-    marketplaces = settings.setdefault("extraKnownMarketplaces", {})
-    enabled = settings.setdefault("enabledPlugins", {})
-    if not isinstance(marketplaces, dict) or not isinstance(enabled, dict):
-        print("  settings.json: unexpected plugin keys — skipping plugin registration")
+    hooks = settings.setdefault("hooks", {})
+    if not isinstance(hooks, dict):
+        print("  settings.json: unexpected 'hooks' value — skipping gate-hook registration")
         return
 
+    wanted = {
+        "PreToolUse": ("Edit|Write|MultiEdit|Bash", _GATE_HOOK),
+        "PostToolUse": ("Skill", _MARK_HOOK),
+        "UserPromptSubmit": (None, _MARK_PROMPT_HOOK),
+    }
     changed = False
-    if _MARKETPLACE in marketplaces:
-        print(f"  settings.json: marketplace {_MARKETPLACE!r} already declared — left as is")
-    else:
-        marketplaces[_MARKETPLACE] = {
-            "source": {
-                "source": "github",
-                "repo": _MARKETPLACE_REPO,
-                "ref": f"v{version}",
-            }
-        }
-        changed = True
-        print(f"  settings.json: declared marketplace {_MARKETPLACE} @ v{version}")
-
-    for was, now in _RENAMED_PLUGINS.items():
-        stale = f"{was}@{_MARKETPLACE}"
-        if stale not in enabled:
+    for event, (matcher, command) in wanted.items():
+        entries = hooks.setdefault(event, [])
+        if not isinstance(entries, list):
             continue
-        fresh = f"{now}@{_MARKETPLACE}"
-        # Carry the old value over only when the new key is absent. A consumer
-        # who already set the new name migrated by hand and meant that value;
-        # the leftover key is the stale one, so it is dropped, not promoted.
-        if fresh in enabled:
-            enabled.pop(stale)
-            print(f"  settings.json: dropped stale {stale} ({fresh} already set)")
-        else:
-            enabled[fresh] = enabled.pop(stale)
-            print(f"  settings.json: {stale} renamed to {fresh}")
+        if any(command in json.dumps(e) for e in entries):
+            continue
+        entry: dict = {"hooks": [{"type": "command", "command": f"bash {command}"}]}
+        if matcher:
+            entry["matcher"] = matcher
+        entries.append(entry)
         changed = True
-
-    for plugin in _PLUGINS:
-        key = f"{plugin}@{_MARKETPLACE}"
-        if key not in enabled:
-            enabled[key] = True
-            changed = True
-            print(f"  settings.json: enabled {key}")
 
     if changed:
         settings_path.parent.mkdir(parents=True, exist_ok=True)
         settings_path.write_text(json.dumps(settings, indent=2) + "\n", encoding="utf-8")
+        print("  settings.json: registered the skill-edit gate")
 
 
-def find_vendored_skills(repo_path: Path) -> list[Path]:
-    """Skill folders under .claude/skills/ that vendor-skills.sh wrote.
+def _retire_plugin_declaration(repo_path: Path) -> None:
+    """Remove a marketplace declaration written by v1.0.0 through v1.1.0.
 
-    Identified by the .arsenal-vendored marker, never by name — a folder
-    without the marker is one the consumer authored and is not ours to touch.
+    Those versions declared the plugins in the host repo's settings, on the
+    belief that a cloud session would install them. It does not. Left in place
+    beside the vendored copies it does nothing in the cloud and produces
+    duplicate skills on the CLI — `specify` and `core:specify` both live, both
+    answering.
     """
-    skills_dir = repo_path / ".claude" / "skills"
-    if not skills_dir.is_dir():
-        return []
-    # Symlinks are skipped rather than followed: shutil.rmtree refuses one and
-    # would abort the prune half-done, and a link is the consumer's own wiring
-    # — removing what it points at is not what the marker consented to.
-    return sorted(
-        d for d in skills_dir.iterdir()
-        if d.is_dir() and not d.is_symlink() and (d / _VENDOR_MARKER).is_file()
-    )
-
-
-def _prune_vendored_skills(repo_path: Path, vendored: list[Path]) -> None:
-    """Remove vendored copies now that the same skills arrive as a plugin.
-
-    Both would otherwise stay live at once: plugin skills are namespaced
-    (`core:specify`) and the vendored copy is not (`specify`), and Claude Code
-    keeps both rather than letting one override the other. That doubles the
-    listing budget and leaves two skills answering the same request.
-    """
-    for d in vendored:
-        shutil.rmtree(d)
-        print(f"  removed vendored copy: {d.relative_to(repo_path)}")
-    print(f"  {len(vendored)} vendored skill(s) removed — the plugin now supplies them")
-
-
-def _settle_vendored_skills(repo_path: Path, migrate_plugins: str | None) -> None:
-    """Prune, keep, or ask about the vendored skill copies — whichever was decided.
-
-    Never removes anything on its own: dropping committed files out from under
-    a consumer is exactly the surprise this bundle is careful not to spring.
-    Absent a decision it prints the question and leaves everything in place, so
-    a `--silent` session-start refresh can never delete a file.
-    """
-    vendored = find_vendored_skills(repo_path)
-    if not vendored:
+    settings_path = repo_path / ".claude" / "settings.json"
+    settings = _read_settings(settings_path)
+    if not settings:
         return
 
-    config = repo_path / "arsenal" / "config.toml"
-    decision = migrate_plugins or _plugin_migration_setting(config)
+    changed = False
+    markets = settings.get("extraKnownMarketplaces")
+    if isinstance(markets, dict) and _MARKETPLACE in markets:
+        markets.pop(_MARKETPLACE)
+        if not markets:
+            settings.pop("extraKnownMarketplaces")
+        changed = True
 
-    if decision == "yes":
-        _prune_vendored_skills(repo_path, vendored)
-        _record_plugin_migration(config, "yes")
-    elif decision == "no":
-        _record_plugin_migration(config, "no")
-        print(f"  keeping {len(vendored)} vendored skill(s) — plugin-migration = no")
-    else:
-        names = ", ".join(d.name for d in vendored)
-        print(
-            f"\n  {len(vendored)} vendored skill(s) in .claude/skills/: {names}\n"
-            "  These now arrive as a plugin, and both copies stay live at once — "
-            "the plugin's are namespaced (core:specify), the vendored ones are not "
-            "(specify), so every skill answers twice and costs listing budget twice.\n"
-            "  ASK THE USER whether to remove the vendored copies, then re-run with "
-            "--migrate-plugins yes (or no to keep them and stop being asked)."
-        )
+    enabled = settings.get("enabledPlugins")
+    if isinstance(enabled, dict):
+        stale = [k for k in enabled if k.endswith(f"@{_MARKETPLACE}")]
+        for key in stale:
+            enabled.pop(key)
+        if stale:
+            changed = True
+        if not enabled:
+            settings.pop("enabledPlugins")
 
-
-def _plugin_migration_setting(config: Path) -> str | None:
-    """The recorded plugin-migration decision: `yes`, `no`, or None if never asked."""
-    if not config.is_file():
-        return None
-    for line in config.read_text(encoding="utf-8").splitlines():
-        match = re.match(r"^\s*plugin-migration\s*=\s*(\S+)", line)
-        if match:
-            return match.group(1).strip().strip('"').lower()
-    return None
-
-
-def _record_plugin_migration(config: Path, value: str) -> None:
-    """Upsert `plugin-migration = "<value>"` in arsenal/config.toml.
-
-    Quoted, unlike `queue-automation = true`: `yes` and `no` are bare words
-    rather than TOML values, and arsenal_config.py raises ConfigError on a
-    config.toml it cannot parse — so writing them unquoted would break every
-    later config read in the repo that just answered the question.
-    """
-    _upsert_bare_key(config, "plugin-migration", f'"{value}"')
+    if changed:
+        settings_path.write_text(json.dumps(settings, indent=2) + "\n", encoding="utf-8")
+        print("  settings.json: retired the plugin declaration (vendored copies supersede it)")
 
 
 def _add_gitignore_entry(repo_path: Path, entry: str) -> None:
@@ -715,7 +691,6 @@ def init_base(
     repo_path: Path,
     bundle_override: Path | None = None,
     silent: bool = False,
-    migrate_plugins: str | None = None,
 ) -> None:
     bundle = _bundle_dir(bundle_override)
     arsenal = repo_path / "claude-arsenal"
@@ -786,12 +761,11 @@ def init_base(
     # statusLine command feeding budget_check.sh (token-budget stop)
     _register_statusline(repo_path)
 
-    # Declare the marketplace so cloud sessions get the skills too, then offer
-    # to retire the vendored copies the plugin now supersedes.
-    bundle_ver_path = bundle / ".bundle-version"
-    if bundle_ver_path.exists():
-        _register_plugins(repo_path, bundle_ver_path.read_text(encoding="utf-8").strip())
-    _settle_vendored_skills(repo_path, migrate_plugins)
+    # Vendor the skills and wire the gate — the only path that reaches a cloud
+    # session — then retire a plugin declaration an older init may have written.
+    _vendor_skills(repo_path, silent=silent)
+    _register_gate_hook(repo_path)
+    _retire_plugin_declaration(repo_path)
 
     # CLAUDE.md
     _inject_claude_md(repo_path)
@@ -860,10 +834,6 @@ def main() -> None:
     p.add_argument("--plan", default=None, help="Plan file path override.")
     p.add_argument("--bundle-dir", help="Override path to plugin bundle/ (for testing).")
     p.add_argument(
-        "--migrate-plugins", choices=("yes", "no"), default=None,
-        help="Remove ('yes') or keep ('no') vendored .claude/skills/ copies the plugin supersedes.",
-    )
-    p.add_argument(
         "--silent", action="store_true",
         help="Suppress 'up to date' lines; only print refreshed files and version banner.",
     )
@@ -879,8 +849,7 @@ def main() -> None:
         plan = args.plan or f"arsenal/project/{name}/plan.md"
         init_workspace(repo_path, name, root, spec, plan, bundle_override)
     else:
-        init_base(repo_path, bundle_override, silent=args.silent,
-                  migrate_plugins=args.migrate_plugins)
+        init_base(repo_path, bundle_override, silent=args.silent)
 
 
 if __name__ == "__main__":

@@ -69,7 +69,6 @@ file:line back-references.
 | `make format` | `ruff format .` + `ruff check --fix .`. |
 | `make dev` | Launch Claude Code with `plugins/*` mounted. |
 | `make new-skill` | Prints the slash to invoke inside Claude Code. |
-| `make update-skills` | Prints the slash for `/plugin update`. |
 | `make clean` | Drop caches and `__pycache__`. |
 
 ---
