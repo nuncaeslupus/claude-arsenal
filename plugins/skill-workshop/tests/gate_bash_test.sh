@@ -6,8 +6,12 @@ set -uo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CHECK="$here/../hooks/check_skill_workshop_loaded.sh"
-export CLAUDE_PLUGIN_DATA="$(mktemp -d)"
-trap 'rm -rf "$CLAUDE_PLUGIN_DATA"' EXIT
+# Assigned before export: `export X="$(mktemp -d)"` masks a mktemp failure, and
+# the hook would then fall back to the real ~/.cache marker dir — where this
+# test would happily create a session marker and report a false pass.
+marker_root="$(mktemp -d)" || { echo "FAIL: mktemp -d failed" >&2; exit 1; }
+export CLAUDE_PLUGIN_DATA="$marker_root"
+trap 'rm -rf "$marker_root"' EXIT
 SESSION="gate-bash-test"
 fail() { echo "FAIL: $1" >&2; exit 1; }
 
@@ -31,8 +35,12 @@ cp /tmp/other $SKILL
 mv /tmp/other $SKILL
 rm $SKILL
 python3 -c "import pathlib; pathlib.Path('$SKILL').write_text('x')"
+printf x >| $SKILL
+rm -rf plugins/core/skills/specify
+cp /tmp/other $SKILL
+mv $SKILL /tmp/elsewhere
 CMDS
-echo "PASS: 8 Bash write forms are blocked without the marker"
+echo "PASS: 12 Bash write forms are blocked, including >| and whole-folder rm"
 
 # --- reads that must stay allowed ------------------------------------------
 while IFS= read -r cmd; do
@@ -44,6 +52,8 @@ grep -n description $SKILL
 grep -n description $SKILL > /tmp/out.txt
 wc -l $SKILL
 sed -n '1,5p' $SKILL
+cp $SKILL /tmp/backup
+diff $SKILL /tmp/other
 CMDS
 echo "PASS: reads of a skill file stay allowed, including redirect-to-elsewhere"
 

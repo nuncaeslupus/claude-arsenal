@@ -33,9 +33,11 @@ session_id="$(printf '%s' "$payload" | python3 -c 'import json,sys; print(json.l
 # descendant — references/, scripts/, evals/, assets/, plus any new
 # subfolder or loose file at the skill root (notes.md, findings.md, etc.).
 # A Bash target arrives relative, so match with and without a leading path.
+# One segment past skills/ is enough: the skill folder root is itself a target,
+# because `rm -rf .../skills/specify` deletes the skill as surely as editing it.
 case "$file_path" in
-  */.claude/skills/*/*|.claude/skills/*/*) ;;
-  */plugins/*/skills/*/*|plugins/*/skills/*/*) ;;
+  */.claude/skills/*|.claude/skills/*) ;;
+  */plugins/*/skills/*|plugins/*/skills/*) ;;
   *) exit 0 ;;
 esac
 
