@@ -105,23 +105,101 @@ brief window where the gate would block a clean-up edit.
 
 ---
 
-## Use on Claude Code web (vendoring)
+## Use in cloud sessions
 
-Claude Code **on the web** (claude.ai/code) has **no plugin or marketplace
-support** — `/plugin` and `/plugin marketplace add` are CLI/IDE/desktop only.
-The web environment only reads config **committed into the project repo**:
-`.claude/skills/`, `.claude/agents/`, `.claude/commands/`, `.mcp.json`, and
-hooks in `.claude/settings.json`.
+A **cloud session** — Claude Code on the web, `claude --cloud`, the desktop
+and mobile apps, Claude Tag, routines — runs on a fresh clone of your
+repository, on a different machine. It never sees `~/.claude/`, so a plugin
+you installed with `/plugin install` does not reach it: that install state is
+user-scoped, not the plugin system.
 
-So to use these skills on the web, **vendor** them into the consuming
-project's `.claude/skills/`. The canonical copies stay here in
-`plugins/<plugin>/skills/<skill>/`; the vendored copies are generated build
-output you regenerate, never hand-edit. `scripts/vendor-skills.sh` flattens
-the marketplace layout into the flat layout web expects and tags each copy
-with a `.arsenal-vendored` marker (so re-runs clean up renamed/removed skills
-without touching skills you authored yourself).
+What does reach it is the repo's own committed `.claude/settings.json`.
+Plugins declared there are installed at session start:
 
-### Agent playbook — set up or update for the web
+> | Plugins declared in `.claude/settings.json` | Yes | Installed at session start from the marketplace you declared. Requires network access to reach the marketplace source |
+> | Plugins enabled only in your user settings | No | User-scoped `enabledPlugins` lives in `~/.claude/settings.json`. Declare them in the repo's `.claude/settings.json` instead |
+>
+> — [Cloud environments § What carries over from your setup](https://code.claude.com/docs/en/cloud-environments#what-carries-over-from-your-setup)
+
+`/init` writes that declaration for you. To do it by hand, commit this into
+the consuming repo:
+
+```json
+{
+  "extraKnownMarketplaces": {
+    "claude-arsenal": {
+      "source": {
+        "source": "github",
+        "repo": "nuncaeslupus/claude-arsenal",
+        "ref": "v0.39.0"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "core@claude-arsenal": true,
+    "skill-creator@claude-arsenal": true
+  }
+}
+```
+
+`ref` takes a branch, tag, or commit; add `sha` (full 40 characters) to pin a
+commit exactly, which wins over `ref` when both are set. **Upgrading is
+bumping the `ref`** — there is nothing to regenerate and nothing to re-commit
+but that one line.
+
+Three things to know:
+
+- **Shared project settings outrank user settings.** Precedence is managed →
+  command line → project-local → **shared project** → user. This declaration
+  therefore wins over a same-named marketplace in your own
+  `~/.claude/settings.json`, including a local `directory` source pointed at a
+  working copy.
+- **`extraKnownMarketplaces` waits for workspace trust.** Until each
+  collaborator trusts the folder, they don't get plugins from a marketplace
+  the file declares.
+- **It needs network access to reach GitHub.** The default **Trusted**
+  network level allows it.
+
+### If you already vendored
+
+Repos set up before this have flattened copies under `.claude/skills/`, each
+carrying a `.arsenal-vendored` marker. Leaving them in place alongside the
+plugin means **every skill is live twice** — the plugin's are namespaced
+(`core:specify`), the vendored ones are not (`specify`), and Claude Code keeps
+both rather than letting one override the other. That doubles the listing
+budget and leaves two skills answering the same request.
+
+`/init` detects them, asks, and prunes on `--migrate-plugins yes`. Only
+folders carrying the marker are removed.
+
+---
+
+## Vendoring (fallback)
+
+> **Kept as a fallback while the plugin path is being confirmed in the
+> field.** A cloud environment proxies GitHub and scopes API traffic to the
+> repositories attached to the session; whether a marketplace in a *different*
+> repository always resolves under that proxy has not been verified end to
+> end. If a cloud session reports no arsenal skills, vendoring still works —
+> use it, and please say so, because that is the signal for keeping this
+> section.
+
+Vendoring copies the skills into the consuming project's `.claude/skills/`,
+where any session reads them straight from the clone with no marketplace
+fetch. The canonical copies stay here in `plugins/<plugin>/skills/<skill>/`;
+the vendored copies are generated build output you regenerate, never
+hand-edit. `scripts/vendor-skills.sh` flattens the marketplace layout into the
+flat layout and tags each copy with a `.arsenal-vendored` marker (so re-runs
+clean up renamed/removed skills without touching skills you authored
+yourself).
+
+**What vendoring costs you:** plugin *hooks* do not travel. `vendor-skills.sh`
+copies only folders containing a `SKILL.md`, so
+`plugins/skill-creator/hooks/hooks.json` — the pre-edit gate that blocks edits
+inside a `skills/` folder unless the meta-skill is loaded — is not installed.
+Vendored skill authoring is ungated.
+
+### Agent playbook — vendor into a repo
 
 When the user says *"install/update claude-arsenal from its repo to be used
 in Claude Code web"*, run these steps from the consuming project root. They
@@ -175,7 +253,7 @@ Add this target to the **consuming project's** Makefile:
 
 ```make
 ARSENAL_REPO    ?= https://github.com/nuncaeslupus/claude-arsenal.git
-ARSENAL_REF     ?= v0.38.0           # pin to a tag — upgrade deliberately
+ARSENAL_REF     ?= v0.39.0           # pin to a tag — upgrade deliberately
 ARSENAL_PLUGINS ?= core  # comma list, or "all" to include skill-creator
 
 update-skills:  ## vendor claude-arsenal skills into .claude/skills (for CC web)
@@ -189,7 +267,7 @@ Then:
 ```bash
 make update-skills          # regenerates .claude/skills/ from the pinned tag
 git add .claude/skills      # commit so the next web session sees them
-git commit -m "chore: vendor claude-arsenal skills @ v0.38.0"
+git commit -m "chore: vendor claude-arsenal skills @ v0.39.0"
 ```
 
 `core` is already the default. To vendor everything including

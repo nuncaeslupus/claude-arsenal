@@ -94,10 +94,33 @@ A breach prints `OVER cap by N chars` and a hint to `/plugin disable
 
 ---
 
-## Refreshing the vendored trees (CC web)
+## Upgrading when the skills come from the plugin
 
-Consumers who vendor the skills for Claude Code on the web have two trees to
-keep up to date, and exactly one of them is upstream's:
+Since v0.39.0 a consuming repo declares the marketplace in its own
+`.claude/settings.json`, so cloud sessions install the plugin at session start
+and there is nothing to re-vendor. Upgrading is two steps:
+
+```bash
+# 1. Bump the pin in .claude/settings.json
+#      "ref": "v0.38.0"  ->  "ref": "v0.39.0"
+
+# 2. Refresh the runtime bundle (AGENTS.md, references/, bin/, scripts/)
+python3 .claude/skills/init/scripts/init.py --repo-path .   # or /init
+```
+
+`claude-arsenal/` is still upstream's and still refreshed by `init.py`;
+`arsenal/` is still yours and still never written to.
+
+If the repo has leftover `.claude/skills/` copies from before the switch, `/init`
+reports them and prunes on `--migrate-plugins yes` — leaving them means every
+skill is live twice, namespaced and not.
+
+---
+
+## Refreshing the vendored trees (fallback)
+
+Consumers still using the [vendoring fallback](INSTALL.md#vendoring-fallback)
+have two trees to keep up to date, and exactly one of them is upstream's:
 
 - **`.claude/skills/`** — the flattened skill files; refreshed by
   `make update-skills` (or directly with `<clone>/scripts/vendor-skills.sh`).
