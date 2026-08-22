@@ -21,6 +21,10 @@ probe() {  # probe <command> -> prints "blocked" or "allowed"
 }
 
 SKILL="plugins/core/skills/specify/SKILL.md"
+# Absolute paths are the common case in practice — a session usually names a
+# file by full path — so both forms are pinned. A relative-only pattern is a
+# gate that misses nearly every real edit.
+ABS="/somewhere/repo/plugins/core/skills/specify/SKILL.md"
 
 # --- writes that must be blocked (each one bypassed the gate before) --------
 while IFS= read -r cmd; do
@@ -39,8 +43,12 @@ printf x >| $SKILL
 rm -rf plugins/core/skills/specify
 cp /tmp/other $SKILL
 mv $SKILL /tmp/elsewhere
+printf x > $ABS
+sed -i s/a/b/ $ABS
+rm -rf /somewhere/repo/plugins/core/skills/specify
+tee $ABS < /tmp/x
 CMDS
-echo "PASS: 12 Bash write forms are blocked, including >| and whole-folder rm"
+echo "PASS: 16 Bash write forms blocked — relative and absolute, >| and folder rm"
 
 # --- reads that must stay allowed ------------------------------------------
 while IFS= read -r cmd; do
@@ -54,6 +62,8 @@ wc -l $SKILL
 sed -n '1,5p' $SKILL
 cp $SKILL /tmp/backup
 diff $SKILL /tmp/other
+cat $ABS
+cp $ABS /tmp/backup
 CMDS
 echo "PASS: reads of a skill file stay allowed, including redirect-to-elsewhere"
 

@@ -30,12 +30,12 @@ import sys
 # or anything beneath it. The root itself counts: `rm -rf …/skills/specify`
 # deletes the skill as surely as editing its SKILL.md does.
 SKILL_PATH = re.compile(
-    r"^(?:[\w.-]+/)*?(?:\.claude/skills|plugins/[^/]+/skills)/[^/]+(?:/.*)?$"
+    r"^/?(?:[\w.-]+/)*?(?:\.claude/skills|plugins/[^/]+/skills)/[^/]+(?:/.*)?$"
 )
 
 # The same shape, found anywhere inside a larger string (an interpreter script).
 EMBEDDED_PATH = re.compile(
-    r"(?:[\w.-]+/)*?(?:\.claude/skills|plugins/[^/\s'\"]+/skills)/[^/\s'\"]+(?:/[^\s'\"]*)?"
+    r"/?(?:[\w.-]+/)*?(?:\.claude/skills|plugins/[^/\s'\"]+/skills)/[^/\s'\"]+(?:/[^\s'\"]*)?"
 )
 
 REDIRECTS = {">", ">>", ">|", "&>", "&>>", "1>", "2>", "1>>", "2>>"}

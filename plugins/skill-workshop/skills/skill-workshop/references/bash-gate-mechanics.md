@@ -19,7 +19,7 @@ merely mentioned are not targets:
 
 | Form | Target |
 |---|---|
-| `> f`, `>> f`, `>| f`, `&> f`, `2> f` | `f` |
+| `> f`, `>> f`, `>\| f`, `&> f`, `2> f` | `f` |
 | `sed -i SCRIPT f…` | every `f` |
 | `tee`, `truncate`, `touch`, `chmod`, `chown`, `patch`, `ln`, `install`, `shred` | every path argument |
 | `mv`, `rm`, `rmdir` | every path argument — removing a skill file mutates the skill |
