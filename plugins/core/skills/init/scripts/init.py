@@ -369,7 +369,13 @@ def find_vendored_skills(repo_path: Path) -> list[Path]:
     skills_dir = repo_path / ".claude" / "skills"
     if not skills_dir.is_dir():
         return []
-    return sorted(d for d in skills_dir.iterdir() if (d / _VENDOR_MARKER).is_file())
+    # Symlinks are skipped rather than followed: shutil.rmtree refuses one and
+    # would abort the prune half-done, and a link is the consumer's own wiring
+    # — removing what it points at is not what the marker consented to.
+    return sorted(
+        d for d in skills_dir.iterdir()
+        if d.is_dir() and not d.is_symlink() and (d / _VENDOR_MARKER).is_file()
+    )
 
 
 def _prune_vendored_skills(repo_path: Path, vendored: list[Path]) -> None:
@@ -431,8 +437,14 @@ def _plugin_migration_setting(config: Path) -> str | None:
 
 
 def _record_plugin_migration(config: Path, value: str) -> None:
-    """Upsert `plugin-migration = <value>` in arsenal/config.toml."""
-    _upsert_bare_key(config, "plugin-migration", value)
+    """Upsert `plugin-migration = "<value>"` in arsenal/config.toml.
+
+    Quoted, unlike `queue-automation = true`: `yes` and `no` are bare words
+    rather than TOML values, and arsenal_config.py raises ConfigError on a
+    config.toml it cannot parse — so writing them unquoted would break every
+    later config read in the repo that just answered the question.
+    """
+    _upsert_bare_key(config, "plugin-migration", f'"{value}"')
 
 
 def _add_gitignore_entry(repo_path: Path, entry: str) -> None:

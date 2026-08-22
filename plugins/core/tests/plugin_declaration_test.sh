@@ -36,8 +36,31 @@ echo "PASS: vendored copies survive a run with no decision, and the user is aske
 python3 "$init_py" --repo-path "$repo" --migrate-plugins yes >"$tmp/out2" 2>&1
 [ ! -d "$repo/.claude/skills/specify" ] || fail "vendored skill not pruned on 'yes'"
 [ -d "$repo/.claude/skills/mine" ] || fail "pruned a skill the consumer authored"
-grep -q "plugin-migration = yes" "$repo/arsenal/config.toml" || fail "decision not recorded"
+grep -q 'plugin-migration = "yes"' "$repo/arsenal/config.toml" || fail "decision not recorded"
 echo "PASS: 'yes' prunes marked copies only, and records the decision"
+
+# the recorded decision must leave config.toml parseable — arsenal_config.py
+# raises ConfigError on a config it cannot parse, so a bare `yes` would break
+# every later config read in the repo that just answered the question
+python3 -c "
+import tomllib, sys
+tomllib.loads(open('$repo/arsenal/config.toml').read())
+" || fail "config.toml is not valid TOML after recording the decision"
+echo "PASS: config.toml stays valid TOML after the decision is recorded"
+
+# a symlinked skill dir carrying the marker must be left alone: shutil.rmtree
+# refuses a symlink and would abort the prune half-done
+mkdir -p "$tmp/elsewhere/linked"
+touch "$tmp/elsewhere/linked/.arsenal-vendored"
+mkdir -p "$repo/.claude/skills/still-vendored"
+touch "$repo/.claude/skills/still-vendored/.arsenal-vendored"
+ln -s "$tmp/elsewhere/linked" "$repo/.claude/skills/linked"
+
+python3 "$init_py" --repo-path "$repo" --migrate-plugins yes >"$tmp/out3" 2>&1   || fail "prune aborted on a symlinked skill dir"
+[ -L "$repo/.claude/skills/linked" ] || fail "removed a symlink the consumer wired up"
+[ -d "$tmp/elsewhere/linked" ] || fail "deleted through a symlink"
+[ ! -d "$repo/.claude/skills/still-vendored" ] || fail "real vendored dir not pruned"
+echo "PASS: symlinks are skipped, real vendored dirs still pruned"
 
 # an existing declaration is never rewritten (a consumer's own pin is theirs)
 python3 - "$repo/.claude/settings.json" <<'PY'
