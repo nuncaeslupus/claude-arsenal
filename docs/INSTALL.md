@@ -8,7 +8,7 @@ project two plugins:
   scripts everything else is checked against.
 - **`core`** — generic engineering workflow skills (`specify`,
   `design`, `execution`, `review`, `ship`, `github`, `gate-check`,
-  `lsp-setup`, `session-end`), the Python toolchain skills
+  `session-end`), the Python toolchain skills
   (`python-bootstrap`, `pypi-release`, `coverage-gaps`, `dep-upgrade`,
   `mutmut-report`), and the git-backed DAG task queue (`init`,
   `continue`, `queue-add`, `queue-status`). `init` injects a proactive
@@ -175,7 +175,7 @@ Add this target to the **consuming project's** Makefile:
 
 ```make
 ARSENAL_REPO    ?= https://github.com/nuncaeslupus/claude-arsenal.git
-ARSENAL_REF     ?= v0.37.0           # pin to a tag — upgrade deliberately
+ARSENAL_REF     ?= v0.38.0           # pin to a tag — upgrade deliberately
 ARSENAL_PLUGINS ?= core  # comma list, or "all" to include skill-creator
 
 update-skills:  ## vendor claude-arsenal skills into .claude/skills (for CC web)
@@ -189,7 +189,7 @@ Then:
 ```bash
 make update-skills          # regenerates .claude/skills/ from the pinned tag
 git add .claude/skills      # commit so the next web session sees them
-git commit -m "chore: vendor claude-arsenal skills @ v0.37.0"
+git commit -m "chore: vendor claude-arsenal skills @ v0.38.0"
 ```
 
 `core` is already the default. To vendor everything including
