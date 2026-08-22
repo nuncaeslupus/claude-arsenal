@@ -1,4 +1,4 @@
-.PHONY: help sync smoke test context-budget queue-doctor tag sync-version sync-version-check validate audit audit-rule-drift sync-dupes lint format dev new-skill update-skills clean
+.PHONY: validate-manifests help sync smoke test context-budget queue-doctor tag sync-version sync-version-check validate audit audit-rule-drift sync-dupes lint format dev new-skill update-skills clean
 
 PLUGIN_DIRS := $(wildcard plugins/*)
 PLUGIN_SKILL_LIBS := $(wildcard plugins/*/skills)
@@ -21,8 +21,17 @@ help:  ## list available targets
 sync:  ## uv sync — install/refresh dependencies
 	uv sync
 
-smoke: validate audit  ## run validate + audit on every plugin's skills, then skills_smoke.sh
+smoke: validate-manifests validate audit  ## run manifest + skill validation and the audit, then skills_smoke.sh
 	@bash $(SMOKE_SH)
+
+# `validate` below checks the *skills*. Nothing checked the plugin manifests
+# that carry them, and v1.0.0 shipped plugins/core with `"author": "..."` — a
+# bare string where the loader wants an object — so Claude Code refused to load
+# the plugin while the marketplace looked healthy from the outside. It runs
+# first because a manifest the loader rejects makes every skill inside it
+# unreachable, whatever `validate` then says about them.
+validate-manifests:  ## assert every plugin manifest matches the shapes the loader requires
+	python3 scripts/validate_manifests.py
 
 validate:  ## validate every plugin's skills, fail-fast
 ifeq ($(PLUGIN_SKILLS),)
