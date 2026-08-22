@@ -198,6 +198,14 @@ Each reference covers one topic. Load only what the current task needs.
 Real failures observed while authoring or validating skills. Each
 entry says *what* goes wrong AND *why*, not just the prohibition.
 
+- **The gate covers Bash, because Edit/Write/MultiEdit alone left a hole.**
+  `sed -i`, `tee`, a heredoc redirect and a `python3 -c` one-liner all reach a
+  SKILL.md without ever naming it in `file_path`, so a matcher scoped to the
+  edit tools was bypassable by the edit style a session is often steered
+  toward. The gate now inspects Bash commands too, and keys on *mutation*
+  rather than mention — reading a skill file and redirecting the output
+  elsewhere stays allowed, because a gate that fires on `grep … > out` is one
+  people route around instead of through.
 - **Container directories swallow skills silently.** Skill discovery
   walks one level under `.claude/skills/`. A SKILL.md nested as
   `.claude/skills/<scope>/<name>/SKILL.md` is invisible — no warning,
