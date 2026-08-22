@@ -142,10 +142,10 @@ the consuming repo:
 }
 ```
 
-`ref` takes a branch, tag, or commit; add `sha` (full 40 characters) to pin a
-commit exactly, which wins over `ref` when both are set. **Upgrading is
-bumping the `ref`** — there is nothing to regenerate and nothing to re-commit
-but that one line.
+`ref` takes a branch or tag. A *marketplace* source supports `ref` but **not**
+`sha` — that is a plugin-source field, and the two are pinned independently.
+**Upgrading is bumping the `ref`** — there is nothing to regenerate and
+nothing to re-commit but that one line.
 
 Three things to know:
 
