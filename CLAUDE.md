@@ -298,3 +298,18 @@ registry of flags a core skill honors:
 
 Markers are per-host-repo and optional; absent a marker each skill uses
 its default (or asks once, for `session-end`).
+
+### This repo's own markers
+
+The registry above describes what a *consumer's* `CLAUDE.md` may set, but
+`claude-arsenal` is itself a host repo whenever a session runs inside it, so the
+markers it sets for its own sessions live here:
+
+<!-- session-end: handoff=no -->
+
+`handoff=no` because the ledger here is already the merged work — the PRs, the
+`skill-workshop` improvements log, and the vendored docs under
+`plugins/core/skills/init/assets/`. `status/specification.md` and
+`status/plan.md` are archived records of a design that never shipped, not a live
+plan a handoff would keep current, so a `status/handoff.md` would be a fourth
+place to keep in sync and the first to go stale.
