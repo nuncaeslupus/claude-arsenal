@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""create_reader.py — generate an annotatable HTML + Markdown reader from specification files.
+"""create_reader.py — generate an annotatable HTML + Markdown reader from a spec or plan.
 
 Auto-discovers spec source(s):
   1. --input FILE      single specification file
@@ -7,11 +7,12 @@ Auto-discovers spec source(s):
   3. auto (no flags): looks for arsenal/project/*/spec.md,
                       then falls back to status/specification.md
 
-Outputs (--output-dir, default: directory of the single spec, or docs/spec-reader/ in
-workspace mode):
-  spec-reader.html      self-contained HTML reader with per-section note fields
+Outputs are named for the document the input stem names — a `plan.md` input writes
+plan-reader.html / plan-annotated.md, anything else writes spec-*. (--output-dir,
+default: directory of the single input, or docs/spec-reader/ in workspace mode):
+  <doc>-reader.html     self-contained HTML reader with per-section note fields
                         (notes auto-save in browser; Export button saves a Markdown file)
-  spec-annotated.md     same spec as Markdown with a note slot per section
+  <doc>-annotated.md    same document as Markdown with a note slot per section
 
 Seed notes from a previous Export by placing the downloaded file as
 {output-dir}/notes.json. Notes are keyed by stable section IDs and are
@@ -20,11 +21,13 @@ re-injected into both output artifacts.
 Requires: pip install markdown   (or: uv run --with markdown python3 create_reader.py)
 
 Usage (run from repo root):
-    uv run --with markdown python3 "$CLAUDE_SKILL_DIR/scripts/create_reader.py"
-    uv run --with markdown python3 "$CLAUDE_SKILL_DIR/scripts/create_reader.py" \\
+    uv run --with markdown python3 claude-arsenal/scripts/create_reader.py
+    uv run --with markdown python3 claude-arsenal/scripts/create_reader.py \\
         --input status/specification.md --output-dir status
-    uv run --with markdown python3 "$CLAUDE_SKILL_DIR/scripts/create_reader.py" \\
+    uv run --with markdown python3 claude-arsenal/scripts/create_reader.py \\
         --input-dir arsenal/project --output-dir docs/spec-reader
+    uv run --with markdown python3 claude-arsenal/scripts/create_reader.py \\
+        --input status/plan.md --output-dir status
 """
 
 import argparse
@@ -228,11 +231,23 @@ def build_part(file_md: str, code: str, part_label: str, title: str) -> dict:
 
 # ---------------------------------------------------------------- Source discovery
 
+# The input stem decides which document this is, the same way it already decides the
+# title. A plan and a spec want different badges and different output filenames, and
+# nothing else about the reader changes between them.
+DOC_KINDS = {"plan": ("PLAN", "Plan", "plan")}
+DEFAULT_DOC_KIND = ("SPEC", "Specification", "spec")
+
+
+def doc_kind(stem: str) -> tuple[str, str, str]:
+    """Return (badge code, part label, output basename) for a document stem."""
+    return DOC_KINDS.get(stem.lower().replace("_", "-"), DEFAULT_DOC_KIND)
+
+
 def collect_parts_single(spec_path: Path) -> list[tuple[str, dict]]:
-    """Single-file mode: one part from the spec at spec_path."""
-    code = "SPEC"
+    """Single-file mode: one part from the document at spec_path."""
+    code, label, basename = doc_kind(spec_path.stem)
     raw = spec_path.read_text(encoding="utf-8")
-    return [("spec", build_part(raw, code, "Specification", spec_path.stem.replace("-", " ").title()))]
+    return [(basename, build_part(raw, code, label, spec_path.stem.replace("-", " ").title()))]
 
 
 def collect_parts_workspace(workspace_dir: Path) -> list[tuple[str, dict]]:
@@ -289,15 +304,16 @@ def esc(t: str) -> str:
              .replace('"', "&quot;"))
 
 
-def build_html(parts: list[tuple[str, dict]], title: str, gen_date: str, seed_notes: dict | None = None) -> str:
+def build_html(parts: list[tuple[str, dict]], title: str, gen_date: str, seed_notes: dict | None = None,
+               single_label: str = "Specification", doc_slug: str = "spec") -> str:
     seed_notes = seed_notes or {}
     total_sections = sum(len(p["items"]) for _, p in parts)
-    ls_ns = slug(title) + "-spec-v1:"
+    ls_ns = slug(title) + f"-{doc_slug}-v1:"
 
     toc = ['<details class="toc" open><summary>Contents</summary>']
     for _kind, p in parts:
         head = esc(p["title"])
-        if p["part_label"] != "Specification":
+        if p["part_label"] != single_label:
             head = f'{esc(p["part_label"])} — {head}'
         toc.append('<details class="toc-part">')
         toc.append(f'<summary>{head}</summary><ul>')
@@ -310,7 +326,7 @@ def build_html(parts: list[tuple[str, dict]], title: str, gen_date: str, seed_no
     body = []
     for kind, p in parts:
         part_head = esc(p["title"])
-        if p["part_label"] != "Specification":
+        if p["part_label"] != single_label:
             part_head = f'{esc(p["part_label"])} — {part_head}'
         badge_cls = kind
         badge_label = p["part_label"]
@@ -353,7 +369,7 @@ def build_html(parts: list[tuple[str, dict]], title: str, gen_date: str, seed_no
     page = page.replace("__TOC__", toc_html)
     page = page.replace("__BODY__", body_html)
     page = page.replace("__CSS__", CSS)
-    page = page.replace("__JS__", JS.replace("__LS_NS__", ls_ns))
+    page = page.replace("__JS__", JS.replace("__LS_NS__", ls_ns).replace("__DOC_SLUG__", doc_slug))
     page = page.replace(
         "__SEED_NOTES__",
         json.dumps(seed_notes, ensure_ascii=False).replace("<", "\\u003c"),
@@ -363,17 +379,18 @@ def build_html(parts: list[tuple[str, dict]], title: str, gen_date: str, seed_no
 
 # ---------------------------------------------------------------- Markdown build
 
-def build_markdown(parts: list[tuple[str, dict]], title: str, gen_date: str, seed_notes: dict | None = None) -> str:
+def build_markdown(parts: list[tuple[str, dict]], title: str, gen_date: str, seed_notes: dict | None = None,
+                   single_label: str = "Specification") -> str:
     seed_notes = seed_notes or {}
-    out = [f"# {title} — Specification (annotated edition)", ""]
+    out = [f"# {title} — {single_label} (annotated edition)", ""]
     out.append(
-        f"> Generated {gen_date}. This is the specification with a **note slot** after every "
+        f"> Generated {gen_date}. This is the document with a **note slot** after every "
         "section. Read it in any Markdown app. To annotate, replace the `_(your notes…)_` "
         "placeholder under any section. When done, send the file back — notes are acted on."
     )
     out += ["", "---", ""]
     for _, p in parts:
-        title_line = f"# {p['part_label']} — {p['title']}" if p["part_label"] != "Specification" \
+        title_line = f"# {p['part_label']} — {p['title']}" if p["part_label"] != single_label \
             else f"# {p['title']}"
         out.append(title_line)
         out.append("")
@@ -463,7 +480,7 @@ pre code{background:none;padding:0}
   padding-bottom:8px;margin:18px 0 8px;position:sticky;top:54px;background:var(--bg);z-index:10}
 .badge{display:inline-block;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;
   vertical-align:middle;padding:3px 7px;border-radius:6px;margin-right:8px}
-.badge.spec{background:var(--chip);color:var(--accent)}
+.badge.spec,.badge.plan{background:var(--chip);color:var(--accent)}
 .badge.workspace{background:var(--chip);color:var(--accent2)}
 .sec{padding:6px 0 2px;border-bottom:1px solid var(--line);scroll-margin-top:100px}
 .sec:last-child{border-bottom:none}
@@ -601,7 +618,7 @@ JS = r"""
   document.getElementById('btn-export').addEventListener('click',function(){
     var r=buildExport();
     if(r.n===0){toast('No notes yet — add some first.');return;}
-    var name='spec-notes-'+today()+'.md';
+    var name='__DOC_SLUG__-notes-'+today()+'.md';
     download(name,r.text);openModal(r.text);
     if(navigator.clipboard){navigator.clipboard.writeText(r.text).then(function(){},function(){});}
     dirty=false;setState('✓ Backup saved '+nowStamp(),'ok');
@@ -614,7 +631,7 @@ JS = r"""
     if(navigator.clipboard){navigator.clipboard.writeText(modalTa.value).then(function(){},function(){});ok=true;}
     toast(ok?'Copied to clipboard':'Select the text and copy');
   });
-  document.getElementById('modal-dl').addEventListener('click',function(){download('spec-notes-'+today()+'.md',modalTa.value);toast('Download started');});
+  document.getElementById('modal-dl').addEventListener('click',function(){download('__DOC_SLUG__-notes-'+today()+'.md',modalTa.value);toast('Download started');});
   document.getElementById('modal-close').addEventListener('click',closeModal);
   modal.addEventListener('click',function(e){if(e.target===modal)closeModal();});
 
@@ -735,13 +752,14 @@ HTML_TEMPLATE = r"""<!doctype html>
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--input", metavar="FILE", help="single specification Markdown file")
+    parser.add_argument("--input", metavar="FILE", help="single spec or plan Markdown file")
     parser.add_argument("--input-dir", metavar="DIR", help="directory containing workspace subdirs with spec.md")
-    parser.add_argument("--output-dir", metavar="DIR", help="where to write spec-reader.html and spec-annotated.md")
+    parser.add_argument("--output-dir", metavar="DIR", help="where to write the reader and annotated Markdown")
     parser.add_argument("--name", metavar="TEXT", help="project name for the reader title (default: git repo name)")
     args = parser.parse_args()
 
     cwd = Path.cwd()
+    single_label, doc_slug = DEFAULT_DOC_KIND[1], DEFAULT_DOC_KIND[2]
 
     if args.input:
         spec_path = Path(args.input)
@@ -749,6 +767,7 @@ def main() -> int:
             print(f"✗ {spec_path} not found", file=sys.stderr)
             return 2
         parts = collect_parts_single(spec_path)
+        _, single_label, doc_slug = doc_kind(spec_path.stem)
         default_out = spec_path.parent
     elif args.input_dir:
         ws_dir = Path(args.input_dir)
@@ -783,11 +802,11 @@ def main() -> int:
         except Exception as exc:
             print(f"⚠  could not read {notes_path}: {exc}", file=sys.stderr)
 
-    html_out = build_html(parts, title, gen_date, seed_notes)
-    md_out = build_markdown(parts, title, gen_date, seed_notes)
+    html_out = build_html(parts, title, gen_date, seed_notes, single_label, doc_slug)
+    md_out = build_markdown(parts, title, gen_date, seed_notes, single_label)
 
-    html_file = out_dir / "spec-reader.html"
-    md_file = out_dir / "spec-annotated.md"
+    html_file = out_dir / f"{doc_slug}-reader.html"
+    md_file = out_dir / f"{doc_slug}-annotated.md"
     html_file.write_text(html_out, encoding="utf-8")
     md_file.write_text(md_out, encoding="utf-8")
 
