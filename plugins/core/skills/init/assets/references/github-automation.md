@@ -69,11 +69,13 @@ or a reply explaining the disagreement. An unresolved thread is an unmet policy,
 judgement call.
 
 **Who fixes, and who merges.** The findings are the session's work, not a handoff. Read
-every finding the review raised, verify each against the code, fix the real ones, reply
-saying what changed and what was rejected and why, then merge. `after-review` is satisfied
-by that loop closing — not by a human signing off afterwards. Stopping to ask permission
-once the threads are answered is the same failure as merging with them open: the policy
-already answered the question.
+every finding the review raised, verify each against the code, fix the real ones, and reply
+saying what changed and what was rejected and why. Under `after-review` that closing loop
+is the whole gate: merge on it, with no further human sign-off. Under
+`after-ci-and-review` the CI row above must be satisfied too. Under `never` the human
+merges whatever the threads say. Stopping to ask permission once the active policy's
+conditions are met is the same failure as merging before they are — the file already
+answered the question.
 
 **A summary line is not the finding list.** A review bot can report an overall status of
 "passed" or "review completed" on the PR while leaving unresolved comments on individual
