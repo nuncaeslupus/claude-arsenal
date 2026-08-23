@@ -54,11 +54,14 @@ The log should rarely exceed 30 entries. If it does, drain.
 validator checks its schema, but nothing runs the prompts. The canary
 half is enforced; trigger rate is unmeasured.
 **Where:** `plugins/*/skills/*/evals/`, `Makefile`, `.github/workflows/`.
-**Suggested fix:** blocked, not deferred — `claude plugin eval` is the
-right runner and is in early access. A `claude -p` harness was measured
-and rejected: $0.098 per prompt, no clean room (`--bare` loses auth;
-without it, hooks and other plugins skew routing), and one fixture repo
-needed per skill. Revisit when early access opens.
+**Suggested fix:** blocked, not deferred. `claude plugin eval` is the
+right runner, gated per organization by a server-side flag — nothing
+local opens it (flag fetch unobstructed, build current, no gateway or
+Bedrock routing), so it waits on Anthropic enabling the org. A `claude
+-p` harness was measured and rejected: $0.098 per prompt, no clean room
+(`--bare` loses auth; without it, hooks and other plugins skew routing),
+one fixture repo per skill. When it opens, retest `continue` first — it
+did not fire on its own load prompt.
 
 ## 2026-05-08 — container directories swallow skills silently
 
