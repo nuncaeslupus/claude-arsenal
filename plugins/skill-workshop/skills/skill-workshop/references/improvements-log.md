@@ -48,6 +48,19 @@ The log should rarely exceed 30 entries. If it does, drain.
 
 <!-- Newest first. Add new entries at the top. -->
 
+## 2026-08-24 — four shipped flags sit outside the argument canon
+
+**What:** after the canon adopted the library's domain flags, four warnings
+remain: `init.py --silent` and `--repo-path`, `analyze_mutmut.py --max`, and
+`new_task.py`'s `new` verb. Each duplicates something already canonical —
+`--quiet`, `--root`, `--limit`, and the `create` verb — so these are findings
+the check is right to raise, not gaps in the list.
+**Where:** `plugins/core/skills/{init,mutmut-report,queue-add}/scripts/`.
+**Suggested fix:** deferred, not blocked. Each rename is a vendored-interface
+break touching six to ten files including consumer-facing docs and the shipped
+`AGENTS.md`, so it wants a deliberate pass with aliases and a major bump, not a
+drive-by rename.
+
 ## 2026-08-23 — loading-verification evals are never executed
 
 **What:** every skill ships `evals/loading_verification.json` and the

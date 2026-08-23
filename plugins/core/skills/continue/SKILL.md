@@ -3,6 +3,8 @@ name: continue
 description: When the user wants to resume work or run the worker loop — picks the next unblocked task, optionally scoped by tag(s) and/or a workspace, or matched by title text. Use /continue [TAG … | WORKSPACE | search-text]. Do NOT use before running init.
 user-invocable: true
 argument-hint: "[TAG … | WORKSPACE | search-text]"
+metadata:
+  type: workflow
 ---
 
 # continue
