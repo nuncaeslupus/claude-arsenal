@@ -22,6 +22,14 @@ The agile review loop, triggered after `gh pr create`, runs `query_pr_state.py` 
 
 **No timestamp filter on comments.** By default the script returns ALL watched-bot line-level comments and leaves the judgment of "addressed vs not" to Claude per-comment. The previous heuristic ("addressed if older than head commit") was wrong — a later commit may fix something unrelated, leaving the original comment still outstanding. With `--unresolved-only`, GH-side resolution + human-reply detection moves the filtering into the script (see "How the script tracks 'addressed'" below).
 
+**A bot's check conclusion is not its finding list.** A review bot reports a
+check run (`gh pr checks` shows it as `pass` / `Review completed`) separately
+from the comments it leaves, and the two disagree: a PR can show a green bot
+check while carrying unresolved line comments that name real defects. This loop
+is not exposed to that — `query_pr_state.py` reads the comments endpoint
+directly and never consults the rollup — but a session checking PR status by
+hand between ticks is. Read the comments, not the check.
+
 **CI-only mode**: when invoked with `--watch-bots ""` (no bots configured), the script skips bot tracking. Green CI plus the quiet window past the head commit is enough to reach `ready_to_merge`.
 
 **Silent approval requires a positive signal.** A bot that commented and then went silent is NOT silent approval. Silent approval requires either a `:+1:` / `:rocket:` reaction, an `APPROVED` review submission, OR — under `--unresolved-only` — every comment the bot wrote being addressed (replied to + filtered out). If none of those hold, the state stays `waiting` indefinitely. This is intentional: ambiguous silence should not auto-merge.
