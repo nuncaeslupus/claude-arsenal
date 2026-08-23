@@ -106,13 +106,13 @@ notes scroll away unattached to the section they were about:
 Run `create_reader.py` (in `claude-arsenal/scripts/`; it imports `markdown`, which
 `uv run --with markdown python3` supplies):
 
-```
-create_reader.py --input status/specification.md --output-dir status
+```bash
+create_reader.py
 ```
 
-With no flags it auto-discovers the source (workspace mode: `arsenal/project/*/spec.md`;
-single mode: `status/specification.md`). It writes `spec-reader.html` and
-`spec-annotated.md` to the output directory and prints both paths — the step is done when
+It auto-discovers the source (workspace mode: `arsenal/project/*/spec.md`; single mode:
+`status/specification.md`) and writes `spec-reader.html` and `spec-annotated.md` beside it
+— `docs/spec-reader/` in workspace mode. Both paths are printed; the step is done when
 those two paths exist and the user has been given the HTML, not merely told where it is.
 Add `--name "My Project"` to override the reader title.
 

@@ -86,14 +86,17 @@ section by section rather than as a path to open themselves:
 Run `create_reader.py` (in `claude-arsenal/scripts/`; it imports `markdown`, which
 `uv run --with markdown python3` supplies):
 
-```
+```bash
 create_reader.py --input status/plan.md --output-dir status
 ```
 
-Writes `plan-reader.html` and `plan-annotated.md` beside the plan and prints both paths —
+Auto-discovery only looks for spec files, so the plan is named explicitly — which means
+`--output-dir` has to travel with it. Point both flags at `arsenal/project/<WORKSPACE>/`
+when a workspace plan exists, or the reader lands back in `status/` beside a plan it does
+not render. Writes `plan-reader.html` and `plan-annotated.md` there and prints both paths;
 the step is done when those two paths exist and the user has been given the HTML. The
 reader keeps its notes under a namespace of its own, so plan annotations never overwrite
-the spec's. Point `--input` at the workspace plan when one exists.
+the spec's.
 
 ---
 

@@ -369,7 +369,9 @@ def build_html(parts: list[tuple[str, dict]], title: str, gen_date: str, seed_no
     page = page.replace("__TOC__", toc_html)
     page = page.replace("__BODY__", body_html)
     page = page.replace("__CSS__", CSS)
-    page = page.replace("__JS__", JS.replace("__LS_NS__", ls_ns).replace("__DOC_SLUG__", doc_slug))
+    page = page.replace("__DOC_LABEL__", esc(single_label))
+    page = page.replace("__JS__", JS.replace("__LS_NS__", ls_ns).replace("__DOC_SLUG__", doc_slug)
+                                    .replace("__DOC_LABEL__", single_label))
     page = page.replace(
         "__SEED_NOTES__",
         json.dumps(seed_notes, ensure_ascii=False).replace("<", "\\u003c"),
@@ -586,7 +588,7 @@ JS = r"""
       if(!byPart[part]){byPart[part]=[];order.push(part);}
       byPart[part].push({label:t.dataset.label,ref:keyFromDom(t.dataset.key,t),note:t.value});
     });
-    var lines=['# Specification notes','','_Exported '+today()+' · '+n+' note'+(n===1?'':'s')+'._','',
+    var lines=['# __DOC_LABEL__ notes','','_Exported '+today()+' · '+n+' note'+(n===1?'':'s')+'._','',
       '> Send this file back to continue the review. Notes are embedded as data at the bottom','> so importing this file restores them in the reader.',''];
     order.forEach(function(part){
       lines.push('## '+part,'');
@@ -687,13 +689,13 @@ HTML_TEMPLATE = r"""<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
-<title>__TITLE__ — Specification (annotatable)</title>
+<title>__TITLE__ — __DOC_LABEL__ (annotatable)</title>
 <style>__CSS__</style>
 </head>
 <body>
 <div class="topbar">
   <div class="wrap">
-    <div class="brand">__TITLE__ — Specification<small>annotatable reader · __GEN_DATE__</small></div>
+    <div class="brand">__TITLE__ — __DOC_LABEL__<small>annotatable reader · __GEN_DATE__</small></div>
     <span class="savestate ok" id="savestate">✓ Auto-saving</span>
     <button class="btn primary" id="btn-export">Save / Export</button>
   </div>
