@@ -179,6 +179,26 @@ CANONICAL_ARGS = {
     "--claude-md",
     # session-end skill flags
     "--project",
+    # init skill flags — what a bundle install is pointed at
+    "--spec",
+    "--plan",
+    "--bundle-dir",
+    # queue flags — the fields a task carries
+    "--workspace",
+    "--tasks-dir",
+    "--title",
+    "--size",
+    "--priority",
+    "--deps",
+    "--requires",
+    "--max-attempts",
+    # mutmut-report flags — where the mutation run lives
+    "--venv",
+    "--module",
+    # github skill: a PR body is not a --name
+    "--body",
+    # meta-skill self-flag
+    "--listing-budget",
 }
 FORBIDDEN_ARG_SYNONYMS = {
     "--out": "--output",
