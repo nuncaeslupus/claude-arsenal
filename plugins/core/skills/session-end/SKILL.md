@@ -120,13 +120,13 @@ Escalated tasks (exhausted retry cap — no PR opened):
 
 ## Auto-fire (opt-in)
 
-Stop-hook setup (so this skill fires at conversation close without an explicit `/session-end`) and the skip override (`tmp/.skip-next-session-end` sentinel file) are documented in [auto-fire-setup](references/auto-fire-setup.md). Both are user-installed via the update-config skill; this skill does not modify settings.json on its own.
+A `SessionStart` hook fires this skill about once a week without an explicit `/session-end`, detached so the starting session sees nothing. That trigger, the weekly stamp behind it, the `SessionEnd` alternative, and the skip override (`tmp/.skip-next-session-end`) are documented in [auto-fire-setup](references/auto-fire-setup.md). All are user-installed via the update-config skill; this skill does not modify settings.json on its own.
 
 ## References
 
 - [handoff-mode](references/handoff-mode.md) — CLAUDE.md marker syntax, `status/handoff.md` template, ticket-mode alternative (load when Step 1 runs).
 - [retrospective-rubric](references/retrospective-rubric.md) — pain-signal catalog, judgment rubric, IMPROVEMENTS.md block format (load when Step 2 surfaces proposals).
-- [auto-fire-setup](references/auto-fire-setup.md) — Stop-hook config snippet + skip-override sentinel (load when wiring auto-fire).
+- [auto-fire-setup](references/auto-fire-setup.md) — the detached `SessionStart` hook, why not `SessionEnd`, weekly stamp, skip-override sentinel (load when wiring auto-fire, or when an installed auto-fire is not firing).
 
 ## Workspace-aware paths
 
