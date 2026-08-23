@@ -48,6 +48,16 @@ The log should rarely exceed 30 entries. If it does, drain.
 
 <!-- Newest first. Add new entries at the top. -->
 
+## 2026-08-23 — loading-verification evals are never executed
+
+**What:** every skill ships `evals/loading_verification.json` and the
+validator checks its schema, but no Makefile target and no CI job ever
+runs the prompts inside it. Trigger-rate and misapplication claims
+therefore have no measurement behind them.
+**Where:** `plugins/*/skills/*/evals/`, `Makefile`, `.github/workflows/`.
+**Suggested fix:** deferred — needs a runner design (which model, how
+scored, how often) rather than a drive-by target.
+
 ## 2026-05-08 — container directories swallow skills silently
 
 **What:** a SKILL.md nested one container directory deep

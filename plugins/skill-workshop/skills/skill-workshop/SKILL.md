@@ -159,7 +159,7 @@ the chosen canonical onto its declared siblings.
 Each reference covers one topic. Load only what the current task needs.
 
 - [Frontmatter and naming](references/frontmatter-and-naming.md) — load when writing or fixing the YAML header (name regex, length limits, allowed keys, trigger phrases).
-- [Body and style](references/body-and-style.md) — load when the body is over 400 lines or readability needs work (line budget, code blocks, tone, what NOT to put in a SKILL).
+- [Body and style](references/body-and-style.md) — load when the body is over 400 lines or readability needs work (line budget, runbook shape, code blocks, tone, what NOT to put in a SKILL).
 - [References and chunking](references/references-and-chunking.md) — load when splitting an oversized SKILL into reference docs (when to split, ToC requirement, link-back rules).
 - [Scripts and CLI conventions](references/scripts-and-cli-conventions.md) — load before adding a script or reviewing one (argument-name canon, output discipline, naming, duplication header, print conventions).
 - [Workspace and composition](references/workspace-and-composition.md) — load when deciding where a skill lives (single-depth rule, scope tiers, plugin namespacing, cross-cwd discovery).
@@ -170,7 +170,7 @@ Each reference covers one topic. Load only what the current task needs.
 - [Research coverage](references/research-coverage.md) — load when the validator misses a real failure mode, when planning to widen the rule set, or when defending a deferred-rule decision.
 - [Bash gate mechanics](references/bash-gate-mechanics.md) — load when a Bash command is blocked for touching a skill folder and the reason is not obvious, or when changing what the gate catches.
 - [Skill rules](references/skill-rules.md) — load before committing any skill change. Canonical ruleset Claude walks against current file state to produce per-skill alignment findings; lists must/should rules grouped by topic plus the gate protocol.
-- [Content quality rules](references/content-quality-rules.md) — load alongside `skill-rules.md` at every gate. Second, interpretive rubric covering prose shape, example currency, reference cost, evergreen-doc-style, and trigger-and-boundary quality. Walked by the same `audit_alignment.py` runner with `--input references/content-quality-rules.md`.
+- [Content quality rules](references/content-quality-rules.md) — load alongside `skill-rules.md` at every gate. Second, interpretive rubric covering prose shape, example currency, reference cost, evergreen-doc-style, trigger-and-boundary quality, and procedural shape. Walked by the same `audit_alignment.py` runner with `--input references/content-quality-rules.md`.
 
 ## Hard constraints (top-of-mind)
 

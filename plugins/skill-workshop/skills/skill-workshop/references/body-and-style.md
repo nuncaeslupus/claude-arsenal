@@ -6,6 +6,7 @@
 - [What belongs in the body](#what-belongs-in-the-body)
 - [Recommended sections](#recommended-sections)
 - [What does NOT belong in the body](#what-does-not-belong-in-the-body)
+- [Runbook shape](#runbook-shape)
 - [Code blocks](#code-blocks)
 - [Tone and voice](#tone-and-voice)
 - [Negative triggers in the description](#negative-triggers-in-the-description)
@@ -84,6 +85,32 @@ Repetition without one of the three roles above wastes the budget.
 - TODOs / stubs / "will be added later" — finish or remove.
 - Markdown links to peer skills' SKILL.md or scripts — never. Always
   reference peer skills by name in prose.
+
+## Runbook shape
+
+A skill earns its keep as a procedural anchor, not as a knowledge
+store. Across ~8,100 agent trial records, procedural anchoring —
+stable action sequences, setup steps, verification routines — carried
+the large majority of the cases where a skill changed the outcome,
+while explicit knowledge injection carried a small minority (Jiang et
+al., *Demystifying Agent Skills*, https://arxiv.org/abs/2608.14036).
+The same study measured the payoff concentrating in execution
+robustness: environment-setup and output-format failures fell sharply,
+while high-level reasoning errors held steady.
+
+Two consequences for the body.
+
+**Every step carries its own check.** Name what confirms the step
+worked — the command, its exit code, the file that now exists. A step
+written as "run the tests" leaves the agent no way to distinguish a
+pass from a suite that never ran; "run `make test`; it exits 0" does.
+Steps without checks are where a run diverges silently and keeps going.
+
+**Background moves to a reference.** Imperative voice is not the same
+as procedural content: a section can be verb-first from top to bottom
+and still be a tutorial about a domain. Keep the ordered actions in the
+body and push the explanation behind a reference, where it costs
+nothing until something opens it.
 
 ## Code blocks
 

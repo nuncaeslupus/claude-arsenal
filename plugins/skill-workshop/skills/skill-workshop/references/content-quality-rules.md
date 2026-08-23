@@ -11,6 +11,7 @@
 - [C. Reference cost](#c-reference-cost)
 - [D. Evergreen-doc-style](#d-evergreen-doc-style)
 - [E. Trigger and boundary quality](#e-trigger-and-boundary-quality)
+- [F. Procedural shape](#f-procedural-shape)
 - [Out of scope for this checklist](#out-of-scope-for-this-checklist)
 
 ## Purpose
@@ -183,6 +184,21 @@ at activation time.
 | Q-TRIG-3 | should | The `description`'s *what* claim and *when* claim are independent. A tautology ("Use when working with X to work with X") fails. The two clauses must add information when read together. |
 | Q-TRIG-4 | should | The body "When to load" section either (a) self-checks with a defer-if clause, (b) adds nuance the 1024-char description could not hold, or (c) gives meta-guidance for after-load behaviour. A section that only restates the description wastes the budget. |
 | Q-TRIG-5 | should | Cross-skill mentions in body prose name the sibling skill ("use the `specify` skill") rather than describe its function vaguely ("the workflow that handles specification tasks"). A reviewer should be able to look up the named skill. |
+
+## F. Procedural shape
+
+Deep dive: `references/body-and-style.md`.
+
+These rules force the reviewer to read the body as the agent executes
+it, step by step, and ask two questions at each one: can the agent tell
+whether this step worked, and is this a step at all rather than a
+paragraph about the domain. Voice checks miss both — a body can be
+verb-first throughout and still be a tutorial with no checkable state.
+
+| ID | Tier | Check |
+|---|---|---|
+| Q-PROC-1 | should | Each step in a procedural `SKILL.md` names how to confirm it succeeded — a command, an exit code, a file that now exists, an observable state. "Run the tests" fails; "run `make test`; it exits 0" passes. A step whose outcome the agent cannot check is where execution diverges without anything noticing. |
+| Q-PROC-2 | should | The body reads as a sequence of actions, not an explanation of a domain. Material that teaches *why* moves to `references/`; the body keeps what to do, in what order. A section a reader could mistake for a tutorial fails. |
 
 ## Out of scope for this checklist
 
