@@ -51,24 +51,14 @@ The log should rarely exceed 30 entries. If it does, drain.
 ## 2026-08-23 — loading-verification evals are never executed
 
 **What:** every skill ships `evals/loading_verification.json` and the
-validator checks its schema, but nothing ever runs the prompts. The
-schema half is sound — canary presence, canary-to-SKILL.md match and
-library-wide canary uniqueness are all enforced, and a scan found no
-skill whose `negative_control` leaks into its own body, no empty or
-duplicated prompt array, and no `skill` field disagreeing with its
-folder. The unmeasured half is trigger rate.
+validator checks its schema, but nothing runs the prompts. The canary
+half is enforced; trigger rate is unmeasured.
 **Where:** `plugins/*/skills/*/evals/`, `Makefile`, `.github/workflows/`.
-**Suggested fix:** blocked, not deferred. `claude plugin eval` is the
-right runner and needs no code here, but it answers `plugin eval is
-currently in early access`. A hand-rolled harness on `claude -p` was
-measured and rejected: `--bare` skips keychain reads so the run fails
-`Not logged in` without an API key, and its tool list carries no
-`Skill` entry to detect against; without `--bare`, SessionStart hooks
-and every other installed plugin compete for the same prompt, so the
-number describes the operator's machine rather than the description
-under test. Each skill would also need a fixture repo — a gate prompt
-against an empty directory measures missing context, not routing.
-Revisit when early access opens.
+**Suggested fix:** blocked, not deferred — `claude plugin eval` is the
+right runner and is in early access. A `claude -p` harness was measured
+and rejected: $0.098 per prompt, no clean room (`--bare` loses auth;
+without it, hooks and other plugins skew routing), and one fixture repo
+needed per skill. Revisit when early access opens.
 
 ## 2026-05-08 — container directories swallow skills silently
 
