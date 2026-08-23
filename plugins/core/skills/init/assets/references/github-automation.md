@@ -68,6 +68,20 @@ correct behaviour.
 or a reply explaining the disagreement. An unresolved thread is an unmet policy, not a
 judgement call.
 
+**Who fixes, and who merges.** The findings are the session's work, not a handoff. Read
+every finding the review raised, verify each against the code, fix the real ones, and reply
+saying what changed and what was rejected and why. Under `after-review` that closing loop
+is the whole gate: merge on it, with no further human sign-off. Under
+`after-ci-and-review` the CI row above must be satisfied too. Under `never` the human
+merges whatever the threads say. Stopping to ask permission once the active policy's
+conditions are met is the same failure as merging before they are — the file already
+answered the question.
+
+**A summary line is not the finding list.** A review bot can report an overall status of
+"passed" or "review completed" on the PR while leaving unresolved comments on individual
+lines. Read the review comments themselves, not the rollup — merging on a green summary
+with open threads breaks the policy while appearing to satisfy it.
+
 **When CI cannot report at all.** Absent is not green. A repo out of runner minutes, with
 no workflows, or whose jobs die in seconds with no runner assigned has produced no
 evidence — so `after-ci` and `after-ci-and-review` are unsatisfied, and stay that way for
