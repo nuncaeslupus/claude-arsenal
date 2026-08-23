@@ -77,6 +77,27 @@ python3 "${CLAUDE_SKILL_DIR}/scripts/validate_plan.py" --input status/plan.md
 
 It checks the plan has the required sections (Technical solution, Implementation tasks, Evidence log, Sign-off) and that the task table carries the required columns including the measurable Gate — shape only. The `gate-check` skill's `run_gate.py` then audits the gate values and evidence themselves (add `--strict` there to require a gate on every task).
 
+### Step 6: Publish the annotatable plan
+
+Generate the reader once the validator passes, and hand both files to the user in the same
+reply. The plan is what the user signs off on, so it goes back in a form they can mark up
+section by section rather than as a path to open themselves:
+
+Run `create_reader.py` (in `claude-arsenal/scripts/`; it imports `markdown`, which
+`uv run --with markdown python3` supplies):
+
+```bash
+create_reader.py --input status/plan.md --output-dir status
+```
+
+Auto-discovery only looks for spec files, so the plan is named explicitly — which means
+`--output-dir` has to travel with it. Point both flags at `arsenal/project/<WORKSPACE>/`
+when a workspace plan exists, or the reader lands back in `status/` beside a plan it does
+not render. Writes `plan-reader.html` and `plan-annotated.md` there and prints both paths;
+the step is done when those two paths exist and the user has been given the HTML. The
+reader keeps its notes under a namespace of its own, so plan annotations never overwrite
+the spec's.
+
 ---
 
 ## Abbreviation

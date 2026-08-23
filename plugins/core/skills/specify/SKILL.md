@@ -97,24 +97,29 @@ python3 "${CLAUDE_SKILL_DIR}/scripts/validate_spec.py" --input status/specificat
 
 It checks that the required sections (1–4) and the measurable Success criteria block are present and filled — shape only, not content quality. Sections 5–6 are reported as pending until `design` appends them. Exit 0 clean, 1 on a missing or unfilled required section.
 
-## Annotatable reader
+## Annotatable reader — required before reporting the spec done
 
-When the spec is ready for stakeholder review, generate a phone-friendly, self-contained HTML reader and an annotated Markdown copy:
+Generate the reader once the validator passes, and hand both files to the user in the
+same reply. A spec the reviewer cannot annotate gets reviewed in chat instead, where the
+notes scroll away unattached to the section they were about:
 
-```bash
-uv run --with markdown python3 "${CLAUDE_SKILL_DIR}/scripts/create_reader.py"
-```
-
-Auto-discovers the spec source (workspace mode: `arsenal/project/*/spec.md`; single mode: `status/specification.md`). Outputs `spec-reader.html` and `spec-annotated.md` to the output directory (next to the spec in single mode, `docs/spec-reader/` in workspace mode).
-
-The HTML reader auto-saves notes in the browser and exports them as a Markdown file the reviewer sends back. The Markdown copy has a `> ✎ Notes` slot after every section for annotation in any text editor. To re-seed a rebuilt reader with notes from a previous export, place the returned file at `{output-dir}/notes.json`.
-
-Override defaults when needed:
+Run `create_reader.py` (in `claude-arsenal/scripts/`; it imports `markdown`, which
+`uv run --with markdown python3` supplies):
 
 ```bash
-uv run --with markdown python3 "${CLAUDE_SKILL_DIR}/scripts/create_reader.py" \
-    --input path/to/spec.md --output-dir docs/review --name "My Project"
+create_reader.py
 ```
+
+It auto-discovers the source (workspace mode: `arsenal/project/*/spec.md`; single mode:
+`status/specification.md`) and writes `spec-reader.html` and `spec-annotated.md` beside it
+— `docs/spec-reader/` in workspace mode. Both paths are printed; the step is done when
+those two paths exist and the user has been given the HTML, not merely told where it is.
+Add `--name "My Project"` to override the reader title.
+
+The HTML reader auto-saves notes in the browser and exports them as a Markdown file the
+reviewer sends back. The Markdown copy has a `> ✎ Notes` slot after every section for
+annotation in any text editor. To re-seed a rebuilt reader with notes from a previous
+export, place the returned file at `{output-dir}/notes.json`.
 
 Commit the generated files so reviewers can open the HTML directly from the repo.
 

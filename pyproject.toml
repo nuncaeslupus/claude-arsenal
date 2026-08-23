@@ -44,7 +44,7 @@ select = ["E", "W", "F", "I", "UP", "RUF", "B", "SIM", "PTH"]
 # Generates an HTML/CSS/JS reader from embedded template strings — long lines
 # are inherent to that markup, and its info/warning glyphs are intentional
 # stderr output, not ambiguous identifiers.
-"plugins/core/skills/specify/scripts/create_reader.py" = ["E501", "RUF001"]
+"plugins/core/skills/init/assets/scripts/create_reader.py" = ["E501", "RUF001"]
 
 [tool.mypy]
 python_version = "3.12"
