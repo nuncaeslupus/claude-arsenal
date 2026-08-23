@@ -51,12 +51,14 @@ The log should rarely exceed 30 entries. If it does, drain.
 ## 2026-08-23 — loading-verification evals are never executed
 
 **What:** every skill ships `evals/loading_verification.json` and the
-validator checks its schema, but no Makefile target and no CI job ever
-runs the prompts inside it. Trigger-rate and misapplication claims
-therefore have no measurement behind them.
+validator checks its schema, but nothing runs the prompts. The canary
+half is enforced; trigger rate is unmeasured.
 **Where:** `plugins/*/skills/*/evals/`, `Makefile`, `.github/workflows/`.
-**Suggested fix:** deferred — needs a runner design (which model, how
-scored, how often) rather than a drive-by target.
+**Suggested fix:** blocked, not deferred — `claude plugin eval` is the
+right runner and is in early access. A `claude -p` harness was measured
+and rejected: $0.098 per prompt, no clean room (`--bare` loses auth;
+without it, hooks and other plugins skew routing), and one fixture repo
+needed per skill. Revisit when early access opens.
 
 ## 2026-05-08 — container directories swallow skills silently
 
