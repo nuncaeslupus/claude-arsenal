@@ -14,7 +14,10 @@ default: directory of the single input, or docs/spec-reader/ in workspace mode):
                         (notes auto-save in browser; Export button saves a Markdown file)
   <doc>-annotated.md    same document as Markdown with a note slot per section
 
-Seed notes from a previous Export by placing the downloaded file as
+The Export button names its download for the reader title and document kind
+(`<project>-<doc>-notes-<date>.md`) so it stays findable in a Downloads folder.
+A returned export belongs in {output-dir} beside the reader — it is part of the
+project, not a scratch file. Seed a rebuilt reader from one by placing it as
 {output-dir}/notes.json. Notes are keyed by stable section IDs and are
 re-injected into both output artifacts.
 
@@ -370,7 +373,11 @@ def build_html(parts: list[tuple[str, dict]], title: str, gen_date: str, seed_no
     page = page.replace("__BODY__", body_html)
     page = page.replace("__CSS__", CSS)
     page = page.replace("__DOC_LABEL__", esc(single_label))
-    page = page.replace("__JS__", JS.replace("__LS_NS__", ls_ns).replace("__DOC_SLUG__", doc_slug)
+    # The export lands in the reviewer's Downloads beside everything else they saved
+    # that week, so the filename carries the project as well as the document kind:
+    # `my-project-spec-notes-2026-08-24.md`, not a bare `spec-notes-…`.
+    file_slug = f"{slug(title)}-{doc_slug}"
+    page = page.replace("__JS__", JS.replace("__LS_NS__", ls_ns).replace("__DOC_SLUG__", file_slug)
                                     .replace("__DOC_LABEL__", single_label))
     page = page.replace(
         "__SEED_NOTES__",
