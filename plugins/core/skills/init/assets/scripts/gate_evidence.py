@@ -36,6 +36,10 @@ Exit: 0 pass OR no evidence gate declared; 1 assertion failed; 2 evidence gate
 declared but missing/unreadable file, key not found, or non-numeric value;
 3 declared unmeasured via ``status-key`` — `gate_run.sh` already treats 3 as
 "could not run" rather than as a verdict.
+
+``--list-only <tasks-dir>`` prints instead the ``evidence:`` path every gate
+block in a task tree declares, one per line — the set of build products in this
+repo, which only these declarations know.
 """
 
 from __future__ import annotations
@@ -85,18 +89,8 @@ def _dig(obj: object, dotted: str) -> object:
     return cur
 
 
-def main() -> None:
-    if len(sys.argv) != 2:
-        print("usage: gate_evidence.py <payload.md>", file=sys.stderr)
-        sys.exit(2)
-    payload = Path(sys.argv[1])
-    if not payload.is_file():
-        _fail(f"payload not found: {payload}", 2)
-
-    block = _extract_block(payload.read_text(encoding="utf-8"))
-    if block is None:
-        sys.exit(0)  # no evidence gate declared — nothing to enforce here
-
+def _parse_block(block: str) -> tuple[dict[str, str], str]:
+    """Split a gate block into its `key: value` fields and its assertion line."""
     fields: dict[str, str] = {}
     gate_line = ""
     for raw in block.splitlines():
@@ -109,6 +103,57 @@ def main() -> None:
             fields[k.strip().lower()] = v.strip().strip("'\"")
         elif GATE_RE.search(line):
             gate_line = line
+    return fields, gate_line
+
+
+def declared_evidence(tasks_dir: Path) -> list[str]:
+    """Every path a gate block in this task tree names as `evidence:`.
+
+    These are build products — a committed measurement of the tree, regenerated
+    by the host's own gate. Which paths they are is per-repo and knowable only
+    from the declarations, which is why a consumer-side script cannot generalise
+    this and arsenal can. `rebase_stack.sh` reads it to tell a conflict on a
+    regenerable file, where hand-merging two sides is meaningless, from a real
+    one. History is included: a merged task's evidence file is still a build
+    product on the branch being replayed.
+    """
+    paths: set[str] = set()
+    if not tasks_dir.is_dir():
+        return []
+    for path in sorted(tasks_dir.rglob("*.md")):
+        try:
+            block = _extract_block(path.read_text(encoding="utf-8"))
+        except OSError:
+            continue
+        if block is None:
+            continue
+        evidence = _parse_block(block)[0].get("evidence")
+        if evidence:
+            paths.add(evidence)
+    return sorted(paths)
+
+
+def main() -> None:
+    if len(sys.argv) == 3 and sys.argv[1] == "--list-only":
+        # Print the declared evidence paths of a task tree, one per line.
+        for path in declared_evidence(Path(sys.argv[2])):
+            print(path)
+        sys.exit(0)
+    if len(sys.argv) != 2:
+        print(
+            "usage: gate_evidence.py <payload.md> | --list-only <tasks-dir>",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+    payload = Path(sys.argv[1])
+    if not payload.is_file():
+        _fail(f"payload not found: {payload}", 2)
+
+    block = _extract_block(payload.read_text(encoding="utf-8"))
+    if block is None:
+        sys.exit(0)  # no evidence gate declared — nothing to enforce here
+
+    fields, gate_line = _parse_block(block)
 
     m = GATE_RE.search(gate_line)
     if not m:
