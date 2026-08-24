@@ -252,7 +252,12 @@ def _parse_version(text: str) -> tuple[int, ...] | None:
     parts = text.strip().split(".")
     if len(parts) != 3 or not all(part.isdigit() for part in parts):
         return None
-    return tuple(int(part) for part in parts)
+    try:
+        return tuple(int(part) for part in parts)
+    except ValueError:
+        # CPython caps int() on very long digit strings. A garbage marker is
+        # "cannot compare", never a crash in the one step every session runs.
+        return None
 
 
 def _check_bundle_version(bundle: Path, arsenal: Path) -> tuple[str, str] | None:
@@ -720,7 +725,8 @@ def init_base(
     bundle_override: Path | None = None,
     silent: bool = False,
     allow_downgrade: bool = False,
-) -> None:
+) -> bool:
+    """True when the install ran; False when it refused to downgrade (nothing written)."""
     bundle = _bundle_dir(bundle_override)
     arsenal = repo_path / "claude-arsenal"
 
@@ -741,7 +747,7 @@ def init_base(
             f"pass --allow-downgrade."
         )
         if not allow_downgrade:
-            return
+            return False
         print(f"init: --allow-downgrade — DOWNGRADING {installed_ver} → {bundle_ver}")
 
     # Scaffold directories. `claude-arsenal/` is upstream's and may be
@@ -819,6 +825,7 @@ def init_base(
             print(f"claude-arsenal {ver_path.read_text(encoding='utf-8').strip()}")
     else:
         print(f"\ninit: claude-arsenal/ ready at {repo_path}")
+    return True
 
 
 def init_workspace(
@@ -828,6 +835,7 @@ def init_workspace(
     spec: str,
     plan: str,
     bundle_override: Path | None = None,
+    allow_downgrade: bool = False,
 ) -> None:
     # The workspace name becomes a directory under arsenal/project/ — host-owned,
     # so a bundle upgrade never touches a workspace's spec, plan, or context.
@@ -842,9 +850,12 @@ def init_workspace(
 
     arsenal = repo_path / "claude-arsenal"
 
-    # Ensure base exists first
-    if not (arsenal / "bin").is_dir():
-        init_base(repo_path, bundle_override)
+    # Ensure base exists first. A refusal there wrote nothing, so registering a
+    # workspace on top would report one ready over an uninitialized bundle.
+    if not (arsenal / "bin").is_dir() and not init_base(
+        repo_path, bundle_override, allow_downgrade=allow_downgrade
+    ):
+        sys.exit("init: workspace not registered — the bundle refused to install (see above)")
 
     ws_dir = repo_path / "arsenal" / "project" / workspace
     ws_dir.mkdir(parents=True, exist_ok=True)
@@ -894,7 +905,8 @@ def main() -> None:
         root = args.root or f"./{name}/"
         spec = args.spec or f"arsenal/project/{name}/spec.md"
         plan = args.plan or f"arsenal/project/{name}/plan.md"
-        init_workspace(repo_path, name, root, spec, plan, bundle_override)
+        init_workspace(repo_path, name, root, spec, plan, bundle_override,
+                       allow_downgrade=args.allow_downgrade)
     else:
         init_base(repo_path, bundle_override, silent=args.silent,
                   allow_downgrade=args.allow_downgrade)

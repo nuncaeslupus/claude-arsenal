@@ -125,4 +125,17 @@ grep -q "DOWNGRADING" <<<"${out}" || fail "--allow-downgrade did not announce th
     || fail "--allow-downgrade left the newer version in place"
 echo "PASS: a newer installed bundle is reported, not reverted"
 
+# --- 6b: and the refusal stops workspace registration too ---
+#     init_workspace() installs the base when claude-arsenal/bin/ is absent and
+#     then builds the workspace regardless, so a refusal would have reported a
+#     workspace ready over a bundle that was never written.
+WS="${tmpdir}/ws-repo"
+mkdir -p "${WS}/claude-arsenal"
+echo "99.0.0" > "${WS}/claude-arsenal/.bundle-version"
+out=$(python3 "${INIT_PY}" --repo-path "${WS}" --bundle-dir "${BUNDLE}" --workspace demo 2>&1); rc=$?
+[[ ${rc} -ne 0 ]] || fail "registering a workspace over a refused install should fail: ${out}"
+[[ -d "${WS}/arsenal/project/demo" ]] \
+    && fail "the workspace was registered even though the bundle refused to install"
+echo "PASS: a refused install does not register a workspace"
+
 echo "PASS: init_upgrade_test — all gates passed"
