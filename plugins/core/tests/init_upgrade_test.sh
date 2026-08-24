@@ -99,4 +99,30 @@ out=$(python3 "${INIT_PY}" --repo-path "${REPO}" --bundle-dir "${BUNDLE}" 2>&1)
 grep -q "up to date" <<<"${out}" || fail "a second run should report the block up to date: ${out}"
 grep -q "refreshed (was out of date)" <<<"${out}" && fail "the block was rewritten on an idempotent re-run"
 
+# --- 6: a bundle NEWER than the skill is never overwritten (#220) ---
+#     Step 0b runs `init.py --silent` before a session knows what kind of session
+#     it is. On a host whose committed bundle is ahead of the skill's vendored
+#     copies, the checksum refresh cannot tell forward from backward: it replaced
+#     upstream fixes with the versions that predate them, silently, and the next
+#     PR that session opened carried the revert.
+newer="99.0.0"
+echo "${newer}" > "${REPO}/claude-arsenal/.bundle-version"
+canary="${REPO}/claude-arsenal/bin/gate_run.sh"
+[[ -f "${canary}" ]] || fail "gate_run.sh missing — the fixture cannot detect a downgrade"
+printf '#!/usr/bin/env bash
+# newer than the skill ships
+' > "${canary}"
+out=$(python3 "${INIT_PY}" --repo-path "${REPO}" --bundle-dir "${BUNDLE}" --silent 2>&1)
+[[ "$(cat "${REPO}/claude-arsenal/.bundle-version")" == "${newer}" ]] \
+    || fail "the newer installed version was overwritten: ${out}"
+grep -q "newer than the skill ships" "${canary}" \
+    || fail "a newer installed bundle file was reverted to the skill's older copy"
+grep -q "NEWER" <<<"${out}" || fail "--silent hid the downgrade refusal: ${out}"
+# ...and the escape hatch still works, saying what it is doing.
+out=$(python3 "${INIT_PY}" --repo-path "${REPO}" --bundle-dir "${BUNDLE}" --allow-downgrade 2>&1)
+grep -q "DOWNGRADING" <<<"${out}" || fail "--allow-downgrade did not announce the downgrade: ${out}"
+[[ "$(cat "${REPO}/claude-arsenal/.bundle-version")" != "${newer}" ]] \
+    || fail "--allow-downgrade left the newer version in place"
+echo "PASS: a newer installed bundle is reported, not reverted"
+
 echo "PASS: init_upgrade_test — all gates passed"

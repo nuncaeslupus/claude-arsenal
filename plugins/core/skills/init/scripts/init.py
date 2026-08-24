@@ -243,18 +243,44 @@ def _prune_bundle(bundle: Path, target: Path) -> None:
             print(f"  removed (no longer shipped): {dirname}/{installed.name}")
 
 
-def _check_bundle_version(bundle: Path, arsenal: Path) -> None:
-    """Print an upgrade banner when the installed bundle version is behind the plugin source."""
+def _parse_version(text: str) -> tuple[int, ...] | None:
+    """(major, minor, patch), or None when this is not a plain numeric version.
+
+    None means "cannot compare", and the caller then behaves as it always did:
+    a hand-edited or pre-release marker must not be able to wedge an install shut.
+    """
+    parts = text.strip().split(".")
+    if len(parts) != 3 or not all(part.isdigit() for part in parts):
+        return None
+    return tuple(int(part) for part in parts)
+
+
+def _check_bundle_version(bundle: Path, arsenal: Path) -> tuple[str, str] | None:
+    """Print an upgrade banner; REPORT a downgrade instead of performing one.
+
+    Returns (installed, bundle) when the host's committed bundle is newer than
+    this skill's vendored copies, and None otherwise. That direction used to be
+    invisible: the refresh is by checksum, so an older vendored copy differs from
+    a newer installed one exactly as a newer copy does, and step 0b — which a
+    session runs before it knows what kind of session it is — quietly replaced
+    upstream fixes with the versions that predate them. A session that trusts it
+    then ships the regression inside whatever PR it opens next (#220).
+    """
     bundle_ver_path = bundle / ".bundle-version"
     installed_ver_path = arsenal / ".bundle-version"
     if not bundle_ver_path.exists() or not installed_ver_path.exists():
-        return
+        return None
     bundle_ver = bundle_ver_path.read_text(encoding="utf-8").strip()
     installed_ver = installed_ver_path.read_text(encoding="utf-8").strip()
-    if installed_ver != bundle_ver:
-        print(
-            f"Upgrading claude-arsenal bundle: {installed_ver} → {bundle_ver}"
-        )
+    if installed_ver == bundle_ver:
+        return None
+    installed_parsed, bundle_parsed = _parse_version(installed_ver), _parse_version(bundle_ver)
+    if installed_parsed and bundle_parsed and installed_parsed > bundle_parsed:
+        return installed_ver, bundle_ver
+    print(
+        f"Upgrading claude-arsenal bundle: {installed_ver} → {bundle_ver}"
+    )
+    return None
 
 
 def _register_statusline(repo_path: Path) -> None:
@@ -693,6 +719,7 @@ def init_base(
     repo_path: Path,
     bundle_override: Path | None = None,
     silent: bool = False,
+    allow_downgrade: bool = False,
 ) -> None:
     bundle = _bundle_dir(bundle_override)
     arsenal = repo_path / "claude-arsenal"
@@ -700,8 +727,22 @@ def init_base(
     if not silent:
         print("Initializing claude-arsenal/...")
 
-    # Version check — prints upgrade banner when behind the plugin source
-    _check_bundle_version(bundle, arsenal)
+    # Version check — upgrade banner when behind, a hard stop when AHEAD.
+    newer_installed = _check_bundle_version(bundle, arsenal)
+    if newer_installed is not None:
+        installed_ver, bundle_ver = newer_installed
+        # Printed whatever --silent says: this is the one line that tells a
+        # refresh from a revert, and the caller is usually the session-start
+        # protocol, which runs silent.
+        print(
+            f"init: the installed bundle ({installed_ver}) is NEWER than this skill's "
+            f"vendored copies ({bundle_ver}) — nothing written. Update the plugin so its "
+            f"copies catch up. To overwrite {installed_ver} with {bundle_ver} anyway, "
+            f"pass --allow-downgrade."
+        )
+        if not allow_downgrade:
+            return
+        print(f"init: --allow-downgrade — DOWNGRADING {installed_ver} → {bundle_ver}")
 
     # Scaffold directories. `claude-arsenal/` is upstream's and may be
     # overwritten freely; `arsenal/` is the host's and is created once, never
@@ -839,6 +880,10 @@ def main() -> None:
         "--silent", action="store_true",
         help="Suppress 'up to date' lines; only print refreshed files and version banner.",
     )
+    p.add_argument(
+        "--allow-downgrade", action="store_true",
+        help="Overwrite a NEWER installed bundle with this skill's older copies.",
+    )
     args = p.parse_args()
 
     repo_path = Path(args.repo_path).resolve()
@@ -851,7 +896,8 @@ def main() -> None:
         plan = args.plan or f"arsenal/project/{name}/plan.md"
         init_workspace(repo_path, name, root, spec, plan, bundle_override)
     else:
-        init_base(repo_path, bundle_override, silent=args.silent)
+        init_base(repo_path, bundle_override, silent=args.silent,
+                  allow_downgrade=args.allow_downgrade)
 
 
 if __name__ == "__main__":
