@@ -136,7 +136,14 @@ printf 'merge-policy = "after-ci"\n' > arsenal/config.toml
 # far as cutting a branch, which needs a default ref to branch off.
 git update-ref refs/remotes/origin/main HEAD
 write_task t-gate-archive "true"
+# Committed, then edited without staging — the state a worker's tree is actually
+# in. It is also what separates a real index restore from `git add -A`: the
+# latter would turn these unstaged edits into staged ones on the way out.
+git add arsenal/tasks/t-gate-archive.md && git commit -q -m "file the task"
+printf '\n<!-- an unstaged edit the worker has not committed -->\n' >> arsenal/tasks/t-gate-archive.md
+git update-ref refs/remotes/origin/main HEAD
 printf 'host-gate = "test ! -e arsenal/tasks/_history"\n' > arsenal/config.toml
+before_status="$(git status --porcelain)"
 out=$(ARSENAL_TASK_ISSUE=42 ARSENAL_ALLOW_SHARED_ADD=1 ARSENAL_COAUTHOR="" bash "${HELPER}" t-gate-archive "Archived tree" 2>&1); rc=$?
 [[ ${rc} -ne 0 ]] || fail "a host gate that fails over the archived tree must stop the PR"
 grep -q "re-running host gate" <<<"${out}" \
@@ -145,8 +152,14 @@ grep -q "re-running host gate" <<<"${out}" \
     || fail "the refused run left the task file archived: it must be restored"
 [[ -e "arsenal/tasks/_history/t-gate-archive.md" ]] \
     && fail "the archived copy survived a refusal"
-git status --porcelain | grep -q "^D.*t-gate-archive" \
-    && fail "the index still stages the archive's deletion after the undo"
+# The whole point of the undo: the tree AND the index come out exactly as they
+# went in. `git add -A` as a rollback would turn this untracked task file into a
+# staged addition the worker never made.
+after_status="$(git status --porcelain)"
+[[ "${after_status}" == "${before_status}" ]] \
+    || fail "the refused run changed the index/worktree state:
+before: ${before_status}
+after:  ${after_status}"
 printf 'merge-policy = "after-ci"\n' > arsenal/config.toml
 git checkout -q main 2>/dev/null || true
 echo "PASS: the host gate re-runs over the archived tree, and a refusal restores it"
