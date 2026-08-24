@@ -70,7 +70,8 @@ section or sibling pattern needed to start — spare them the grep.
 
 - **Deps must already exist.** `--deps` is rejected if no task file declares that id. The
   selector treats an unknown dep as unsatisfied, so a typo would otherwise block the task
-  forever and silently.
+  forever and silently. Finished tasks count — `_history/` is read too, so a dep on merged
+  work is declarable rather than a relationship only prose records.
 - **Ids are random, not derived from the title.** Two agents adding tasks at the same time
   cannot collide, and no coordination is needed to mint one.
 - **`requires` values are exact strings.** `surface:cli` or `surface:web`; an unrecognised

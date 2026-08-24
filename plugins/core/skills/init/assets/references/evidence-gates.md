@@ -69,6 +69,13 @@ cannot satisfy a `[LAPTOP]`-only gate (model training, CPCV Sharpe, soak,
 paper-trade), so tag such tasks `laptop` (`new_task.py --tag laptop`) and the
 laptop session records `done`; a cloud session is refused.
 
+Evidence files are build products, and that shows up in git: every branch
+rewrites them, so every rebase onto a moved base conflicts on them. Do not
+hand-merge one — the right content is neither side, it is what the code measures
+on the resulting tree. `bin/rebase_stack.sh` handles this: an evidence-only
+conflict is regenerated with the repo's `host-gate` and the rebase continues; a
+conflict anywhere else stops it.
+
 ---
 
 ## Unmeasured — the third outcome
