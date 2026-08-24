@@ -64,6 +64,7 @@ out=$(python3 "${BUDGET_PY}" --root "${tmpdir}/tree" --fail-over 5000 2>&1)
 [[ $? -eq 2 ]] || fail "a missing AGENTS.md must exit 2, not score zero and pass: ${out}"
 grep -q "AGENTS.md" <<<"${out}" || fail "the refusal must name the file it could not read: ${out}"
 grep -q "Within budget" <<<"${out}" && fail "a bundle missing AGENTS.md must not report a budget: ${out}"
+grep -q "^RESIDENT" <<<"${out}" && fail "a refused measurement must print no tier report either: ${out}"
 
 # An input that is not valid UTF-8 is the same answer, not a traceback.
 # UnicodeDecodeError is a ValueError, so catching OSError alone would miss it.
@@ -74,5 +75,7 @@ printf 'name: demo\n\xff\xfe' > "${tmpdir}/tree/plugins/core/skills/demo/SKILL.m
 out=$(python3 "${BUDGET_PY}" --root "${tmpdir}/tree" --fail-over 5000 2>&1)
 [[ $? -eq 2 ]] || fail "an undecodable input must exit 2: ${out}"
 grep -q "Traceback" <<<"${out}" && fail "an undecodable input must be reported, not raised: ${out}"
+grep -q "cannot read" <<<"${out}" || fail "an undecodable input must say it could not be read: ${out}"
+grep -q "SKILL.md" <<<"${out}" || fail "the read error must name the file: ${out}"
 
 echo "PASS: context_budget_test — resident tier reported and capped"
