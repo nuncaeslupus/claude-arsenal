@@ -9,6 +9,7 @@ numeric threshold has no number behind it yet.
 - [Gate blocks run verbatim](#gate-blocks-run-verbatim)
 - [Evidence gates (numeric acceptance)](#evidence-gates-numeric-acceptance)
 - [Unmeasured — the third outcome](#unmeasured--the-third-outcome)
+- [The placeholder, and the first PR that replaces it](#the-placeholder-and-the-first-pr-that-replaces-it)
 
 ---
 
@@ -104,3 +105,30 @@ not run" rather than as a verdict. It must be **positively asserted** in the
 evidence file: treating any missing or null value as unmeasured would let a gate
 stop checking by omission, which is the vacuous-pass hole these gates were added
 to close, reopened somewhere new.
+
+---
+
+## The placeholder, and the first PR that replaces it
+
+Every task is filed with a gate command that fails on purpose:
+
+````markdown
+```bash
+# arsenal:gate-placeholder — replace with the real check; it may land in this task's own PR
+false
+```
+````
+
+`open_task_pr.sh` resolves the gate from the **default branch**, because a worker
+whose own branch supplies the gate it is held to is certifying itself. Those two
+rules used to collide: the placeholder on the default branch failed, so no PR
+opened — and the only change that could replace the placeholder was the one that
+PR carried.
+
+The command is now the one part that defers. When the default branch's ```bash
+block is still the placeholder — the marker above, or a lone `false` from an
+earlier template — `gate_run.sh` runs the **working copy's** command instead and
+says so on stderr. The ```gate block is unaffected: the metric, operator,
+threshold and evidence path are still read from the default branch, every time,
+so the assertion a worker is measured against is always the board's. Once a real
+command has merged, the working copy stops being consulted.
