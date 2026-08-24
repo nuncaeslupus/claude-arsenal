@@ -40,7 +40,7 @@ Writing a skill is easy. Writing one that *fires when it should*, doesn't
 collide with its siblings, and doesn't quietly cost every session tokens it
 never earns back — that's the hard part, and it has a research answer.
 
-`skill-workshop` distills [a 4,600-line research
+`skill-workshop` distills [a 4,658-line research
 archive](docs/research/claude-skill-system_v1.17.md) — Anthropic's official skill
 documentation, the `anthropics/skills` shipping repository, and academic sources
 — into two rubrics it walks on every edit:
