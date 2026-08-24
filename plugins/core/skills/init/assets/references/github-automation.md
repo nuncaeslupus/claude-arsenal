@@ -53,8 +53,8 @@ question the file answers.
 |---|---|
 | `always` | The PR is open and `open_task_pr.sh`'s gates passed. Nothing further to wait for. |
 | `after-ci` | Every required check on the head commit has **reported**, and is green. |
-| `after-review` | A review has landed **and** every comment it raised is fixed or answered. CI is not consulted. |
-| `after-ci-and-review` | Both rows above. |
+| `after-review` | A review has landed **and** every comment it raised is fixed or answered. CI is **not** consulted — this is the value for a repo with no CI, or whose CI is unavailable rather than failing. |
+| `after-ci-and-review` | Both rows above: green checks **and** a review whose comments are all addressed. What "wait for green, answer the bot, then merge" means. |
 | `never` | Never, by an agent. Report the PR as ready and stop; the human merges. |
 
 **What counts as a review.** Whatever GitHub reports on the PR itself: a review submitted
