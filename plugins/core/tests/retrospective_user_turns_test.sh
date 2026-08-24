@@ -48,6 +48,10 @@ rows = [
         message=msg("<task-notification>agent said the approach was wrong</task-notification>")),
     # an SDK-driven prompt — input, but not this person correcting anything
     rec(promptSource="sdk", message=msg("stop doing that")),
+    # a record whose `origin` is not a mapping — one of these raised out of the
+    # scan, so a single odd record cost the whole retrospective its report
+    rec(promptSource="typed", origin="human",
+        message=msg("no, don't use that one either")),
     # the only human turn
     rec(promptSource="typed", origin={"kind": "human"},
         message=msg("no, don't refactor the parser — I already told you")),
@@ -69,7 +73,10 @@ out=$(cd "${proj}" && HOME="${tmpdir}/home" python3 "${SCANNER}" --days 3650 --l
 count=$(printf '%s' "${out}" | python3 -c 'import json,sys; print(len(json.load(sys.stdin)["user_corrections"]))') \
     || fail "scanner output was not JSON"
 
-[[ "${count}" == "1" ]] || fail "expected 1 correction from 7 phrase-bearing records, got ${count}"
+[[ "${count}" == "1" ]] || fail "expected 1 correction from 8 phrase-bearing records, got ${count}"
+
+printf '%s' "${out}" | grep -q "either" \
+    && fail "a record with a non-mapping origin was scanned as a human turn"
 
 printf '%s' "${out}" | grep -q "already told" \
     || fail "the one human correction is missing — the filter dropped a real turn"

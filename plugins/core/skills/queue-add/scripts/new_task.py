@@ -77,7 +77,11 @@ def existing_ids(tasks_dir: Path) -> set[str]:
     ids: set[str] = set()
     if not tasks_dir.is_dir():
         return ids
-    pattern = re.compile(r"^id:\s*([A-Za-z0-9._-]+)\s*$", re.MULTILINE)
+    # Quotes optional: the selector's front-matter parser strips them, so a
+    # generator that writes `id: "t-abc12345"` defines an id this would not
+    # have seen — and a dep on that task then reads as a dep on nothing and is
+    # refused. The two must agree on what an id is; they disagreed on quoting.
+    pattern = re.compile(r"""^id:\s*["']?([A-Za-z0-9._-]+)["']?\s*$""", re.MULTILINE)
     paths = sorted(tasks_dir.glob("*.md")) + sorted((tasks_dir / "_history").glob("*.md"))
     for path in paths:
         # `_`- and `.`-prefixed files are notes living alongside the tasks — the
