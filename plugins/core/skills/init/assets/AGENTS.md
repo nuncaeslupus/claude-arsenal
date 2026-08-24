@@ -1,6 +1,6 @@
 # Claude Arsenal
 
-<!-- claude-arsenal v2.4.2 — imported via @claude-arsenal/AGENTS.md -->
+<!-- claude-arsenal v2.4.3 — imported via @claude-arsenal/AGENTS.md -->
 
 This file is imported by the host repo's `CLAUDE.md` via the session-protocol block
 that `/init` injects, so it sits in context on **every turn of every session**. It
@@ -27,8 +27,10 @@ At the start of every session (fresh start, context compaction, or cold restart)
       which is a history-writing side effect from a step described as a report, landing in
       the same main working tree the worker loop requires to be clean.
    b. Run `python3 .claude/skills/init/scripts/init.py --repo-path . --silent` to refresh
-      any stale bundle script, and report anything it refreshes. Skip (a) and (b) when
-      that script is not present.
+      any stale bundle script, and report anything it refreshes. It writes nothing when
+      the installed bundle is NEWER than the skill's copies — report that line as-is and
+      update the plugin; do not pass `--allow-downgrade` to get past it. Skip (a) and (b)
+      when that script is not present.
 
 1. **Establish the GitHub channel** — `bash claude-arsenal/bin/github_channel.sh --detect`
    prints `gh`, `rest`, or `none`. **`none` is not a failure**: it means no scriptable
