@@ -48,8 +48,9 @@ priority: {priority}
      visible rather than quietly inert. -->
 
 ```bash
+# arsenal:gate-placeholder — replace with the real check; it may land in this task's own PR
 # e.g. bash tests/surface_probe_test.sh
-false  # fail until a real check replaces this
+false
 ```
 """
 

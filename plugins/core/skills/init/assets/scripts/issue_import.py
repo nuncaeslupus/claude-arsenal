@@ -83,7 +83,8 @@ Imported from {url}
      everything. -->
 
 ```bash
-false  # fail until a real check replaces this
+# arsenal:gate-placeholder — replace with the real check; it may land in this task's own PR
+false
 ```
 """
 

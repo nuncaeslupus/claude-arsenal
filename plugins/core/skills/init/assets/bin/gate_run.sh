@@ -77,7 +77,10 @@ PAYLOAD="${HOME_DIR}/tasks/${TASK_ID}.md"
 # disk. open_task_pr.sh sets it, because there the gate is an enforcement
 # precondition rather than a convenience: a worker whose own branch supplies the
 # gate it is being held to is certifying itself. Everywhere else the working
-# copy is what the author wants to run, so the default is unchanged.
+# copy is what the author wants to run, so the default is unchanged. One
+# exception, below: when the default branch's gate COMMAND is still the shipped
+# placeholder, it is taken from the working copy — otherwise the first PR that
+# could define a real check is the one this gate refuses.
 _prefer_default=0
 [[ "${ARSENAL_GATE_FROM_DEFAULT:-}" == "1" && -f "${PAYLOAD}" ]] && _prefer_default=1
 
@@ -121,6 +124,14 @@ if [[ ! -f "${PAYLOAD}" || ${_prefer_default} -eq 1 ]]; then
     fi
 fi
 
+# When the default branch's copy won, keep the working copy's path too. The
+# assertion (the ```gate block, its threshold and evidence path) always comes
+# from the default branch — that is what self-certification would target — but a
+# task still carrying the shipped PLACEHOLDER command can never define its first
+# real one: the only PR that could replace it is the one this gate refuses.
+WORKING_PAYLOAD=""
+[[ ${_prefer_default} -eq 1 && -n "${PAYLOAD_TMP}" ]] && WORKING_PAYLOAD="${HOME_DIR}/tasks/${TASK_ID}.md"
+
 # Enforce a structured numeric evidence gate first, if the payload declares one.
 # A declared evidence gate can never pass vacuously (CA-12): a missing evidence
 # file or a measurement that violates the threshold fails the gate right here,
@@ -146,7 +157,7 @@ if [[ -f "${GATE_EVIDENCE_PY}" ]]; then
     fi
 fi
 
-python3 - "${PAYLOAD}" "${TASK_ID}" <<'PY'
+python3 - "${PAYLOAD}" "${TASK_ID}" "${WORKING_PAYLOAD}" <<'PY'
 import os
 import pathlib
 import re
@@ -185,29 +196,83 @@ def nothing_ran(kind, detail):
     sys.exit(0)
 
 
-# Extract ## Acceptance gate section (up to next ## heading or EOF).
-section_match = re.search(
-    r'##\s+Acceptance gate\s*\n(.*?)(?=\n##\s|\Z)', payload, re.DOTALL | re.IGNORECASE
-)
-if not section_match:
+def gate_section(text):
+    """The ## Acceptance gate section (up to the next ## heading or EOF)."""
+    m = re.search(
+        r'##\s+Acceptance gate\s*\n(.*?)(?=\n##\s|\Z)', text, re.DOTALL | re.IGNORECASE
+    )
+    return m.group(1) if m else None
+
+
+def gate_command(section):
+    """First ```bash/```sh block in the section, stripped. None when there is
+    none. An inline single-backtick command does NOT match and never has — that
+    is the most common way a gate ends up inert, so callers name it."""
+    m = re.search(r'```(?:bash|sh)\s*\n(.*?)```', section, re.DOTALL) if section else None
+    return m.group(1).strip().replace('\r', '') if m else None
+
+
+# The command every new task ships with, which fails on purpose so that an
+# undefined gate is loud rather than vacuous. Recognising it is what lets the
+# first PR define a real one; the marker is the current template's, the lone
+# `false` covers every task filed from an earlier one.
+PLACEHOLDER_MARKER = "arsenal:gate-placeholder"
+
+
+def is_placeholder(cmd):
+    lines = cmd.splitlines()
+    # On the block's FIRST line, and only as a comment. A real gate may carry the
+    # marker as data — a grep for un-replaced placeholders is exactly the check
+    # someone writes, and a heredoc body can hold the marker line verbatim — and
+    # matching that would hand the command back to the branch under review, which
+    # is the guard this whole path exists to keep. Nothing can precede a heredoc's
+    # body but the command opening it, so the first line is never data.
+    first = next((ln.strip() for ln in lines if ln.strip()), "")
+    if first.startswith("#") and PLACEHOLDER_MARKER in first:
+        return True
+    code = [ln.split("#", 1)[0].strip() for ln in lines]
+    return [ln for ln in code if ln] == ["false"]
+
+
+section = gate_section(payload)
+if section is None:
     nothing_ran("none", "the payload has no '## Acceptance gate' section")
 
-section = section_match.group(1)
-
-# Find first ```bash or ```sh code block inside the section. An inline
-# single-backtick command does NOT match and never has — that is the most
-# common way a gate ends up inert, so name it in the message.
-block_match = re.search(r'```(?:bash|sh)\s*\n(.*?)```', section, re.DOTALL)
-if not block_match:
+cmd = gate_command(section)
+if cmd is None:
     nothing_ran(
         "prose-only",
         "the '## Acceptance gate' section has no fenced ```bash/```sh block — "
         "prose and inline `single-backtick` commands are not executed",
     )
-
-cmd = block_match.group(1).strip().replace('\r', '')
 if not cmd:
     nothing_ran("prose-only", "the fenced gate block is empty")
+
+# The bootstrap case: the default branch still has the placeholder, so the
+# assertion is real but nothing can produce a measurement for it yet. Take the
+# command from the working copy and say which copy ran — the threshold it is
+# held to is still the board's.
+working = sys.argv[3] if len(sys.argv) > 3 else ""
+if working and is_placeholder(cmd):
+    try:
+        wcmd = gate_command(gate_section(pathlib.Path(working).read_text(encoding="utf-8")))
+    except OSError:
+        wcmd = None
+    if wcmd and not is_placeholder(wcmd):
+        print(
+            f"gate_run: {task_id} — the default branch still carries the placeholder gate "
+            "command; running the working copy's instead. The gate block (metric, operator, "
+            "threshold, evidence path) was still read from the default branch.",
+            file=sys.stderr,
+        )
+        cmd = wcmd
+    else:
+        print(
+            f"gate_run: {task_id} — the gate command is still the placeholder on both the "
+            "default branch and the working copy. Replace the ```bash block under "
+            "'## Acceptance gate' with the real check; it may land in this task's own PR.",
+            file=sys.stderr,
+        )
 
 script = "#!/usr/bin/env bash\nset -euo pipefail\n" + cmd + "\n"
 

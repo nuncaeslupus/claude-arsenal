@@ -315,5 +315,174 @@ if git -C "${refrepo}" status --porcelain --untracked-files=all | grep -q '^??';
 fi
 echo "PASS: task file resolves from the default branch without dirtying the tree"
 
+# Gate 18: the bootstrap case. A task filed from the template carries a gate
+# command that fails on purpose, and open_task_pr.sh resolves the gate from the
+# default branch — so the only PR that could replace the placeholder was the one
+# the gate refused. The working copy's command runs instead when the default
+# branch's is still the placeholder.
+cat > "${refrepo}/arsenal/tasks/t-boot.md" <<'EOF'
+---
+id: t-boot
+title: "Placeholder gate on the default branch"
+---
+
+## Acceptance gate
+
+```bash
+# arsenal:gate-placeholder — replace with the real check; it may land in this task's own PR
+false
+```
+EOF
+git -C "${refrepo}" add -A
+git -C "${refrepo}" commit -q -m "file the task with the placeholder gate"
+# The worker's branch replaces the placeholder with a real check.
+cat > "${refrepo}/arsenal/tasks/t-boot.md" <<'EOF'
+---
+id: t-boot
+title: "Placeholder gate on the default branch"
+---
+
+## Acceptance gate
+
+```bash
+true
+```
+EOF
+if ! (cd "${refrepo}" && ARSENAL_DEFAULT_BRANCH=main ARSENAL_GATE_FROM_DEFAULT=1 bash "${GATE_RUN}" "t-boot" >/dev/null 2>&1); then
+    echo "FAIL: a working copy replacing the placeholder gate command should run" >&2; exit 1
+fi
+# ...and the guard still holds: a real command on the default branch is the one
+# that runs, not whatever the worker's branch says.
+cat > "${refrepo}/arsenal/tasks/t-real.md" <<'EOF'
+---
+id: t-real
+title: "Real gate on the default branch"
+---
+
+## Acceptance gate
+
+```bash
+false
+echo replaced-by-worker
+```
+EOF
+git -C "${refrepo}" add -A
+git -C "${refrepo}" commit -q -m "file the task with a real gate"
+cat > "${refrepo}/arsenal/tasks/t-real.md" <<'EOF'
+---
+id: t-real
+title: "Real gate on the default branch"
+---
+
+## Acceptance gate
+
+```bash
+true
+```
+EOF
+if (cd "${refrepo}" && ARSENAL_DEFAULT_BRANCH=main ARSENAL_GATE_FROM_DEFAULT=1 bash "${GATE_RUN}" "t-real" >/dev/null 2>&1); then
+    echo "FAIL: the working copy must not override a real gate on the default branch" >&2; exit 1
+fi
+# A pre-marker placeholder (a lone `false` with an explanatory comment) counts too.
+cat > "${refrepo}/arsenal/tasks/t-old.md" <<'EOF'
+---
+id: t-old
+title: "Pre-marker placeholder"
+---
+
+## Acceptance gate
+
+```bash
+false  # fail until a real check replaces this
+```
+EOF
+git -C "${refrepo}" add -A
+git -C "${refrepo}" commit -q -m "file the task with the pre-marker placeholder"
+cat > "${refrepo}/arsenal/tasks/t-old.md" <<'EOF'
+---
+id: t-old
+title: "Pre-marker placeholder"
+---
+
+## Acceptance gate
+
+```bash
+true
+```
+EOF
+if ! (cd "${refrepo}" && ARSENAL_DEFAULT_BRANCH=main ARSENAL_GATE_FROM_DEFAULT=1 bash "${GATE_RUN}" "t-old" >/dev/null 2>&1); then
+    echo "FAIL: the pre-marker placeholder should be recognised too" >&2; exit 1
+fi
+# The marker counts only on a comment line. A real gate may well mention it as
+# data — grepping for un-replaced placeholders is exactly the check someone
+# writes — and matching that would hand the command back to the branch under review.
+cat > "${refrepo}/arsenal/tasks/t-data.md" <<'EOF'
+---
+id: t-data
+title: "Marker as command data"
+---
+
+## Acceptance gate
+
+```bash
+echo "arsenal:gate-placeholder" >/dev/null
+false
+```
+EOF
+git -C "${refrepo}" add -A
+git -C "${refrepo}" commit -q -m "file the task whose real gate mentions the marker"
+cat > "${refrepo}/arsenal/tasks/t-data.md" <<'EOF'
+---
+id: t-data
+title: "Marker as command data"
+---
+
+## Acceptance gate
+
+```bash
+true
+```
+EOF
+if (cd "${refrepo}" && ARSENAL_DEFAULT_BRANCH=main ARSENAL_GATE_FROM_DEFAULT=1 \
+        bash "${GATE_RUN}" "t-data" >/dev/null 2>&1); then
+    echo "FAIL: the marker as command data must not count as a placeholder" >&2; exit 1
+fi
+# ...including inside a heredoc body, where the marker can sit on a line of its
+# own and still be data the gate writes out rather than a declaration about it.
+cat > "${refrepo}/arsenal/tasks/t-heredoc.md" <<'TASKEOF'
+---
+id: t-heredoc
+title: "Marker inside a heredoc body"
+---
+
+## Acceptance gate
+
+```bash
+cat > /dev/null <<'INNER'
+# arsenal:gate-placeholder — written as data, not declared
+INNER
+false
+```
+TASKEOF
+git -C "${refrepo}" add -A
+git -C "${refrepo}" commit -q -m "file the task whose gate writes the marker as data"
+cat > "${refrepo}/arsenal/tasks/t-heredoc.md" <<'TASKEOF'
+---
+id: t-heredoc
+title: "Marker inside a heredoc body"
+---
+
+## Acceptance gate
+
+```bash
+true
+```
+TASKEOF
+if (cd "${refrepo}" && ARSENAL_DEFAULT_BRANCH=main ARSENAL_GATE_FROM_DEFAULT=1 \
+        bash "${GATE_RUN}" "t-heredoc" >/dev/null 2>&1); then
+    echo "FAIL: a marker inside a heredoc body must not count as a placeholder" >&2; exit 1
+fi
+echo "PASS: a placeholder gate command on the default branch defers to the working copy"
+
 echo "PASS: gate_run_test — all gates passed"
 exit 0
