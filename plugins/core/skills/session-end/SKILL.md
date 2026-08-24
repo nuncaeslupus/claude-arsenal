@@ -1,6 +1,6 @@
 ---
 name: session-end
-description: Use whenever the user signals end-of-job, invokes /session-end, or a Stop hook fires at conversation close — three steps. (1) write status/handoff.md if host repo opts in; (2) retrospective scan for repeated errors and proposed skill updates; (3) PR audit — checks CI, review comments, and merge conflicts on session PRs, prints a review table. Triggers — "wrap up", "we're done", "/session-end", "end-of-job". Do NOT use mid-job or for cross-session memory.
+description: Use whenever the user signals end-of-job, invokes /session-end, or the opt-in SessionStart auto-fire hook runs — three steps. (1) write status/handoff.md if host repo opts in; (2) retrospective scan for repeated errors and proposed skill updates; (3) PR audit — checks CI, review comments, and merge conflicts on session PRs, prints a review table. Triggers — "wrap up", "we're done", "/session-end", "end-of-job". Do NOT use mid-job or for cross-session memory.
 metadata:
   type: workflow
 ---
@@ -18,7 +18,7 @@ CANARY: session-end-loaded-2026-05-20-4896c0a5-8ca7505c91dc34e6
 ## When to load
 
 - The user types `/session-end` or says "wrap up", "we're done", "close this session".
-- A Stop hook fires at conversation close (opt-in setup — see [auto-fire-setup](references/auto-fire-setup.md)).
+- The opt-in auto-fire hook runs: a detached `SessionStart` hook, about once a week (setup — see [auto-fire-setup](references/auto-fire-setup.md)).
 - The github skill is about to open a PR and the handoff marker is `yes` — this skill regenerates `status/handoff.md` before the PR commit.
 
 Do not load mid-job. The retrospective wants a complete arc to scan.

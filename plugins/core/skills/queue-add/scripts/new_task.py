@@ -77,7 +77,16 @@ def existing_ids(tasks_dir: Path) -> set[str]:
     ids: set[str] = set()
     if not tasks_dir.is_dir():
         return ids
-    pattern = re.compile(r"^id:\s*([A-Za-z0-9._-]+)\s*$", re.MULTILINE)
+    # Quotes optional, and only in the pairs `_parse_scalar` strips: the
+    # selector reads `id: "t-abc12345"` as `t-abc12345`, so a generator that
+    # quotes defined an id this never saw, and a dep on that task read as a dep
+    # on nothing. A lone quote is not stripped there either — it reads as part
+    # of the id — so accepting one here would trade the old disagreement for a
+    # subtler one, where the dep validates and then resolves to nothing.
+    pattern = re.compile(
+        r"""^id:\s*(?:["'](?P<quoted>[A-Za-z0-9._-]+)["']|(?P<bare>[A-Za-z0-9._-]+))\s*$""",
+        re.MULTILINE,
+    )
     paths = sorted(tasks_dir.glob("*.md")) + sorted((tasks_dir / "_history").glob("*.md"))
     for path in paths:
         # `_`- and `.`-prefixed files are notes living alongside the tasks — the
@@ -88,7 +97,7 @@ def existing_ids(tasks_dir: Path) -> set[str]:
             continue
         match = pattern.search(path.read_text(encoding="utf-8"))
         if match:
-            ids.add(match.group(1))
+            ids.add(match.group("quoted") or match.group("bare"))
     return ids
 
 

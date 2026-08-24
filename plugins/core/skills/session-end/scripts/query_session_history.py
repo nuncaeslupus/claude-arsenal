@@ -80,9 +80,13 @@ def _is_user_turn(rec: dict) -> bool:
     every typed, queued and suggestion-accepted turn and nothing else, where a
     denylist of `isMeta`/`toolUseResult` still let `<bash-input>` and
     `<task-notification>` records through. A transcript old enough to predate
-    the field reports no corrections rather than wrong ones.
+    the field reports no corrections rather than wrong ones — as does a record
+    that spells `origin` as anything but a mapping, which is why the check is
+    the `isinstance` `_message` already uses and not a truthiness test: a
+    string there raised out of the scan instead of being skipped.
     """
-    return (rec.get("origin") or {}).get("kind") == "human"
+    origin = rec.get("origin")
+    return isinstance(origin, dict) and origin.get("kind") == "human"
 
 
 def _user_text(rec: dict) -> str:
