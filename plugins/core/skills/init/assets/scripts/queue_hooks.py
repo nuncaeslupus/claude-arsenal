@@ -208,8 +208,19 @@ def plan_pr_closed(
 def plan_sync_handles(
     tasks: list[dict[str, Any]], issues: list[dict[str, Any]]
 ) -> list[dict[str, Any]]:
-    """An issue for every task file that has none. One-directional and idempotent."""
+    """An issue for every task file that has none. One-directional and idempotent.
+
+    The warnings are collected rather than dropped: this is the caller that runs
+    unattended, and `missing_handles` holds a task back when an unresolved issue
+    is a near-match for it. Without them the workflow reported "nothing to do"
+    for a task that has no handle and is therefore invisible to the board — the
+    diagnostic existed, and was reachable only from the interactive path.
+    """
+    warnings: list[str] = []
+    rows = missing_handles(tasks, issues, label=TASK_LABEL, warnings=warnings)
     return [
+        {"kind": "note", "message": f"handle_sync: {warning}"} for warning in warnings
+    ] + [
         {
             "kind": "create-issue",
             "task": row["task"],
@@ -217,7 +228,7 @@ def plan_sync_handles(
             "body": row["body"],
             "labels": row["labels"],
         }
-        for row in missing_handles(tasks, issues, label=TASK_LABEL)
+        for row in rows
     ]
 
 

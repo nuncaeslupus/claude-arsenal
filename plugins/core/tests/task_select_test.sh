@@ -555,4 +555,50 @@ grep -q '#50' <<<"${err}" || fail "the warning must name the issue to fix: ${err
 grep -q 't-aaaa1111' <<<"${out}" || fail "an unrelated task must still be proposed: ${out}"
 rm -f "${TASKS}/t-near0001.md" "${TASKS}/t-esc00001.md" "${TASKS}/t-uni00001.md"
 
+# --- 26: an ambiguous loose key stops suppressing, rather than starts --------
+#         The key is deliberately lossy, so it can collide with a title that is
+#         not this task's at all. One unresolved issue cannot be the handle for
+#         two tasks, and holding both back means a task with no issue never gets
+#         one proposed — invisible to the board, and nothing produced to notice.
+cat > "${TASKS}/t-ambi0001.md" <<'EOF'
+---
+id: t-ambi0001
+title: "Add A/B"
+---
+
+## Acceptance gate
+```bash
+true
+```
+EOF
+cat > "${TASKS}/t-ambi0002.md" <<'EOF'
+---
+id: t-ambi0002
+title: "Add AB"
+---
+
+## Acceptance gate
+```bash
+true
+```
+EOF
+cat > "${tmpdir}/issues-ambi.json" <<'EOF'
+[{"number": 60, "state": "open", "labels": [{"name": "arsenal:task"}], "title": "Add A-B"}]
+EOF
+out=$(python3 "${HANDLE_PY}" --tasks-dir "${TASKS}" --issues "${tmpdir}/issues-ambi.json" 2>/dev/null)
+grep -q 't-ambi0001' <<<"${out}"     || fail "two tasks share the loose key, so the guard cannot say which #60 is — propose both: ${out}"
+grep -q 't-ambi0002' <<<"${out}" || fail "the second colliding task must be proposed too: ${out}"
+rm -f "${TASKS}/t-ambi0002.md"
+
+# --- 27: the all-clear cannot be printed under a warning that contradicts it -
+#         `rows` is empty when every missing task was held back, so the summary
+#         could assert every task has a handle two lines below naming one that
+#         does not. That line gets quoted as evidence in PR bodies.
+onlynear="${tmpdir}/only-near"
+mkdir -p "${onlynear}"
+mv "${TASKS}/t-ambi0001.md" "${onlynear}/"
+err=$(python3 "${HANDLE_PY}" --tasks-dir "${onlynear}" --issues "${tmpdir}/issues-ambi.json" 2>&1 >/dev/null)
+grep -q 'every task has an issue handle' <<<"${err}"     && fail "a suppressed task must not be summarised as handled: ${err}"
+grep -q 'held back' <<<"${err}" || fail "the summary must count what it held back: ${err}"
+
 echo "PASS: task_select_test — all gates passed"
