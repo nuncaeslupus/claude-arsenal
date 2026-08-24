@@ -45,4 +45,12 @@ printf -- '---\nid: "t-quoted"\nstatus: todo\n---\n' > arsenal/tasks/t-quoted.md
 out="$(python3 "${ADD_PY}" --title "depends on a quoted id" --deps t-quoted 2>&1)" \
     || fail "a dep on a task whose id is quoted was refused: ${out}"
 
+# ...but only the quote pairs the selector strips. `_parse_scalar` reads an
+# unmatched quote as part of the value, so accepting one here would let a dep
+# validate against `t-halfquoted` and then resolve against `"t-halfquoted`.
+printf -- '---\nid: "t-halfquoted\nstatus: todo\n---\n' > arsenal/tasks/t-half.md
+if python3 "${ADD_PY}" --title "half-quoted dep" --deps t-halfquoted >/dev/null 2>&1; then
+    fail "an id behind an unmatched quote is not the id the selector reads"
+fi
+
 echo "PASS: new_task_deps_test.sh"

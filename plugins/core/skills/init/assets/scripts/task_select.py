@@ -87,8 +87,9 @@ def normalise_title(text: str) -> str:
 
     Both sides are unescaped exactly once, which assumes a title does not
     contain literal entity text. That assumption is worth stating because the
-    obvious defence of the symmetry — "unescape is idempotent" — is only true
-    of text carrying no entities. A canonical title spelling `&lt;` as
+    obvious defence of the symmetry — "unescape is idempotent" — holds only
+    while one pass cannot leave fresh entity text behind, and `&amp;lt;`
+    unescapes to `&lt;`, which unescapes again. A canonical title spelling `&lt;` as
     *characters* arrives from the transport as `&amp;lt;`, and one unescape per
     side lands them a level apart, so they never compare equal and the task
     reads as unhandled. Unescaping to a fixed point would close that at the
