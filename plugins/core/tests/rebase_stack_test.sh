@@ -128,4 +128,50 @@ listed="$(python3 "${GATE_PY}" --list-only arsenal/tasks)"
     || fail "a ./-prefixed declaration must normalise to git's path, got: ${listed}"
 mv arsenal/tasks/t-1.md.bak arsenal/tasks/t-1.md
 
+# --- 6: invoked by a relative path from a subdirectory ---
+# The bundle is found relative to the script, and the script is found relative
+# to wherever it was invoked from — so it has to be resolved before the cd to
+# the repo root. When it was not, evidence paths silently resolved to nothing
+# and every conflict reported as a real one.
+git checkout -q -b featF "${BASE}"
+echo f > f.txt && ./regen.sh && git add -A && git commit -qm F
+TIP_F=$(git rev-parse HEAD)
+git checkout -q -b featG
+echo g > g.txt && ./regen.sh && git add -A && git commit -qm G
+git push -q origin featG
+git checkout -q main && git merge -q --squash featF && git commit -qm "F squashed"
+echo h > h.txt && ./regen.sh && git add -A && git commit -qm "later main work"
+git push -q origin main
+git checkout -q featG
+
+# Vendored the way a consumer has it — `claude-arsenal/bin` beside
+# `claude-arsenal/scripts` — so the relative path is the one an operator types.
+mkdir -p sub vendor/claude-arsenal
+cp -R "${SCRIPT_DIR}/../skills/init/assets/bin" "${SCRIPT_DIR}/../skills/init/assets/scripts" vendor/claude-arsenal/
+out="$(cd sub && bash ../vendor/claude-arsenal/bin/rebase_stack.sh featG "${TIP_F}" 2>&1)" \
+    || fail "a relative invocation from a subdirectory should still resolve the bundle: ${out}"
+grep -q "evidence-only conflict" <<<"${out}" || fail "expected the evidence auto-resolve from a subdirectory: ${out}"
+rm -rf sub vendor
+
+# --- 7: a conflict --theirs cannot resolve stops instead of staging the other side ---
+# The branch deletes an evidence file main modified: there is no "theirs" to
+# check out, and taking main's copy would resurrect a file the branch removed.
+git checkout -q -b featH "${BASE}"
+git rm -q status/evidence/E1.json && git commit -qm "H drops the evidence file"
+git push -q origin featH
+H_PUSHED=$(git rev-parse HEAD)
+git checkout -q main
+echo i > i.txt && ./regen.sh && git add -A && git commit -qm "main regenerates it"
+git push -q origin main
+git checkout -q featH
+
+set +e
+out="$(bash "${REBASE_SH}" featH "${BASE}" 2>&1)"
+rc=$?
+set -e
+(( rc != 0 )) || fail "an unresolvable evidence conflict must not exit 0: ${out}"
+grep -q "cannot take the branch's side" <<<"${out}" || fail "expected the unresolvable-conflict diagnosis: ${out}"
+[[ "$(git rev-parse origin/featH)" == "${H_PUSHED}" ]] || fail "nothing should have been pushed"
+git rebase --abort
+
 echo "PASS: rebase_stack_test.sh"

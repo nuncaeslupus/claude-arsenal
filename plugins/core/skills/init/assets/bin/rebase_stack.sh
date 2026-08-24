@@ -36,13 +36,20 @@ for a in "$@"; do
 done
 set -- "${args[@]+"${args[@]}"}"
 
+# Resolve the bundle BEFORE the cd below: `BASH_SOURCE[0]` is the path as
+# invoked, so a relative one (`bin/rebase_stack.sh` from anywhere but the repo
+# root) stops resolving the moment the working directory moves. That failed
+# silently — `BUNDLE_SCRIPTS` pointed nowhere, the guarded `gate_evidence.py`
+# lookup was skipped, and every conflict then read as "outside the declared
+# evidence set": the pre-evidence refusal, wearing the same message.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BUNDLE_SCRIPTS="${SCRIPT_DIR}/../scripts"
+
 # Run from the repo root so `git diff --name-only` and the declared evidence
 # paths are in the same frame of reference (both repo-root-relative), and so
 # ARSENAL_HOME resolves the way every other script resolves it.
 cd "$(git rev-parse --show-toplevel)"
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BUNDLE_SCRIPTS="${SCRIPT_DIR}/../scripts"
 ARSENAL_HOME="${ARSENAL_HOME:-arsenal}"
 
 BRANCH="${1:-$(git rev-parse --abbrev-ref HEAD)}"
@@ -72,6 +79,14 @@ evidence_paths=""
 if [[ -f "${BUNDLE_SCRIPTS}/gate_evidence.py" ]]; then
     evidence_paths="$(python3 "${BUNDLE_SCRIPTS}/gate_evidence.py" \
         --list-only "${ARSENAL_HOME}/tasks" 2>/dev/null || true)"
+fi
+
+# A repo that declares a host gate but resolves no evidence paths gets the
+# refusal path for every conflict. Legitimate when no task declares `evidence:`,
+# a symptom when something upstream broke — say which rather than letting the
+# degraded case look like normal operation.
+if [[ -z "${evidence_paths}" && -n "${host_gate}" ]]; then
+    echo "rebase_stack: a host gate is declared but no evidence paths resolved from ${ARSENAL_HOME}/tasks — conflicts will not auto-resolve" >&2
 fi
 
 is_evidence() {
@@ -116,7 +131,13 @@ resolve_evidence_conflicts() {
         # --theirs is the commit being replayed (the branch's own work). Either
         # side would do — the gate is about to overwrite it — but a file the
         # gate does not in fact rewrite is then the branch's, not the base's.
-        git checkout --theirs -- "${f}" 2>/dev/null || true
+        #
+        # It fails when the path has no "theirs" at all — the branch deleted a
+        # file the base modified. Swallowing that left the base's copy in the
+        # tree and staged it below, resurrecting a file the branch removed. It
+        # is not a resolution the script can make on its own, so it stops.
+        git checkout --theirs -- "${f}" \
+            || stop_here "cannot take the branch's side of ${f} — not a content conflict (deleted on one side?), so regenerating cannot resolve it"
     done <<<"${files}"
     run_host_gate || stop_here "the host gate failed while regenerating evidence"
     # Every declared evidence path, not only the conflicted ones: the gate
