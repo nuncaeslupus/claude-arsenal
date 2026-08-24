@@ -48,4 +48,31 @@ trap 'rm -rf "${tmpdir}"' EXIT
 python3 "${BUDGET_PY}" --root "${tmpdir}" >/dev/null 2>&1
 [[ $? -eq 2 ]] || fail "an empty tree must exit 2, not report a budget of zero"
 
+# A bundle missing its AGENTS.md is a layout problem too, and the one that used
+# to score zero for the largest resident input and then report "Within budget" —
+# the gate reading healthiest exactly when it had stopped measuring.
+mkdir -p "${tmpdir}/tree/plugins/core/skills/demo"
+cat > "${tmpdir}/tree/plugins/core/skills/demo/SKILL.md" <<'SKILL'
+---
+name: demo
+description: A skill that exists so the tree is not empty.
+---
+
+Body.
+SKILL
+out=$(python3 "${BUDGET_PY}" --root "${tmpdir}/tree" --fail-over 5000 2>&1)
+[[ $? -eq 2 ]] || fail "a missing AGENTS.md must exit 2, not score zero and pass: ${out}"
+grep -q "AGENTS.md" <<<"${out}" || fail "the refusal must name the file it could not read: ${out}"
+grep -q "Within budget" <<<"${out}" && fail "a bundle missing AGENTS.md must not report a budget: ${out}"
+
+# An input that is not valid UTF-8 is the same answer, not a traceback.
+# UnicodeDecodeError is a ValueError, so catching OSError alone would miss it.
+agents="${tmpdir}/tree/plugins/core/skills/init/assets/AGENTS.md"
+mkdir -p "$(dirname "${agents}")"
+echo "resident text" > "${agents}"
+printf 'name: demo\n\xff\xfe' > "${tmpdir}/tree/plugins/core/skills/demo/SKILL.md"
+out=$(python3 "${BUDGET_PY}" --root "${tmpdir}/tree" --fail-over 5000 2>&1)
+[[ $? -eq 2 ]] || fail "an undecodable input must exit 2: ${out}"
+grep -q "Traceback" <<<"${out}" && fail "an undecodable input must be reported, not raised: ${out}"
+
 echo "PASS: context_budget_test — resident tier reported and capped"
