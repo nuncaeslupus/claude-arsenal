@@ -41,11 +41,28 @@ Every session, without waiting to be asked:
 _CONFIG_TEMPLATE = """\
 # claude-arsenal host configuration — yours; upstream never rewrites this file.
 
-# How far must a task PR get before it may be merged?
-#   always | after-review | after-ci | after-ci-and-review | never
-# after-review is for a repo with no CI, or whose CI is unavailable rather than
-# failing — a policy nothing can ever satisfy gets waved through, and then it
-# gets waved through on the day it starts meaning something again.
+# How far must a task PR get before an agent may merge it?
+#
+#   always               The gates open_task_pr.sh already ran are the whole bar.
+#   after-ci             Every required check has REPORTED, and is green.
+#                        Absent is not green: no runners, no workflows, or a
+#                        job that died unassigned means "wait", not "pass".
+#   after-review         A review has landed (human or bot — whatever GitHub
+#                        reports on the PR) and every comment it raised is
+#                        fixed or answered. CI is NOT consulted. This is the
+#                        value for a repo with no CI, or whose CI is
+#                        unavailable rather than failing.
+#   after-ci-and-review  Both of the two above: green checks AND a review whose
+#                        comments are all addressed. The usual choice for a repo
+#                        that has CI and a review bot — pick this one if you
+#                        expect "wait for green, answer the bot, then merge".
+#   never                An agent never merges. It reports the PR ready and
+#                        stops; a human merges.
+#
+# Whichever is set, both directions are failures: merging past what it allows,
+# and stopping to ask a question this file already answers. Do not set a policy
+# nothing in the repo can ever satisfy — it gets waved through, and then it
+# stays waved through on the day it starts meaning something again.
 merge-policy = "after-ci"
 
 # Shell command run before any task PR is opened; a non-zero exit means no PR.
