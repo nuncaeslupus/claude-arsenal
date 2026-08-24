@@ -348,7 +348,7 @@ title: "Placeholder gate on the default branch"
 true
 ```
 EOF
-if ! (cd "${refrepo}" && ARSENAL_DEFAULT_BRANCH=main ARSENAL_GATE_FROM_DEFAULT=1         bash "${GATE_RUN}" "t-boot" >/dev/null 2>&1); then
+if ! (cd "${refrepo}" && ARSENAL_DEFAULT_BRANCH=main ARSENAL_GATE_FROM_DEFAULT=1 bash "${GATE_RUN}" "t-boot" >/dev/null 2>&1); then
     echo "FAIL: a working copy replacing the placeholder gate command should run" >&2; exit 1
 fi
 # ...and the guard still holds: a real command on the default branch is the one
@@ -380,7 +380,7 @@ title: "Real gate on the default branch"
 true
 ```
 EOF
-if (cd "${refrepo}" && ARSENAL_DEFAULT_BRANCH=main ARSENAL_GATE_FROM_DEFAULT=1         bash "${GATE_RUN}" "t-real" >/dev/null 2>&1); then
+if (cd "${refrepo}" && ARSENAL_DEFAULT_BRANCH=main ARSENAL_GATE_FROM_DEFAULT=1 bash "${GATE_RUN}" "t-real" >/dev/null 2>&1); then
     echo "FAIL: the working copy must not override a real gate on the default branch" >&2; exit 1
 fi
 # A pre-marker placeholder (a lone `false` with an explanatory comment) counts too.
@@ -410,8 +410,42 @@ title: "Pre-marker placeholder"
 true
 ```
 EOF
-if ! (cd "${refrepo}" && ARSENAL_DEFAULT_BRANCH=main ARSENAL_GATE_FROM_DEFAULT=1         bash "${GATE_RUN}" "t-old" >/dev/null 2>&1); then
+if ! (cd "${refrepo}" && ARSENAL_DEFAULT_BRANCH=main ARSENAL_GATE_FROM_DEFAULT=1 bash "${GATE_RUN}" "t-old" >/dev/null 2>&1); then
     echo "FAIL: the pre-marker placeholder should be recognised too" >&2; exit 1
+fi
+# The marker counts only on a comment line. A real gate may well mention it as
+# data — grepping for un-replaced placeholders is exactly the check someone
+# writes — and matching that would hand the command back to the branch under review.
+cat > "${refrepo}/arsenal/tasks/t-data.md" <<'EOF'
+---
+id: t-data
+title: "Marker as command data"
+---
+
+## Acceptance gate
+
+```bash
+echo "arsenal:gate-placeholder" >/dev/null
+false
+```
+EOF
+git -C "${refrepo}" add -A
+git -C "${refrepo}" commit -q -m "file the task whose real gate mentions the marker"
+cat > "${refrepo}/arsenal/tasks/t-data.md" <<'EOF'
+---
+id: t-data
+title: "Marker as command data"
+---
+
+## Acceptance gate
+
+```bash
+true
+```
+EOF
+if (cd "${refrepo}" && ARSENAL_DEFAULT_BRANCH=main ARSENAL_GATE_FROM_DEFAULT=1 \
+        bash "${GATE_RUN}" "t-data" >/dev/null 2>&1); then
+    echo "FAIL: the marker as command data must not count as a placeholder" >&2; exit 1
 fi
 echo "PASS: a placeholder gate command on the default branch defers to the working copy"
 

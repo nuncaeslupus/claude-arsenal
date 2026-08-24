@@ -220,10 +220,14 @@ PLACEHOLDER_MARKER = "arsenal:gate-placeholder"
 
 
 def is_placeholder(cmd):
-    if PLACEHOLDER_MARKER in cmd:
+    lines = cmd.splitlines()
+    # On a COMMENT line only: a real gate may carry the marker as data (a grep
+    # for un-replaced placeholders is exactly the check someone writes), and
+    # matching that would hand the command back to the branch under review.
+    if any(ln.strip().startswith("#") and PLACEHOLDER_MARKER in ln for ln in lines):
         return True
-    code = [line.split("#", 1)[0].strip() for line in cmd.splitlines()]
-    return [line for line in code if line] == ["false"]
+    code = [ln.split("#", 1)[0].strip() for ln in lines]
+    return [ln for ln in code if ln] == ["false"]
 
 
 section = gate_section(payload)

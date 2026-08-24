@@ -125,10 +125,10 @@ rules used to collide: the placeholder on the default branch failed, so no PR
 opened — and the only change that could replace the placeholder was the one that
 PR carried.
 
-The command is now the one part that defers. When the default branch's ```bash
+The command is now the one part that defers. When the default branch's `bash`
 block is still the placeholder — the marker above, or a lone `false` from an
 earlier template — `gate_run.sh` runs the **working copy's** command instead and
-says so on stderr. The ```gate block is unaffected: the metric, operator,
+says so on stderr. The `gate` block is unaffected: the metric, operator,
 threshold and evidence path are still read from the default branch, every time,
 so the assertion a worker is measured against is always the board's. Once a real
 command has merged, the working copy stops being consulted.
