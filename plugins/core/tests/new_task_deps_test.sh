@@ -31,4 +31,11 @@ if python3 "${ADD_PY}" --title "typo" --deps t-nope >/dev/null 2>&1; then
     fail "an unknown dep must still be rejected"
 fi
 
+# A `_`-prefixed history note lists ids it does not define. The selector skips
+# such files, so a dep on one would never be satisfied.
+printf -- 'archived: t-ghost\nid: t-ghost\n' > arsenal/tasks/_history/_migrated-history.md
+if python3 "${ADD_PY}" --title "ghost" --deps t-ghost >/dev/null 2>&1; then
+    fail "an id from a _-prefixed history note must not count as a dep"
+fi
+
 echo "PASS: new_task_deps_test.sh"

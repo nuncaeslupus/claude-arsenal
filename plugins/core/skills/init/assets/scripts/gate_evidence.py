@@ -129,7 +129,10 @@ def declared_evidence(tasks_dir: Path) -> list[str]:
             continue
         evidence = _parse_block(block)[0].get("evidence")
         if evidence:
-            paths.add(evidence)
+            # `./status/x.json` and `status/x.json` are the same declaration, but
+            # git names a conflicted path only the second way. An exact compare
+            # against the raw string would read an evidence conflict as a real one.
+            paths.add(Path(evidence).as_posix())
     return sorted(paths)
 
 

@@ -11,7 +11,7 @@
 # <branch>   — the stacked branch to rebase (defaults to current branch)
 # <old-base> — the tip of the parent branch at the time <branch> was cut
 #              (a branch name, tag, or commit SHA)
-# --no-push  — rebase only; skip the host gate and the force-push
+# --no-push  — rebase only; skip the pre-push gate and the force-push
 #
 # Evidence conflicts resolve themselves. A repo that uses evidence gates
 # commits a measurement of its own tree (`evidence:` in a task's gate block),
@@ -119,9 +119,37 @@ resolve_evidence_conflicts() {
         git checkout --theirs -- "${f}" 2>/dev/null || true
     done <<<"${files}"
     run_host_gate || stop_here "the host gate failed while regenerating evidence"
+    # Every declared evidence path, not only the conflicted ones: the gate
+    # measures the whole tree, so it can rewrite a file that merged cleanly —
+    # and an unstaged change to a tracked file blocks `rebase --continue`.
+    stage_evidence
     while IFS= read -r f; do
         git add -A -- "${f}"
     done <<<"${files}"
+}
+
+# The declared evidence paths as an argv array — a path may contain spaces.
+evidence_argv() {
+    local f
+    ev_argv=()
+    [[ -n "${evidence_paths}" ]] || return 0
+    while IFS= read -r f; do ev_argv+=("${f}"); done <<<"${evidence_paths}"
+}
+
+stage_evidence() {
+    local f
+    evidence_argv
+    for f in ${ev_argv[@]+"${ev_argv[@]}"}; do
+        [[ -e "${f}" ]] && git add -- "${f}"
+    done
+    return 0
+}
+
+# Declared evidence paths that differ from what HEAD committed — staged or not.
+dirty_evidence() {
+    evidence_argv
+    (( ${#ev_argv[@]} )) || return 0
+    git diff HEAD --name-only -- "${ev_argv[@]}"
 }
 
 default_branch="$(git ls-remote --symref "${REMOTE}" HEAD 2>/dev/null \
@@ -159,6 +187,20 @@ run_host_gate || {
     echo "rebase_stack: fix it, commit, and push yourself (or re-run with --no-push to skip this)" >&2
     exit 1
 }
+
+# A rebase that never conflicted can still move the inputs a measurement is
+# taken over, leaving committed evidence that describes the pre-rebase tree.
+# The gate just regenerated it; if that differs, what is committed is stale and
+# pushing it publishes a head the repo's own gate would reject. Not committed
+# here — an extra commit on a stacked branch is the caller's call, not this
+# script's.
+stale="$(dirty_evidence)"
+if [[ -n "${stale}" ]]; then
+    echo "rebase_stack: regenerated evidence differs from what ${BRANCH} committed:" >&2
+    sed 's/^/  /' <<<"${stale}" >&2
+    echo "rebase_stack: commit it and re-run — NOT pushing a head whose evidence describes the old tree" >&2
+    exit 1
+fi
 
 git push --force-with-lease "${REMOTE}" "${BRANCH}"
 echo "rebase_stack: ${BRANCH} rebased and pushed"

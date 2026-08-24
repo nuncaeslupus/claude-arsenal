@@ -79,6 +79,12 @@ def existing_ids(tasks_dir: Path) -> set[str]:
     pattern = re.compile(r"^id:\s*([A-Za-z0-9._-]+)\s*$", re.MULTILINE)
     paths = sorted(tasks_dir.glob("*.md")) + sorted((tasks_dir / "_history").glob("*.md"))
     for path in paths:
+        # `_`- and `.`-prefixed files are notes living alongside the tasks — the
+        # migration's `_migrated-history.md` lists ids it does not define. The
+        # selector skips them, so accepting a dep on one would declare a dep the
+        # selector can never satisfy: the exact failure this check exists to stop.
+        if path.name.startswith(("_", ".")):
+            continue
         match = pattern.search(path.read_text(encoding="utf-8"))
         if match:
             ids.add(match.group(1))

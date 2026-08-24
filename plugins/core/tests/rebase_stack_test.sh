@@ -97,4 +97,35 @@ git checkout -q featB
 out="$(bash "${REBASE_SH}" --no-push featB "${TIP_A}" 2>&1)" || fail "--no-push run failed: ${out}"
 grep -q "nothing was pushed" <<<"${out}" || fail "expected the --no-push notice: ${out}"
 
+# --- 4: a clean rebase that leaves committed evidence stale does not publish it ---
+# featE conflicts on nothing, but main added files, so the measurement moved.
+git checkout -q -b featE "${BASE}"
+# No regen here: the branch never touches the evidence, so nothing conflicts —
+# but main moves the tree the measurement is taken over.
+echo e > e.txt && git add -A && git commit -qm E
+git push -q origin featE
+E_PUSHED=$(git rev-parse HEAD)
+git checkout -q main
+echo m1 > m1.txt && echo m2 > m2.txt && ./regen.sh && git add -A && git commit -qm "main moved"
+git push -q origin main
+git checkout -q featE
+
+set +e
+out="$(bash "${REBASE_SH}" featE "${BASE}" 2>&1)"
+rc=$?
+set -e
+(( rc != 0 )) || fail "stale evidence must not be published: ${out}"
+grep -q "regenerated evidence differs" <<<"${out}" || fail "expected the stale-evidence refusal: ${out}"
+[[ "$(git rev-parse origin/featE)" == "${E_PUSHED}" ]] || fail "a stale head was pushed"
+git add -A && git commit -qm "refresh evidence"
+out="$(bash "${REBASE_SH}" featE "$(git rev-parse HEAD)" 2>&1)" || fail "committing the evidence should unblock the push: ${out}"
+
+# --- 5: a `./`-prefixed declaration still matches git's path for the file ---
+GATE_PY="${SCRIPT_DIR}/../skills/init/assets/scripts/gate_evidence.py"
+sed -i.bak 's|^evidence: status|evidence: ./status|' arsenal/tasks/t-1.md
+listed="$(python3 "${GATE_PY}" --list-only arsenal/tasks)"
+[[ "${listed}" == "status/evidence/E1.json" ]] \
+    || fail "a ./-prefixed declaration must normalise to git's path, got: ${listed}"
+mv arsenal/tasks/t-1.md.bak arsenal/tasks/t-1.md
+
 echo "PASS: rebase_stack_test.sh"
