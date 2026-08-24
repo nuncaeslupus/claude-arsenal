@@ -248,4 +248,36 @@ echo "${rows}" | grep -q '"id":"t-live".*"terminal":true' \
 echo "${rows}" | grep -q '"issue":31' || fail "--json should carry the issue number: ${rows}"
 echo "PASS: --json reports terminality derived from either the issue or the file"
 
+# Gate 12: the unattended caller surfaces what it held back. `missing_handles`
+# takes a warnings list, and this planner passed none — so in the scheduled
+# `sync-handles` job a task held back as a near-match produced no action, no
+# diagnostic, and a "nothing to do" summary. The warning existed and was
+# reachable only from the interactive path, where somebody is already watching.
+near="${tmp}/near"
+mkdir -p "${near}"
+cat > "${near}/t-9999aaaa.md" <<'MD'
+---
+id: t-9999aaaa
+title: "Broaden the corpus — annotations/<offer_id>.json, >=6 job families"
+priority: 5
+---
+
+## Acceptance gate
+```bash
+true
+```
+MD
+cat > "${tmp}/near-issues.json" <<'JSON'
+[{"number": 70, "state": "open", "labels": [{"name": "arsenal:task"}],
+  "title": "Broaden the corpus - annotations/.json, \u22656 job families"}]
+JSON
+plan=$(python3 "${HOOKS}" sync-handles --tasks-dir "${near}" --issues "${tmp}/near-issues.json" --dry-run)
+if echo "${plan}" | grep -q '"task":"t-9999aaaa"'; then
+    fail "a near-match must still not draw a second handle: ${plan}"
+fi
+echo "${plan}" | grep -q '"kind":"note"' \
+    || fail "holding a task back unattended must produce a note, not silence: ${plan}"
+echo "${plan}" | grep -q '#70' || fail "the note must name the issue to fix: ${plan}"
+echo "PASS: a suppressed handle is reported by the unattended planner"
+
 echo "PASS: queue_hooks_test — all gates passed"

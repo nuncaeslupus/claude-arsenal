@@ -80,6 +80,21 @@ def missing_handles(
         if key := loose_title_key(issue.get("title") or ""):
             near.setdefault(key, issue.get("number", "?"))
 
+    # Which tasks that guard is allowed to speak for. One unresolved issue
+    # cannot be the handle for two tasks, so when two of them fold to the same
+    # loose key, "this issue may already be its handle" is true of at most one
+    # and the guard cannot say which. Suppressing both is a coin flip played
+    # twice; propose them and let the ids settle it.
+    candidates = [
+        t
+        for t in tasks
+        if t["id"] not in handled and str(t.get("status") or "") not in TERMINAL
+    ]
+    key_users: dict[str, int] = {}
+    for task in candidates:
+        if key := loose_title_key(task["title"]):
+            key_users[key] = key_users.get(key, 0) + 1
+
     out: list[dict[str, Any]] = []
     for task in tasks:
         if task["id"] in handled:
@@ -94,7 +109,7 @@ def missing_handles(
         # will hand straight back out.
         if str(task.get("status") or "") in TERMINAL:
             continue
-        if (key := loose_title_key(task["title"])) in near:
+        if (key := loose_title_key(task["title"])) in near and key_users.get(key, 0) < 2:
             if warnings is not None:
                 warnings.append(
                     f"{task['id']}: no handle resolved, but issue #{near[key]} has a "
@@ -149,7 +164,16 @@ def main(argv: list[str] | None = None) -> int:
         print(f"handle_sync: {warning}", file=sys.stderr)
     for row in rows:
         print(json.dumps(row, separators=(",", ":")))
-    if not rows:
+    # `rows` is also empty when every missing task was held back, so the
+    # all-clear used to be printable directly under a warning naming a task
+    # that has no handle — and the reassuring line is the one that gets quoted.
+    if not rows and proposal_warnings:
+        print(
+            f"handle_sync: nothing proposed — {len(proposal_warnings)} task(s) held back "
+            "as near-matches for an unresolved issue, listed above",
+            file=sys.stderr,
+        )
+    elif not rows:
         print("handle_sync: every task has an issue handle", file=sys.stderr)
     return 0
 
