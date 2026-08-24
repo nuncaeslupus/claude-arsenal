@@ -51,9 +51,25 @@ def approx_tokens(text: str) -> int:
     return len(text) // 4
 
 
-def listing_entry(skill_md: Path) -> str:
+def read_or_fail(path: Path) -> str | None:
+    """The file's text, or None after saying on stderr why it could not be read.
+
+    Every input here is read for its size, so an unreadable one has no sensible
+    size to stand in for it — the caller turns a None into the exit 2 this
+    script already uses for a layout problem, rather than a traceback or a
+    zero. `UnicodeDecodeError` is a `ValueError`, not an `OSError`, and it is
+    the likelier half of the two.
+    """
+    try:
+        return path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        print(f"context_budget: cannot read {path}: {exc}", file=sys.stderr)
+        return None
+
+
+def listing_entry(text: str) -> str:
     """The frontmatter a skills index carries for one skill."""
-    match = FRONT_MATTER_RE.match(skill_md.read_text(encoding="utf-8"))
+    match = FRONT_MATTER_RE.match(text)
     if not match:
         return ""
     return "".join(m.group(0) for m in FIELD_RE.finditer(match.group(1)))
@@ -76,12 +92,26 @@ def main(argv: list[str] | None = None) -> int:
         print(f"context_budget: no skills under {args.root}/plugins/*/skills/", file=sys.stderr)
         return 2
 
-    agents_md = args.root / "plugins/core/skills/init/assets/AGENTS.md"
-    agents_tokens = (
-        approx_tokens(agents_md.read_text(encoding="utf-8")) if agents_md.is_file() else 0
-    )
+    bodies_text: dict[Path, str] = {}
+    for skill in skills:
+        text = read_or_fail(skill)
+        if text is None:
+            return 2
+        bodies_text[skill] = text
 
-    entries = [(s, approx_tokens(listing_entry(s))) for s in skills]
+    # A missing AGENTS.md used to count as zero. It is the largest single
+    # resident input — `@`-imported into the host's CLAUDE.md, so paid on every
+    # turn — so scoring it as nothing made the one bundle that should certainly
+    # fail the gate the one most likely to pass it: the report looked healthiest
+    # at the moment it stopped measuring what it is named for. Same class of
+    # fact as no skills at all, and the same exit code.
+    agents_md = args.root / "plugins/core/skills/init/assets/AGENTS.md"
+    agents_text = read_or_fail(agents_md)
+    if agents_text is None:
+        return 2
+    agents_tokens = approx_tokens(agents_text)
+
+    entries = [(s, approx_tokens(listing_entry(bodies_text[s]))) for s in skills]
     listing_tokens = sum(t for _, t in entries)
     resident = agents_tokens + listing_tokens
 
@@ -94,18 +124,21 @@ def main(argv: list[str] | None = None) -> int:
     for skill, tokens in sorted(entries, key=lambda e: -e[1])[:5]:
         print(f"    {skill.parent.name:<42} {tokens:>6}")
 
-    bodies = sorted(((s, approx_tokens(s.read_text(encoding='utf-8'))) for s in skills),
+    bodies = sorted(((s, approx_tokens(t)) for s, t in bodies_text.items()),
                     key=lambda e: -e[1])
     print("\nON INVOCATION — one SKILL.md body, paid when that skill triggers")
     for skill, tokens in bodies[:5]:
         print(f"  {skill.parent.name:<44} {tokens:>6}")
 
-    on_demand = sorted(
-        ((p, approx_tokens(p.read_text(encoding="utf-8")))
-         for p in args.root.glob("plugins/*/skills/*/**/*.md")
-         if p.name != "SKILL.md"),
-        key=lambda e: -e[1],
-    )
+    on_demand = []
+    for path in args.root.glob("plugins/*/skills/*/**/*.md"):
+        if path.name == "SKILL.md":
+            continue
+        text = read_or_fail(path)
+        if text is None:
+            return 2
+        on_demand.append((path, approx_tokens(text)))
+    on_demand.sort(key=lambda e: -e[1])
     total_demand = sum(t for _, t in on_demand)
     print(f"\nON DEMAND — {len(on_demand)} files, {total_demand} tokens, paid only when opened")
     for path, tokens in on_demand[:5]:
