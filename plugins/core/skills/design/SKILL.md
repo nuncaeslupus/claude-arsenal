@@ -96,7 +96,11 @@ when a workspace plan exists, or the reader lands back in `status/` beside a pla
 not render. Writes `plan-reader.html` and `plan-annotated.md` there and prints both paths;
 the step is done when those two paths exist and the user has been given the HTML. The
 reader keeps its notes under a namespace of its own, so plan annotations never overwrite
-the spec's.
+the spec's, and its export is named `<project>-plan-notes-<date>.md`.
+
+When a returned export arrives — a path in `~/Downloads`, an upload, a paste — move it
+into the plan's directory beside the reader and commit it. The annotations are the
+sign-off record for this plan; left in Downloads they are gone by the next session.
 
 ---
 
