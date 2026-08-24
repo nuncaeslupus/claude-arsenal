@@ -120,7 +120,8 @@ The HTML reader auto-saves notes in the browser and exports them as a Markdown f
 reviewer sends back, named `<project>-spec-notes-<date>.md` so it stays findable among
 whatever else is in a Downloads folder. The Markdown copy has a `> ✎ Notes` slot after
 every section for annotation in any text editor. To re-seed a rebuilt reader with notes
-from a previous export, place the returned file at `{output-dir}/notes.json`.
+from a previous export, pass `--notes <the returned file>` — the export carries its own
+note data, so hand back the file the reviewer sent, unrenamed.
 
 When a returned export arrives — a path in `~/Downloads`, an upload, a paste — move it
 into the spec's directory beside the reader and commit it. The annotations are review

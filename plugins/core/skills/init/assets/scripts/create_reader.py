@@ -17,8 +17,10 @@ default: directory of the single input, or docs/spec-reader/ in workspace mode):
 The Export button names its download for the reader title and document kind
 (`<project>-<doc>-notes-<date>.md`) so it stays findable in a Downloads folder.
 A returned export belongs in {output-dir} beside the reader — it is part of the
-project, not a scratch file. Seed a rebuilt reader from one by placing it as
-{output-dir}/notes.json. Notes are keyed by stable section IDs and are
+project, not a scratch file. Seed a rebuilt reader from one with
+`--notes <that file>`; it is Markdown with the note data embedded in a trailing
+comment, and a plain JSON object is accepted too ({output-dir}/notes.json is
+still read when --notes is not given). Notes are keyed by stable section IDs and are
 re-injected into both output artifacts.
 
 Requires: pip install markdown   (or: uv run --with markdown python3 create_reader.py)
@@ -96,9 +98,12 @@ def strip_inline_md(text: str) -> str:
 
 
 def slug(text: str) -> str:
+    """A filename-safe stem. Never empty: it names the export file and the
+    reader's storage namespace, and a title that is entirely non-ASCII or
+    punctuation ("项目") stripped down to nothing produced `-spec-notes-….md`."""
     text = text.lower()
     text = re.sub(r"[^a-z0-9]+", "-", text)
-    return text.strip("-")
+    return text.strip("-") or "doc"
 
 
 def parse_doc(raw: str) -> tuple[str, str, list[dict]]:
@@ -298,6 +303,32 @@ def infer_title(cwd: Path) -> str:
     except Exception:
         pass
     return cwd.name.replace("-", " ").replace("_", " ").title()
+
+
+# The Export button writes Markdown for a human to read, with the note data
+# embedded verbatim in a trailing HTML comment so that the same file can be read
+# back. Seeding used to demand a `notes.json` nothing produces — a reviewer who
+# followed the instructions with the file the page had just handed them got a
+# JSON decode error.
+NOTES_DATA_RE = re.compile(r"<!--\s*SPEC-NOTES-DATA\s*(\{.*?\})\s*-->", re.DOTALL)
+
+
+def read_notes(path: Path) -> dict:
+    """Notes from an exported reader file: raw JSON, or the block the export embeds."""
+    text = path.read_text(encoding="utf-8")
+    try:
+        loaded = json.loads(text)
+    except ValueError:
+        match = NOTES_DATA_RE.search(text)
+        if not match:
+            raise ValueError(
+                "no notes found — expected a JSON object, or a Markdown export "
+                "carrying its SPEC-NOTES-DATA block"
+            ) from None
+        loaded = json.loads(match.group(1))
+    if not isinstance(loaded, dict):
+        raise ValueError("the notes are not a JSON object")
+    return loaded
 
 
 # ---------------------------------------------------------------- HTML build
@@ -763,6 +794,8 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--input", metavar="FILE", help="single spec or plan Markdown file")
     parser.add_argument("--input-dir", metavar="DIR", help="directory containing workspace subdirs with spec.md")
+    parser.add_argument("--notes", metavar="FILE",
+                        help="returned export to seed notes from (default: <output-dir>/notes.json)")
     parser.add_argument("--output-dir", metavar="DIR", help="where to write the reader and annotated Markdown")
     parser.add_argument("--name", metavar="TEXT", help="project name for the reader title (default: git repo name)")
     args = parser.parse_args()
@@ -798,18 +831,21 @@ def main() -> int:
     title = args.name or infer_title(cwd)
     gen_date = date.today().isoformat()
 
-    notes_path = out_dir / "notes.json"
+    notes_path = Path(args.notes) if args.notes else out_dir / "notes.json"
     seed_notes: dict = {}
     if notes_path.exists():
         try:
-            loaded = json.loads(notes_path.read_text(encoding="utf-8"))
-            if isinstance(loaded, dict):
-                seed_notes = loaded
-                print(f"ℹ  seeding from {notes_path} ({len(seed_notes)} notes)", file=sys.stderr)
-            else:
-                print(f"⚠  {notes_path} does not contain a JSON object", file=sys.stderr)
-        except Exception as exc:
+            loaded = read_notes(notes_path)
+        except ValueError as exc:
             print(f"⚠  could not read {notes_path}: {exc}", file=sys.stderr)
+        except OSError as exc:
+            print(f"⚠  could not read {notes_path}: {exc}", file=sys.stderr)
+        else:
+            seed_notes = loaded
+            print(f"ℹ  seeding from {notes_path} ({len(seed_notes)} notes)", file=sys.stderr)
+    elif args.notes:
+        print(f"✗ {notes_path} does not exist", file=sys.stderr)
+        return 2
 
     html_out = build_html(parts, title, gen_date, seed_notes, single_label, doc_slug)
     md_out = build_markdown(parts, title, gen_date, seed_notes, single_label)
