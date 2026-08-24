@@ -447,6 +447,41 @@ if (cd "${refrepo}" && ARSENAL_DEFAULT_BRANCH=main ARSENAL_GATE_FROM_DEFAULT=1 \
         bash "${GATE_RUN}" "t-data" >/dev/null 2>&1); then
     echo "FAIL: the marker as command data must not count as a placeholder" >&2; exit 1
 fi
+# ...including inside a heredoc body, where the marker can sit on a line of its
+# own and still be data the gate writes out rather than a declaration about it.
+cat > "${refrepo}/arsenal/tasks/t-heredoc.md" <<'TASKEOF'
+---
+id: t-heredoc
+title: "Marker inside a heredoc body"
+---
+
+## Acceptance gate
+
+```bash
+cat > /dev/null <<'INNER'
+# arsenal:gate-placeholder — written as data, not declared
+INNER
+false
+```
+TASKEOF
+git -C "${refrepo}" add -A
+git -C "${refrepo}" commit -q -m "file the task whose gate writes the marker as data"
+cat > "${refrepo}/arsenal/tasks/t-heredoc.md" <<'TASKEOF'
+---
+id: t-heredoc
+title: "Marker inside a heredoc body"
+---
+
+## Acceptance gate
+
+```bash
+true
+```
+TASKEOF
+if (cd "${refrepo}" && ARSENAL_DEFAULT_BRANCH=main ARSENAL_GATE_FROM_DEFAULT=1 \
+        bash "${GATE_RUN}" "t-heredoc" >/dev/null 2>&1); then
+    echo "FAIL: a marker inside a heredoc body must not count as a placeholder" >&2; exit 1
+fi
 echo "PASS: a placeholder gate command on the default branch defers to the working copy"
 
 echo "PASS: gate_run_test — all gates passed"

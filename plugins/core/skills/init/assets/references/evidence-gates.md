@@ -126,8 +126,8 @@ opened — and the only change that could replace the placeholder was the one th
 PR carried.
 
 The command is now the one part that defers. When the default branch's `bash`
-block is still the placeholder — the marker above, or a lone `false` from an
-earlier template — `gate_run.sh` runs the **working copy's** command instead and
+block is still the placeholder — the marker above on the block's first line,
+or a lone `false` from an earlier template — `gate_run.sh` runs the **working copy's** command instead and
 says so on stderr. The `gate` block is unaffected: the metric, operator,
 threshold and evidence path are still read from the default branch, every time,
 so the assertion a worker is measured against is always the board's. Once a real

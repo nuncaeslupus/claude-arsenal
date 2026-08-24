@@ -221,10 +221,14 @@ PLACEHOLDER_MARKER = "arsenal:gate-placeholder"
 
 def is_placeholder(cmd):
     lines = cmd.splitlines()
-    # On a COMMENT line only: a real gate may carry the marker as data (a grep
-    # for un-replaced placeholders is exactly the check someone writes), and
-    # matching that would hand the command back to the branch under review.
-    if any(ln.strip().startswith("#") and PLACEHOLDER_MARKER in ln for ln in lines):
+    # On the block's FIRST line, and only as a comment. A real gate may carry the
+    # marker as data — a grep for un-replaced placeholders is exactly the check
+    # someone writes, and a heredoc body can hold the marker line verbatim — and
+    # matching that would hand the command back to the branch under review, which
+    # is the guard this whole path exists to keep. Nothing can precede a heredoc's
+    # body but the command opening it, so the first line is never data.
+    first = next((ln.strip() for ln in lines if ln.strip()), "")
+    if first.startswith("#") and PLACEHOLDER_MARKER in first:
         return True
     code = [ln.split("#", 1)[0].strip() for ln in lines]
     return [ln for ln in code if ln] == ["false"]
