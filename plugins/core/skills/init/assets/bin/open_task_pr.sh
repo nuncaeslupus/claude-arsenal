@@ -335,6 +335,32 @@ fi
 # branch at the moment the merge does, and if the PR never merges the task file
 # never moves. No follow-up commit, no push to a protected branch, nothing to
 # reconcile.
+_ARCHIVED_LIVE=""
+_ARCHIVED_DEST=""
+_ARCHIVED_BACKUP=""
+_ARCHIVED_INDEX=""
+
+_unarchive_task_file() {
+    [[ -n "${_ARCHIVED_BACKUP}" && -f "${_ARCHIVED_BACKUP}" ]] || return 0
+    # Restore FIRST, delete second. Deleting the archive before the copy
+    # succeeds is the one ordering where a failure leaves the task file at
+    # neither path — the tree would come out of a refusal worse than it went in.
+    if ! cp "${_ARCHIVED_BACKUP}" "${_ARCHIVED_LIVE}"; then
+        echo "open_task_pr: could not restore ${_ARCHIVED_LIVE} from ${_ARCHIVED_BACKUP} — the archived copy at ${_ARCHIVED_DEST} is being left in place. Move it back by hand; the backup is at ${_ARCHIVED_BACKUP}." >&2
+        return 1
+    fi
+    rm -f "${_ARCHIVED_DEST}" "${_ARCHIVED_BACKUP}"
+    # Put the INDEX back where it was, rather than staging the rollback: the
+    # task file may have been untracked (a task added by this very PR) or
+    # carrying unstaged edits, and `git add -A` would turn either into a staged
+    # change the worker never made.
+    git rm -q --cached --ignore-unmatch -- "${_ARCHIVED_LIVE}" "${_ARCHIVED_DEST}" 2>/dev/null || true
+    if [[ -n "${_ARCHIVED_INDEX}" ]]; then
+        printf '%s\n' "${_ARCHIVED_INDEX}" | git update-index --index-info 2>/dev/null || true
+    fi
+    echo "open_task_pr: restored ${_ARCHIVED_LIVE} — the archive was undone" >&2
+}
+
 _archive_task_file() {
     local live="${ARSENAL_HOME}/tasks/${TASK_ID}.md"
     local hist_dir="${ARSENAL_HOME}/tasks/_history"
@@ -354,6 +380,19 @@ _archive_task_file() {
     # fatal, because the PR body promises the archive and a half-done one leaves
     # exactly the drift this whole change removes.
     [[ -f "${live}" ]] || return 0
+
+    # Keep a byte-exact copy OUTSIDE the tree. The archive is the last thing to
+    # change the tree before the commit, so it is also the only thing that can
+    # need undoing when the re-check below refuses — and a refusal that leaves
+    # the task file moved contradicts this script's own "nothing has been
+    # committed".
+    _ARCHIVED_BACKUP="$(mktemp -t "arsenal-task-${TASK_ID}-XXXXXX.md")"
+    cp "${live}" "${_ARCHIVED_BACKUP}" || { echo "open_task_pr: cannot back up ${live}" >&2; return 1; }
+    _ARCHIVED_LIVE="${live}"
+    _ARCHIVED_DEST="${dest}"
+    # The index entry as it stands before the move — empty when the file is
+    # untracked, which is itself the state to restore.
+    _ARCHIVED_INDEX="$(git ls-files -s -- "${live}" 2>/dev/null || true)"
 
     mkdir -p "${hist_dir}" || { echo "open_task_pr: cannot create ${hist_dir}" >&2; return 1; }
     if ! git mv "${live}" "${dest}" 2>/dev/null; then
@@ -393,6 +432,24 @@ if ! _archive_task_file; then
     echo "open_task_pr: refusing to open a PR whose task file could not be archived — the merge would close the issue and leave the task file live. Fix the error above and re-run; nothing has been committed." >&2
     exit 1
 fi
+
+# The host gate ran at the top, over a tree that did not yet contain the
+# archive. Then the archive moved a tracked file — so the gate certified one
+# tree and the commit carries another. Any host measurement over the repo's own
+# files (a file count, a coverage denominator, a lint sweep) is then stale by
+# exactly that file, and the host's next run fails on a branch whose gate had
+# just passed (#220). Re-run it here, where the tree is final: a gate that
+# regenerates its evidence writes the right numbers into this commit, and one
+# that only checks confirms the tree being committed is the certified one.
+if [[ -n "${host_gate}" && -n "${_ARCHIVED_DEST}" ]]; then
+    echo "open_task_pr: re-running host gate over the archived tree: ${host_gate}" >&2
+    if ! bash -c "${host_gate}" >&2; then
+        _unarchive_task_file || echo "open_task_pr: THE ROLLBACK ALSO FAILED — see above; the tree needs a hand before re-running." >&2
+        echo "open_task_pr: host gate failed after the task file was archived (${host_gate}) — no PR opened. The task file has been restored to ${ARSENAL_HOME}/tasks/ — nothing was committed. A gate that passes before the archive and fails after it is measuring the repo's own files; re-run once the measurement accounts for ${ARSENAL_HOME}/tasks/_history/." >&2
+        exit 1
+    fi
+fi
+[[ -n "${_ARCHIVED_BACKUP}" ]] && rm -f "${_ARCHIVED_BACKUP}"
 
 # Stage and commit — the shared-checkout guard above already cleared `git add
 # -A`, and a dynamic Co-Authored-By is added only when supplied.

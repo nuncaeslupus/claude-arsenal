@@ -125,4 +125,43 @@ grep -q "host gate failed" <<<"${out}" \
     || fail "the host gate must be found when run from a subdirectory: ${out}"
 printf 'merge-policy = "after-ci"\n' > arsenal/config.toml
 
+# --- 10: the gate certifies the tree that is actually committed (#220) ---
+#     The host gate ran, and THEN the task file was archived into _history/ —
+#     so any host measurement over the repo's own files (a file count, a
+#     coverage denominator) was stale by exactly that file in every PR this
+#     script opened, and the host's next run failed on a branch whose gate had
+#     just passed. The gate now re-runs over the archived tree; a refusal there
+#     must leave the task file where it started.
+# The earlier cases all refuse before git is touched; this one has to get as
+# far as cutting a branch, which needs a default ref to branch off.
+git update-ref refs/remotes/origin/main HEAD
+write_task t-gate-archive "true"
+# Committed, then edited without staging — the state a worker's tree is actually
+# in. It is also what separates a real index restore from `git add -A`: the
+# latter would turn these unstaged edits into staged ones on the way out.
+git add arsenal/tasks/t-gate-archive.md && git commit -q -m "file the task"
+printf '\n<!-- an unstaged edit the worker has not committed -->\n' >> arsenal/tasks/t-gate-archive.md
+git update-ref refs/remotes/origin/main HEAD
+printf 'host-gate = "test ! -e arsenal/tasks/_history"\n' > arsenal/config.toml
+before_status="$(git status --porcelain)"
+out=$(ARSENAL_TASK_ISSUE=42 ARSENAL_ALLOW_SHARED_ADD=1 ARSENAL_COAUTHOR="" bash "${HELPER}" t-gate-archive "Archived tree" 2>&1); rc=$?
+[[ ${rc} -ne 0 ]] || fail "a host gate that fails over the archived tree must stop the PR"
+grep -q "re-running host gate" <<<"${out}" \
+    || fail "the host gate should re-run once the archive is in the tree: ${out}"
+[[ -f "arsenal/tasks/t-gate-archive.md" ]] \
+    || fail "the refused run left the task file archived: it must be restored"
+[[ -e "arsenal/tasks/_history/t-gate-archive.md" ]] \
+    && fail "the archived copy survived a refusal"
+# The whole point of the undo: the tree AND the index come out exactly as they
+# went in. `git add -A` as a rollback would turn this untracked task file into a
+# staged addition the worker never made.
+after_status="$(git status --porcelain)"
+[[ "${after_status}" == "${before_status}" ]] \
+    || fail "the refused run changed the index/worktree state:
+before: ${before_status}
+after:  ${after_status}"
+printf 'merge-policy = "after-ci"\n' > arsenal/config.toml
+git checkout -q main 2>/dev/null || true
+echo "PASS: the host gate re-runs over the archived tree, and a refusal restores it"
+
 echo "PASS: open_task_pr_gates_test — all gates passed"
