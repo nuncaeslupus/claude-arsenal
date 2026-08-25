@@ -91,5 +91,46 @@ if ! grep -q "arsenal/session/surface_profile.json" "${tmpdir}/.gitignore" 2>/de
     echo "FAIL: .gitignore missing surface_profile.json entry" >&2; exit 1
 fi
 
+# Gate 7: ARSENAL_HOME relocates the host tree, and the config it writes is the
+# config the readers read. Every runtime script resolves the host tree that way
+# — `arsenal_config.py` included — while init hardcoded `arsenal/`, so a
+# relocated host was scaffolded where nothing looks and every setting silently
+# stayed at its default.
+relocated="${tmpdir}/relocated"
+mkdir -p "${relocated}"
+echo "# Relocated repo" > "${relocated}/CLAUDE.md"
+ARSENAL_HOME=hosttree python3 "${INIT_PY}" \
+    --repo-path "${relocated}" --bundle-dir "${BUNDLE_DIR}" --silent
+if [[ ! -f "${relocated}/hosttree/config.toml" ]]; then
+    echo "FAIL: ARSENAL_HOME=hosttree did not scaffold hosttree/config.toml" >&2; exit 1
+fi
+if [[ -d "${relocated}/arsenal" ]]; then
+    echo "FAIL: init scaffolded arsenal/ as well as the relocated tree" >&2; exit 1
+fi
+read_back=$(ARSENAL_HOME=hosttree python3 \
+    "${SCRIPT_DIR}/../skills/init/assets/scripts/arsenal_config.py" \
+    --repo-root "${relocated}" --get merge-policy)
+[[ -n "${read_back}" ]] \
+    || { echo "FAIL: arsenal_config.py read nothing back from the relocated config" >&2; exit 1; }
+echo "PASS: ARSENAL_HOME relocates the tree init creates, and the readers agree"
+
+# Gate 8: an existing default tree that ARSENAL_HOME would orphan stops init.
+# The tasks and config stay on disk while every script reads past them, which is
+# the silent half of the same mismatch.
+orphan="${tmpdir}/orphan"
+mkdir -p "${orphan}/arsenal/tasks"
+echo "# Orphan repo" > "${orphan}/CLAUDE.md"
+if ARSENAL_HOME=elsewhere python3 "${INIT_PY}" \
+        --repo-path "${orphan}" --bundle-dir "${BUNDLE_DIR}" --silent >/dev/null 2>"${tmpdir}/orphan.err"; then
+    echo "FAIL: init scaffolded a second host tree beside an existing one" >&2; exit 1
+fi
+if ! grep -q "would leave the existing tasks and config" "${tmpdir}/orphan.err"; then
+    echo "FAIL: the refusal must say what is at stake: $(cat "${tmpdir}/orphan.err")" >&2; exit 1
+fi
+if [[ -d "${orphan}/elsewhere" ]]; then
+    echo "FAIL: the refusal still created the relocated tree" >&2; exit 1
+fi
+echo "PASS: init refuses to orphan an existing host tree"
+
 echo "PASS: init_test — all gates passed"
 exit 0

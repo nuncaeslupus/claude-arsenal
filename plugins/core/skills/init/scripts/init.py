@@ -3,6 +3,7 @@
 import argparse
 import hashlib
 import json
+import os
 import re
 import shutil
 import sys
@@ -574,8 +575,21 @@ def _inject_claude_md(repo_path: Path) -> None:
     print("  CLAUDE.md: session-protocol block refreshed (was out of date)")
 
 
+def _home(repo_path: Path) -> Path:
+    """The host-owned tree — tasks, specs, plans, config, session.
+
+    `ARSENAL_HOME` relocates it, and eight shipped bundle files already read it
+    that way, `arsenal_config.py` included. This script is the one thing that
+    CREATES the tree, and it hardcoded `arsenal/` — so with the variable set,
+    `/init` scaffolded a config in one place and every reader looked in another.
+    The consumer edits a file nothing reads and every setting silently stays at
+    its default.
+    """
+    return repo_path / os.environ.get("ARSENAL_HOME", "arsenal")
+
+
 def _upsert_overview(repo_path: Path, workspace: str, root: str, spec: str, plan: str) -> None:
-    overview = repo_path / "arsenal" / "project" / "overview.md"
+    overview = _home(repo_path) / "project" / "overview.md"
     if not overview.exists():
         overview.write_text(OVERVIEW_HEADER, encoding="utf-8")
     content = overview.read_text(encoding="utf-8")
@@ -688,7 +702,7 @@ def _install_queue_workflow(repo_path: Path, arsenal: Path, silent: bool = False
     if not source.is_file():
         return
     target = repo_path / ".github" / "workflows" / _QUEUE_WORKFLOW
-    config = repo_path / "arsenal" / "config.toml"
+    config = _home(repo_path) / "config.toml"
     setting = _queue_automation_setting(config)
 
     if setting == "false":
@@ -773,7 +787,19 @@ def init_base(
     # vendor the bundle without an update ever touching their tasks or config.
     for d in ["bin", "scripts", "agents"]:
         (arsenal / d).mkdir(parents=True, exist_ok=True)
-    home = repo_path / "arsenal"
+    home = _home(repo_path)
+    # An existing default tree while ARSENAL_HOME points somewhere else is an
+    # install about to be orphaned: the tasks and config stay on disk and every
+    # script starts reading past them. Scaffolding a second tree beside the
+    # first is the less useful of the two answers, and it is silent.
+    default_home = repo_path / "arsenal"
+    if home != default_home and default_home.is_dir() and not home.exists():
+        sys.exit(
+            f"init: ARSENAL_HOME points at {home}, which does not exist, while "
+            f"{default_home} does. Scaffolding a second host tree would leave the "
+            "existing tasks and config where nothing reads them. Move it "
+            f"(`mv {default_home} {home}`), or unset ARSENAL_HOME to keep using it."
+        )
     for d in ["tasks", "specs", "plans", "project", "session"]:
         (home / d).mkdir(parents=True, exist_ok=True)
 
@@ -874,7 +900,7 @@ def init_workspace(
     ):
         sys.exit("init: workspace not registered — the bundle refused to install (see above)")
 
-    ws_dir = repo_path / "arsenal" / "project" / workspace
+    ws_dir = _home(repo_path) / "project" / workspace
     ws_dir.mkdir(parents=True, exist_ok=True)
     print(f"Registering workspace {workspace!r}...")
 
