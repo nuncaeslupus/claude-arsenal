@@ -14,13 +14,16 @@ CLAUDE_MD_END_MARKER = "<!-- /claude-arsenal: auto-managed -->"
 # How the block ended before it had a closing marker.
 LEGACY_BLOCK_TAIL = "@claude-arsenal/AGENTS.md"
 
-CLAUDE_MD_BLOCK = """\
+# `{home}` is substituted with the resolved host tree — the block is
+# auto-managed and rewritten on every init, so a hand-corrected path would be
+# overwritten anyway; it has to be generated right instead.
+_CLAUDE_MD_TEMPLATE = """\
 <!-- claude-arsenal: auto-managed -->
 ## Automatic session protocol
 
 Every session, without waiting to be asked:
 
-1. Read `arsenal/session/handover.md` for the previous session's context.
+1. Read `{home}/session/handover.md` for the previous session's context.
 2. List the repository's issues labelled `arsenal:task` — **open and closed** — and
    save the JSON. Use whatever GitHub access this surface has; run
    `claude-arsenal/bin/github_channel.sh --detect` to find out which. Request
@@ -34,7 +37,7 @@ Every session, without waiting to be asked:
    - **Nothing returned + workspace plans exist** → seed tasks from each plan.
    - **Nothing at all** → ask what to work on.
 5. Open each task's PR with `Closes #<issue>` so merging it closes the task by itself.
-6. After any session with tasks: update `arsenal/session/handover.md`.
+6. After any session with tasks: update `{home}/session/handover.md`.
 
 @claude-arsenal/AGENTS.md
 <!-- /claude-arsenal: auto-managed -->"""
@@ -509,7 +512,7 @@ def _add_gitignore_entry(repo_path: Path, entry: str) -> None:
     print(f"  .gitignore: added {entry}")
 
 
-def _replace_managed_block(content: str) -> str | None:
+def _replace_managed_block(content: str, block: str) -> str | None:
     """Return content with the managed block replaced, or None if there is none.
 
     The block is delimited by the two markers. Repos installed before the end
@@ -541,19 +544,26 @@ def _replace_managed_block(content: str) -> str | None:
             # the file would eat host-owned content, so leave it and say so.
             return ""
         end = offsets[-1]
-    return content[:start] + CLAUDE_MD_BLOCK + content[end:]
+    return content[:start] + block + content[end:]
+
+
+def _claude_md_block(repo_path: Path) -> str:
+    """The managed block, naming the host tree this repo actually has."""
+    home_rel = _home(repo_path).relative_to(repo_path).as_posix()
+    return _CLAUDE_MD_TEMPLATE.replace("{home}", home_rel)
 
 
 def _inject_claude_md(repo_path: Path) -> None:
+    block = _claude_md_block(repo_path)
     claude_md = repo_path / "CLAUDE.md"
     if not claude_md.exists():
-        claude_md.write_text(f"{CLAUDE_MD_BLOCK}\n", encoding="utf-8")
+        claude_md.write_text(f"{block}\n", encoding="utf-8")
         print("  CLAUDE.md: created with session-protocol block")
         return
 
     content = claude_md.read_text(encoding="utf-8")
     if CLAUDE_MD_MARKER not in content:
-        claude_md.write_text(content.rstrip("\n") + f"\n\n{CLAUDE_MD_BLOCK}\n", encoding="utf-8")
+        claude_md.write_text(content.rstrip("\n") + f"\n\n{block}\n", encoding="utf-8")
         print("  CLAUDE.md: injected session-protocol block")
         return
 
@@ -561,7 +571,7 @@ def _inject_claude_md(repo_path: Path) -> None:
     # once and never touched again, which meant an upgrade that rewrote the
     # protocol left every consumer running the old one — naming paths that had
     # moved and scripts that had been deleted.
-    replaced = _replace_managed_block(content)
+    replaced = _replace_managed_block(content, block)
     if replaced == "":
         print(
             "  CLAUDE.md: managed block has no end marker and no recognisable tail — "

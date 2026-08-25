@@ -171,5 +171,20 @@ if [[ -d "${outside}" ]]; then
 fi
 echo "PASS: a host tree outside the repo is refused, not half-installed"
 
+# Gate 8e: the managed CLAUDE.md block names the tree this repo actually has.
+# It is rewritten on every init, so a hand-corrected path would be overwritten —
+# it has to be generated right. Every session reads step 1 before anything else.
+if ! grep -q "hosttree/session/handover.md" "${relocated}/CLAUDE.md"; then
+    echo "FAIL: the session protocol still points at arsenal/session/ for a relocated tree" >&2; exit 1
+fi
+if grep -q "arsenal/session/handover.md" "${relocated}/CLAUDE.md"; then
+    echo "FAIL: the session protocol names a handover path that does not exist" >&2; exit 1
+fi
+# ...and the default install is unchanged, so no consumer sees churn.
+if ! grep -q "arsenal/session/handover.md" "${tmpdir}/CLAUDE.md"; then
+    echo "FAIL: the default install's session protocol changed" >&2; exit 1
+fi
+echo "PASS: the session protocol names the resolved host tree"
+
 echo "PASS: init_test — all gates passed"
 exit 0
