@@ -56,17 +56,26 @@ detect() {
     # held by a proxy outside the VM. Probe instead of assuming.
     #
     # The probe is a READ, and answers only the read question. A channel that
-    # can GET /rate_limit may still be refused a ref creation, so `rest` here
-    # means "reachable", not "may write" — `api()` maps a refused write back to
-    # the `none` path rather than treating it as a fault. Probing with a real
-    # write is not an option: the only way to test creating a ref is to create
-    # one.
+    # can read may still be refused a ref creation, so `rest` here means
+    # "reachable", not "may write" — `api()` maps a refused write back to the
+    # `none` path rather than treating it as a fault. Probing with a real write
+    # is not an option: the only way to test creating a ref is to create one.
+    #
+    # It probes /user, not /rate_limit. An agent proxy in front of the API can
+    # answer /rate_limit 200 by itself, without the request ever reaching GitHub
+    # with this session's credential — so the probe was not testing the channel
+    # at all, and every real call afterwards came back 403. /user cannot be
+    # answered without the credential: no identity, no 200. A credential with no
+    # user identity of its own (an Actions installation token) answers 403 and
+    # gets `none`, which is a handled outcome — a session on that path uses its
+    # built-in tools. Detection failing open into the wrong branch is the worse
+    # of the two.
     if command -v curl >/dev/null 2>&1 && [[ -n "${GITHUB_TOKEN:-${GH_TOKEN:-}}" ]]; then
         local code
         code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 \
             -H "Authorization: Bearer ${GITHUB_TOKEN:-${GH_TOKEN}}" \
             -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/rate_limit" 2>/dev/null || echo 000)"
+            "https://api.github.com/user" 2>/dev/null || echo 000)"
         [[ "${code}" == "200" ]] && { echo "rest"; return 0; }
     fi
     echo "none"

@@ -22,6 +22,17 @@ fail() { echo "FAIL: $1" >&2; exit 1; }
 BIN="${tmp}/bin"; mkdir -p "${BIN}"
 cp "${SRC}/github_channel.sh" "${SRC}/claim_task.sh" "${BIN}/"
 
+# A `gh` that is present but not authenticated. PATH below keeps /usr/bin — a
+# developer machine has a real, logged-in `gh` there, so `detect` answered `gh`
+# and none of the REST cases below ran. The suite passed in CI, where there is
+# no such `gh`, and failed on the machine writing the code.
+cat > "${BIN}/gh" <<'EOF'
+#!/usr/bin/env bash
+[[ "$1 $2" == "auth status" ]] && exit 1
+exit 1
+EOF
+chmod +x "${BIN}/gh"
+
 # A curl stub standing in for the proxy: 200 on the read probe, 403 on any
 # write, and it records the Content-Type it was handed.
 cat > "${BIN}/curl" <<'EOF'
@@ -37,7 +48,7 @@ for i in "${!args[@]}"; do
     esac
 done
 [[ -n "${ctype}" ]] && echo "${ctype}" >> "${CURL_LOG:-/dev/null}"
-if [[ "${url}" == *"/rate_limit" ]]; then
+if [[ "${url}" == *"/user" || "${url}" == *"/rate_limit" ]]; then
     [[ -n "${out}" ]] && echo '{"ok":true}' > "${out}"
     printf '200'; exit 0
 fi
@@ -93,7 +104,7 @@ for i in "${!args[@]}"; do
         https://*) url="${args[$i]}" ;;
     esac
 done
-if [[ "${url}" == *"/rate_limit" ]]; then
+if [[ "${url}" == *"/user" || "${url}" == *"/rate_limit" ]]; then
     [[ -n "${out}" ]] && echo '{"ok":true}' > "${out}"; printf '200'; exit 0
 fi
 [[ -n "${out}" ]] && echo '{"message":"boom"}' > "${out}"
@@ -102,5 +113,31 @@ EOF
 chmod +x "${BIN}/curl"
 bash "${BIN}/github_channel.sh" --api POST "/repos/o/r/git/refs" '{"ref":"x"}' >/dev/null 2>&1; rc=$?
 [[ ${rc} -eq 4 ]] || fail "a 500 must stay a fault (exit 4), got ${rc}"
+
+# --- 6: a proxy that answers the reachability probe itself is not a channel ---
+#     On Claude Code on the web the agent proxy answers GET /rate_limit 200
+#     without the request reaching GitHub with the session's credential. The
+#     probe printed `rest`, and every real call afterwards came back 403 —
+#     which is neither `won` nor `lost` for a claim. `none` is a handled
+#     outcome; a forged `rest` is not.
+cat > "${BIN}/curl" <<'EOF'
+#!/usr/bin/env bash
+out=""; url=""
+args=("$@")
+for i in "${!args[@]}"; do
+    case "${args[$i]}" in
+        -o) out="${args[$((i+1))]}" ;;
+        https://*) url="${args[$i]}" ;;
+    esac
+done
+if [[ "${url}" == *"/rate_limit" ]]; then
+    [[ -n "${out}" ]] && echo '{"ok":true}' > "${out}"; printf '200'; exit 0
+fi
+[[ -n "${out}" ]] && echo '{"message":"Resource not accessible"}' > "${out}"
+printf '403'; exit 0
+EOF
+chmod +x "${BIN}/curl"
+[[ "$(bash "${BIN}/github_channel.sh" --detect)" == "none" ]] \
+    || fail "a proxy answering the reachability probe must not read as a usable channel"
 
 echo "PASS: github_channel_test — all gates passed"
