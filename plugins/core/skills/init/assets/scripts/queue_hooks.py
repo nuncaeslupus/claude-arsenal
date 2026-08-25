@@ -211,8 +211,9 @@ def plan_sync_handles(
     """An issue for every task file that has none. One-directional and idempotent.
 
     The warnings are collected rather than dropped: this is the caller that runs
-    unattended, and `missing_handles` holds a task back when an unresolved issue
-    is a near-match for it. Without them the workflow reported "nothing to do"
+    unattended, and `missing_handles` holds a task back — or proposes it marked
+    `ambiguous`, which this caller reports and does not create — when an
+    unresolved issue is a near-match for it. Without them the workflow reported "nothing to do"
     for a task that has no handle and is therefore invisible to the board — the
     diagnostic existed, and was reachable only from the interactive path.
     """
@@ -228,7 +229,14 @@ def plan_sync_handles(
             "body": row["body"],
             "labels": row["labels"],
         }
+        # A row marked ambiguous names a collision the id resolution cannot
+        # settle: an unresolved issue that is the handle for at most one of
+        # several tasks. Creating it here would put a second issue on the board
+        # for whichever one it already covered, unattended and unreviewed. The
+        # warning above already carries the row, so nothing is hidden — the
+        # decision is just left to someone who can make it (#239).
         for row in rows
+        if not row.get("ambiguous")
     ]
 
 

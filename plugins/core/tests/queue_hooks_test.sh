@@ -207,6 +207,50 @@ assert not mod.apply_action({"kind": "close-issue", "task": "t-x", "comment": "c
 PY
 echo "PASS: create-issue reaches the API; close-issue without a number does not"
 
+# Gate 8b (#239): the unattended planner does not CREATE an ambiguous handle.
+# Two task files folding to one unresolved issue's loose title means that issue
+# is the handle for at most one of them, and this caller has nobody to ask. It
+# reports the collision and creates nothing; a session reading the same rows can
+# still weigh it.
+ambi="${tmp}/ambi"
+mkdir -p "${ambi}"
+for _pair in "t-ambi0001:Add A/B" "t-ambi0002:Add AB" "t-solo0001:Something else"; do
+    cat > "${ambi}/${_pair%%:*}.md" <<MD
+---
+id: ${_pair%%:*}
+title: "${_pair#*:}"
+priority: 5
+---
+
+## Acceptance gate
+\`\`\`bash
+true
+\`\`\`
+MD
+done
+cat > "${tmp}/issues-ambi.json" <<'JSON'
+[{"number": 60, "state": "open", "labels": [{"name": "arsenal:task"}], "title": "Add A-B"}]
+JSON
+python3 - "${HOOKS}" "${ambi}" "${tmp}/issues-ambi.json" <<'AMBI' || fail "ambiguous handles must be reported, not created"
+import importlib.util, json, sys
+from pathlib import Path
+
+spec = importlib.util.spec_from_file_location("queue_hooks", sys.argv[1])
+mod = importlib.util.module_from_spec(spec)
+sys.path.insert(0, str(Path(sys.argv[1]).parent))
+spec.loader.exec_module(mod)
+
+tasks, _ = mod.load_tasks(Path(sys.argv[2]))
+issues = json.loads(Path(sys.argv[3]).read_text())
+actions = mod.plan_sync_handles(tasks, issues)
+created = {a["task"] for a in actions if a["kind"] == "create-issue"}
+notes = " ".join(a["message"] for a in actions if a["kind"] == "note")
+assert created == {"t-solo0001"}, created
+assert "t-ambi0001" in notes and "t-ambi0002" in notes, notes
+assert "#60" in notes, notes
+AMBI
+echo "PASS: an ambiguous handle is reported by the unattended planner, never created"
+
 # Gate 9 (#146): a board carrying both priority conventions is reported. Neither
 # scale is wrong alone; the mix is, because a rank scale's floor sits above the
 # size scale's ceiling, so every rank-encoded task outranks every sized one

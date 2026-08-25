@@ -1,6 +1,6 @@
 # Claude Arsenal
 
-<!-- claude-arsenal v2.4.20 — imported via @claude-arsenal/AGENTS.md -->
+<!-- claude-arsenal v2.4.21 — imported via @claude-arsenal/AGENTS.md -->
 
 This file is imported by the host repo's `CLAUDE.md` via the session-protocol block
 that `/init` injects, so it sits in context on **every turn of every session**. It
@@ -66,7 +66,8 @@ At the start of every session (fresh start, context compaction, or cold restart)
    `arsenal:task` label and a **visible** `` `arsenal-task: <id>` `` line in the body. It
    must be visible text, not an HTML comment: some GitHub tools strip angle-bracketed
    content from bodies, and an id that is stripped leaves the issue anonymous and the board
-   reading as stateless. This is the only sync in the system: one-directional and
+   reading as stateless. A row carrying an `ambiguous` key is a collision to resolve first,
+   not an issue to create. This is the only sync in the system: one-directional and
    idempotent, so a failure delays work rather than corrupting it.
 
 4b. **Import issues filed between sessions** — list open issues carrying the import label
