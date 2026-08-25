@@ -182,6 +182,11 @@ MD
 git add arsenal/tasks/t-no-front.md && git commit -q -m "file the unstampable task"
 git update-ref refs/remotes/origin/main HEAD
 before_status="$(git status --porcelain)"
+# The bytes and the index entry, not just the porcelain summary: a rollback that
+# restored a re-rendered file, or staged what was untracked, reads identical in
+# `git status` and is not the tree the worker had.
+before_blob="$(git hash-object arsenal/tasks/t-no-front.md)"
+before_index="$(git ls-files -s -- arsenal/tasks/t-no-front.md)"
 out=$(ARSENAL_TASK_ISSUE=42 ARSENAL_ALLOW_SHARED_ADD=1 ARSENAL_COAUTHOR="" bash "${HELPER}" t-no-front "Unstampable" 2>&1); rc=$?
 [[ ${rc} -ne 0 ]] || fail "an archive that cannot be stamped must stop the PR"
 grep -q "not a complete archive" <<<"${out}" || fail "the refusal should name what it could not verify: ${out}"
@@ -190,6 +195,10 @@ grep -q "not a complete archive" <<<"${out}" || fail "the refusal should name wh
 [[ -e "arsenal/tasks/_history/t-no-front.md" ]] \
     && fail "the archived copy survived a refusal"
 grep -q "has been restored" <<<"${out}" || fail "the refusal should say the file was put back: ${out}"
+[[ "$(git hash-object arsenal/tasks/t-no-front.md)" == "${before_blob}" ]] \
+    || fail "the restored task file is not byte-identical to the one that went in"
+[[ "$(git ls-files -s -- arsenal/tasks/t-no-front.md)" == "${before_index}" ]] \
+    || fail "the index entry for the task file was not restored as it was"
 after_status="$(git status --porcelain)"
 [[ "${after_status}" == "${before_status}" ]] \
     || fail "the refused run changed the index/worktree state:

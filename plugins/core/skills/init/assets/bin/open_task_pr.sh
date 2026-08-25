@@ -354,9 +354,19 @@ _unarchive_task_file() {
     # task file may have been untracked (a task added by this very PR) or
     # carrying unstaged edits, and `git add -A` would turn either into a staged
     # change the worker never made.
-    git rm -q --cached --ignore-unmatch -- "${_ARCHIVED_LIVE}" "${_ARCHIVED_DEST}" 2>/dev/null || true
+    local index_ok=1
+    git rm -q --cached --ignore-unmatch -- "${_ARCHIVED_LIVE}" "${_ARCHIVED_DEST}" 2>/dev/null || index_ok=0
     if [[ -n "${_ARCHIVED_INDEX}" ]]; then
-        printf '%s\n' "${_ARCHIVED_INDEX}" | git update-index --index-info 2>/dev/null || true
+        printf '%s\n' "${_ARCHIVED_INDEX}" | git update-index --index-info 2>/dev/null || index_ok=0
+    fi
+    # Assert the outcome rather than the commands: `cp` succeeding is not the
+    # same fact as the tree being back. An `rm` that fails leaves the archived
+    # copy in place — the state `task_select.py` reads as finished work — and
+    # every caller here treats this function's status as proof of restoration,
+    # so a success returned over a half-undone tree is the claim that misleads.
+    if [[ ! -f "${_ARCHIVED_LIVE}" || -e "${_ARCHIVED_DEST}" || "${index_ok}" != 1 ]]; then
+        echo "open_task_pr: the rollback did not complete — ${_ARCHIVED_LIVE} should be present and ${_ARCHIVED_DEST} should be gone; check both, and the index, by hand." >&2
+        return 1
     fi
     echo "open_task_pr: restored ${_ARCHIVED_LIVE} — the archive was undone" >&2
 }
