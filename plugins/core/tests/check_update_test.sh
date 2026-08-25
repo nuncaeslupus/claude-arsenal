@@ -213,5 +213,54 @@ if grep -q "updated to v" <<<"${out}"; then
         || fail "must not report a completed update while the bundle version is unchanged: ${out}"
 fi
 
+# --- 10: a vendored init skill OLDER than the bundle is reported --------------
+#     init.py's downgrade refusal ships inside the skill, so a host vendored at
+#     2.4.0 has a copy that predates it: step 0(b) rewrites twelve bundle files
+#     backwards under an "Upgrading" banner and nothing objects. This script is
+#     the newer of the two in exactly that case, so it is the only side that can
+#     say so — and it must say it with no remote and under --check-only, since
+#     the comparison is local.
+skew="${tmp}/skew"
+mkdir -p "${skew}/claude-arsenal" "${skew}/.claude/skills/init/assets"
+git init -q -b main "${skew}"
+printf '2.4.9\n' > "${skew}/claude-arsenal/.bundle-version"
+printf '2.4.0\n' > "${skew}/.claude/skills/init/assets/.bundle-version"
+(cd "${skew}" && ARSENAL_REMOTE=nope bash "${CHECK}" --check-only 2>"${tmp}/skew-err.log" >/dev/null) \
+    || fail "check_update.sh exited non-zero on the skew case"
+grep -q "VENDORED SKILL BEHIND BUNDLE" "${tmp}/skew-err.log" \
+    || fail "a skill older than the bundle was not reported: $(cat "${tmp}/skew-err.log")"
+grep -q "2\.4\.9" "${tmp}/skew-err.log" || fail "the report does not name the bundle version"
+grep -q "2\.4\.0" "${tmp}/skew-err.log" || fail "the report does not name the skill version"
+grep -q "0(b)" "${tmp}/skew-err.log" \
+    || fail "the report does not name the step that would perform the downgrade"
+
+# ...and the safe directions stay quiet, or the warning is noise every session.
+printf '2.4.16\n' > "${skew}/.claude/skills/init/assets/.bundle-version"
+(cd "${skew}" && ARSENAL_REMOTE=nope bash "${CHECK}" --check-only 2>"${tmp}/skew-ok.log" >/dev/null)
+grep -q "VENDORED SKILL BEHIND BUNDLE" "${tmp}/skew-ok.log" \
+    && fail "a skill NEWER than the bundle must not be reported as behind it"
+printf '2.4.9\n' > "${skew}/.claude/skills/init/assets/.bundle-version"
+(cd "${skew}" && ARSENAL_REMOTE=nope bash "${CHECK}" --check-only 2>"${tmp}/skew-eq.log" >/dev/null)
+grep -q "VENDORED SKILL BEHIND BUNDLE" "${tmp}/skew-eq.log" \
+    && fail "matching versions must not be reported as skew"
+echo "PASS: a vendored skill older than the bundle is reported bundle-side"
+
+# --- 11: the update hint fits the layout it is printed for --------------------
+#     `consumer` installed by copy, not by subtree, so both halves of the
+#     suggested command fail there — the tag's tree has no claude-arsenal/ at
+#     its root to merge from. It was suggested anyway.
+out="$(cd "${consumer}" && bash "${CHECK}" --check-only 2>/dev/null)"
+grep -q "UPDATE AVAILABLE" <<<"${out}" || fail "expected an available update, got: ${out}"
+grep -q "git subtree merge" <<<"${out}" \
+    && fail "a non-subtree install was told to run a subtree merge that cannot work: ${out}"
+grep -q "plugin update claude-arsenal" <<<"${out}" \
+    || fail "a non-subtree install was not given a route that works: ${out}"
+
+git -C "${subtree_consumer}" remote add arsenal "${market}"
+out="$(cd "${subtree_consumer}" && bash "${CHECK}" --check-only 2>/dev/null)"
+grep -q "git subtree merge" <<<"${out}" \
+    || fail "a real subtree must still get the subtree command: ${out}"
+echo "PASS: the update hint matches how the bundle was installed"
+
 echo "PASS: check_update_test — all gates passed"
 exit 0

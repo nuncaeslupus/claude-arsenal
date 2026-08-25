@@ -20,6 +20,8 @@
 #     loudly. An untagged upstream version is never merged automatically —
 #     consumers pin to tags by contract — but they are told it exists.
 #   - genuinely current    → say so.
+# It also reports the one skew no other file can: a vendored init skill OLDER
+# than the bundle it would rewrite (#237).
 #
 # NEVER DOWNGRADES. The old check was `installed != latest`, so a consumer on a
 # hand-vendored 0.21.0 with a newest tag of v0.20.5 would "update" backwards.
@@ -132,6 +134,31 @@ _is_subtree() {
         --max-count=1 --format=%H 2>/dev/null | grep -q .
 }
 
+# Installed version
+installed="$(cat "${VERSION_FILE}" 2>/dev/null || echo "0.0.0")"
+
+# The skew that nothing inside the host can catch on its own. init.py refuses to
+# overwrite a newer installed bundle with its own older copies (#220) — but that
+# refusal shipped in v2.4.5 and lives in the very file that is stale, so a host
+# whose vendored skill predates it runs session-start step 0(b) and walks the
+# bundle backwards with an "Upgrading" banner (#237). This script is bundle-side:
+# in exactly the dangerous case it is the NEWER of the two files, which makes it
+# the only side that can report the drop. Runs before the remote gate and
+# regardless of --check-only — it is a local comparison and needs neither.
+_report_skill_skew() {
+    local installed="$1" ver_file skill_dir skill_ver
+    ver_file="$(find .claude/skills -path '*/init/assets/.bundle-version' 2>/dev/null | head -1 || true)"
+    [[ -n "${ver_file}" ]] || return 0
+    skill_ver="$(tr -d '[:space:]' < "${ver_file}" 2>/dev/null || true)"
+    [[ -n "${skill_ver}" ]] || return 0
+    _semver_gt "${installed}" "${skill_ver}" || return 0
+    skill_dir="${ver_file%/assets/.bundle-version}"
+    _warn "VENDORED SKILL BEHIND BUNDLE — the bundle is v${installed}, but the init skill at ${skill_dir} is v${skill_ver}."
+    _warn "  Session-start step 0(b) runs that skill's init.py, which would rewrite the bundle back to v${skill_ver}. SKIP step 0(b) until the skill catches up."
+    _warn "  Fix: update the plugin (/plugin update claude-arsenal), re-vendor .claude/skills from it, then re-run this check."
+}
+_report_skill_skew "${installed}"
+
 # No remote → the check is inert. Say so: silence here reads as "you are up to
 # date". Say only what was tested, though: the old wording asserted that the
 # bundle "was copied, not added as a git subtree", which is a different fact
@@ -148,9 +175,6 @@ if ! git remote get-url "${REMOTE}" >/dev/null 2>&1; then
     fi
     exit 0
 fi
-
-# Installed version
-installed="$(cat "${VERSION_FILE}" 2>/dev/null || echo "0.0.0")"
 
 # Latest strict-semver tag on the remote (vX.Y.Z only; pre-release tags ignored)
 latest="$(git ls-remote --tags "${REMOTE}" 'refs/tags/v*' 2>/dev/null \
@@ -193,7 +217,17 @@ if ! _semver_gt "${latest}" "${installed}"; then
     exit 0
 fi
 
-_manual_hint="git fetch ${REMOTE} refs/tags/v${latest}:refs/tags/v${latest} && git subtree merge --prefix=${PREFIX} \"v${latest}^{commit}\" --squash"
+# The route out of date depends on how the bundle got here, and only one of the
+# two was ever printed. A plugin/assets install has no subtree at the tag root to
+# merge — the skill's assets ARE the distribution — so both halves of the subtree
+# command fail, and the consumer is sent down that route twice with nothing in
+# the text to tell them it cannot work here.
+_plugin_route="update the plugin (/plugin update claude-arsenal), re-vendor .claude/skills from it, then: python3 .claude/skills/init/scripts/init.py --repo-path . --silent"
+if _is_subtree; then
+    _manual_hint="git fetch ${REMOTE} refs/tags/v${latest}:refs/tags/v${latest} && git subtree merge --prefix=${PREFIX} \"v${latest}^{commit}\" --squash"
+else
+    _manual_hint="'${PREFIX}' is not a git subtree, so there is nothing to merge into — ${_plugin_route}"
+fi
 if [[ ${CHECK_ONLY} -eq 1 ]]; then
     echo "claude-arsenal: installed=v${installed}, latest=v${latest} — UPDATE AVAILABLE"
     echo "  run without --check-only, or: ${_manual_hint}"
@@ -203,9 +237,8 @@ fi
 echo "claude-arsenal: installed=v${installed}, latest=v${latest} — pulling update…"
 
 # Ensure the working tree is clean before the subtree update
-_manual="git fetch ${REMOTE} refs/tags/v${latest}:refs/tags/v${latest} && git subtree merge --prefix=${PREFIX} \"v${latest}^{commit}\" --squash"
 if ! git diff --quiet 2>/dev/null || ! git diff --cached --quiet 2>/dev/null; then
-    _warn "working tree is dirty; skipping auto-update (run manually: ${_manual})"
+    _warn "working tree is dirty; skipping auto-update (run manually: ${_manual_hint})"
     exit 0
 fi
 
@@ -217,14 +250,14 @@ fi
 # fixes it. Saying so beats a `fatal:` that reads like a transient failure and a
 # manual command carrying the same wrong prefix.
 if ! _is_subtree; then
-    _warn "'${PREFIX}' was never added as a git subtree, so it cannot be updated by merge. If the subtree lives elsewhere, set ARSENAL_PREFIX to it (and ARSENAL_BUNDLE_DIR to where .bundle-version is)."
+    _warn "'${PREFIX}' was never added as a git subtree, so it cannot be updated by merge. If the subtree lives elsewhere, set ARSENAL_PREFIX to it (and ARSENAL_BUNDLE_DIR to where .bundle-version is). If the bundle came from the plugin instead: ${_plugin_route}"
     exit 0
 fi
 
 if ! git fetch "${REMOTE}" "refs/tags/v${latest}:refs/tags/v${latest}" 2>&1 \
     || ! git subtree merge --prefix="${PREFIX}" "v${latest}^{commit}" --squash \
         -m "chore: update claude-arsenal to v${latest}" 2>&1; then
-    _warn "subtree update failed — run manually: ${_manual}"
+    _warn "subtree update failed — run manually: ${_manual_hint}"
     exit 0
 fi
 
