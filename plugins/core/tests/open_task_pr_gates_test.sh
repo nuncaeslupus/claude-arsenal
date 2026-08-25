@@ -125,6 +125,20 @@ grep -q "host gate failed" <<<"${out}" \
     || fail "the host gate must be found when run from a subdirectory: ${out}"
 printf 'merge-policy = "after-ci"\n' > arsenal/config.toml
 
+# --- 9b: ...and it RUNS where it was read from ---
+#     The read is anchored to the git root and the run was not, so a gate
+#     written the way gates are written — `make lint`, `bash tests/foo.sh` —
+#     was executed in the subdirectory instead, and a green repo was refused a
+#     PR with `host gate failed (make lint)`.
+mkdir -p sub/dir
+: > root-marker
+printf 'host-gate = "test -f root-marker"\n' > arsenal/config.toml
+out=$(cd sub/dir && ARSENAL_COAUTHOR="" bash "${HELPER}" t-gate-cwd "Root-relative gate" 2>&1); rc=$?
+grep -q "host gate failed" <<<"${out}" \
+    && fail "a root-relative host gate must run at the root, not in the cwd: ${out}"
+rm -f root-marker
+printf 'merge-policy = "after-ci"\n' > arsenal/config.toml
+
 # --- 10: the gate certifies the tree that is actually committed (#220) ---
 #     The host gate ran, and THEN the task file was archived into _history/ —
 #     so any host measurement over the repo's own files (a file count, a
