@@ -36,6 +36,7 @@ Usage (run from repo root):
 """
 
 import argparse
+import hashlib
 import json
 import re
 import sys
@@ -98,12 +99,21 @@ def strip_inline_md(text: str) -> str:
 
 
 def slug(text: str) -> str:
-    """A filename-safe stem. Never empty: it names the export file and the
-    reader's storage namespace, and a title that is entirely non-ASCII or
-    punctuation ("项目") stripped down to nothing produced `-spec-notes-….md`."""
-    text = text.lower()
-    text = re.sub(r"[^a-z0-9]+", "-", text)
-    return text.strip("-") or "doc"
+    """A filename-safe stem. Never empty, and never the same for two titles.
+
+    It names the export file and the reader's storage namespace, so a title
+    that is entirely non-ASCII or punctuation ("项目") stripped down to nothing
+    produced `-spec-notes-….md`. Falling back to a fixed `doc` fixed the empty
+    name and gave every such title the SAME name: two readers then shared an
+    export filename and a localStorage namespace, so one project's notes came
+    up under another's headings. The digest keeps the fallback stable across
+    runs — the namespace has to survive regeneration — while telling two of
+    them apart.
+    """
+    text_slug = re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
+    if text_slug:
+        return text_slug
+    return "doc-" + hashlib.sha1(text.encode("utf-8")).hexdigest()[:8]  # a name, not a signature
 
 
 def parse_doc(raw: str) -> tuple[str, str, list[dict]]:
@@ -310,7 +320,7 @@ def infer_title(cwd: Path) -> str:
 # back. Seeding used to demand a `notes.json` nothing produces — a reviewer who
 # followed the instructions with the file the page had just handed them got a
 # JSON decode error.
-NOTES_DATA_RE = re.compile(r"<!--\s*SPEC-NOTES-DATA\s*(\{.*?\})\s*-->", re.DOTALL)
+MARKER_RE = re.compile(r"<!--\s*SPEC-NOTES-DATA\s*")
 
 
 def read_notes(path: Path) -> dict:
@@ -319,15 +329,29 @@ def read_notes(path: Path) -> dict:
     try:
         loaded = json.loads(text)
     except ValueError:
-        match = NOTES_DATA_RE.search(text)
+        match = MARKER_RE.search(text)
         if not match:
             raise ValueError(
                 "no notes found — expected a JSON object, or a Markdown export "
                 "carrying its SPEC-NOTES-DATA block"
             ) from None
-        loaded = json.loads(match.group(1))
+        # Where the object ENDS is the decoder's answer, not a regex's. Matching
+        # `{.*?}` up to a `-->` ended the block at the first `}` a note happened
+        # to contain, and truncated JSON reads as unparseable — so a reviewer
+        # whose note quoted a marker got their notes dropped, silently enough
+        # that the regenerated file overwrote them.
+        try:
+            loaded, _ = json.JSONDecoder().raw_decode(text, match.end())
+        except ValueError as exc:
+            raise ValueError(f"the SPEC-NOTES-DATA block is not valid JSON — {exc}") from None
     if not isinstance(loaded, dict):
         raise ValueError("the notes are not a JSON object")
+    # Every note is text, and `build_markdown` calls `.strip()` on it. A file
+    # spelling one as a number or an object raised an AttributeError out of the
+    # build; it is bad input, and it gets the message every other bad input gets.
+    bad = [k for k, v in loaded.items() if not isinstance(v, str)]
+    if bad:
+        raise ValueError(f"note values must be strings; not for: {', '.join(sorted(bad)[:5])}")
     return loaded
 
 
@@ -833,13 +857,27 @@ def main() -> int:
 
     notes_path = Path(args.notes) if args.notes else out_dir / "notes.json"
     seed_notes: dict = {}
+    html_file = out_dir / f"{doc_slug}-reader.html"
+    md_file = out_dir / f"{doc_slug}-annotated.md"
+
     if notes_path.exists():
         try:
             loaded = read_notes(notes_path)
-        except ValueError as exc:
+        except (ValueError, OSError) as exc:
             print(f"⚠  could not read {notes_path}: {exc}", file=sys.stderr)
-        except OSError as exc:
-            print(f"⚠  could not read {notes_path}: {exc}", file=sys.stderr)
+            # Continuing unseeded is right for a stray notes.json — the reader
+            # is still worth writing. It is not right when the unreadable file
+            # is one this run is about to write: the notes are then replaced by
+            # a fresh empty reader, and the warning scrolls past above the ✓
+            # that says it worked.
+            if notes_path.resolve() in {html_file.resolve(), md_file.resolve()}:
+                print(
+                    f"✗ {notes_path} is also this run's output — refusing to overwrite "
+                    "notes that could not be read. Fix the file, or point --notes at "
+                    "the export the page produced.",
+                    file=sys.stderr,
+                )
+                return 2
         else:
             seed_notes = loaded
             print(f"ℹ  seeding from {notes_path} ({len(seed_notes)} notes)", file=sys.stderr)
@@ -850,8 +888,6 @@ def main() -> int:
     html_out = build_html(parts, title, gen_date, seed_notes, single_label, doc_slug)
     md_out = build_markdown(parts, title, gen_date, seed_notes, single_label)
 
-    html_file = out_dir / f"{doc_slug}-reader.html"
-    md_file = out_dir / f"{doc_slug}-annotated.md"
     html_file.write_text(html_out, encoding="utf-8")
     md_file.write_text(md_out, encoding="utf-8")
 
