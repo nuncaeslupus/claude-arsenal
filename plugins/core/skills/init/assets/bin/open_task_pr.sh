@@ -48,6 +48,20 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd 2>/dev/null || echo .)"
 BUNDLE_SCRIPTS="$(cd "${SCRIPT_DIR}/../scripts" && pwd 2>/dev/null || echo "${SCRIPT_DIR}/../scripts")"
 ARSENAL_HOME="${ARSENAL_HOME:-arsenal}"
 
+# Every path this script handles is repo-root-relative by contract: ARSENAL_HOME,
+# a task's gate block, the session sentinel. Anchoring the whole run at the root
+# is what makes that contract true. Resolving only the gates there — the first
+# fix for this — left `_archive_task_file` resolving `${ARSENAL_HOME}/tasks/…`
+# against the CALLER's cwd, so invoked from a subdirectory the archive silently
+# missed (or, in a monorepo, hit a different tree that exists) while the PR body
+# promised it and the merge closed the issue (#239). SCRIPT_DIR and
+# BUNDLE_SCRIPTS are resolved absolute above; this depends on that ordering.
+_repo_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+cd "${_repo_root}" || {
+    echo "open_task_pr: cannot enter the repository root ${_repo_root}" >&2
+    exit 1
+}
+
 # ---------------------------------------------------------------------------
 # Gates, before anything touches git.
 #
@@ -92,18 +106,18 @@ host_gate=""
 # a worker got was `host gate failed (make lint)` over a green repo, and the
 # only ways out are editing config.toml or cd-ing, the first being the one
 # somebody under pressure reaches for. A linked worktree was never affected:
-# its cwd and its `--show-toplevel` are the same directory.
-_repo_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+# its cwd and its `--show-toplevel` are the same directory. Both are anchored by
+# the process cwd now — the subshells that anchored only these two call sites
+# left every other relative path in the file reading from the caller's cwd.
 if [[ -f "${BUNDLE_SCRIPTS}/arsenal_config.py" ]]; then
     if ! host_gate="$(python3 "${BUNDLE_SCRIPTS}/arsenal_config.py" \
             --repo-root "${_repo_root}" --get host-gate 2>&1)"; then
-        _gate_fail "could not read host-gate from ${_repo_root}/arsenal/config.toml: ${host_gate}"
+        _gate_fail "could not read host-gate from ${_repo_root}/${ARSENAL_HOME}/config.toml: ${host_gate}"
     fi
 fi
 if [[ -n "${host_gate}" ]]; then
     echo "open_task_pr: running host gate: ${host_gate}" >&2
-    # A subshell, so the rest of the script keeps the cwd it was invoked with.
-    if ! ( cd "${_repo_root}" && bash -c "${host_gate}" ) >&2; then
+    if ! bash -c "${host_gate}" >&2; then
         _gate_fail "host gate failed (${host_gate})"
     fi
 fi
@@ -121,7 +135,7 @@ if [[ -f "${SCRIPT_DIR}/gate_run.sh" ]]; then
     # Same anchor as the host gate above: a task's gate block is written
     # relative to the repo root (`bash tests/foo.sh`), and `${ARSENAL_HOME}` is
     # a repo-root-relative path in every other script that reads it.
-    ( cd "${_repo_root}" && ARSENAL_GATE_FROM_DEFAULT=1 bash "${SCRIPT_DIR}/gate_run.sh" "${TASK_ID}" ) >&2
+    ARSENAL_GATE_FROM_DEFAULT=1 bash "${SCRIPT_DIR}/gate_run.sh" "${TASK_ID}" >&2
     _rc=$?
     case ${_rc} in
         0) ;;
@@ -480,7 +494,7 @@ fi
 # that only checks confirms the tree being committed is the certified one.
 if [[ -n "${host_gate}" && -n "${_ARCHIVED_DEST}" ]]; then
     echo "open_task_pr: re-running host gate over the archived tree: ${host_gate}" >&2
-    if ! ( cd "${_repo_root}" && bash -c "${host_gate}" ) >&2; then
+    if ! bash -c "${host_gate}" >&2; then
         # Say which of the two happened. Claiming the restoration unconditionally
         # told a reader the tree was back the way it started in exactly the case
         # where it is not, and that is the case where they have to act.
