@@ -92,4 +92,63 @@ out=$(bash "${OUTLINE}" "${tmpdir}/sample.py" "${tmpdir}/sample.sh" 2>&1)
 grep -q "==> ${tmpdir}/sample.py <==" <<<"${out}" || fail "multi-file output must label each file"
 grep -q "_resolve_issue" <<<"${out}" || fail "multi-file output must include every file"
 
+# The keyword form of a shell function declaration. `(function )?` was optional
+# but `()` was not, so a script written this way outlined to its constants and
+# read as a script with no functions.
+cat > "${tmpdir}/keyword.sh" <<'EOF'
+#!/usr/bin/env bash
+CONST_ONE=1
+
+function keyword_style {
+    local hidden_keyword_body=1
+}
+
+function parens_style() {
+    :
+}
+
+paren_style() {
+    :
+}
+EOF
+out=$(bash "${OUTLINE}" "${tmpdir}/keyword.sh" 2>&1)
+grep -q "keyword_style" <<<"${out}" || fail "the 'function name {' form is a declaration: ${out}"
+grep -q "parens_style" <<<"${out}" || fail "'function name() {' must still match: ${out}"
+grep -q "paren_style" <<<"${out}" || fail "'name() {' must still match: ${out}"
+grep -q "hidden_keyword_body" <<<"${out}" && fail "outline leaked a keyword-function body: ${out}"
+
+# JS control flow is body structure, not shape. The method-shorthand pattern
+# matches any `identifier(...) {`, so `if (x) {` qualified as a declaration.
+cat > "${tmpdir}/sample.js" <<'EOF'
+export function realDeclaration(a) {
+  if (a) {
+    return 1;
+  }
+  for (const x of a) {
+    doThing(x);
+  }
+  switch (a) {
+    case 1:
+      break;
+  }
+  try {
+    risky();
+  } catch (e) {
+    handle(e);
+  }
+}
+
+const obj = {
+  methodShorthand(arg) {
+    return arg;
+  },
+};
+EOF
+out=$(bash "${OUTLINE}" "${tmpdir}/sample.js" 2>&1)
+grep -q "realDeclaration" <<<"${out}" || fail "a real JS declaration must survive: ${out}"
+grep -q "methodShorthand" <<<"${out}" || fail "method shorthand is shape and must stay: ${out}"
+for kw in "if (a)" "for (const" "switch (a)" "catch (e)"; do
+    grep -qF "${kw}" <<<"${out}" && fail "control flow leaked into the outline: ${kw} — ${out}"
+done
+
 echo "PASS: outline_test — declarations kept, bodies and prose dropped"
