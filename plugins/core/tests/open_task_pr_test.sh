@@ -245,5 +245,37 @@ if git log --oneline "${before}..HEAD" 2>/dev/null | grep -q .; then
 fi
 echo "PASS: a task file that cannot be archived aborts before committing"
 
+# Gate 7: invoked from a SUBDIRECTORY, the archive still happens. Every path
+# this script handles is repo-root-relative by contract, but only the two gate
+# call sites were anchored there — `_archive_task_file` resolved
+# `arsenal/tasks/…` against the caller's cwd, so from a subdirectory it found
+# nothing, archived nothing, and the PR body promised the archive anyway while
+# the commit closed the issue (#239).
+git checkout -q main 2>/dev/null || git checkout -q -B main origin/main
+git branch -qD "arsenal/lo-x003-subdir-archive" 2>/dev/null || true
+rm -rf arsenal/tasks/_history
+cat > "${tmpwork}/issues3.json" <<'JSON'
+[{"number": 79, "state": "open", "body": "`arsenal-task: lo-x003`\n\nTask defined in `arsenal/tasks/lo-x003.md`"}]
+JSON
+mkdir -p arsenal/tasks sub/deeper
+printf -- '---\nid: lo-x003\ntitle: "Subdir archive"\n---\n\n## Acceptance gate\n```bash\ntrue\n```\n' \
+    > arsenal/tasks/lo-x003.md
+git add -A && git commit -q -m "chore: seed subdir task"
+git push -q origin main
+echo "feature3" > feature3.txt
+out=$(cd sub/deeper && ARSENAL_ISSUES_JSON="${tmpwork}/issues3.json" ARSENAL_ALLOW_SHARED_ADD=1 \
+      ARSENAL_COAUTHOR="" bash "${HELPER}" lo-x003 "Subdir archive" 2>&1) \
+    || { echo "FAIL: run from a subdirectory failed: ${out}" >&2; exit 1; }
+if [[ -f arsenal/tasks/lo-x003.md ]]; then
+    echo "FAIL: run from a subdirectory left the task file live — the archive missed" >&2; exit 1
+fi
+if [[ ! -f arsenal/tasks/_history/lo-x003.md ]]; then
+    echo "FAIL: run from a subdirectory did not archive the task file" >&2; exit 1
+fi
+if ! git log -1 --name-status | grep -q "_history/lo-x003.md"; then
+    echo "FAIL: the subdirectory run's archive is not part of the PR commit" >&2; exit 1
+fi
+echo "PASS: the archive is repo-root-relative, not cwd-relative"
+
 echo "PASS: open_task_pr_test — all gates passed"
 exit 0
