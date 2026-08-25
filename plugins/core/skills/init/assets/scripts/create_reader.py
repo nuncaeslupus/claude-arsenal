@@ -320,7 +320,11 @@ def infer_title(cwd: Path) -> str:
 # back. Seeding used to demand a `notes.json` nothing produces — a reviewer who
 # followed the instructions with the file the page had just handed them got a
 # JSON decode error.
-MARKER_RE = re.compile(r"<!--\s*SPEC-NOTES-DATA\s*")
+# Anchored to the start of a line, because that is what separates the block the
+# export writes from a QUOTATION of it. Both places a marker can be quoted put it
+# mid-line — a note is rendered as `> …` prose, and a note that mentions the
+# marker also carries it inside a JSON string, which cannot hold a raw newline.
+MARKER_RE = re.compile(r"^[ \t]*<!--[ \t]*SPEC-NOTES-DATA\s*", re.MULTILINE)
 
 
 def read_notes(path: Path) -> dict:
@@ -329,8 +333,13 @@ def read_notes(path: Path) -> dict:
     try:
         loaded = json.loads(text)
     except ValueError:
-        match = MARKER_RE.search(text)
-        if not match:
+        # The LAST marker, not the first: the block is trailing, and the notes
+        # above it are the reviewer's own prose. Searching forward found a note
+        # that quoted the marker, decoded nothing there, and rejected the whole
+        # export — so the reader was regenerated without the notes it was handed
+        # (#239).
+        matches = list(MARKER_RE.finditer(text))
+        if not matches:
             raise ValueError(
                 "no notes found — expected a JSON object, or a Markdown export "
                 "carrying its SPEC-NOTES-DATA block"
@@ -338,10 +347,10 @@ def read_notes(path: Path) -> dict:
         # Where the object ENDS is the decoder's answer, not a regex's. Matching
         # `{.*?}` up to a `-->` ended the block at the first `}` a note happened
         # to contain, and truncated JSON reads as unparseable — so a reviewer
-        # whose note quoted a marker got their notes dropped, silently enough
+        # whose note quoted a `-->` got their notes dropped, silently enough
         # that the regenerated file overwrote them.
         try:
-            loaded, _ = json.JSONDecoder().raw_decode(text, match.end())
+            loaded, _ = json.JSONDecoder().raw_decode(text, matches[-1].end())
         except ValueError as exc:
             raise ValueError(f"the SPEC-NOTES-DATA block is not valid JSON — {exc}") from None
     if not isinstance(loaded, dict):
@@ -720,9 +729,13 @@ JS = r"""
     var rd=new FileReader();
     rd.onload=function(){
       var txt=String(rd.result||'');var obj=null;
-      var m=txt.lastIndexOf('SPEC-NOTES-DATA');
+      // Last LINE-ANCHORED marker. A plain lastIndexOf lands inside the JSON
+      // string of a note that mentions the marker, and the import then reads as
+      // a corrupt file — the same defect the Python seeder had (#239).
+      var mk=/^[ \t]*<!--[ \t]*SPEC-NOTES-DATA/gm,mm=null,mx;
+      while((mx=mk.exec(txt))!==null){mm=mx;}
       try{
-        if(m>=0){var after=txt.slice(m+15);var jstart=after.indexOf('{');var jend=after.lastIndexOf('}');
+        if(mm){var after=txt.slice(mm.index+mm[0].length);var jstart=after.indexOf('{');var jend=after.lastIndexOf('}');
                   if(jstart>=0&&jend>jstart){obj=JSON.parse(after.slice(jstart,jend+1));}}
         else{obj=JSON.parse(txt);}
       }catch(err){obj=null;}
