@@ -98,6 +98,16 @@ grep -q "IS a git subtree" "${tmp}/subtree-err.log" \
 # ...and the copied case still gets the structural half of the diagnosis.
 grep -q "no subtree merge in this history" "${tmp}/err.log" \
     || fail "a hand-copied bundle should be told it cannot be merged: $(cat "${tmp}/err.log")"
+# ...and a consumer whose git config sets a literal pattern type still has a
+# subtree recognised: `grep.patternType=fixed` applies to `git log --grep`, and
+# the trailer pattern is a regex — read literally it matches nothing, so every
+# subtree would report as copied and the update path would refuse to merge one.
+git -C "${subtree_consumer}" config grep.patternType fixed
+(cd "${subtree_consumer}" && bash "${CHECK}" 2>"${tmp}/fixed-err.log") \
+    || fail "check_update.sh exited non-zero under grep.patternType=fixed"
+grep -q "IS a git subtree" "${tmp}/fixed-err.log" \
+    || fail "grep.patternType=fixed hid a real subtree: $(cat "${tmp}/fixed-err.log")"
+git -C "${subtree_consumer}" config --unset grep.patternType
 echo "PASS: the no-remote report distinguishes a subtree from a copied bundle"
 
 git -C "${consumer}" remote add arsenal "${market}"

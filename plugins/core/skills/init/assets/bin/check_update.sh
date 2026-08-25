@@ -124,8 +124,12 @@ _report_untagged_upstream() {
 # is configured, and the script tests both — it just used to answer the first
 # with the second's message.
 _is_subtree() {
-    git log --grep="git-subtree-dir: ${PREFIX}\(/\)\?$" --max-count=1 --format=%H 2>/dev/null \
-        | grep -q .
+    # `--basic-regexp` explicitly: `grep.patternType=fixed` in a consumer's git
+    # config applies to `git log --grep` too, and the trailer pattern is a
+    # regex — read literally it matches nothing, so every subtree would report
+    # as a copied bundle and the update path would refuse to merge one.
+    git log --basic-regexp --grep="git-subtree-dir: ${PREFIX}\(/\)\?$" \
+        --max-count=1 --format=%H 2>/dev/null | grep -q .
 }
 
 # No remote → the check is inert. Say so: silence here reads as "you are up to
