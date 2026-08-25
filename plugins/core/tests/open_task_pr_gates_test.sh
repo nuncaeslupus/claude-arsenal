@@ -132,11 +132,22 @@ printf 'merge-policy = "after-ci"\n' > arsenal/config.toml
 #     PR with `host gate failed (make lint)`.
 mkdir -p sub/dir
 : > root-marker
+# A real task with a passing gate, so the run is not stopped by something else
+# on its way past the two gates — the point is that BOTH clear from a
+# subdirectory, and the task gate reads `${ARSENAL_HOME}/tasks/…`, itself a
+# root-relative path.
+write_task t-gate-cwd "test -f root-marker"
 printf 'host-gate = "test -f root-marker"\n' > arsenal/config.toml
 out=$(cd sub/dir && ARSENAL_COAUTHOR="" bash "${HELPER}" t-gate-cwd "Root-relative gate" 2>&1); rc=$?
 grep -q "host gate failed" <<<"${out}" \
     && fail "a root-relative host gate must run at the root, not in the cwd: ${out}"
-rm -f root-marker
+grep -q "gate: passed" <<<"${out}" \
+    || fail "the task gate must also run at the root: ${out}"
+# It gets past both gates and on to the work — the only thing that stops it here
+# is the absent PR backend, which is not what this case is about.
+grep -qE "gate failed|could not read|could not run" <<<"${out}" \
+    && fail "a gate stopped a run that both gates should have cleared: ${out}"
+rm -f root-marker arsenal/tasks/t-gate-cwd.md
 printf 'merge-policy = "after-ci"\n' > arsenal/config.toml
 
 # --- 10: the gate certifies the tree that is actually committed (#220) ---
