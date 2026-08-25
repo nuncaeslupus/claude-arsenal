@@ -41,7 +41,9 @@ legacy_block=$(python3 -c "
 import importlib.util
 s = importlib.util.spec_from_file_location('m', '${INIT_PY}')
 m = importlib.util.module_from_spec(s); s.loader.exec_module(m)
-print(m.CLAUDE_MD_BLOCK.replace(m.CLAUDE_MD_END_MARKER, '').rstrip())
+from pathlib import Path
+block = m._claude_md_block(Path('${REPO}'))
+print(block.replace(m.CLAUDE_MD_END_MARKER, '').rstrip())
 ") || fail "could not derive the legacy block from init.py"
 
 {
