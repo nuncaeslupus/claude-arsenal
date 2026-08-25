@@ -585,7 +585,24 @@ def _home(repo_path: Path) -> Path:
     The consumer edits a file nothing reads and every setting silently stays at
     its default.
     """
-    return repo_path / os.environ.get("ARSENAL_HOME", "arsenal")
+    home = repo_path / os.environ.get("ARSENAL_HOME", "arsenal")
+    # It has to land inside the repo. A task is a file in the repository —
+    # versioned, and committed by the PR that opens it — so a tree outside it
+    # can never reach the board, and `${ARSENAL_HOME}/tasks` as an absolute
+    # path is a queue that quietly stops being git-backed. It also breaks every
+    # repo-root-relative comparison (evidence paths, the rebase helper). An
+    # absolute value used to reach `relative_to(repo_path)` and raise a
+    # traceback halfway through an install, which is a worse way to find out.
+    try:
+        home.resolve().relative_to(repo_path.resolve())
+    except ValueError:
+        sys.exit(
+            f"init: ARSENAL_HOME resolves to {home}, which is outside {repo_path}. "
+            "The host tree is versioned in the repository — a task file outside it "
+            "cannot be committed, so the queue would never see it. Set ARSENAL_HOME "
+            "to a path inside the repo, or unset it to use arsenal/."
+        )
+    return home
 
 
 def _upsert_overview(repo_path: Path, workspace: str, root: str, spec: str, plan: str) -> None:
@@ -835,17 +852,21 @@ def init_base(
 
     # .gitignore — surface profile, the statusLine-written rate-limit snapshot,
     # and the per-session dispatch-round counter (all live, machine-local state)
+    # Derived from `home`, not from the literal: ignoring `arsenal/session/…`
+    # for a tree that lives at `hosttree/session/` leaves machine-local state
+    # stageable, which is the accident these entries exist to prevent.
+    session = home.relative_to(repo_path) / "session"
     for entry in (
-        "arsenal/session/surface_profile.json",
-        "arsenal/session/rate_limits.json",
-        "arsenal/session/budget_iterations.json",
-        "arsenal/session/worktree_isolation",
-        "arsenal/session/host_branch",
+        "surface_profile.json",
+        "rate_limits.json",
+        "budget_iterations.json",
+        "worktree_isolation",
+        "host_branch",
         # Rescue metadata is machine-local too; it was previously omitted, so a
         # forced-restore snapshot could be swept into a task commit (#140).
-        "arsenal/session/rescue_refs",
+        "rescue_refs",
     ):
-        _add_gitignore_entry(repo_path, entry)
+        _add_gitignore_entry(repo_path, f"{session.as_posix()}/{entry}")
 
     # GitHub-side queue upkeep (see the function's docstring for why by default)
     _install_queue_workflow(repo_path, arsenal, silent=silent)
@@ -946,8 +967,11 @@ def main() -> None:
     if args.workspace:
         name = args.workspace
         root = args.root or f"./{name}/"
-        spec = args.spec or f"arsenal/project/{name}/spec.md"
-        plan = args.plan or f"arsenal/project/{name}/plan.md"
+        # The stubs are written under the resolved home, so the paths recorded
+        # in overview.md have to point at the same place.
+        ws_rel = (_home(repo_path).relative_to(repo_path) / "project" / name).as_posix()
+        spec = args.spec or f"{ws_rel}/spec.md"
+        plan = args.plan or f"{ws_rel}/plan.md"
         init_workspace(repo_path, name, root, spec, plan, bundle_override,
                        allow_downgrade=args.allow_downgrade)
     else:

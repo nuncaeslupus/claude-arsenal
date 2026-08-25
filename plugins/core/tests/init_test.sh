@@ -132,5 +132,44 @@ if [[ -d "${orphan}/elsewhere" ]]; then
 fi
 echo "PASS: init refuses to orphan an existing host tree"
 
+# Gate 8b: the machine-local ignore entries follow the tree they describe.
+if ! grep -q "hosttree/session/surface_profile.json" "${relocated}/.gitignore"; then
+    echo "FAIL: .gitignore still ignores arsenal/session/ for a relocated tree" >&2; exit 1
+fi
+echo "PASS: the ignore entries follow the relocated tree"
+
+# Gate 8c: a relocated workspace records the paths its stubs were written to.
+ARSENAL_HOME=hosttree python3 "${INIT_PY}" \
+    --repo-path "${relocated}" --bundle-dir "${BUNDLE_DIR}" --workspace demo >/dev/null
+if [[ ! -f "${relocated}/hosttree/project/demo/spec.md" ]]; then
+    echo "FAIL: the workspace stubs were not written under the relocated tree" >&2; exit 1
+fi
+if ! grep -q "hosttree/project/demo/spec.md" "${relocated}/hosttree/project/overview.md"; then
+    echo "FAIL: overview.md records a path the stubs are not at: $(cat "${relocated}/hosttree/project/overview.md")" >&2; exit 1
+fi
+echo "PASS: a relocated workspace records the paths it actually wrote"
+
+# Gate 8d: a host tree outside the repo is refused before anything is written.
+# The queue is git-backed: a task file outside the repository can never be
+# committed, so it would never reach the board.
+outside="${tmpdir}/outside-home"
+mkdir -p "${tmpdir}/abs-repo"
+echo "# Abs repo" > "${tmpdir}/abs-repo/CLAUDE.md"
+if ARSENAL_HOME="${outside}" python3 "${INIT_PY}" \
+        --repo-path "${tmpdir}/abs-repo" --bundle-dir "${BUNDLE_DIR}" --silent \
+        >/dev/null 2>"${tmpdir}/abs.err"; then
+    echo "FAIL: an ARSENAL_HOME outside the repo must be refused" >&2; exit 1
+fi
+if ! grep -q "outside" "${tmpdir}/abs.err"; then
+    echo "FAIL: the refusal must say what is wrong: $(cat "${tmpdir}/abs.err")" >&2; exit 1
+fi
+if grep -q "Traceback" "${tmpdir}/abs.err"; then
+    echo "FAIL: an ARSENAL_HOME outside the repo raised instead of refusing" >&2; exit 1
+fi
+if [[ -d "${outside}" ]]; then
+    echo "FAIL: the refusal still created the outside tree" >&2; exit 1
+fi
+echo "PASS: a host tree outside the repo is refused, not half-installed"
+
 echo "PASS: init_test — all gates passed"
 exit 0
