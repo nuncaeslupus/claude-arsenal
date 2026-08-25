@@ -1,6 +1,6 @@
 # Claude Arsenal
 
-<!-- claude-arsenal v2.4.19 — imported via @claude-arsenal/AGENTS.md -->
+<!-- claude-arsenal v2.4.20 — imported via @claude-arsenal/AGENTS.md -->
 
 This file is imported by the host repo's `CLAUDE.md` via the session-protocol block
 that `/init` injects, so it sits in context on **every turn of every session**. It
@@ -10,6 +10,9 @@ how to start, what a task is, how a claim is decided, and how a task finishes.
 The rest of the protocol lives in `claude-arsenal/references/`, read **on demand**.
 Those are plain paths, never `@` imports — nothing here pulls them into context. The
 table at the end says which file answers what.
+
+Paths starting `arsenal/` are the host-owned tree, and a host that sets `ARSENAL_HOME`
+relocates all of them at once. `claude-arsenal/` is the vendored bundle and never moves.
 
 ---
 
