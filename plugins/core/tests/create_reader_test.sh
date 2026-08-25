@@ -135,6 +135,31 @@ grep -q "seeding from" <<<"${out}" || fail "a note quoting the marker broke the 
 grep -q "or so I assumed" "${tmp}/status/spec-annotated.md" \
     || fail "the note quoting the marker did not reach the annotated Markdown"
 
+# --- 6b: a note that quotes the export MARKER still round-trips ---
+#     Selection ran FORWARD from the first marker, and the first one in an
+#     export is inside the reviewer's own prose — the note is embedded verbatim
+#     above the data block. Decoding there failed, the export was rejected whole,
+#     and the reader was regenerated without the notes it had just been handed.
+cat > "${tmp}/status/quoted-marker.md" <<EOF
+# Specification notes
+
+**Problem**  \`S1\`
+> I went looking for the <!-- SPEC-NOTES-DATA block
+
+<!-- SPEC-NOTES-DATA
+{"${domid}": "I went looking for the <!-- SPEC-NOTES-DATA block"}
+-->
+EOF
+out=$(run_reader --input status/specification.md --output-dir status \
+        --name "Widget Overhaul" --notes status/quoted-marker.md)
+grep -q "seeding from" <<<"${out}" || fail "a note quoting the marker broke the seed: ${out}"
+grep -q "went looking for" "${tmp}/status/spec-annotated.md" \
+    || fail "the note quoting the marker did not survive the round trip"
+# The page's own Import button parses the same file with its own scanner, and it
+# had the same defect — a plain lastIndexOf lands inside that note's JSON string.
+grep -q "SPEC-NOTES-DATA/gm" "${tmp}/status/spec-reader.html" \
+    || fail "the in-page importer does not anchor the marker to a line start"
+
 # --- 7: a note that is not text is reported, not raised ---
 printf '{"%s": {"nested": 1}}\n' "${domid}" > "${tmp}/status/bad-types.json"
 out=$(run_reader --input status/specification.md --output-dir status \
