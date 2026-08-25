@@ -22,7 +22,9 @@ A task whose title is a near-match for an issue that resolved to nothing is
 reported on stderr instead of proposed: since the board resolves handles by
 title as well as by id, "no id resolved" can mean the fold missed rather than
 that no issue exists, and a duplicate handle corrupts state where a delay does
-not.
+not. When SEVERAL tasks fold to that same title the guard cannot say which one
+the issue covers, so they are proposed with an `"ambiguous"` key naming the
+collision — a person can weigh it, and the unattended caller creates nothing.
 
 Exit: 0 when everything has a handle or the missing ones were printed,
 2 on unreadable input.
@@ -83,8 +85,10 @@ def missing_handles(
     # Which tasks that guard is allowed to speak for. One unresolved issue
     # cannot be the handle for two tasks, so when two of them fold to the same
     # loose key, "this issue may already be its handle" is true of at most one
-    # and the guard cannot say which. Suppressing both is a coin flip played
-    # twice; propose them and let the ids settle it.
+    # and the guard cannot say which. Suppressing both hides a handle that is
+    # genuinely missing (#190), so they are still proposed — but marked, because
+    # a caller that creates them unattended puts a second issue on the board for
+    # whichever one the near-match already covered (#239).
     candidates = [
         t
         for t in tasks
@@ -109,26 +113,41 @@ def missing_handles(
         # will hand straight back out.
         if str(task.get("status") or "") in TERMINAL:
             continue
-        if (key := loose_title_key(task["title"])) in near and key_users.get(key, 0) < 2:
+        ambiguous = ""
+        if (key := loose_title_key(task["title"])) in near:
+            shared = key_users.get(key, 0)
+            if shared < 2:
+                if warnings is not None:
+                    warnings.append(
+                        f"{task['id']}: no handle resolved, but issue #{near[key]} has a "
+                        "near-identical title — not proposing a second handle. Add "
+                        f"`arsenal-task: {task['id']}` to that issue if it is the handle, or "
+                        "make the two titles agree."
+                    )
+                continue
+            ambiguous = (
+                f"{shared} task files fold to the same loose title as issue "
+                f"#{near[key]}, which is therefore the handle for at most one of "
+                f"them. Resolve that before creating this: add `arsenal-task: "
+                f"{task['id']}` to #{near[key]} if it is this task's handle, or make "
+                "the titles distinct."
+            )
             if warnings is not None:
-                warnings.append(
-                    f"{task['id']}: no handle resolved, but issue #{near[key]} has a "
-                    "near-identical title — not proposing a second handle. Add "
-                    f"`arsenal-task: {task['id']}` to that issue if it is the handle, or "
-                    "make the two titles agree."
-                )
-            continue
-        out.append(
-            {
-                "task": task["id"],
-                "title": task["title"],
-                "labels": [label],
-                "body": (
-                    f"`arsenal-task: {task['id']}`\n\n"
-                    f"Task defined in `{task['path']}`"
-                ),
-            }
-        )
+                warnings.append(f"{task['id']}: {ambiguous}")
+        row = {
+            "task": task["id"],
+            "title": task["title"],
+            "labels": [label],
+            "body": (
+                f"`arsenal-task: {task['id']}`\n\n"
+                f"Task defined in `{task['path']}`"
+            ),
+        }
+        if ambiguous:
+            # Reported, never created on its own: the two callers of this list
+            # disagree about what to do next, and only one of them is a person.
+            row["ambiguous"] = ambiguous
+        out.append(row)
     return out
 
 
