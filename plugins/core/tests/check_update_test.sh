@@ -68,6 +68,38 @@ grep -q "git remote add" "${tmp}/err.log" \
     || fail "no-remote case did not say how to fix it"
 echo "PASS: a missing 'arsenal' remote is reported, not silently treated as current"
 
+# --- Gate 1b: the message states what was tested, and nothing else. ----------
+#     A missing remote and a bundle that is not a subtree are independent facts,
+#     and remotes are not cloned — so a genuine subtree arrives with no remote
+#     on every fresh clone. Told "the bundle was copied, not added as a git
+#     subtree", a session reasonably concludes that upgrades must be done by
+#     copying files in, which is what `verify-subtree` exists to catch.
+subtree_consumer="${tmp}/subtree-consumer"
+mkdir -p "${subtree_consumer}/claude-arsenal"
+git init -q -b main "${subtree_consumer}"
+git -C "${subtree_consumer}" config user.email "test@arsenal.example"
+git -C "${subtree_consumer}" config user.name "Arsenal Test"
+echo "0.20.5" > "${subtree_consumer}/claude-arsenal/.bundle-version"
+git -C "${subtree_consumer}" add -A
+# The merge commit `git subtree add` writes, which is how the script recognises
+# one. No remote here — that is the state under test.
+git -C "${subtree_consumer}" commit -q -m "chore: add bundle
+
+git-subtree-dir: claude-arsenal
+git-subtree-split: 0000000000000000000000000000000000000000"
+(cd "${subtree_consumer}" && bash "${CHECK}" 2>"${tmp}/subtree-err.log") \
+    || fail "check_update.sh exited non-zero on a subtree with no remote"
+grep -qi "INERT" "${tmp}/subtree-err.log" \
+    || fail "the no-remote case must still report itself: $(cat "${tmp}/subtree-err.log")"
+grep -q "was copied" "${tmp}/subtree-err.log" \
+    && fail "a genuine subtree must not be reported as a copied bundle: $(cat "${tmp}/subtree-err.log")"
+grep -q "IS a git subtree" "${tmp}/subtree-err.log" \
+    || fail "the report should say which of the two states this repo is in: $(cat "${tmp}/subtree-err.log")"
+# ...and the copied case still gets the structural half of the diagnosis.
+grep -q "no subtree merge in this history" "${tmp}/err.log" \
+    || fail "a hand-copied bundle should be told it cannot be merged: $(cat "${tmp}/err.log")"
+echo "PASS: the no-remote report distinguishes a subtree from a copied bundle"
+
 git -C "${consumer}" remote add arsenal "${market}"
 
 # --- Gate 2: tag == installed and the branch is at that tag → genuinely

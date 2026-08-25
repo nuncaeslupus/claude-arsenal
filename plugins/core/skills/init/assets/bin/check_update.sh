@@ -120,10 +120,28 @@ _report_untagged_upstream() {
     return 0
 }
 
-# No remote → the check is inert. Say so: a hand-copied bundle has no upstream
-# to compare against, and silence here reads as "you are up to date".
+# Was PREFIX added by `git subtree`? A separate question from whether a remote
+# is configured, and the script tests both — it just used to answer the first
+# with the second's message.
+_is_subtree() {
+    git log --grep="git-subtree-dir: ${PREFIX}\(/\)\?$" --max-count=1 --format=%H 2>/dev/null \
+        | grep -q .
+}
+
+# No remote → the check is inert. Say so: silence here reads as "you are up to
+# date". Say only what was tested, though: the old wording asserted that the
+# bundle "was copied, not added as a git subtree", which is a different fact
+# and frequently a false one — remotes are not cloned, so a genuine subtree
+# comes out of `git clone` with no remote at all. A session that believed it
+# concluded upgrades had to be done by copying files in, which is the exact
+# failure `verify-subtree` exists to catch, arrived at by trusting the tool
+# whose job is to know.
 if ! git remote get-url "${REMOTE}" >/dev/null 2>&1; then
-    _warn "no '${REMOTE}' remote configured — update checking is INERT for this repo (the bundle was copied, not added as a git subtree). Wire it up with: git remote add ${REMOTE} <marketplace-url>"
+    if _is_subtree; then
+        _warn "no '${REMOTE}' remote configured — update checking is INERT for this repo. '${PREFIX}' IS a git subtree here; only the remote is missing, which is expected on a fresh clone. Wire it up with: git remote add ${REMOTE} <marketplace-url>"
+    else
+        _warn "no '${REMOTE}' remote configured — update checking is INERT for this repo, and '${PREFIX}' has no subtree merge in this history either, so it cannot be updated by merge even once the remote is added. Wire up the remote with: git remote add ${REMOTE} <marketplace-url>"
+    fi
     exit 0
 fi
 
@@ -194,7 +212,7 @@ fi
 # A prefix that was never added as a subtree cannot be merged into, and no retry
 # fixes it. Saying so beats a `fatal:` that reads like a transient failure and a
 # manual command carrying the same wrong prefix.
-if ! git log --grep="git-subtree-dir: ${PREFIX}\(/\)\?$" --max-count=1 --format=%H 2>/dev/null | grep -q .; then
+if ! _is_subtree; then
     _warn "'${PREFIX}' was never added as a git subtree, so it cannot be updated by merge. If the subtree lives elsewhere, set ARSENAL_PREFIX to it (and ARSENAL_BUNDLE_DIR to where .bundle-version is)."
     exit 0
 fi
