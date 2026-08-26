@@ -232,4 +232,41 @@ after:  ${after_status}"
 git checkout -q main 2>/dev/null || true
 echo "PASS: an archive that cannot be completed is undone, not left half-done"
 
+# --- 9: outside a git repository the helper refuses, and runs no gate --------
+#     Every path this script handles is repo-root-relative, so it anchored the
+#     run at `git rev-parse --show-toplevel || pwd`. The fallback made "there is
+#     no repository" indistinguishable from success: the `cd` into the caller's
+#     own cwd always works, so the host gate and the task gate ran against
+#     whatever tree the caller was standing in, and the operator got a gate
+#     result rather than "you are not in a repository" (#244). The sentinel is
+#     the assertion that matters — a refusal that still ran the gates would have
+#     satisfied the exit code alone.
+norepo="${tmp}/norepo"
+mkdir -p "${norepo}/arsenal/tasks"
+git -C "${norepo}" rev-parse --show-toplevel >/dev/null 2>&1 \
+    && fail "fixture error: ${norepo} is inside a git repository"
+cat > "${norepo}/arsenal/tasks/t-loose.md" <<EOF
+---
+id: t-loose
+title: "Loose fixture"
+priority: 1
+---
+
+## Acceptance gate
+\`\`\`bash
+touch "${norepo}/TASK_GATE_RAN"
+\`\`\`
+EOF
+printf 'host-gate = "touch %s/HOST_GATE_RAN"\n' "${norepo}" > "${norepo}/arsenal/config.toml"
+out=$( (cd "${norepo}" && ARSENAL_COAUTHOR="" bash "${HELPER}" t-loose "Loose" 2>&1) ); rc=$?
+[[ ${rc} -ne 0 ]] || fail "running outside a repository must not succeed: ${out}"
+grep -qi "not inside a git repository" <<<"${out}" \
+    || fail "the refusal should say there is no repository, not something else: ${out}"
+[[ -e "${norepo}/HOST_GATE_RAN" ]] \
+    && fail "the host gate ran from a directory that is not a repository"
+[[ -e "${norepo}/TASK_GATE_RAN" ]] \
+    && fail "the task gate ran from a directory that is not a repository"
+cd "${REPO}"
+echo "PASS: outside a repository the helper refuses before running any gate"
+
 echo "PASS: open_task_pr_gates_test — all gates passed"

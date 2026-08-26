@@ -56,7 +56,18 @@ ARSENAL_HOME="${ARSENAL_HOME:-arsenal}"
 # missed (or, in a monorepo, hit a different tree that exists) while the PR body
 # promised it and the merge closed the issue (#239). SCRIPT_DIR and
 # BUNDLE_SCRIPTS are resolved absolute above; this depends on that ordering.
-_repo_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+# Not being in a repository is not a degraded mode this script has an answer
+# for: every step below is a git operation or a gate resolved from the root.
+# The old `|| pwd` fallback made that case indistinguishable from success — the
+# `cd` into the caller's own cwd always works, so the host gate and the task
+# gate ran against whatever tree the caller happened to be standing in and the
+# operator got a gate result instead of "you are not in a repository" (#244).
+# Refusing here is the only honest answer.
+_repo_root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+[[ -n "${_repo_root}" ]] || {
+    echo "open_task_pr: not inside a git repository (git rev-parse --show-toplevel failed) — run this from the repo that owns the task." >&2
+    exit 1
+}
 cd "${_repo_root}" || {
     echo "open_task_pr: cannot enter the repository root ${_repo_root}" >&2
     exit 1

@@ -147,7 +147,19 @@ installed="$(cat "${VERSION_FILE}" 2>/dev/null || echo "0.0.0")"
 # regardless of --check-only — it is a local comparison and needs neither.
 _report_skill_skew() {
     local installed="$1" ver_file skill_dir skill_ver
-    ver_file="$(find .claude/skills -path '*/init/assets/.bundle-version' 2>/dev/null | head -1 || true)"
+    # The canonical location first. The `find` below is a fallback for a host
+    # that vendors the skills somewhere else, but it cannot be the primary
+    # lookup: its pattern is not anchored to `.claude/skills/init/`, so any
+    # other vendored skill carrying a nested `init/assets/.bundle-version`
+    # matches too, and `find` emits filesystem order — so `head -1` picked a
+    # DIFFERENT skill's version, compared the bundle against it, and returned
+    # false. The probe then stayed silent and step 0(b) downgraded the bundle:
+    # the exact failure this guard exists to catch, failing open (#244).
+    # `sort` in the fallback is load-bearing for the same reason — without it
+    # the same tree answers differently on different machines.
+    ver_file=".claude/skills/init/assets/.bundle-version"
+    [[ -f "${ver_file}" ]] \
+        || ver_file="$(find .claude/skills -path '*/init/assets/.bundle-version' 2>/dev/null | sort | head -1 || true)"
     [[ -n "${ver_file}" ]] || return 0
     skill_ver="$(tr -d '[:space:]' < "${ver_file}" 2>/dev/null || true)"
     [[ -n "${skill_ver}" ]] || return 0

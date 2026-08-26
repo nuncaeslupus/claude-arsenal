@@ -245,6 +245,74 @@ grep -q "VENDORED SKILL BEHIND BUNDLE" "${tmp}/skew-eq.log" \
     && fail "matching versions must not be reported as skew"
 echo "PASS: a vendored skill older than the bundle is reported bundle-side"
 
+# --- 10b: another skill's nested init/assets must not be read instead ---------
+#     The probe used `find -path '*/init/assets/.bundle-version' | head -1`,
+#     which is neither anchored to `.claude/skills/init/` nor sorted. A second
+#     vendored skill carrying that nested path can match too, and `find` emits
+#     filesystem order — so which one `head -1` got was luck, and on the wrong
+#     draw the bundle was compared against a DIFFERENT skill's version (#244).
+#
+#     Real `find` cannot be made to lose that draw on demand, which is the bug's
+#     whole character, so the ordering is forced with a stub that answers the
+#     skew probe's query decoy-first and delegates everything else. The decoy is
+#     NEWER than the bundle and the real init skill is older: read the decoy and
+#     the comparison returns false, the probe stays silent, and step 0(b)
+#     performs the downgrade this guard exists to prevent — it fails open.
+stub_bin="${tmp}/stub-bin"
+mkdir -p "${stub_bin}"
+cat > "${stub_bin}/find" <<'STUB'
+#!/usr/bin/env bash
+# Answer the skew probe's exact query decoy-first; delegate anything else.
+if [[ "$*" == *"init/assets/.bundle-version"* ]]; then
+    printf '%s\n' ".claude/skills/zzz-other/init/assets/.bundle-version"
+    printf '%s\n' ".claude/skills/aaa-decoy/init/assets/.bundle-version"
+    printf '%s\n' ".claude/skills/init/assets/.bundle-version"
+    exit 0
+fi
+exec /usr/bin/env -i PATH=/usr/bin:/bin find "$@"
+STUB
+chmod +x "${stub_bin}/find"
+
+mkdir -p "${skew}/.claude/skills/aaa-decoy/init/assets"
+printf '9.9.9\n' > "${skew}/.claude/skills/aaa-decoy/init/assets/.bundle-version"
+printf '2.4.0\n' > "${skew}/.claude/skills/init/assets/.bundle-version"
+(cd "${skew}" && PATH="${stub_bin}:${PATH}" ARSENAL_REMOTE=nope bash "${CHECK}" --check-only \
+    2>"${tmp}/skew-decoy.log" >/dev/null) \
+    || fail "check_update.sh exited non-zero with a decoy skill present"
+grep -q "VENDORED SKILL BEHIND BUNDLE" "${tmp}/skew-decoy.log" \
+    || fail "a decoy skill's version was read instead of .claude/skills/init: $(cat "${tmp}/skew-decoy.log")"
+grep -q "2\.4\.0" "${tmp}/skew-decoy.log" \
+    || fail "the report does not name the canonical skill's version"
+grep -q "9\.9\.9" "${tmp}/skew-decoy.log" \
+    && fail "the report named the decoy skill's version"
+echo "PASS: the skew probe reads .claude/skills/init, not whatever find hits first"
+
+# ...and with no canonical copy the fallback is what answers. It must sort, or
+# the same tree hands different machines different verdicts — the hardest kind
+# of report to act on. The stub hands it `zzz-other` (current) ahead of
+# `aaa-decoy` (stale): unsorted, `head -1` takes the current one and the probe
+# says nothing; sorted, the stale copy is found and reported.
+rm -rf "${skew}/.claude/skills/init"
+printf '2.4.0\n' > "${skew}/.claude/skills/aaa-decoy/init/assets/.bundle-version"
+mkdir -p "${skew}/.claude/skills/zzz-other/init/assets"
+printf '9.9.9\n' > "${skew}/.claude/skills/zzz-other/init/assets/.bundle-version"
+(cd "${skew}" && PATH="${stub_bin}:${PATH}" ARSENAL_REMOTE=nope bash "${CHECK}" --check-only \
+    2>"${tmp}/skew-fb1.log" >/dev/null) \
+    || fail "check_update.sh exited non-zero on the fallback case"
+grep -q "VENDORED SKILL BEHIND BUNDLE" "${tmp}/skew-fb1.log" \
+    || fail "the fallback did not report a skewed skill: $(cat "${tmp}/skew-fb1.log")"
+grep -q "aaa-decoy" "${tmp}/skew-fb1.log" \
+    || fail "the fallback did not resolve to the sorted-first copy"
+(cd "${skew}" && PATH="${stub_bin}:${PATH}" ARSENAL_REMOTE=nope bash "${CHECK}" --check-only \
+    2>"${tmp}/skew-fb2.log" >/dev/null)
+diff -q "${tmp}/skew-fb1.log" "${tmp}/skew-fb2.log" >/dev/null \
+    || fail "the fallback lookup is not deterministic across runs"
+echo "PASS: the fallback lookup is sorted, so it answers the same way twice"
+
+rm -rf "${skew}/.claude/skills/aaa-decoy" "${skew}/.claude/skills/zzz-other" "${stub_bin}"
+mkdir -p "${skew}/.claude/skills/init/assets"
+printf '2.4.9\n' > "${skew}/.claude/skills/init/assets/.bundle-version"
+
 # --- 11: the update hint fits the layout it is printed for --------------------
 #     `consumer` installed by copy, not by subtree, so both halves of the
 #     suggested command fail there — the tag's tree has no claude-arsenal/ at
