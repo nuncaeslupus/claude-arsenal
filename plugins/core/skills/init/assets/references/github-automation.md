@@ -90,6 +90,15 @@ stop: that state is precisely why `after-review` exists, and the fix is the host
 one line in `arsenal/config.toml`, not an agent deciding at merge time that today the gate
 did not mean anything.
 
+**The same shape shows up on the review side.** A review-bot vendor that caps how many
+reviews it runs per hour is a second, independent kind of platform quota — not a defect in
+the PR, just an external usage limit, same as the CI case above but affecting the review
+half of `after-review` / `after-ci-and-review` instead of the CI half. See
+`plugins/core/skills/github/references/pr-review-loop.md`, section "When the review bot
+rate-limits itself", for the retry pattern. Neither kind of quota is a reason to weaken the policy or to merge
+past what it requires — it is a reason to wait, requeue, and keep working whatever PRs have
+already cleared the bar while the clock runs out on the rest.
+
 ---
 
 ## Upkeep GitHub does — `.github/workflows/arsenal-queue.yml`
