@@ -96,9 +96,7 @@ def labels_of(issue: dict[str, Any]) -> set[str]:
     }
 
 
-def importable(
-    issues: list[dict[str, Any]], *, label: str, known_ids: set[str]
-) -> list[dict[str, Any]]:
+def importable(issues: list[dict[str, Any]], *, label: str) -> list[dict[str, Any]]:
     """Open, labelled issues that are not already a task handle."""
     out: list[dict[str, Any]] = []
     for issue in issues:
@@ -111,7 +109,6 @@ def importable(
         existing = task_id_from_issue(issue)
         if existing:
             continue
-        del known_ids
         out.append(issue)
     return out
 
@@ -151,11 +148,13 @@ def main(argv: list[str] | None = None) -> int:
         payload = payload.get("issues", [])
     issues = [i for i in payload if isinstance(i, dict)]
 
-    tasks, warnings = load_tasks(args.tasks_dir)
+    # Read only for its warnings — a malformed task file is worth naming here,
+    # even though the import decision reads the issue bodies, not the board.
+    _, warnings = load_tasks(args.tasks_dir)
     for warning in warnings:
         print(f"issue_import: {warning}", file=sys.stderr)
 
-    rows = importable(issues, label=args.label, known_ids={t["id"] for t in tasks})
+    rows = importable(issues, label=args.label)
     if not rows:
         print(
             f"issue_import: no open `{args.label}` issue is missing a task",
