@@ -44,6 +44,26 @@ echo "${out}" | grep -q '"add_to_issue_body":"`arsenal-task: t-' \
     || fail "no handle marker was printed for the caller to apply: ${out}"
 echo "PASS: only an open, labelled, unhandled issue becomes a task"
 
+# Gate 1b: a run that imports TWO issues mints two tasks. Every other gate here
+# feeds exactly one importable issue, which is how a crash on the second loop
+# iteration shipped: `importable` deleted one of its own parameters inside the
+# loop, so the first issue passed and the second raised UnboundLocalError.
+two="${tmp}/two"
+mkdir -p "${two}"
+cat > "${tmp}/two.json" <<'JSON'
+[
+ {"number": 60, "state": "open", "title": "first of two",
+  "labels": [{"name": "arsenal:queue"}], "body": "one"},
+ {"number": 61, "state": "open", "title": "second of two",
+  "labels": [{"name": "arsenal:queue"}], "body": "two"}
+]
+JSON
+pair=$(python3 "${IMPORT}" --issues "${tmp}/two.json" --tasks-dir "${two}" --apply) \
+    || fail "importing two issues in one run failed: ${pair}"
+[[ "$(echo "${pair}" | wc -l)" -eq 2 ]] || fail "expected two imports, got: ${pair}"
+[[ "$(ls "${two}"/*.md | wc -l)" -eq 2 ]] || fail "two issues must mint two distinct task files"
+echo "PASS: two importable issues in one run mint two tasks"
+
 # Gate 2: the seeded task is VISIBLE but never dispatched. Its gate is the
 # issue's prose, and a gate that runs nothing passes everything — so a human
 # writes a real one and deletes the requires line before it can be claimed.
