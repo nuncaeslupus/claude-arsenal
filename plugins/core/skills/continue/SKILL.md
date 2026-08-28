@@ -119,15 +119,19 @@ The suffix rule is derived from the vocabulary rather than a table to keep in st
 in full as `class:value`. `/continue BROWSER FRONTEND` and `/continue FRONTEND BROWSER`
 resolve to the same scope, and a task qualifies only if it satisfies **every** token.
 
-**Naming a capability also grants it for the session.** A person typing
-`/continue BROWSER` is the evidence that the browser is there — without this the filter
-would return nothing whenever the probe cannot see the thing being asserted, which is
-every `access:` capability except the browser. This is what makes `access:human` usable
-at all: no probe can tell whether someone is watching, but someone typing it can.
+**Naming a capability grants it only where nothing can check it.** A token always
+filters; whether it also *grants* depends on whether something authoritative already
+knows the answer:
 
-The exception is a capability the session *can* check. If the browser tools report none
-connected, say so and stop — do not hand out a task that spends an attempt discovering
-it.
+| token names | granted by the token? | because |
+|---|---|---|
+| `surface:*`, `services:*` | **no** — the probe decides | `/continue CLI` on a cloud session would otherwise hand out work that surface genuinely cannot run |
+| `access:browser` | **no** — the session's tools decide | if none is connected, say so and stop rather than spending an attempt discovering it |
+| `access:human`, `access:secrets`, `access:device` | **yes** | nothing can probe whether a person is watching or which keys this machine holds, so the person typing it is the evidence |
+
+Without that last row `access:human` would be unusable — the filter would match a
+capability no profile ever contains, and always return nothing. Without the first two,
+a typo would quietly promote a session past a limit that exists for a reason.
 
 ## Gotchas
 

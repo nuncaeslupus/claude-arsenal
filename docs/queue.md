@@ -101,10 +101,11 @@ rather than quietly inert.
 so a task demanding something this session does not have is never offered — it is
 not skipped with a warning, it simply is not in the answer.
 
-That is what makes the vocabulary worth naming, because the alternative is a tag,
-and tags gate nothing: a task labelled `tags: [BROWSER]` is handed to a cloud
-worker with no browser, which fails it, retries, and fails it twice more before
-the attempt cap stops it.
+That is what makes the vocabulary worth naming, because the alternative is a tag —
+and a tag narrows a search without gating anything. A task labelled
+`tags: [BROWSER]` is still handed to a plain `/continue` on a cloud worker with no
+browser, which fails it, retries, and fails it twice more before the attempt cap
+stops it.
 
 | capability | the task cannot proceed without | granted by |
 |---|---|---|
@@ -135,12 +136,15 @@ that exist only on a real machine — Claude Design, the research tool — need
 nothing beyond `surface:cli`. What survives that test is the list above: the
 things an unattended CLI session still cannot do.
 
-**Naming one at `/continue` grants it.** Nothing can probe whether a person is
-watching, and the shell hook that writes the profile cannot see the session's own
-tools — `claude mcp list` reports no servers on a session whose browser tools are
-live. So the person typing `/continue HUMAN` is the evidence. Where a probe does
-exist it wins: `/continue BROWSER` with no browser connected is reported, not
-granted.
+**Naming one at `/continue` grants it only where nothing can check it.** Nothing
+can probe whether a person is watching or which keys a machine holds, so for the
+unprobeable `access:` values the person typing `/continue HUMAN` is the evidence.
+Everything with an authoritative source keeps it: `surface:` and `services:` are
+the probe's to decide, and `access:browser` is the session's own tools' — the
+shell hook cannot see those, since `claude mcp list` reports no servers on a
+session whose browser tools are live. So `/continue CLI` on a cloud session
+narrows the search and grants nothing; the tasks stay out of reach, which is the
+point of the gate.
 
 Tags keep the job they are good at — scoping a working session, no gate implied:
 `FRONTEND`, `BACKEND`, `DOCS`, `INFRA`, `FLAKY`. Neither list is an enum; both are

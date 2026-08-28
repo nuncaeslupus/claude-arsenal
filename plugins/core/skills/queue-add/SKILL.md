@@ -68,10 +68,12 @@ section or sibling pattern needed to start — spare them the grep.
 
 ## `--requires` gates; `--tag` only labels
 
-`--requires` is checked: `task_select.py` hides the task from any session whose
-capabilities do not cover it. `--tag` is checked by nobody — it scopes `/continue`, and
-nothing more. So "a person has to answer this" belongs in `--requires`; put it in a tag
-and an unattended worker takes the task and fails it three times.
+Both are applied by `task_select.py`, but only one of them protects anything.
+`--requires` is matched against what the session *can do*, so a task is hidden from a
+session that cannot run it. `--tag` is matched against what the session *asked for* — it
+narrows a search and nothing more, so a tag never keeps a task away from a session that
+would fail it. "A person has to answer this" therefore belongs in `--requires`; as a tag
+it holds until the moment an unattended worker asks for that tag, then fails three times.
 
 | capability | the task cannot proceed without | granted by |
 |---|---|---|
