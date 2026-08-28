@@ -30,7 +30,7 @@ python3 "${CLAUDE_SKILL_DIR}/scripts/new_task.py" \
   --priority 5 \
   --deps t-aaaa1111 \
   --requires "surface:cli" \
-  --tag CLI \
+  --tag INFRA \
   --workspace BACKEND
 ```
 
@@ -66,6 +66,31 @@ Load `${CLAUDE_SKILL_DIR}/references/payload-template.md` for the fuller task-bo
 the test names a worker should write failing first, and one reference anchor per spec
 section or sibling pattern needed to start — spare them the grep.
 
+## `--requires` gates; `--tag` only labels
+
+`--requires` is checked: `task_select.py` hides the task from any session whose
+capabilities do not cover it. `--tag` is checked by nobody — it scopes `/continue`, and
+nothing more. So "a person has to answer this" belongs in `--requires`; put it in a tag
+and an unattended worker takes the task and fails it three times.
+
+| capability | the task cannot proceed without | granted by |
+|---|---|---|
+| `surface:cli` | a real terminal on a machine | the probe |
+| `surface:cloud` | a cloud session (`surface:web` is the older name for the same thing) | the probe |
+| `services:postgres`, `services:redis` | that daemon answering | the probe |
+| `access:human` | a person to decide, label, answer, or approve | naming it at `/continue` |
+| `access:browser` | a driveable browser | the session's own tools |
+| `access:secrets` | machine-local credentials — prod tokens, SSH keys, a vault | naming it at `/continue` |
+| `access:device` | hardware physically attached — a phone, a serial port, a board | naming it at `/continue` |
+
+Reach for a new capability only when a session that already has `surface:cli` would
+*still* be unable to do the task. That test is what keeps the list this short: LAPTOP, PC,
+DESKTOP and CLI are all one capability, and the tools that only exist on a real machine —
+Claude Design, the research tool — need no name of their own beyond `surface:cli`.
+
+Tags are for scoping a working session instead: `FRONTEND`, `BACKEND`, `DOCS`, `INFRA`,
+`FLAKY`. Both lists are examples, not an enum — `new_task.py` accepts any string.
+
 ## Gotchas
 
 - **Deps must already exist.** `--deps` is rejected if no task file declares that id. The
@@ -74,10 +99,11 @@ section or sibling pattern needed to start — spare them the grep.
   work is declarable rather than a relationship only prose records.
 - **Ids are random, not derived from the title.** Two agents adding tasks at the same time
   cannot collide, and no coordination is needed to mint one.
-- **`requires` values are exact strings.** `surface:cli` or `surface:web`; an unrecognised
-  value passes through but will never match a surface, so the task never becomes eligible.
-- **`--tag` (repeatable) adds free-form labels.** `/continue CLI` scopes the loop to tasks
-  carrying tag `CLI`. Tags are orthogonal to `--workspace` and `--requires`.
+- **`requires` values are matched as exact strings.** A typo passes validation and then
+  matches nothing, so the task is never offered to anyone — the failure looks like an
+  empty queue, not like a bad value. Copy them from the table above.
+- **`--tag` and `--requires` are both repeatable and orthogonal**, to each other and to
+  `--workspace`.
 - **`--max-attempts N` (default 3) caps retries.** Each retry claims the next attempt ref;
   past the cap the task stops being offered and needs a human.
 - **The task file must be merged to the default branch to count.** Task files are read

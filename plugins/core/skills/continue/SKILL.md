@@ -2,7 +2,7 @@
 name: continue
 description: When the user wants to resume work or run the worker loop — picks the next unblocked task, optionally scoped by tag(s) and/or a workspace, or matched by title text. Use /continue [TAG … | WORKSPACE | search-text]. Do NOT use before running init.
 user-invocable: true
-argument-hint: "[TAG … | WORKSPACE | search-text]"
+argument-hint: "[CAPABILITY | TAG … | WORKSPACE | search-text]"
 metadata:
   type: workflow
 ---
@@ -46,12 +46,18 @@ Run `task_select.py` (in `claude-arsenal/scripts/`) with the saved issues:
 
 ```
 task_select.py --tasks-dir arsenal/tasks --issues /tmp/issues.json \
-               --capability surface:cli --workspace FRONTEND --tag CLI
+               --capability surface:cli --workspace FRONTEND --tag DOCS
 ```
 
 Ordering is a computation, not a judgement — deps, priority, capabilities and scope are
 all applied by the script, so the decision costs one line of context rather than a
 protocol re-read each session.
+
+Pass one `--capability` per entry in `arsenal/session/surface_profile.json`, plus what
+only this session can see. The probe is a shell hook, so it detects the *machine* —
+surface, running services — and is blind to what the session itself was given: a
+connected browser shows up in the session's own tools while `claude mcp list` reports
+nothing. Check there before adding `access:browser`.
 
 **3. Check nobody else holds it.** Before claiming, read the task's issue and skip it if
 it is closed, has an assignee, or carries `arsenal:claimed`. This is not a race — a human
@@ -92,19 +98,36 @@ commit form survives a squash and covers a stacked PR based on another branch.
 
 ## Scoping
 
+Bare-word tokens are order-independent and resolved by membership, in this order:
+
+| the token matches | it resolves to |
+|---|---|
+| the suffix of a known capability | `--capability` filter (and grants it — below) |
+| a known workspace | `--workspace` filter (at most one) |
+| a known tag | `--tag` filter (several are ANDed) |
+| nothing above | fuzzy title search |
+
 ```bash
-# Bare-word tokens are order-independent and resolved by membership:
-#   known workspace -> workspace filter (at most one)
-#   known tag       -> tag filter (multiple tags are ANDed)
-#   anything else   -> fuzzy title search
-/continue CLI FRONTEND   # tag CLI AND workspace FRONTEND
-/continue CLI WEB        # tag CLI AND tag WEB
-/continue FRONTEND       # workspace only
+/continue HUMAN             # access:human — the tasks waiting on a person
+/continue BROWSER FRONTEND  # access:browser AND workspace FRONTEND
+/continue DOCS INFRA        # tag DOCS AND tag INFRA
 ```
 
-`/continue CLI FRONTEND` and `/continue FRONTEND CLI` resolve to the same scope. A task
-qualifies only if it carries **every** requested tag and matches the workspace when one is
-given.
+The suffix rule is derived from the vocabulary rather than a table to keep in step:
+`HUMAN` finds `access:human`, `POSTGRES` finds `services:postgres`, `CLI` finds
+`surface:cli`. Should two classes ever end in the same word, that token must be written
+in full as `class:value`. `/continue BROWSER FRONTEND` and `/continue FRONTEND BROWSER`
+resolve to the same scope, and a task qualifies only if it satisfies **every** token.
+
+**Naming a capability also grants it for the session.** A person typing
+`/continue BROWSER` is the evidence that the browser is there — without this the filter
+would return nothing whenever the probe cannot see the thing being asserted, which is
+every `access:` capability except the browser. This is what makes `access:human` usable
+at all: no probe can tell whether someone is watching, but someone typing it can.
+
+The exception is a capability the session *can* check. If the browser tools report none
+connected, say so and stop — do not hand out a task that spends an attempt discovering
+it.
 
 ## Gotchas
 

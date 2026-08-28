@@ -104,9 +104,13 @@ orchestrator = ""
 workers = "sonnet"
 """
 
+# Permissive on purpose: until the probe runs, every `surface:` task stays
+# eligible. `access:` capabilities are deliberately absent — they gate work a
+# session may genuinely be unable to do, so they are granted by the probe or by
+# naming one at /continue, never by a default nobody chose.
 DEFAULT_SURFACE_PROFILE = {
     "surface": "unknown",
-    "capabilities": ["surface:cli", "surface:web"],
+    "capabilities": ["surface:cli", "surface:web", "surface:cloud"],
 }
 
 WORKSPACE_SPEC_STUB = """\
