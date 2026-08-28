@@ -14,13 +14,18 @@ PROFILE="${STATE_DIR}/surface_profile.json"
 main() {
     [[ -d "${STATE_DIR}" ]] || return 0
 
+    # CLAUDE_CODE_REMOTE is set on every cloud surface, not just the web app:
+    # the desktop and mobile apps, Claude Tag and routines all report it. The
+    # capability was named `surface:web` first and reads as if it excluded them,
+    # so `surface:cloud` is emitted alongside it. Both are granted; task files
+    # written against either keep matching.
     if [[ "${CLAUDE_CODE_REMOTE:-}" == "true" ]]; then
-        surface="web"
+        surface="cloud"
+        caps=("\"surface:cloud\"" "\"surface:web\"")
     else
         surface="cli"
+        caps=("\"surface:cli\"")
     fi
-
-    caps=("\"surface:${surface}\"")
 
     if command -v pg_isready &>/dev/null 2>&1; then
         if pg_isready -t 2 -q 2>/dev/null; then

@@ -62,7 +62,7 @@ title: "Extract the surface probe into its own script"
 priority: 5
 deps: [t-aaaa1111, t-bbbb2222]
 requires: [surface:cli]
-tags: [CLI]
+tags: [INFRA]
 ---
 
 ## Acceptance gate
@@ -91,6 +91,64 @@ by omission, which is the hole evidence gates exist to close.
 gate that runs nothing passes everything. `task_select.py` reports `gate: false`
 for a task that has no block, so a queue full of unenforced gates is visible
 rather than quietly inert.
+
+---
+
+## Capabilities
+
+`requires` is the only field that can make a task invisible to a session.
+`task_select.py` treats it as a subset check against the session's capabilities,
+so a task demanding something this session does not have is never offered — it is
+not skipped with a warning, it simply is not in the answer.
+
+That is what makes the vocabulary worth naming, because the alternative is a tag —
+and a tag narrows a search without gating anything. A task labelled
+`tags: [BROWSER]` is still handed to a plain `/continue` on a cloud worker with no
+browser, which fails it, retries, and fails it twice more before the attempt cap
+stops it.
+
+| capability | the task cannot proceed without | granted by |
+|---|---|---|
+| `surface:cli` | a real terminal on a machine | `detect_surface.sh` |
+| `surface:cloud` | a cloud session | `detect_surface.sh` |
+| `services:postgres`, `services:redis` | that daemon answering | `detect_surface.sh` |
+| `access:human` | a person to decide, label, answer, or approve | named at `/continue` |
+| `access:browser` | a driveable browser | the session's own tools |
+| `access:secrets` | machine-local credentials — prod tokens, SSH keys, a vault | named at `/continue` |
+| `access:device` | hardware physically attached — a phone, a serial port, a board | named at `/continue` |
+
+**Three classes, all nouns.** The same string is read from two opposite sides — as
+a demand in a task file's `requires`, as an offer in the session's `capabilities`
+— so a value phrased from either side reads as nonsense from the other:
+`requires: [needs:human]` and `capabilities: [has:human]` are each wrong exactly
+once. A noun is right twice.
+
+**`surface:cloud`, not `surface:web`.** `CLAUDE_CODE_REMOTE` is set on every cloud
+surface — the desktop and mobile apps, Claude Tag and routines, not only the web
+app — so the original name described a subset of what it actually matched, and
+anyone reading it would conclude their desktop session was something else. The
+probe now emits both strings, so task files written against either keep working;
+`surface:web` is the older spelling and needs no migration.
+
+**A capability earns a name only if `surface:cli` does not already cover it.**
+LAPTOP, PC, DESKTOP and CLI are one capability under four names, and the tools
+that exist only on a real machine — Claude Design, the research tool — need
+nothing beyond `surface:cli`. What survives that test is the list above: the
+things an unattended CLI session still cannot do.
+
+**Naming one at `/continue` grants it only where nothing can check it.** Nothing
+can probe whether a person is watching or which keys a machine holds, so for the
+unprobeable `access:` values the person typing `/continue HUMAN` is the evidence.
+Everything with an authoritative source keeps it: `surface:` and `services:` are
+the probe's to decide, and `access:browser` is the session's own tools' — the
+shell hook cannot see those, since `claude mcp list` reports no servers on a
+session whose browser tools are live. So `/continue CLI` on a cloud session
+narrows the search and grants nothing; the tasks stay out of reach, which is the
+point of the gate.
+
+Tags keep the job they are good at — scoping a working session, no gate implied:
+`FRONTEND`, `BACKEND`, `DOCS`, `INFRA`, `FLAKY`. Neither list is an enum; both are
+examples, and any string is accepted.
 
 ---
 
