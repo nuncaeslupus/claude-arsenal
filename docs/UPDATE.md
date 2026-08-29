@@ -7,6 +7,23 @@ edits on the next update.
 
 ---
 
+## What's new in a given version
+
+You don't have to go hunting for this. `/init`'s upgrade banner (and
+`check_update.sh`, for a subtree install) prints every changelog entry
+between your installed version and the version you're updating to,
+automatically, every time you update — new skills, new flags, new options,
+breaking changes. The session-start protocol already runs `init.py --silent`
+every session, so the banner shows up on the first session after a plugin
+update even if you never run `/init` by hand.
+
+The entries themselves live in
+`plugins/core/skills/init/assets/CHANGELOG.md` inside the marketplace repo,
+one `## [X.Y.Z]` section per version bump. Read it directly if you want to
+look ahead before updating; nothing below duplicates it.
+
+---
+
 ## What v0.32.0 adds on upgrade
 
 Re-running `/init` after this upgrade writes one new file outside the vendored

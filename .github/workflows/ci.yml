@@ -84,10 +84,11 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Require a .bundle-version bump when shipped files change
+      - name: Require a .bundle-version bump and CHANGELOG entry when shipped files change
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
           VFILE: plugins/core/skills/init/assets/.bundle-version
+          CHANGELOG: plugins/core/skills/init/assets/CHANGELOG.md
         run: |
           changed=$(git diff --name-only "${BASE}...HEAD")
           # "Shipped" = anything a consumer vendors: plugin skills + manifests.
@@ -103,6 +104,11 @@ jobs:
             exit 1
           fi
           echo "version bump OK: ${base_v:-none} -> ${head_v}"
+          if ! grep -qE "^## \[${head_v}\]" "${CHANGELOG}"; then
+            echo "::error::${CHANGELOG} has no '## [${head_v}]' entry for the bumped version. Add one describing what changed for a downstream consumer — see CLAUDE.md § Versioning."
+            exit 1
+          fi
+          echo "changelog OK: found an entry for ${head_v}"
 
   queue-doctor:
     name: queue doctor (dogfood)

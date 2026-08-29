@@ -140,4 +140,60 @@ out=$(python3 "${INIT_PY}" --repo-path "${WS}" --bundle-dir "${BUNDLE}" --worksp
     && fail "the workspace was registered even though the bundle refused to install"
 echo "PASS: a refused install does not register a workspace"
 
+# --- 7: CHANGELOG entries surface on the upgrade banner ---------------------
+#     init.py used to print only "Upgrading bundle: X -> Y" — a version number
+#     with no way to know what actually changed. A consumer three releases
+#     behind had no signal that a feature they would want had even shipped,
+#     short of reading the marketplace's own commit history by hand.
+changelog_repo="${tmpdir}/changelog-repo"
+changelog_bundle="${tmpdir}/changelog-bundle"
+mkdir -p "${changelog_repo}/claude-arsenal" "${changelog_bundle}"
+echo "1.0.0" > "${changelog_repo}/claude-arsenal/.bundle-version"
+echo "1.2.0" > "${changelog_bundle}/.bundle-version"
+cat > "${changelog_bundle}/CHANGELOG.md" <<'EOF'
+# Changelog
+
+## [1.2.0] - 2026-01-03
+
+- Newest entry, should print.
+
+## [1.1.0] - 2026-01-02
+
+- Middle entry, should print.
+
+## [1.0.0] - 2026-01-01
+
+- Entry AT the installed version, already have it — must NOT print.
+
+## [0.9.0] - 2025-12-01
+
+- Entry BEFORE the installed version — must NOT print.
+EOF
+
+out=$(python3 "${INIT_PY}" --repo-path "${changelog_repo}" --bundle-dir "${changelog_bundle}" 2>&1) \
+    || fail "init.py failed with a CHANGELOG.md present: ${out}"
+grep -q "Upgrading claude-arsenal bundle: 1.0.0 → 1.2.0" <<<"${out}" \
+    || fail "upgrade banner missing or wrong versions: ${out}"
+grep -q "Newest entry, should print" <<<"${out}" || fail "the 1.2.0 changelog entry did not print: ${out}"
+grep -q "Middle entry, should print" <<<"${out}" || fail "the 1.1.0 changelog entry did not print: ${out}"
+grep -q "already have it" <<<"${out}" && fail "the entry AT the installed version must not print: ${out}"
+grep -q "BEFORE the installed version" <<<"${out}" && fail "an entry older than installed must not print: ${out}"
+newest_at=$(grep -n "Newest entry" <<<"${out}" | cut -d: -f1)
+middle_at=$(grep -n "Middle entry" <<<"${out}" | cut -d: -f1)
+[[ -n "${newest_at}" && -n "${middle_at}" && "${newest_at}" -lt "${middle_at}" ]] \
+    || fail "changelog entries must print newest first: ${out}"
+echo "PASS: the upgrade banner prints CHANGELOG entries strictly between installed and new"
+
+# --- 7b: no CHANGELOG.md in the bundle — the banner still prints, just without it
+no_changelog_repo="${tmpdir}/no-changelog-repo"
+no_changelog_bundle="${tmpdir}/no-changelog-bundle"
+mkdir -p "${no_changelog_repo}/claude-arsenal" "${no_changelog_bundle}"
+echo "1.0.0" > "${no_changelog_repo}/claude-arsenal/.bundle-version"
+echo "1.1.0" > "${no_changelog_bundle}/.bundle-version"
+out=$(python3 "${INIT_PY}" --repo-path "${no_changelog_repo}" --bundle-dir "${no_changelog_bundle}" 2>&1) \
+    || fail "init.py failed with no CHANGELOG.md present: ${out}"
+grep -q "Upgrading claude-arsenal bundle: 1.0.0 → 1.1.0" <<<"${out}" \
+    || fail "upgrade banner missing when there is no CHANGELOG.md: ${out}"
+echo "PASS: a bundle with no CHANGELOG.md still upgrades cleanly"
+
 echo "PASS: init_upgrade_test — all gates passed"

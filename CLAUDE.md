@@ -34,6 +34,7 @@ cutover).
 | Checking what a change costs a consumer's context | `make context-budget` — reports the resident/on-invocation/on-demand tiers and fails over the resident cap. |
 | Checking this repo's own queue health | `make queue-doctor` — runs the queue consistency checker on `status/queue/` (dogfood). |
 | Updating dependencies | `uv sync`, then commit `uv.lock`. |
+| Bumping `.bundle-version` | Also add a `## [<version>]` entry to `plugins/core/skills/init/assets/CHANGELOG.md` — CI's `version-bump` job requires the heading; see § Versioning. |
 
 The Makefile is the entry point for every routine action. Run `make help`
 to list targets.
@@ -75,6 +76,7 @@ plugins/
   <plugin>/skills/<skill>/scripts/      # helper scripts (uv run python …)
   <plugin>/skills/<skill>/evals/        # eval prompts + loading verification
   core/skills/init/assets/workflows/    # shipped Actions, installed by /init
+  core/skills/init/assets/CHANGELOG.md  # consumer-facing changelog, one entry per bump
 Makefile                                # dev entry point
 pyproject.toml                          # uv + ruff + mypy config
 ```
@@ -104,6 +106,17 @@ Every PR that ships user-visible changes **must** bump
 The `tag-release` workflow reads this file on every push to `main` and
 creates a new git tag (`v<version>`) automatically if it does not already
 exist. Consumer projects pin to these tags to re-vendor the marketplace.
+
+The same PR must also add a `## [<version>] - <date>` entry to
+`plugins/core/skills/init/assets/CHANGELOG.md` describing the change from a
+downstream consumer's point of view — a new skill, flag, option, or breaking
+change, not an internal refactor. CI's `version-bump` job fails the build if
+the bumped version has no matching heading there (it checks the heading
+exists, not that the content is useful — write one worth reading). This is
+not paperwork: `/init`'s upgrade banner and `check_update.sh` print the
+entries between a consumer's installed version and the one they're updating
+to, automatically, on every update — a blank or lazy entry is a blank message
+in every consumer's session.
 
 `.bundle-version` is the **single canonical version** for the whole repo.
 The plugin manifests (`plugins/*/.claude-plugin/plugin.json`), the

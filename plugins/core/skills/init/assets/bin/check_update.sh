@@ -4,7 +4,9 @@
 # Compares the installed bundle version (claude-arsenal/.bundle-version) against
 # the latest version tag on the upstream remote. When behind: runs
 # `git subtree pull` to bring in the new bundle, then re-runs init.py --silent
-# to propagate any file-level changes to the host project.
+# to propagate any file-level changes to the host project. Either way, prints
+# the CHANGELOG.md entries between the installed version and the new one, so
+# an update says what changed, not just the version number.
 #
 # NO SILENT "ALREADY CURRENT". Every path that declines to update says why. A
 # consumer once re-vendored, was told it was current, and sat on a stale bundle
@@ -38,6 +40,8 @@
 #                    that could satisfy both readings.
 #   ARSENAL_UPSTREAM_VERSION_PATH  path of .bundle-version inside the marketplace
 #                    repo, for the untagged-release probe
+#   ARSENAL_UPSTREAM_CHANGELOG_PATH  path of CHANGELOG.md inside the marketplace
+#                    repo, for printing what changed on an update
 #
 # Exit: 0 always — update failures are printed as warnings and never abort a session.
 
@@ -65,6 +69,7 @@ PREFIX="${ARSENAL_PREFIX:-claude-arsenal}"
 BUNDLE_DIR="${ARSENAL_BUNDLE_DIR:-${PREFIX}}"
 VERSION_FILE="${BUNDLE_DIR}/.bundle-version"
 UPSTREAM_VERSION_PATH="${ARSENAL_UPSTREAM_VERSION_PATH:-plugins/core/skills/init/assets/.bundle-version}"
+UPSTREAM_CHANGELOG_PATH="${ARSENAL_UPSTREAM_CHANGELOG_PATH:-plugins/core/skills/init/assets/CHANGELOG.md}"
 
 _warn() { echo "check_update.sh: $*" >&2; }
 
@@ -82,23 +87,61 @@ except (ValueError, IndexError):
 " "$1" "$2" 2>/dev/null
 }
 
-# Report a newer version sitting untagged on the marketplace's default branch.
-# Reads the file from a THROWAWAY bare repo: a --depth=1 fetch into the
-# consumer's own repo would leave shallow objects behind and can break a later
-# `git subtree merge`, and this repo is not ours to make shallow.
-_upstream_branch_version() {
-    local url tmpdir version=""
+# Read `path` at `ref` on the remote, via a THROWAWAY bare repo. A --depth=1
+# fetch into the consumer's own repo would leave shallow objects behind and can
+# break a later `git subtree merge`, and this repo is not ours to make shallow.
+# Empty on any failure (no remote, unreachable ref, no such path) — every
+# caller treats that as "nothing to report", never as an error worth aborting on.
+_show_upstream_file() {
+    local ref="$1" path="$2" url tmpdir content=""
     url="$(git remote get-url "${REMOTE}" 2>/dev/null || true)"
     [[ -n "${url}" ]] || return 0
     tmpdir="$(mktemp -d 2>/dev/null || true)"
     [[ -n "${tmpdir}" ]] || return 0
     if git init -q --bare "${tmpdir}" 2>/dev/null \
-        && git -C "${tmpdir}" fetch -q --depth=1 "${url}" HEAD 2>/dev/null; then
-        version="$(git -C "${tmpdir}" show "FETCH_HEAD:${UPSTREAM_VERSION_PATH}" 2>/dev/null \
-            | tr -d '[:space:]' || true)"
+        && git -C "${tmpdir}" fetch -q --depth=1 "${url}" "${ref}" 2>/dev/null; then
+        content="$(git -C "${tmpdir}" show "FETCH_HEAD:${path}" 2>/dev/null || true)"
     fi
     rm -rf "${tmpdir}" 2>/dev/null || true
-    printf '%s' "${version}"
+    printf '%s' "${content}"
+}
+
+# Report a newer version sitting untagged on the marketplace's default branch.
+_upstream_branch_version() {
+    _show_upstream_file "HEAD" "${UPSTREAM_VERSION_PATH}" | tr -d '[:space:]'
+}
+
+# Print CHANGELOG.md entries for versions in (installed, latest] — what a
+# consumer actually gets by updating, not just the version number. Silent on
+# any failure: this is an enhancement to the UPDATE AVAILABLE / pulling-update
+# messages below, never a reason to treat the update path differently.
+_print_changelog_since() {
+    local installed="$1" latest="$2" text
+    text="$(_show_upstream_file "refs/tags/v${latest}" "${UPSTREAM_CHANGELOG_PATH}")"
+    [[ -n "${text}" ]] || return 0
+    printf '%s' "${text}" | python3 -c "
+import re, sys
+def parse(v):
+    return tuple(int(x) for x in v.split('.'))
+installed, latest = parse(sys.argv[1]), parse(sys.argv[2])
+parts = re.split(r'(?m)^## \[(\d+\.\d+\.\d+)\][^\n]*\n', sys.stdin.read())
+entries = []
+for i in range(1, len(parts), 2):
+    try:
+        v = parse(parts[i])
+    except ValueError:
+        continue
+    if installed < v <= latest:
+        body = parts[i + 1].strip() if i + 1 < len(parts) else ''
+        if body:
+            entries.append((v, parts[i], body))
+entries.sort(reverse=True)
+for _, ver, body in entries:
+    print()
+    print(f'  --- new in {ver} ---')
+    for line in body.splitlines():
+        print(f'  {line}')
+" "${installed}" "${latest}" 2>/dev/null || true
 }
 
 # Only worth a network round trip when the default branch actually carries
@@ -243,10 +286,12 @@ fi
 if [[ ${CHECK_ONLY} -eq 1 ]]; then
     echo "claude-arsenal: installed=v${installed}, latest=v${latest} — UPDATE AVAILABLE"
     echo "  run without --check-only, or: ${_manual_hint}"
+    _print_changelog_since "${installed}" "${latest}"
     exit 0
 fi
 
 echo "claude-arsenal: installed=v${installed}, latest=v${latest} — pulling update…"
+_print_changelog_since "${installed}" "${latest}"
 
 # Ensure the working tree is clean before the subtree update
 if ! git diff --quiet 2>/dev/null || ! git diff --cached --quiet 2>/dev/null; then
