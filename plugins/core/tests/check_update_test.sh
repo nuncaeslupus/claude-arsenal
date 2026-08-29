@@ -330,5 +330,42 @@ grep -q "git subtree merge" <<<"${out}" \
     || fail "a real subtree must still get the subtree command: ${out}"
 echo "PASS: the update hint matches how the bundle was installed"
 
+# --- 12: CHANGELOG entries print alongside the update message ----------------
+#     check_update.sh already knew a newer tag existed; it used to say only
+#     that. A consumer with no reason to browse the marketplace's own commit
+#     history had no way to learn what an update actually contains.
+cat > "${market}/plugins/core/skills/init/assets/CHANGELOG.md" <<'EOF'
+# Changelog
+
+## [0.23.0] - 2026-02-01
+
+- Newest entry, in range — must print.
+
+## [0.22.0] - 2026-01-15
+
+- Middle entry, in range — must print.
+
+## [0.21.0] - 2026-01-01
+
+- AT the consumer's installed version — must NOT print.
+
+## [0.20.5] - 2025-12-01
+
+- Older than installed — must NOT print.
+EOF
+git -C "${market}" add -A
+git -C "${market}" commit -q -m "docs: changelog through 0.23.0"
+git -C "${market}" tag -a v0.23.0 -m "Release v0.23.0"
+
+out="$(run_check)" || fail "check_update.sh exited non-zero with a CHANGELOG.md present"
+grep -q "Newest entry, in range" <<<"${out}" || fail "the 0.23.0 changelog entry did not print: ${out}"
+grep -q "Middle entry, in range" <<<"${out}" || fail "the 0.22.0 changelog entry did not print: ${out}"
+grep -q "must NOT print" <<<"${out}" && fail "an entry at or before the installed version printed: ${out}"
+newest_at=$(grep -n "Newest entry" <<<"${out}" | cut -d: -f1)
+middle_at=$(grep -n "Middle entry" <<<"${out}" | cut -d: -f1)
+[[ -n "${newest_at}" && -n "${middle_at}" && "${newest_at}" -lt "${middle_at}" ]] \
+    || fail "changelog entries must print newest first: ${out}"
+echo "PASS: check_update.sh prints CHANGELOG entries strictly between installed and latest"
+
 echo "PASS: check_update_test — all gates passed"
 exit 0

@@ -285,6 +285,37 @@ def _parse_version(text: str) -> tuple[int, ...] | None:
         return None
 
 
+_CHANGELOG_HEADING = re.compile(r"(?m)^## \[(\d+\.\d+\.\d+)\][^\n]*\n")
+
+
+def _changelog_since(bundle: Path, installed_ver: str, bundle_ver: str) -> str:
+    """Bundle CHANGELOG.md entries newer than installed_ver, up to bundle_ver.
+
+    "" when there is no changelog yet, no entry falls in that range, or either
+    version fails to parse — this is an enhancement to the upgrade banner below,
+    never a reason to withhold it, so every failure here is silent, not fatal.
+    """
+    changelog = bundle / "CHANGELOG.md"
+    if not changelog.is_file():
+        return ""
+    since, upto = _parse_version(installed_ver), _parse_version(bundle_ver)
+    if since is None or upto is None:
+        return ""
+    try:
+        text = changelog.read_text(encoding="utf-8")
+    except (OSError, UnicodeError):
+        return ""
+    parts = _CHANGELOG_HEADING.split(text)
+    entries: list[tuple[tuple[int, ...], str, str]] = []
+    for i in range(1, len(parts), 2):
+        version = _parse_version(parts[i])
+        body = parts[i + 1].strip() if i + 1 < len(parts) else ""
+        if version is not None and since < version <= upto and body:
+            entries.append((version, parts[i], body))
+    entries.sort(reverse=True)
+    return "\n\n".join(f"## {ver}\n{body}" for _, ver, body in entries)
+
+
 def _check_bundle_version(bundle: Path, arsenal: Path) -> tuple[str, str] | None:
     """Print an upgrade banner; REPORT a downgrade instead of performing one.
 
@@ -310,6 +341,9 @@ def _check_bundle_version(bundle: Path, arsenal: Path) -> tuple[str, str] | None
     print(
         f"Upgrading claude-arsenal bundle: {installed_ver} → {bundle_ver}"
     )
+    changelog = _changelog_since(bundle, installed_ver, bundle_ver)
+    if changelog:
+        print(f"\nWhat's new:\n\n{changelog}\n")
     return None
 
 
