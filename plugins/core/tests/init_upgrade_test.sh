@@ -196,4 +196,21 @@ grep -q "Upgrading claude-arsenal bundle: 1.0.0 → 1.1.0" <<<"${out}" \
     || fail "upgrade banner missing when there is no CHANGELOG.md: ${out}"
 echo "PASS: a bundle with no CHANGELOG.md still upgrades cleanly"
 
+# --- 7c: a CHANGELOG.md that is not valid UTF-8 must not crash /init --------
+#     _changelog_since read the file with no guard; an unreadable or non-UTF-8
+#     CHANGELOG.md raised out of _check_bundle_version, which runs
+#     unconditionally at the top of every init_base() call — including the
+#     silent session-start refresh every session performs automatically.
+bad_encoding_repo="${tmpdir}/bad-encoding-repo"
+bad_encoding_bundle="${tmpdir}/bad-encoding-bundle"
+mkdir -p "${bad_encoding_repo}/claude-arsenal" "${bad_encoding_bundle}"
+echo "1.0.0" > "${bad_encoding_repo}/claude-arsenal/.bundle-version"
+echo "1.1.0" > "${bad_encoding_bundle}/.bundle-version"
+printf '# Changelog\n\n## [1.1.0] - 2026-01-01\n\n- \xff\xfe invalid utf-8 bytes\n' > "${bad_encoding_bundle}/CHANGELOG.md"
+out=$(python3 "${INIT_PY}" --repo-path "${bad_encoding_repo}" --bundle-dir "${bad_encoding_bundle}" 2>&1); rc=$?
+[[ ${rc} -eq 0 ]] || fail "init.py exited ${rc} on a non-UTF-8 CHANGELOG.md: ${out}"
+grep -q "Upgrading claude-arsenal bundle: 1.0.0 → 1.1.0" <<<"${out}" \
+    || fail "upgrade banner missing when CHANGELOG.md is not valid UTF-8: ${out}"
+echo "PASS: a CHANGELOG.md that is not valid UTF-8 does not crash init.py"
+
 echo "PASS: init_upgrade_test — all gates passed"

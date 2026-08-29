@@ -301,7 +301,11 @@ def _changelog_since(bundle: Path, installed_ver: str, bundle_ver: str) -> str:
     since, upto = _parse_version(installed_ver), _parse_version(bundle_ver)
     if since is None or upto is None:
         return ""
-    parts = _CHANGELOG_HEADING.split(changelog.read_text(encoding="utf-8"))
+    try:
+        text = changelog.read_text(encoding="utf-8")
+    except (OSError, UnicodeError):
+        return ""
+    parts = _CHANGELOG_HEADING.split(text)
     entries: list[tuple[tuple[int, ...], str, str]] = []
     for i in range(1, len(parts), 2):
         version = _parse_version(parts[i])

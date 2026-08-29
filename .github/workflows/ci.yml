@@ -104,7 +104,13 @@ jobs:
             exit 1
           fi
           echo "version bump OK: ${base_v:-none} -> ${head_v}"
-          if ! grep -qE "^## \[${head_v}\]" "${CHANGELOG}"; then
+          # Escape the dots: unescaped, grep -E's `.` matches any character, so a
+          # stray "## [2x6x0]" heading would satisfy a check meant to require
+          # literally "2.6.0" — and the changelog display parsers (init.py /
+          # check_update.sh) require a literal period-separated version, so that
+          # consumer would get no entry for the release.
+          head_v_re=$(printf '%s' "${head_v}" | sed 's/\./\\./g')
+          if ! grep -qE "^## \[${head_v_re}\]" "${CHANGELOG}"; then
             echo "::error::${CHANGELOG} has no '## [${head_v}]' entry for the bumped version. Add one describing what changed for a downstream consumer — see CLAUDE.md § Versioning."
             exit 1
           fi
