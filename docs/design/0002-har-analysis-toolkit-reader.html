@@ -1,0 +1,1165 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>HAR Analysis Toolkit — Specification (annotatable)</title>
+<style>
+:root{
+  --bg:#fbfaf7;--fg:#1d1c1a;--muted:#6b6862;--line:#e6e2da;
+  --card:#ffffff;--accent:#0f766e;--accent2:#b45309;--chip:#eef2f1;
+  --note:#fff8ec;--note-line:#f0cf94;--code:#f3f1ec;--link:#0f766e;
+}
+@media(prefers-color-scheme:dark){
+  :root{
+    --bg:#16151a;--fg:#e9e7e2;--muted:#a09c95;--line:#2e2c33;
+    --card:#1e1d23;--accent:#5eead4;--accent2:#fbbf24;--chip:#26313055;
+    --note:#251f10;--note-line:#6b531c;--code:#26242b;--link:#5eead4;
+  }
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;background:var(--bg);color:var(--fg);
+  font:17px/1.62 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  padding-bottom:96px;
+}
+.wrap{max-width:760px;margin:0 auto;padding:0 16px}
+a{color:var(--link)}
+code{background:var(--code);padding:.08em .35em;border-radius:5px;font-size:.86em;
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;word-break:break-word}
+pre{background:var(--code);padding:12px;border-radius:8px;overflow:auto}
+pre code{background:none;padding:0}
+.topbar{position:sticky;top:0;z-index:30;background:var(--bg);
+  border-bottom:1px solid var(--line);backdrop-filter:saturate(120%) blur(6px)}
+.topbar .wrap{display:flex;align-items:center;gap:8px;padding-top:10px;padding-bottom:10px}
+.brand{font-weight:700;font-size:16px;margin-right:auto;letter-spacing:.2px}
+.brand small{font-weight:500;color:var(--muted);display:block;font-size:11px;letter-spacing:0}
+.btn{appearance:none;border:1px solid var(--line);background:var(--card);color:var(--fg);
+  border-radius:9px;padding:8px 11px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap}
+.btn:active{transform:translateY(1px)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+@media(prefers-color-scheme:dark){.btn.primary{color:#06201d}}
+.count{font-size:12px;color:var(--muted);white-space:nowrap;font-weight:600}
+.savestate{font-size:12px;font-weight:700;white-space:nowrap;transition:color .2s}
+.savestate.ok{color:var(--accent)}
+.savestate.warn{color:#b45309}
+@media(prefers-color-scheme:dark){.savestate.warn{color:#fbbf24}}
+.statusbar{border-bottom:1px solid var(--line);background:var(--card)}
+.statusbar .wrap{padding:7px 16px;font-size:12px;color:var(--muted)}
+#warnbar{display:none;background:#fff4e5;border-bottom:1px solid var(--note-line);color:#7c2d12}
+#warnbar .wrap{padding:10px 16px;font-size:13px;line-height:1.45}
+@media(prefers-color-scheme:dark){#warnbar{background:#3a2a0e;color:#fde68a;border-color:#6b531c}}
+.hero{padding:22px 0 6px}
+.hero h1{font-size:25px;line-height:1.2;margin:.1em 0 .3em}
+.hero p{color:var(--muted);margin:.3em 0}
+.help{border:1px solid var(--line);background:var(--card);border-radius:12px;padding:4px 14px;margin:14px 0}
+.help summary{cursor:pointer;font-weight:600;padding:10px 0}
+.help ul{margin:.2em 0 1em;padding-left:1.2em}
+.help li{margin:.3em 0}
+.toc{border:1px solid var(--line);background:var(--card);border-radius:12px;padding:4px 14px;margin:14px 0}
+.toc>summary{cursor:pointer;font-weight:700;padding:11px 0;font-size:15px}
+.toc-part{margin:2px 0;border-top:1px solid var(--line)}
+.toc-part>summary{cursor:pointer;padding:9px 2px;font-weight:600;font-size:14px}
+.toc-part ul{margin:.1em 0 .7em;padding-left:1.1em}
+.toc-part li{margin:.22em 0;font-size:13.5px;line-height:1.4}
+.toc-part a{text-decoration:none}
+.toc-part a:hover{text-decoration:underline}
+.part{margin:26px 0}
+.part-title{font-size:21px;line-height:1.25;border-bottom:2px solid var(--accent);
+  padding-bottom:8px;margin:18px 0 8px;position:sticky;top:54px;background:var(--bg);z-index:10}
+.badge{display:inline-block;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;
+  vertical-align:middle;padding:3px 7px;border-radius:6px;margin-right:8px}
+.badge.spec,.badge.plan{background:var(--chip);color:var(--accent)}
+.badge.workspace{background:var(--chip);color:var(--accent2)}
+.sec{padding:6px 0 2px;border-bottom:1px solid var(--line);scroll-margin-top:100px}
+.sec:last-child{border-bottom:none}
+.sec-h{margin:10px 0 6px;line-height:1.3;position:sticky;top:94px;background:var(--bg);z-index:5;padding-top:6px}
+h3.sec-h{font-size:18.5px}
+h4.sec-h{font-size:16.5px;color:var(--fg)}
+.chip{display:inline-block;font-family:ui-monospace,Menlo,monospace;font-size:12px;font-weight:700;
+  color:var(--accent);background:var(--chip);border-radius:6px;padding:2px 7px;margin-right:8px;vertical-align:middle}
+.sec-title{vertical-align:middle}
+.sec-body{margin:.2em 0 .4em}
+.sec-body p{margin:.55em 0}
+.sec-body ul,.sec-body ol{margin:.5em 0;padding-left:1.35em}
+.sec-body li{margin:.3em 0}
+.sec-body blockquote{margin:.7em 0;padding:.5em .9em;border-left:3px solid var(--accent2);
+  background:var(--code);border-radius:0 8px 8px 0;color:var(--fg)}
+.sec-body blockquote p{margin:.3em 0}
+.sec-body table{border-collapse:collapse;width:100%;font-size:13.5px;margin:.6em 0;display:block;overflow-x:auto}
+.sec-body th,.sec-body td{border:1px solid var(--line);padding:6px 9px;text-align:left;vertical-align:top}
+.sec-body th{background:var(--chip);font-weight:700}
+.sec-body strong{font-weight:700}
+.note{background:var(--note);border:1px solid var(--note-line);border-radius:10px;
+  padding:8px 11px;margin:10px 0 16px}
+.note-head{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+.note-ico{color:var(--accent2);font-weight:800}
+.note-label{font-size:12px;font-weight:700;color:var(--accent2);text-transform:uppercase;letter-spacing:.05em}
+.note-ref{margin-left:auto;font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:var(--muted)}
+.note-ta{width:100%;border:none;background:transparent;color:var(--fg);font:inherit;font-size:15.5px;
+  resize:none;outline:none;line-height:1.5;padding:2px 0;overflow:hidden;min-height:1.6em}
+.note-ta::placeholder{color:var(--muted);opacity:.8}
+.note.filled{box-shadow:0 0 0 2px var(--note-line) inset}
+.fab{position:fixed;right:14px;bottom:16px;z-index:40;display:flex;flex-direction:column;gap:8px;align-items:flex-end}
+.fab .btn{box-shadow:0 4px 14px #0003}
+.modal{position:fixed;inset:0;z-index:60;background:#0008;display:none;align-items:center;justify-content:center;padding:16px}
+.modal.open{display:flex}
+.modal-card{background:var(--card);border:1px solid var(--line);border-radius:14px;max-width:680px;width:100%;
+  max-height:86vh;display:flex;flex-direction:column;padding:16px}
+.modal-card h3{margin:.1em 0 .5em}
+.modal-card p{color:var(--muted);font-size:13.5px;margin:.2em 0 .6em}
+.modal-card textarea{width:100%;flex:1;min-height:220px;border:1px solid var(--line);border-radius:8px;
+  background:var(--bg);color:var(--fg);font:13px/1.5 ui-monospace,Menlo,monospace;padding:10px;resize:vertical}
+.modal-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.hidden-input{display:none}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:84px;z-index:70;background:#111;color:#fff;
+  padding:9px 14px;border-radius:9px;font-size:13px;opacity:0;transition:opacity .25s;pointer-events:none}
+.toast.show{opacity:.96}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="wrap">
+    <div class="brand">HAR Analysis Toolkit — Specification<small>annotatable reader · 2026-08-30</small></div>
+    <span class="savestate ok" id="savestate">✓ Auto-saving</span>
+    <button class="btn primary" id="btn-export">Save / Export</button>
+  </div>
+</div>
+<div class="statusbar"><div class="wrap"><span class="count" id="count">0 / 27 notes</span><span class="hint"> · notes save automatically; <strong>Save / Export</strong> keeps a file you can send back</span></div></div>
+<div id="warnbar"><div class="wrap"><strong>Heads up —</strong> this browser isn't storing your notes automatically (private/incognito mode or restricted file view). Tap <strong>Save / Export</strong> regularly.</div></div>
+
+<div class="wrap">
+  <div class="hero">
+    <h1>HAR Analysis Toolkit specification</h1>
+    <p>Read at your own pace and leave a note on any point you want to discuss.</p>
+  </div>
+  <details class="help">
+    <summary>How to annotate (tap)</summary>
+    <ul>
+      <li>Tap the note field under any section and type. Each note is tagged so your feedback maps to an exact point.</li>
+      <li><strong>Notes save automatically</strong> in this browser as you type.</li>
+      <li><strong>Save / Export</strong> downloads a Markdown file of your notes — the copy to send back. Tap whenever you pause, especially on a phone.</li>
+      <li><strong>Import</strong> reloads notes from a file you exported earlier (after clearing the browser or switching devices).</li>
+      <li><strong>Clear</strong> erases every note in this browser. Export first.</li>
+    </ul>
+  </details>
+  <details class="toc" open><summary>Contents</summary>
+<details class="toc-part">
+<summary>0002 Har Analysis Toolkit</summary><ul>
+<li><a href="#s-spec-intro">Preamble &amp; scope</a></li>
+<li><a href="#s-spec-1">§1 Requirements</a></li>
+<li><a href="#s-spec-2">§2 Problem statement</a></li>
+<li><a href="#s-spec-success-criteria-measurable">Success criteria (measurable)</a></li>
+<li><a href="#s-spec-3">§3 What a HAR contains</a></li>
+<li><a href="#s-spec-3-1">§3.1 Top level</a></li>
+<li><a href="#s-spec-3-2">§3.2 Per entry</a></li>
+<li><a href="#s-spec-3-3">§3.3 Non-standard fields worth reading</a></li>
+<li><a href="#s-spec-3-4">§3.4 Two structural traps</a></li>
+<li><a href="#s-spec-4">§4 The operations</a></li>
+<li><a href="#s-spec-4-1">§4.1 analyze_har.py — reduce to insight</a></li>
+<li><a href="#s-spec-4-2">§4.2 query_har.py — select, show, extract</a></li>
+<li><a href="#s-spec-4-3">§4.3 create_repro.py — entry to runnable request</a></li>
+<li><a href="#s-spec-4-4">§4.4 create_har.py — write a derived HAR</a></li>
+<li><a href="#s-spec-4-5">§4.5 compare_har.py — diff two captures</a></li>
+<li><a href="#s-spec-4-6">§4.6 validate_har.py — is this usable</a></li>
+<li><a href="#s-spec-4-7">§4.7 run_har.py — replay (deferred)</a></li>
+<li><a href="#s-spec-5">§5 Architecture</a></li>
+<li><a href="#s-spec-5-1">§5.1 The index sidecar</a></li>
+<li><a href="#s-spec-5-2">§5.2 One filter grammar, shared</a></li>
+<li><a href="#s-spec-5-3">§5.3 Output discipline</a></li>
+<li><a href="#s-spec-5-4">§5.4 Redaction</a></li>
+<li><a href="#s-spec-5-5">§5.5 Packaging</a></li>
+<li><a href="#s-spec-6">§6 Decisions taken</a></li>
+<li><a href="#s-spec-7">§7 Out of scope</a></li>
+<li><a href="#s-spec-8">§8 Risks</a></li>
+<li><a href="#s-spec-9">§9 Delivery</a></li>
+</ul></details>
+</details>
+  <section class="part">
+<h2 class="part-title"><span class="badge spec">Specification</span>0002 Har Analysis Toolkit</h2>
+<article class="sec" id="s-spec-intro">
+<h3 class="sec-h"><span class="chip">overview</span><span class="sec-title">Preamble &amp; scope</span></h3>
+<div class="sec-body"><p><strong>Status:</strong> Proposed — awaiting decision before implementation
+<strong>Depends on:</strong> skill sections (#273, v2.8.0) — this is the first skill to live
+outside the default install set.</p>
+<blockquote>
+<p><strong>Why this exists.</strong> A browser capture already contains the complete network
+truth of a scraping session: every request, its headers and parameters, and
+every response body. It is also 5–500 MB of JSON, so the one thing nobody can
+do with a HAR is read it. The few hundred bytes that matter — which endpoint
+returns the data, which parameter pages it, which header authenticates it —
+are reachable only through a script. This document specifies that script set.</p>
+</blockquote></div>
+<div class="note" data-for="s-spec-intro"><div class="note-head"><span class="note-ico">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC · intro</span></div><textarea class="note-ta" data-key="s-spec-intro" data-label="Preamble &amp; scope" data-part="0002 Har Analysis Toolkit" rows="1" placeholder="Tap to add a note for this point…"></textarea></div>
+</article>
+<article class="sec" id="s-spec-1">
+<h3 class="sec-h"><span class="chip">§1</span><span class="sec-title">Requirements</span></h3>
+<div class="sec-body"><p>Stated by the maintainer, treated here as non-negotiable:</p>
+<ol>
+<li><strong>Scripts, not reading.</strong> Every answer comes from a deterministic script that
+   returns only the result. A session may judge the result; it never pays tokens
+   for the search.</li>
+<li><strong>Anything a HAR contains must be reachable.</strong> Filtering and search by URL,
+   by request parameter, by response content, by status code — and the same for
+   everything else the format carries.</li>
+<li><strong>Output is reduced by default.</strong> Statistics, URL lists, error tallies,
+   bodies written to files. Never a body on stdout that nobody asked for.</li>
+<li><strong>Mutation is in scope.</strong> Filtering, then deleting or replacing what was
+   filtered, producing a smaller or safer HAR.</li>
+<li><strong>It serves scraper construction.</strong> The end of a session is a working
+   request, not a report.</li>
+<li><strong>Replay is anticipated, not built yet.</strong> v1 must not foreclose it.</li>
+</ol></div>
+<div class="note" data-for="s-spec-1"><div class="note-head"><span class="note-ico">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC §1</span></div><textarea class="note-ta" data-key="s-spec-1" data-label="§1 Requirements" data-part="0002 Har Analysis Toolkit" rows="1" placeholder="Tap to add a note for this point…"></textarea></div>
+</article>
+<article class="sec" id="s-spec-2">
+<h3 class="sec-h"><span class="chip">§2</span><span class="sec-title">Problem statement</span></h3>
+<div class="sec-body"><p>Building a scraper for an unfamiliar site currently means driving a browser and
+reading rendered pages into context — expensive, non-deterministic, and it has
+to be repeated whenever the question changes slightly. Meanwhile a single
+DevTools "Save all as HAR" already holds the answer. The gap is not information;
+it is that no tool reduces a HAR to the part that matters. As a result a HAR is
+either not used at all, or used by grepping raw JSON, which finds strings but
+cannot answer structural questions ("which of these 400 requests returned JSON
+containing this job title, and what parameters distinguish it from its
+neighbours?").</p>
+<p>The consequence for <code>integral-job-search</code> is concrete: every connector begins
+with a browser session that could have begun with a capture, and some sites
+would need no browser at all once their JSON endpoint is known.</p></div>
+<div class="note" data-for="s-spec-2"><div class="note-head"><span class="note-ico">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC §2</span></div><textarea class="note-ta" data-key="s-spec-2" data-label="§2 Problem statement" data-part="0002 Har Analysis Toolkit" rows="1" placeholder="Tap to add a note for this point…"></textarea></div>
+</article>
+<article class="sec" id="s-spec-success-criteria-measurable">
+<h4 class="sec-h"><span class="chip">▸</span><span class="sec-title">Success criteria (measurable)</span></h4>
+<div class="sec-body"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>Criterion</th>
+<th>Threshold</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>SC1</td>
+<td>Default output of any command, every mode</td>
+<td>≤ 4096 bytes hard cap, enforced by truncation, not only by <code>--limit</code></td>
+</tr>
+<tr>
+<td>SC2</td>
+<td>Index build, 200 MB HAR</td>
+<td>≤ 30 s wall, peak RSS ≤ 400 MB</td>
+</tr>
+<tr>
+<td>SC3</td>
+<td>Any index-only query, 50k-entry / 200 MB capture</td>
+<td>≤ 1 s, peak RSS ≤ 150 MB — linear in entry count, flat in body bytes</td>
+</tr>
+<tr>
+<td>SC4</td>
+<td>Commands to locate the endpoint behind a known on-page string</td>
+<td>≤ 2</td>
+</tr>
+<tr>
+<td>SC5</td>
+<td>Secrets in the <em>bounded</em> fields (headers, cookies, query and body params) of anything written, without <code>--secrets</code></td>
+<td>0 (asserted by test) — extracted response bodies are explicitly outside this guarantee, see § 5.4</td>
+</tr>
+<tr>
+<td>SC6</td>
+<td><code>create_repro.py --format curl</code> on a public GET</td>
+<td>reproduces the captured status</td>
+</tr>
+<tr>
+<td>SC7</td>
+<td>Resident listing cost</td>
+<td>≤ 130 tokens for repos with the <code>web</code> section, 0 for those without</td>
+</tr>
+</tbody>
+</table>
+<p>SC5 and SC7 are the two that fail silently if nobody asserts them, so both get
+a test rather than a review note. SC3 is deliberately <em>not</em> stated as "independent
+of HAR size": scanning a JSONL sidecar is linear in entry count. What the index
+buys is independence from <strong>body bytes</strong>, which is where a HAR's size actually
+lives, so the criterion is a bounded benchmark against a named capture rather
+than a complexity claim that would not survive contact with a 500k-entry file.</p></div>
+<div class="note" data-for="s-spec-success-criteria-measurable"><div class="note-head"><span class="note-ico">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC › Success criteria (measurable)</span></div><textarea class="note-ta" data-key="s-spec-success-criteria-measurable" data-label="Success criteria (measurable)" data-part="0002 Har Analysis Toolkit" rows="1" placeholder="Tap to add a note for this point…"></textarea></div>
+</article>
+<article class="sec" id="s-spec-3">
+<h3 class="sec-h"><span class="chip">§3</span><span class="sec-title">What a HAR contains</span></h3>
+<div class="sec-body"><p>HAR 1.2 is a JSON document with one <code>log</code> object. This is the complete raw
+material, and the column on the right is what makes each field worth indexing.</p></div>
+<div class="note" data-for="s-spec-3"><div class="note-head"><span class="note-ico">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC §3</span></div><textarea class="note-ta" data-key="s-spec-3" data-label="§3 What a HAR contains" data-part="0002 Har Analysis Toolkit" rows="1" placeholder="Tap to add a note for this point…"></textarea></div>
+</article>
+<article class="sec" id="s-spec-3-1">
+<h4 class="sec-h"><span class="chip">§3.1</span><span class="sec-title">Top level</span></h4>
+<div class="sec-body"><table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Contents</th>
+<th>Useful for</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>log.version</code></td>
+<td><code>"1.2"</code></td>
+<td>validation</td>
+</tr>
+<tr>
+<td><code>log.creator</code></td>
+<td>name/version of the exporter</td>
+<td>provenance — Chrome, Firefox, mitmproxy and Playwright differ in what they omit</td>
+</tr>
+<tr>
+<td><code>log.browser</code></td>
+<td>browser name/version</td>
+<td>provenance</td>
+</tr>
+<tr>
+<td><code>log.pages[]</code></td>
+<td><code>id</code>, <code>title</code>, <code>startedDateTime</code>, <code>pageTimings</code></td>
+<td>page boundaries; scoping a query to one navigation</td>
+</tr>
+<tr>
+<td><code>log.entries[]</code></td>
+<td>the requests</td>
+<td>everything below</td>
+</tr>
+</tbody>
+</table></div>
+<div class="note" data-for="s-spec-3-1"><div class="note-head"><span class="note-ico">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC §3.1</span></div><textarea class="note-ta" data-key="s-spec-3-1" data-label="§3.1 Top level" data-part="0002 Har Analysis Toolkit" rows="1" placeholder="Tap to add a note for this point…"></textarea></div>
+</article>
+<article class="sec" id="s-spec-3-2">
+<h4 class="sec-h"><span class="chip">§3.2</span><span class="sec-title">Per entry</span></h4>
+<div class="sec-body"><table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Contents</th>
+<th>Useful for</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>pageref</code></td>
+<td>owning page id</td>
+<td>scoping</td>
+</tr>
+<tr>
+<td><code>startedDateTime</code>, <code>time</code></td>
+<td>start, total ms</td>
+<td>ordering, time-window filters, slow-request stats</td>
+</tr>
+<tr>
+<td><code>request.method</code></td>
+<td>GET/POST/…</td>
+<td>filtering</td>
+</tr>
+<tr>
+<td><code>request.url</code></td>
+<td>full URL</td>
+<td>the primary search axis</td>
+</tr>
+<tr>
+<td><code>request.httpVersion</code></td>
+<td>h1/h2/h3</td>
+<td>rarely; reproduction fidelity</td>
+</tr>
+<tr>
+<td><code>request.queryString[]</code></td>
+<td>parsed <code>name</code>/<code>value</code></td>
+<td><strong>parameter search; pagination discovery</strong></td>
+</tr>
+<tr>
+<td><code>request.headers[]</code></td>
+<td>all request headers</td>
+<td><strong>auth discovery; reproduction</strong></td>
+</tr>
+<tr>
+<td><code>request.cookies[]</code></td>
+<td>parsed cookies</td>
+<td>session analysis; reproduction</td>
+</tr>
+<tr>
+<td><code>request.postData</code></td>
+<td><code>mimeType</code>, <code>text</code>, parsed <code>params[]</code></td>
+<td><strong>GraphQL/JSON POST bodies — search and reproduction</strong></td>
+</tr>
+<tr>
+<td><code>request.headersSize</code>, <code>bodySize</code></td>
+<td>byte counts</td>
+<td>statistics</td>
+</tr>
+<tr>
+<td><code>response.status</code>, <code>statusText</code></td>
+<td>code and message</td>
+<td><strong>error tallies</strong></td>
+</tr>
+<tr>
+<td><code>response.headers[]</code></td>
+<td>response headers</td>
+<td>content type, caching, <code>Set-Cookie</code>, rate-limit headers</td>
+</tr>
+<tr>
+<td><code>response.cookies[]</code></td>
+<td>cookies set</td>
+<td>session analysis</td>
+</tr>
+<tr>
+<td><code>response.content</code></td>
+<td><code>size</code>, <code>compression</code>, <code>mimeType</code>, <code>text</code>, <code>encoding</code></td>
+<td><strong>the payload — search and extraction</strong></td>
+</tr>
+<tr>
+<td><code>response.redirectURL</code></td>
+<td>redirect target</td>
+<td>redirect chains</td>
+</tr>
+<tr>
+<td><code>cache</code></td>
+<td>before/after cache state</td>
+<td>rarely</td>
+</tr>
+<tr>
+<td><code>timings</code></td>
+<td><code>blocked</code>,<code>dns</code>,<code>connect</code>,<code>send</code>,<code>wait</code>,<code>receive</code>,<code>ssl</code></td>
+<td>performance analysis (the format's original purpose)</td>
+</tr>
+<tr>
+<td><code>serverIPAddress</code>, <code>connection</code></td>
+<td>transport detail</td>
+<td>host/CDN grouping</td>
+</tr>
+</tbody>
+</table></div>
+<div class="note" data-for="s-spec-3-2"><div class="note-head"><span class="note-ico">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC §3.2</span></div><textarea class="note-ta" data-key="s-spec-3-2" data-label="§3.2 Per entry" data-part="0002 Har Analysis Toolkit" rows="1" placeholder="Tap to add a note for this point…"></textarea></div>
+</article>
+<article class="sec" id="s-spec-3-3">
+<h4 class="sec-h"><span class="chip">§3.3</span><span class="sec-title">Non-standard fields worth reading</span></h4>
+<div class="sec-body"><p>Chrome and Firefox write extensions that the spec does not define but that are
+too useful to ignore. All are optional; nothing may depend on their presence.</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Contents</th>
+<th>Useful for</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>_resourceType</code></td>
+<td><code>xhr</code>, <code>fetch</code>, <code>document</code>, <code>script</code>, <code>stylesheet</code>, <code>image</code>, <code>font</code>, <code>media</code>, <code>websocket</code></td>
+<td><strong>the single best first filter</strong></td>
+</tr>
+<tr>
+<td><code>_initiator</code></td>
+<td>what caused the request (parser, script, stack)</td>
+<td>tracing an endpoint back to its caller</td>
+</tr>
+<tr>
+<td><code>_priority</code></td>
+<td>fetch priority</td>
+<td>rarely</td>
+</tr>
+<tr>
+<td><code>_fromCache</code></td>
+<td>served from cache — <strong>three-state</strong>: <code>true</code>, <code>false</code>, or <em>unknown</em> when the exporter omits it</td>
+<td>excluding non-network entries</td>
+</tr>
+<tr>
+<td><code>_webSocketMessages</code></td>
+<td>frames, when the entry is a socket</td>
+<td>sites that stream data over WS</td>
+</tr>
+</tbody>
+</table>
+<p>Where <code>_resourceType</code> is absent, it is inferred from <code>Content-Type</code> plus the
+<code>Accept</code>/<code>X-Requested-With</code> request headers, and the inference is reported as
+inferred rather than presented as fact.</p></div>
+<div class="note" data-for="s-spec-3-3"><div class="note-head"><span class="note-ico">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC §3.3</span></div><textarea class="note-ta" data-key="s-spec-3-3" data-label="§3.3 Non-standard fields worth reading" data-part="0002 Har Analysis Toolkit" rows="1" placeholder="Tap to add a note for this point…"></textarea></div>
+</article>
+<article class="sec" id="s-spec-3-4">
+<h4 class="sec-h"><span class="chip">§3.4</span><span class="sec-title">Two structural traps</span></h4>
+<div class="sec-body"><ul>
+<li><strong><code>content.text</code> may be base64.</strong> When <code>content.encoding == "base64"</code>, the
+  text is encoded, and a naive grep silently misses every hit in it. Every
+  content-touching operation decodes first.</li>
+<li><strong>Bodies are frequently absent.</strong> "Save all as HAR" includes them; some
+  exporters and some <code>_fromCache</code> entries do not. The tool distinguishes <em>"no
+  match"</em> from <em>"no body was captured"</em> — conflating them sends a session
+  hunting for an endpoint it already found.</li>
+</ul></div>
+<div class="note" data-for="s-spec-3-4"><div class="note-head"><span class="note-ico">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC §3.4</span></div><textarea class="note-ta" data-key="s-spec-3-4" data-label="§3.4 Two structural traps" data-part="0002 Har Analysis Toolkit" rows="1" placeholder="Tap to add a note for this point…"></textarea></div>
+</article>
+<article class="sec" id="s-spec-4">
+<h3 class="sec-h"><span class="chip">§4</span><span class="sec-title">The operations</span></h3>
+<div class="sec-body"><p>Six scripts, named on the repo's canonical verbs. All read a HAR or its index;
+none mutate the input file.</p></div>
+<div class="note" data-for="s-spec-4"><div class="note-head"><span class="note-ico">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC §4</span></div><textarea class="note-ta" data-key="s-spec-4" data-label="§4 The operations" data-part="0002 Har Analysis Toolkit" rows="1" placeholder="Tap to add a note for this point…"></textarea></div>
+</article>
+<article class="sec" id="s-spec-4-1">
+<h4 class="sec-h"><span class="chip">§4.1</span><span class="sec-title"><code>analyze_har.py</code> — reduce to insight</span></h4>
+<div class="sec-body"><p>The command run first, and the one that answers "what is even in here".</p>
+<table>
+<thead>
+<tr>
+<th>Mode</th>
+<th>Output</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><em>(default)</em></td>
+<td>Overview: entry count, host count, wall-clock span, pages, resource-type histogram, status histogram, total bytes, and the XHR/JSON count — the number that says whether this site has an API</td>
+</tr>
+<tr>
+<td><code>--index</code></td>
+<td>Build/refresh the sidecar (§ 5.1)</td>
+</tr>
+<tr>
+<td><code>--stats FIELD</code></td>
+<td>Histogram over <code>status</code>, <code>host</code>, <code>mime</code>, <code>type</code>, <code>method</code>, <code>size</code>, <code>time</code></td>
+</tr>
+<tr>
+<td><code>--errors</code></td>
+<td>Every non-2xx: status, statusText, URL, and a short body snippet where one exists</td>
+</tr>
+<tr>
+<td><code>--endpoints</code></td>
+<td>URL paths collapsed to templates, with the parameters that vary and their observed value ranges — <strong>the pagination finder</strong></td>
+</tr>
+<tr>
+<td><code>--headers</code></td>
+<td>Request headers grouped by host, split into constant across requests (candidate auth) versus varying</td>
+</tr>
+<tr>
+<td><code>--cookies</code></td>
+<td>Cookies sent and set, by domain, with flags</td>
+</tr>
+<tr>
+<td><code>--redirects</code></td>
+<td>Redirect chains, collapsed</td>
+</tr>
+<tr>
+<td><code>--slowest</code> / <code>--largest</code></td>
+<td>Top-N by <code>time</code> / <code>content.size</code> — the classic performance use</td>
+</tr>
+<tr>
+<td><code>--websockets</code></td>
+<td>Per-socket frame counts, direction, sizes, first frames</td>
+</tr>
+</tbody>
+</table>
+<p><code>--endpoints</code> deserves its billing. Collapsing <code>/api/jobs?page=1&amp;loc=NY</code>,
+<code>?page=2&amp;loc=NY</code>, <code>?page=3&amp;loc=NY</code> into one row that reports <code>page</code> varying over
+1–3 and <code>loc</code> constant is the difference between reading 40 URLs and reading
+one line that says how to iterate the site.</p></div>
+<div class="note" data-for="s-spec-4-1"><div class="note-head"><span class="note-ico">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC §4.1</span></div><textarea class="note-ta" data-key="s-spec-4-1" data-label="§4.1 analyze_har.py — reduce to insight" data-part="0002 Har Analysis Toolkit" rows="1" placeholder="Tap to add a note for this point…"></textarea></div>
+</article>
+<article class="sec" id="s-spec-4-2">
+<h4 class="sec-h"><span class="chip">§4.2</span><span class="sec-title"><code>query_har.py</code> — select, show, extract</span></h4>
+<div class="sec-body"><p>One filter grammar (§ 5.2), three output modes.</p>
+<p><strong>Select</strong> — every flag composes as AND:</p>
+<p><code>--url REGEX</code> · <code>--host</code> · <code>--method</code> · <code>--status</code> (<code>200</code>, <code>2xx</code>, <code>400-499</code>) ·
+<code>--mime</code> · <code>--type</code> · <code>--min-size</code> / <code>--max-size</code> · <code>--slower-than</code> ·
+<code>--has-header NAME[=REGEX]</code> · <code>--param NAME[=REGEX]</code> · <code>--body-match REGEX</code>
+(request) · <code>--response-match REGEX</code> · <code>--page ID</code> · <code>--since</code> / <code>--until</code> ·
+<code>--from-cache</code> / <code>--no-cache</code> · <code>--unknown-cache</code> · <code>--invert</code></p>
+<p><code>_fromCache</code> is three-state (§ 3.2), so the cache filters say which state they
+mean rather than collapsing the missing one: <code>--from-cache</code> selects <code>true</code>,
+<code>--no-cache</code> selects <code>false</code> <strong>only</strong>, and <code>--unknown-cache</code> selects entries whose
+exporter never recorded it. Folding <em>unknown</em> into <code>false</code> would make
+<code>--no-cache</code> mean different things on a Chrome capture and a Playwright one,
+silently, which is the class of bug this document exists to prevent.</p>
+<p><strong>Show:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Mode</th>
+<th>Output</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--list-only</code> <em>(default)</em></td>
+<td>One line per entry: index, method, status, mime, size, ms, URL</td>
+</tr>
+<tr>
+<td><code>--show IDX</code></td>
+<td>One entry in full: request line, headers, query, body, response headers, body (pretty-printed, truncated at <code>--max-body</code>)</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>The selection as JSON, for chaining</td>
+</tr>
+<tr>
+<td><code>--fields a,b,c</code></td>
+<td>Restrict columns — narrow the fetch, not the reader</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Extract:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--extract-body --output-dir DIR</code></td>
+<td>Decode and write each matching body. The name is derived from <code>NNN-&lt;host&gt;&lt;path&gt;.&lt;ext&gt;</code> but <strong>flattened and sanitised</strong>: path separators, <code>..</code> segments, control characters, leading dots and reserved device names are replaced, the stem is length-capped, and each resolved destination is verified to sit inside <code>--output-dir</code> before any write. A URL path is attacker-controlled in exactly the same way a response body is; it never gets to choose where a file lands</td>
+</tr>
+<tr>
+<td><code>--json-path EXPR</code></td>
+<td>Pull a value out of a JSON body</td>
+</tr>
+<tr>
+<td><code>--css SELECTOR</code> / <code>--xpath EXPR</code></td>
+<td>Pull from an HTML/XML body</td>
+</tr>
+<tr>
+<td><code>--schema</code></td>
+<td>Print a JSON body's <em>shape</em> — keys, types, array lengths — instead of its content. Often 100× smaller and usually the actual question</td>
+</tr>
+</tbody>
+</table>
+<p><code>--response-match</code> is the operation the whole toolkit exists for: paste a string
+seen on the page, get back the request that returned it. Combined with
+<code>--schema</code>, SC4's two commands are <code>--response-match</code> then <code>--show</code>.</p></div>
+<div class="note" data-for="s-spec-4-2"><div class="note-head"><span class="note-ico">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC §4.2</span></div><textarea class="note-ta" data-key="s-spec-4-2" data-label="§4.2 query_har.py — select, show, extract" data-part="0002 Har Analysis Toolkit" rows="1" placeholder="Tap to add a note for this point…"></textarea></div>
+</article>
+<article class="sec" id="s-spec-4-3">
+<h4 class="sec-h"><span class="chip">§4.3</span><span class="sec-title"><code>create_repro.py</code> — entry to runnable request</span></h4>
+<div class="sec-body"><p><code>--id IDX --format curl|python</code> emits a runnable reproduction with method, URL,
+headers, cookies and body. Redacted by default; <code>--secrets</code> writes the real
+values. This is the handoff from "found the endpoint" to "have a scraper", and
+it is where a HAR stops being a diagnostic artifact.</p>
+<p><strong>Every emitted value is escaped for its destination.</strong> A HAR is an untrusted
+document — its URLs, header values and bodies came off the network — and this
+command's whole purpose is to produce something the operator will paste into a
+shell. Shell output single-quotes every argument with the embedded-quote escape,
+never interpolating raw text; Python output uses <code>repr()</code> rather than string
+concatenation. Bodies are passed with <code>--data-raw</code>, so a body beginning with <code>@</code>
+stays inline data instead of becoming a local-file read. A generated command that
+executes something the capture did not contain is the worst bug this toolkit
+could have, so this is a correctness requirement, not a hardening note.</p></div>
+<div class="note" data-for="s-spec-4-3"><div class="note-head"><span class="note-ico">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC §4.3</span></div><textarea class="note-ta" data-key="s-spec-4-3" data-label="§4.3 create_repro.py — entry to runnable request" data-part="0002 Har Analysis Toolkit" rows="1" placeholder="Tap to add a note for this point…"></textarea></div>
+</article>
+<article class="sec" id="s-spec-4-4">
+<h4 class="sec-h"><span class="chip">§4.4</span><span class="sec-title"><code>create_har.py</code> — write a derived HAR</span></h4>
+<div class="sec-body"><p>Takes the same filter grammar and writes a new, valid HAR.</p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--keep &lt;filters&gt;</code> / <code>--drop &lt;filters&gt;</code></td>
+<td>Subset by any filter</td>
+</tr>
+<tr>
+<td><code>--drop-types image,font,media,stylesheet</code></td>
+<td>The usual 80 % of a capture by size</td>
+</tr>
+<tr>
+<td><code>--drop-bodies</code></td>
+<td>Keep the shape, drop the payloads</td>
+</tr>
+<tr>
+<td><code>--redact</code> <em>(default)</em></td>
+<td>Replace auth headers, cookies, token-shaped params with <code>&lt;redacted&gt;</code></td>
+</tr>
+<tr>
+<td><code>--output PATH</code></td>
+<td>Destination. An <code>--output</code> that resolves to the input file is <strong>refused before anything is opened</strong> — a direct writer would truncate the source while still reading it. Every other destination is written to a temporary file in the same directory and atomically renamed into place, so an interrupted run leaves either the old file or the new one, never a half-written HAR</td>
+</tr>
+</tbody>
+</table>
+<p>This is requirement 4. It is also what makes a HAR committable: a capture
+reduced to twelve XHR entries with redacted headers is a fixture, and fixtures
+are how a scraper gets a regression test.</p></div>
+<div class="note" data-for="s-spec-4-4"><div class="note-head"><span class="note-ico">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC §4.4</span></div><textarea class="note-ta" data-key="s-spec-4-4" data-label="§4.4 create_har.py — write a derived HAR" data-part="0002 Har Analysis Toolkit" rows="1" placeholder="Tap to add a note for this point…"></textarea></div>
+</article>
+<article class="sec" id="s-spec-4-5">
+<h4 class="sec-h"><span class="chip">§4.5</span><span class="sec-title"><code>compare_har.py</code> — diff two captures</span></h4>
+<div class="sec-body"><p>Entries present in one and not the other, status changes, new or missing
+parameters, response-size deltas. The way to answer "what actually changed when
+I clicked page 2" and, later, "did the site change under my scraper".</p>
+<p><strong>Matching is one-to-one and deterministic</strong>, because a capture routinely repeats
+the same method and URL. The key is <code>(method, path, sorted query pairs, page
+ref, hash of request body)</code>; entries sharing a key are paired in capture order,
+first with first, second with second. Any left over on either side is reported as
+an addition or a removal — never paired with something that merely resembles it,
+which is how a diff tool starts inventing changes that did not happen. A pairing
+that relied on ordering alone is reported as such, so a reader can tell a real
+match from a positional one.</p></div>
+<div class="note" data-for="s-spec-4-5"><div class="note-head"><span class="note-ico">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC §4.5</span></div><textarea class="note-ta" data-key="s-spec-4-5" data-label="§4.5 compare_har.py — diff two captures" data-part="0002 Har Analysis Toolkit" rows="1" placeholder="Tap to add a note for this point…"></textarea></div>
+</article>
+<article class="sec" id="s-spec-4-6">
+<h4 class="sec-h"><span class="chip">§4.6</span><span class="sec-title"><code>validate_har.py</code> — is this usable</span></h4>
+<div class="sec-body"><p>Well-formedness against HAR 1.2, plus a capability report: are bodies present,
+are they base64, is <code>_resourceType</code> available, which optional fields this
+exporter omitted. Run when something surprising happens; it distinguishes a bad
+capture from a bad query.</p></div>
+<div class="note" data-for="s-spec-4-6"><div class="note-head"><span class="note-ico">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC §4.6</span></div><textarea class="note-ta" data-key="s-spec-4-6" data-label="§4.6 validate_har.py — is this usable" data-part="0002 Har Analysis Toolkit" rows="1" placeholder="Tap to add a note for this point…"></textarea></div>
+</article>
+<article class="sec" id="s-spec-4-7">
+<h4 class="sec-h"><span class="chip">§4.7</span><span class="sec-title"><code>run_har.py</code> — replay (deferred)</span></h4>
+<div class="sec-body"><p>Not in v1. Specified only to fix its shape: replay selected entries against the
+live site and diff the responses against the capture, which is a scraper
+regression test. The filter grammar and the index are designed so this is an
+added script, not a refactor.</p></div>
+<div class="note" data-for="s-spec-4-7"><div class="note-head"><span class="note-ico">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC §4.7</span></div><textarea class="note-ta" data-key="s-spec-4-7" data-label="§4.7 run_har.py — replay (deferred)" data-part="0002 Har Analysis Toolkit" rows="1" placeholder="Tap to add a note for this point…"></textarea></div>
+</article>
+<article class="sec" id="s-spec-5">
+<h3 class="sec-h"><span class="chip">§5</span><span class="sec-title">Architecture</span></h3>
+<div class="note" data-for="s-spec-5"><div class="note-head"><span class="note-ico">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC §5</span></div><textarea class="note-ta" data-key="s-spec-5" data-label="§5 Architecture" data-part="0002 Har Analysis Toolkit" rows="1" placeholder="Tap to add a note for this point…"></textarea></div>
+</article>
+<article class="sec" id="s-spec-5-1">
+<h4 class="sec-h"><span class="chip">§5.1</span><span class="sec-title">The index sidecar</span></h4>
+<div class="sec-body"><p><code>analyze_har.py --index</code> writes <code>&lt;file&gt;.har.index.jsonl</code>: one JSON object per
+entry, no bodies. For a 200 MB HAR this is single-digit MB.</p>
+<p>The schema is fixed, because "every scalar" is not a specification:</p>
+<pre><code class="language-jsonc">{ &quot;i&quot;: 12, &quot;off&quot;: 91823, &quot;len&quot;: 4410,          // byte offset + length in the HAR
+  &quot;ts&quot;: &quot;2026-08-30T20:14:52.311Z&quot;, &quot;ms&quot;: 231, &quot;page&quot;: &quot;page_1&quot;,
+  &quot;method&quot;: &quot;GET&quot;, &quot;url&quot;: &quot;…&quot;, &quot;host&quot;: &quot;…&quot;, &quot;path&quot;: &quot;/api/jobs&quot;,
+  &quot;query&quot;: { &quot;page&quot;: &quot;2&quot;, &quot;loc&quot;: &quot;NY&quot; },
+  &quot;status&quot;: 200, &quot;statusText&quot;: &quot;OK&quot;,
+  &quot;mime&quot;: &quot;application/json&quot;, &quot;type&quot;: &quot;xhr&quot;, &quot;typeSrc&quot;: &quot;declared&quot;,
+  &quot;reqBytes&quot;: 812, &quot;respBytes&quot;: 44120,
+  &quot;cache&quot;: true,                                // true | false | null = unknown
+  &quot;reqHeaders&quot;: { &quot;accept&quot;: &quot;application/json&quot;, &quot;authorization&quot;: &quot;&lt;redacted&gt;&quot; },
+  &quot;respHeaders&quot;: { &quot;content-type&quot;: &quot;application/json; charset=utf-8&quot; },
+  &quot;hasReqBody&quot;: false, &quot;hasRespBody&quot;: true, &quot;bodyEncoding&quot;: null }
+</code></pre>
+<p><strong>Header values are indexed, and sensitive ones are redacted in the sidecar.</strong>
+Names alone would not serve <code>--has-header NAME=REGEX</code> or <code>--headers</code>, so values
+are stored — which makes the sidecar as sensitive as the HAR beside it unless
+something is done about it. The same deny-list as § 5.4 applies here: a sensitive
+header is written as <code>&lt;redacted&gt;</code>, so the sidecar can sit on disk without
+carrying a live session token. A value-regex query against a redacted header
+therefore cannot be answered from the index; it transparently falls back to
+reading those entries from the original HAR by offset, reports that it did, and
+requires <code>--secrets</code>. Presence queries (<code>--has-header authorization</code>) still run
+entirely on the index.</p>
+<p>Every filter, statistic and search that does not need body <em>content</em> runs
+against the index alone: flat memory, sub-second, independent of HAR size
+(SC3). Each index line also records the byte <code>offset</code> and <code>length</code> of its entry
+in the original file, so a body-touching command seeks directly to one entry and
+parses only that object.</p>
+<p>The index is derived data, keyed by a <strong>content digest</strong> of the HAR — not size
+and mtime, which a copy-preserving move or a coarse filesystem clock can carry
+across two different files, after which the tool would seek to offsets belonging
+to a capture it is no longer reading. The digest is stored in the sidecar's
+header line and verified before any offset is trusted; a mismatch rebuilds. It is
+rebuilt automatically when stale, and <code>.gitignore</code>d by convention. A <code>--no-index</code> path
+streams the original for the rare case where writing next to the input is not
+acceptable.</p>
+<p><strong>The one risky part</strong> is the offset scanner: finding entry boundaries requires
+tracking brace depth while respecting strings and escapes.</p>
+<p>It operates on <strong>bytes, not decoded text</strong>. The file is opened in binary mode,
+scanned as UTF-8 bytes, and seeks use those same byte offsets — because a
+character offset and a byte offset diverge the moment a capture contains a
+literal non-ASCII character, and captures of real sites contain them constantly.
+An index built on <code>str</code> positions would work perfectly on every ASCII fixture and
+silently return the wrong entry on the first site with an accented job title.</p>
+<p>It gets its own unit tests against pathological bodies — braces inside strings,
+escaped quotes, Unicode escapes, and <strong>literal multi-byte characters positioned
+before a later entry</strong>, which is the only fixture that actually exercises the
+byte/character distinction — plus a <code>--verify-offsets</code> mode that re-parses every
+entry from its offset and compares. If it proves fragile, the fallback is an index without
+offsets plus a streaming re-scan for bodies: slower, same interface.</p></div>
+<div class="note" data-for="s-spec-5-1"><div class="note-head"><span class="note-ico">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC §5.1</span></div><textarea class="note-ta" data-key="s-spec-5-1" data-label="§5.1 The index sidecar" data-part="0002 Har Analysis Toolkit" rows="1" placeholder="Tap to add a note for this point…"></textarea></div>
+</article>
+<article class="sec" id="s-spec-5-2">
+<h4 class="sec-h"><span class="chip">§5.2</span><span class="sec-title">One filter grammar, shared</span></h4>
+<div class="sec-body"><p><code>query_har.py</code>, <code>create_har.py</code>, <code>compare_har.py</code> and eventually <code>run_har.py</code>
+accept identical selection flags, implemented once in <code>_filters.py</code>. A session
+that learns to select entries once can filter, export, prune and replay the same
+set. Divergent flag sets across sibling scripts would be the most likely way for
+this toolkit to become annoying.</p></div>
+<div class="note" data-for="s-spec-5-2"><div class="note-head"><span class="note-ico">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC §5.2</span></div><textarea class="note-ta" data-key="s-spec-5-2" data-label="§5.2 One filter grammar, shared" data-part="0002 Har Analysis Toolkit" rows="1" placeholder="Tap to add a note for this point…"></textarea></div>
+</article>
+<article class="sec" id="s-spec-5-3">
+<h4 class="sec-h"><span class="chip">§5.3</span><span class="sec-title">Output discipline</span></h4>
+<div class="sec-body"><p>Default output is a compact table capped two ways: by <code>--limit</code> (default 20)
+and by a <strong>hard 4096-byte budget</strong> on the rendered output, whichever binds first.
+A row cap alone does not bound output — twenty entries with 300-character
+tracking URLs blow the budget on their own — so long fields are truncated
+deterministically (URLs keep host, path and a middle ellipsis; the tail always
+survives) and the trailing line reports both what was dropped and that the
+budget, not the limit, did the dropping. The budget applies to every default
+mode, not only the entry list. <code>--json</code> gives machine-readable output for
+chaining. Bodies never reach stdout except through <code>--show</code> (truncated) or
+<code>--extract-body</code> (to files). This is SC1, and it is a hard rule rather than a
+default, because the entire value of the toolkit is that the big data stays out
+of context.</p></div>
+<div class="note" data-for="s-spec-5-3"><div class="note-head"><span class="note-ico">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC §5.3</span></div><textarea class="note-ta" data-key="s-spec-5-3" data-label="§5.3 Output discipline" data-part="0002 Har Analysis Toolkit" rows="1" placeholder="Tap to add a note for this point…"></textarea></div>
+</article>
+<article class="sec" id="s-spec-5-4">
+<h4 class="sec-h"><span class="chip">§5.4</span><span class="sec-title">Redaction</span></h4>
+<div class="sec-body"><p>Redaction applies to everything written to disk or emitted as a shareable
+artifact: derived HARs, extracted entries, repro snippets. It covers
+<code>Authorization</code>, <code>Proxy-Authorization</code>, <code>Cookie</code>, <code>Set-Cookie</code>, <code>X-API-Key</code> and
+neighbours, plus query and body parameters whose names match a token pattern
+(<code>token</code>, <code>key</code>, <code>secret</code>, <code>session</code>, <code>auth</code>, <code>password</code>, <code>signature</code>).
+Interactive <code>--show</code> of a single entry prints real values — that is the operator
+reading their own capture. <code>--secrets</code> opts out where a working reproduction is
+the point.</p>
+<p><strong>Extracted response bodies are outside this guarantee, and SC5 says so.</strong>
+Redaction works on a bounded set of named fields; a response body is unbounded
+text that may contain a token in a JSON field nobody can enumerate in advance,
+and a redactor that tried would either miss things or corrupt the payload the
+extraction exists to preserve. So <code>--extract-body</code> writes the real body, and the
+honest specification is that its output is as sensitive as the capture rather
+than a promise that cannot be kept. The command prints a one-line warning naming
+the output directory the first time it writes in a run, and the skill's
+documentation says plainly that extracted bodies are not fixtures until someone
+has looked at them.</p></div>
+<div class="note" data-for="s-spec-5-4"><div class="note-head"><span class="note-ico">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC §5.4</span></div><textarea class="note-ta" data-key="s-spec-5-4" data-label="§5.4 Redaction" data-part="0002 Har Analysis Toolkit" rows="1" placeholder="Tap to add a note for this point…"></textarea></div>
+</article>
+<article class="sec" id="s-spec-5-5">
+<h4 class="sec-h"><span class="chip">§5.5</span><span class="sec-title">Packaging</span></h4>
+<div class="sec-body"><p>One skill, <code>har</code>, in a new <code>web</code> section defaulting off. Consumers who never
+scrape pay nothing; <code>--sections web</code> or <code>--profile all</code> installs it. Scripts are
+stdlib-only <code>python3</code> so they run in a vendored consumer repo with no
+dependency step, consistent with every other shipped script.</p></div>
+<div class="note" data-for="s-spec-5-5"><div class="note-head"><span class="note-ico">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC §5.5</span></div><textarea class="note-ta" data-key="s-spec-5-5" data-label="§5.5 Packaging" data-part="0002 Har Analysis Toolkit" rows="1" placeholder="Tap to add a note for this point…"></textarea></div>
+</article>
+<article class="sec" id="s-spec-6">
+<h3 class="sec-h"><span class="chip">§6</span><span class="sec-title">Decisions taken</span></h3>
+<div class="sec-body"><table>
+<thead>
+<tr>
+<th>Question</th>
+<th>Decision</th>
+<th>Why</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Large files</td>
+<td>Index sidecar</td>
+<td>Only option that keeps a 500 MB capture usable; makes repeat queries cheap, which is how the tool is actually used</td>
+</tr>
+<tr>
+<td>Body parsing scope</td>
+<td>Extract + text formats (JSON/HTML/XML/CSV) in-tool; binaries decoded to disk for sibling skills</td>
+<td>Keeps this skill focused and leaves PDF/XLSX parsers reusable outside HAR</td>
+</tr>
+<tr>
+<td>Secrets</td>
+<td>Redact when writing, raw when inspecting</td>
+<td>A HAR is full of live session tokens; the risk is a committed file, not a terminal</td>
+</tr>
+<tr>
+<td>Repro output</td>
+<td>Generic curl + Python <code>requests</code></td>
+<td>The natural end of a scraping session; coupling to another repo's connector schema would make an arsenal skill track a foreign format</td>
+</tr>
+</tbody>
+</table></div>
+<div class="note" data-for="s-spec-6"><div class="note-head"><span class="note-ico">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC §6</span></div><textarea class="note-ta" data-key="s-spec-6" data-label="§6 Decisions taken" data-part="0002 Har Analysis Toolkit" rows="1" placeholder="Tap to add a note for this point…"></textarea></div>
+</article>
+<article class="sec" id="s-spec-7">
+<h3 class="sec-h"><span class="chip">§7</span><span class="sec-title">Out of scope</span></h3>
+<div class="sec-body"><ul>
+<li>Replay (§ 4.7) — deferred, shape fixed.</li>
+<li>PDF/XLSX/image parsing — extracted to disk, parsed by sibling skills.</li>
+<li>Capturing HARs. The tool reads captures; producing them is the browser's job.</li>
+<li>Connector-descriptor generation for <code>integral-job-search</code>.</li>
+<li>HAR <em>editing</em> as an interactive activity. <code>create_har.py</code> derives a new file;
+  it does not offer general-purpose mutation.</li>
+</ul></div>
+<div class="note" data-for="s-spec-7"><div class="note-head"><span class="note-ico">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC §7</span></div><textarea class="note-ta" data-key="s-spec-7" data-label="§7 Out of scope" data-part="0002 Har Analysis Toolkit" rows="1" placeholder="Tap to add a note for this point…"></textarea></div>
+</article>
+<article class="sec" id="s-spec-8">
+<h3 class="sec-h"><span class="chip">§8</span><span class="sec-title">Risks</span></h3>
+<div class="sec-body"><table>
+<thead>
+<tr>
+<th>Risk</th>
+<th>Severity</th>
+<th>Mitigation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Offset scanner mis-parses an entry boundary</td>
+<td>High — wrong body for an entry is a silent wrong answer</td>
+<td>Dedicated tests on pathological bodies; <code>--verify-offsets</code>; documented fallback</td>
+</tr>
+<tr>
+<td>Exporter variance (missing bodies, missing <code>_resourceType</code>)</td>
+<td>Medium — looks like "not found"</td>
+<td><code>validate_har.py</code> capability report; "no body captured" reported distinctly from "no match"</td>
+</tr>
+<tr>
+<td>Filter grammar sprawls across scripts</td>
+<td>Medium — the toolkit stops being learnable</td>
+<td>Single <code>_filters.py</code>; a test asserts the sibling scripts expose the same flags</td>
+</tr>
+<tr>
+<td>Redaction misses a token shape</td>
+<td>Medium — a secret in a committed file</td>
+<td>Deny-list plus name-pattern matching, tested; <code>create_har.py</code> output scanned in test</td>
+</tr>
+<tr>
+<td>The sidecar becomes an unnoticed copy of the capture's secrets</td>
+<td>Medium</td>
+<td>Sensitive header values redacted in the index itself; gitignored by convention</td>
+</tr>
+<tr>
+<td>A generated <code>curl</code> executes something the capture did not contain</td>
+<td>High — the operator pastes it into their own shell</td>
+<td>Every value escaped for its destination; <code>--data-raw</code>; tested against adversarial header and body values</td>
+</tr>
+<tr>
+<td>An extracted body lands outside <code>--output-dir</code></td>
+<td>High — arbitrary file write from an untrusted HAR</td>
+<td>Names flattened and sanitised; resolved destination verified inside the output directory before any write</td>
+</tr>
+<tr>
+<td>Skill earns its resident cost</td>
+<td>Low</td>
+<td>Default-off section; 0 tokens for repos that do not enable it</td>
+</tr>
+</tbody>
+</table></div>
+<div class="note" data-for="s-spec-8"><div class="note-head"><span class="note-ico">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC §8</span></div><textarea class="note-ta" data-key="s-spec-8" data-label="§8 Risks" data-part="0002 Har Analysis Toolkit" rows="1" placeholder="Tap to add a note for this point…"></textarea></div>
+</article>
+<article class="sec" id="s-spec-9">
+<h3 class="sec-h"><span class="chip">§9</span><span class="sec-title">Delivery</span></h3>
+<div class="sec-body"><table>
+<thead>
+<tr>
+<th>Stage</th>
+<th>Contents</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td><code>web</code> section registered; skill scaffold; <code>validate_har.py</code>; index builder with offset tests</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>_filters.py</code> + <code>query_har.py</code> (select, show, extract, schema)</td>
+</tr>
+<tr>
+<td>3</td>
+<td><code>analyze_har.py</code> (overview, stats, errors, endpoints, headers)</td>
+</tr>
+<tr>
+<td>4</td>
+<td><code>create_repro.py</code>, <code>create_har.py</code></td>
+</tr>
+<tr>
+<td>5</td>
+<td><code>compare_har.py</code>; <code>run_har.py</code> if still wanted</td>
+</tr>
+</tbody>
+</table>
+<p>Stages 1–3 are the useful minimum: they answer "which request has my data" and
+"how do I iterate it". Stage 4 is what turns that into a scraper.</p>
+<p>Fixtures: a small committed HAR exercising base64 bodies, absent bodies, an
+absent <code>_fromCache</code>, a redirect chain, a paginated JSON API, a websocket, an
+entry whose URL path contains <code>../</code> and a separator, a body value beginning with
+<code>@</code> and one containing shell metacharacters, and <strong>literal multi-byte characters
+positioned before a later entry</strong> — built by hand rather than captured, so it
+carries no real secrets and no site's data. Each of those exists because a
+specific claim in this document is false if it is not tested.</p></div>
+<div class="note" data-for="s-spec-9"><div class="note-head"><span class="note-ico">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC §9</span></div><textarea class="note-ta" data-key="s-spec-9" data-label="§9 Delivery" data-part="0002 Har Analysis Toolkit" rows="1" placeholder="Tap to add a note for this point…"></textarea></div>
+</article>
+</section>
+</div>
+
+<div class="fab">
+  <button class="btn" id="btn-top" title="Back to top">↑ Top</button>
+  <button class="btn" id="btn-import">Import</button>
+  <button class="btn" id="btn-clear">Clear</button>
+  <button class="btn primary" id="btn-export2">💾 Save / Export</button>
+</div>
+<input type="file" id="file-import" class="hidden-input" accept=".md,.markdown,.json,text/markdown,application/json">
+
+<div class="modal" id="modal">
+  <div class="modal-card">
+    <h3>Your notes</h3>
+    <p>Downloaded as a Markdown file. You can also copy the text below and paste it back.</p>
+    <textarea id="modal-ta" readonly></textarea>
+    <div class="modal-actions">
+      <button class="btn primary" id="modal-copy">Copy</button>
+      <button class="btn" id="modal-dl">Download again</button>
+      <button class="btn" id="modal-close">Close</button>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+<script>var SPEC_SEED_NOTES={};</script>
+<script>
+(function(){
+  var NS = 'har-analysis-toolkit-spec-v1:';
+  var tas = Array.prototype.slice.call(document.querySelectorAll('.note-ta'));
+
+  function autoGrow(t){t.style.height='auto';t.style.height=(t.scrollHeight)+'px';}
+  function setFilled(t){var box=t.closest('.note');if(box){box.classList.toggle('filled',t.value.trim()!=='');}}
+  function updateCount(){
+    var n=0;tas.forEach(function(t){if(t.value.trim()!=='')n++;});
+    var el=document.getElementById('count');if(el){el.textContent=n+' / '+tas.length+' notes';}
+    return n;
+  }
+  var lsOK=true,dirty=false;
+  try{localStorage.setItem('__vs__','1');localStorage.removeItem('__vs__');}catch(e){lsOK=false;}
+  var WARN='⚠ Not saving — tap Save / Export';
+  function nowStamp(){var d=new Date();return pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds());}
+  function setState(txt,cls){var el=document.getElementById('savestate');if(el){el.textContent=txt;el.className='savestate '+(cls||'');}}
+  window.addEventListener('beforeunload',function(e){if(!lsOK&&dirty){e.preventDefault();e.returnValue='';}});
+
+  var saveTimers={};
+  function save(t){
+    if(!lsOK){dirty=true;setState(WARN,'warn');return;}
+    var k=NS+t.dataset.key;
+    try{
+      if(t.value.trim()===''){localStorage.removeItem(k);}else{localStorage.setItem(k,t.value);}
+      dirty=true;setState('✓ Saved '+nowStamp(),'ok');
+    }catch(e){lsOK=false;document.getElementById('warnbar').style.display='block';setState(WARN,'warn');}
+  }
+  var SEED=(typeof SPEC_SEED_NOTES!=='undefined')?SPEC_SEED_NOTES:{};
+  tas.forEach(function(t){
+    try{var v=localStorage.getItem(NS+t.dataset.key);
+        if(v!=null){t.value=v;}
+        else if(Object.prototype.hasOwnProperty.call(SEED,t.dataset.key)){
+          var sv=SEED[t.dataset.key];if(typeof sv==='string'){t.value=sv;}}}catch(e){}
+    autoGrow(t);setFilled(t);
+    t.addEventListener('input',function(){
+      autoGrow(t);setFilled(t);updateCount();
+      clearTimeout(saveTimers[t.dataset.key]);
+      saveTimers[t.dataset.key]=setTimeout(function(){save(t);},350);
+    });
+    t.addEventListener('blur',function(){save(t);});
+  });
+  updateCount();
+  if(lsOK){setState('✓ Auto-saving','ok');}else{document.getElementById('warnbar').style.display='block';setState(WARN,'warn');}
+
+  function toast(msg){var el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');setTimeout(function(){el.classList.remove('show');},1900);}
+  function pad(n){return n<10?'0'+n:''+n;}
+  function today(){var d=new Date();return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());}
+
+  function buildExport(){
+    var byPart={},order=[],data={},n=0;
+    tas.forEach(function(t){
+      var v=t.value.trim();if(v==='')return;n++;
+      data[t.dataset.key]=t.value;
+      var part=t.dataset.part||'Other';
+      if(!byPart[part]){byPart[part]=[];order.push(part);}
+      byPart[part].push({label:t.dataset.label,ref:keyFromDom(t.dataset.key,t),note:t.value});
+    });
+    var lines=['# Specification notes','','_Exported '+today()+' · '+n+' note'+(n===1?'':'s')+'._','',
+      '> Send this file back to continue the review. Notes are embedded as data at the bottom','> so importing this file restores them in the reader.',''];
+    order.forEach(function(part){
+      lines.push('## '+part,'');
+      byPart[part].forEach(function(it){
+        lines.push('**'+it.label+'**  `'+it.ref+'`');
+        it.note.split('\n').forEach(function(ln){lines.push('> '+ln);});
+        lines.push('');
+      });
+    });
+    lines.push('<!-- SPEC-NOTES-DATA');
+    lines.push(JSON.stringify(data));
+    lines.push('-->');
+    return{text:lines.join('\n'),n:n};
+  }
+  function keyFromDom(domkey,t){var box=t.closest('.note');var r=box?box.querySelector('.note-ref'):null;return r?r.textContent:domkey;}
+
+  function download(name,text){
+    try{var blob=new Blob([text],{type:'text/markdown'});var url=URL.createObjectURL(blob);
+        var a=document.createElement('a');a.href=url;a.download=name;
+        document.body.appendChild(a);a.click();
+        setTimeout(function(){URL.revokeObjectURL(url);a.remove();},1500);return true;}catch(e){return false;}
+  }
+
+  var modal=document.getElementById('modal');
+  var modalTa=document.getElementById('modal-ta');
+  function openModal(text){modalTa.value=text;modal.classList.add('open');}
+  function closeModal(){modal.classList.remove('open');}
+
+  document.getElementById('btn-export').addEventListener('click',function(){
+    var r=buildExport();
+    if(r.n===0){toast('No notes yet — add some first.');return;}
+    var name='har-analysis-toolkit-spec-notes-'+today()+'.md';
+    download(name,r.text);openModal(r.text);
+    if(navigator.clipboard){navigator.clipboard.writeText(r.text).then(function(){},function(){});}
+    dirty=false;setState('✓ Backup saved '+nowStamp(),'ok');
+    toast('Exported '+r.n+' note'+(r.n===1?'':'s'));
+  });
+  document.getElementById('btn-export2').addEventListener('click',function(){document.getElementById('btn-export').click();});
+
+  document.getElementById('modal-copy').addEventListener('click',function(){
+    modalTa.select();var ok=false;try{ok=document.execCommand('copy');}catch(e){}
+    if(navigator.clipboard){navigator.clipboard.writeText(modalTa.value).then(function(){},function(){});ok=true;}
+    toast(ok?'Copied to clipboard':'Select the text and copy');
+  });
+  document.getElementById('modal-dl').addEventListener('click',function(){download('har-analysis-toolkit-spec-notes-'+today()+'.md',modalTa.value);toast('Download started');});
+  document.getElementById('modal-close').addEventListener('click',closeModal);
+  modal.addEventListener('click',function(e){if(e.target===modal)closeModal();});
+
+  // buildExport only ever writes strings, but an import takes whatever the file
+  // holds: an object arrives as "[object Object]", an array joins on commas,
+  // null becomes "null" — each then persisted over notes the reviewer wrote.
+  // The realistic trigger is a hand-edited or truncated export, not an attack;
+  // it just fails in the least useful way, silently and destructively. Skip
+  // anything that is not a string and say how many were skipped.
+  function applyData(obj){
+    var applied=0,skipped=0;
+    tas.forEach(function(t){
+      if(!Object.prototype.hasOwnProperty.call(obj,t.dataset.key))return;
+      var v=obj[t.dataset.key];
+      if(typeof v!=='string'){skipped++;return;}
+      t.value=v;save(t);autoGrow(t);setFilled(t);applied++;
+    });
+    updateCount();return{applied:applied,skipped:skipped};
+  }
+  document.getElementById('file-import').addEventListener('change',function(e){
+    var f=e.target.files[0];if(!f)return;
+    var rd=new FileReader();
+    rd.onload=function(){
+      var txt=String(rd.result||'');var obj=null;
+      // Last LINE-ANCHORED marker. A plain lastIndexOf lands inside the JSON
+      // string of a note that mentions the marker, and the import then reads as
+      // a corrupt file — the same defect the Python seeder had (#239).
+      var mk=/^[ \t]*<!--[ \t]*SPEC-NOTES-DATA/gm,mm=null,mx;
+      while((mx=mk.exec(txt))!==null){mm=mx;}
+      try{
+        if(mm){var after=txt.slice(mm.index+mm[0].length);var jstart=after.indexOf('{');var jend=after.lastIndexOf('}');
+                  if(jstart>=0&&jend>jstart){obj=JSON.parse(after.slice(jstart,jend+1));}}
+        else{obj=JSON.parse(txt);}
+      }catch(err){obj=null;}
+      if(!obj){toast('Could not read notes from that file');return;}
+      var r=applyData(obj);
+      toast('Imported '+r.applied+' note'+(r.applied===1?'':'s')+
+            (r.skipped?' ('+r.skipped+' skipped — not text)':''));
+    };
+    rd.readAsText(f);e.target.value='';
+  });
+  document.getElementById('btn-import').addEventListener('click',function(){document.getElementById('file-import').click();});
+
+  document.getElementById('btn-clear').addEventListener('click',function(){
+    if(!confirm('Clear ALL notes from this browser? Export first if you want to keep them.'))return;
+    tas.forEach(function(t){t.value='';save(t);autoGrow(t);setFilled(t);});
+    updateCount();toast('All notes cleared');
+  });
+
+  document.getElementById('btn-top').addEventListener('click',function(){window.scrollTo({top:0,behavior:'smooth'});});
+})();
+</script>
+</body>
+</html>

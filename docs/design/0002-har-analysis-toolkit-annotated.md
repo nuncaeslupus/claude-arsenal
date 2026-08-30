@@ -1,4 +1,12 @@
-# Design 0002 — HAR analysis toolkit (`har` skill, `web` section)
+# HAR Analysis Toolkit — Specification (annotated edition)
+
+> Generated 2026-08-30. This is the document with a **note slot** after every section. Read it in any Markdown app. To annotate, replace the `_(your notes…)_` placeholder under any section. When done, send the file back — notes are acted on.
+
+---
+
+# 0002 Har Analysis Toolkit
+
+## Preamble & scope
 
 **Status:** Proposed — awaiting decision before implementation
 **Depends on:** skill sections (#273, v2.8.0) — this is the first skill to live
@@ -11,9 +19,10 @@ outside the default install set.
 > returns the data, which parameter pages it, which header authenticates it —
 > are reachable only through a script. This document specifies that script set.
 
----
+> **✎ Notes** · `SPEC · intro`
+> _(your notes here — replace this line)_
 
-## 1. Requirements
+## §1 Requirements
 
 Stated by the maintainer, treated here as non-negotiable:
 
@@ -31,7 +40,10 @@ Stated by the maintainer, treated here as non-negotiable:
    request, not a report.
 6. **Replay is anticipated, not built yet.** v1 must not foreclose it.
 
-## 2. Problem statement
+> **✎ Notes** · `SPEC §1`
+> _(your notes here — replace this line)_
+
+## §2 Problem statement
 
 Building a scraper for an unfamiliar site currently means driving a browser and
 reading rendered pages into context — expensive, non-deterministic, and it has
@@ -46,6 +58,9 @@ neighbours?").
 The consequence for `integral-job-search` is concrete: every connector begins
 with a browser session that could have begun with a capture, and some sites
 would need no browser at all once their JSON endpoint is known.
+
+> **✎ Notes** · `SPEC §2`
+> _(your notes here — replace this line)_
 
 ### Success criteria (measurable)
 
@@ -66,14 +81,18 @@ buys is independence from **body bytes**, which is where a HAR's size actually
 lives, so the criterion is a bounded benchmark against a named capture rather
 than a complexity claim that would not survive contact with a 500k-entry file.
 
----
+> **✎ Notes** · `SPEC › Success criteria (measurable)`
+> _(your notes here — replace this line)_
 
-## 3. What a HAR contains
+## §3 What a HAR contains
 
 HAR 1.2 is a JSON document with one `log` object. This is the complete raw
 material, and the column on the right is what makes each field worth indexing.
 
-### 3.1 Top level
+> **✎ Notes** · `SPEC §3`
+> _(your notes here — replace this line)_
+
+### §3.1 Top level
 
 | Field | Contents | Useful for |
 |---|---|---|
@@ -83,7 +102,10 @@ material, and the column on the right is what makes each field worth indexing.
 | `log.pages[]` | `id`, `title`, `startedDateTime`, `pageTimings` | page boundaries; scoping a query to one navigation |
 | `log.entries[]` | the requests | everything below |
 
-### 3.2 Per entry
+> **✎ Notes** · `SPEC §3.1`
+> _(your notes here — replace this line)_
+
+### §3.2 Per entry
 
 | Field | Contents | Useful for |
 |---|---|---|
@@ -106,7 +128,10 @@ material, and the column on the right is what makes each field worth indexing.
 | `timings` | `blocked`,`dns`,`connect`,`send`,`wait`,`receive`,`ssl` | performance analysis (the format's original purpose) |
 | `serverIPAddress`, `connection` | transport detail | host/CDN grouping |
 
-### 3.3 Non-standard fields worth reading
+> **✎ Notes** · `SPEC §3.2`
+> _(your notes here — replace this line)_
+
+### §3.3 Non-standard fields worth reading
 
 Chrome and Firefox write extensions that the spec does not define but that are
 too useful to ignore. All are optional; nothing may depend on their presence.
@@ -123,7 +148,10 @@ Where `_resourceType` is absent, it is inferred from `Content-Type` plus the
 `Accept`/`X-Requested-With` request headers, and the inference is reported as
 inferred rather than presented as fact.
 
-### 3.4 Two structural traps
+> **✎ Notes** · `SPEC §3.3`
+> _(your notes here — replace this line)_
+
+### §3.4 Two structural traps
 
 - **`content.text` may be base64.** When `content.encoding == "base64"`, the
   text is encoded, and a naive grep silently misses every hit in it. Every
@@ -133,14 +161,18 @@ inferred rather than presented as fact.
   match"* from *"no body was captured"* — conflating them sends a session
   hunting for an endpoint it already found.
 
----
+> **✎ Notes** · `SPEC §3.4`
+> _(your notes here — replace this line)_
 
-## 4. The operations
+## §4 The operations
 
 Six scripts, named on the repo's canonical verbs. All read a HAR or its index;
 none mutate the input file.
 
-### 4.1 `analyze_har.py` — reduce to insight
+> **✎ Notes** · `SPEC §4`
+> _(your notes here — replace this line)_
+
+### §4.1 analyze_har.py — reduce to insight
 
 The command run first, and the one that answers "what is even in here".
 
@@ -162,7 +194,10 @@ The command run first, and the one that answers "what is even in here".
 1–3 and `loc` constant is the difference between reading 40 URLs and reading
 one line that says how to iterate the site.
 
-### 4.2 `query_har.py` — select, show, extract
+> **✎ Notes** · `SPEC §4.1`
+> _(your notes here — replace this line)_
+
+### §4.2 query_har.py — select, show, extract
 
 One filter grammar (§ 5.2), three output modes.
 
@@ -203,7 +238,10 @@ silently, which is the class of bug this document exists to prevent.
 seen on the page, get back the request that returned it. Combined with
 `--schema`, SC4's two commands are `--response-match` then `--show`.
 
-### 4.3 `create_repro.py` — entry to runnable request
+> **✎ Notes** · `SPEC §4.2`
+> _(your notes here — replace this line)_
+
+### §4.3 create_repro.py — entry to runnable request
 
 `--id IDX --format curl|python` emits a runnable reproduction with method, URL,
 headers, cookies and body. Redacted by default; `--secrets` writes the real
@@ -220,7 +258,10 @@ stays inline data instead of becoming a local-file read. A generated command tha
 executes something the capture did not contain is the worst bug this toolkit
 could have, so this is a correctness requirement, not a hardening note.
 
-### 4.4 `create_har.py` — write a derived HAR
+> **✎ Notes** · `SPEC §4.3`
+> _(your notes here — replace this line)_
+
+### §4.4 create_har.py — write a derived HAR
 
 Takes the same filter grammar and writes a new, valid HAR.
 
@@ -236,7 +277,10 @@ This is requirement 4. It is also what makes a HAR committable: a capture
 reduced to twelve XHR entries with redacted headers is a fixture, and fixtures
 are how a scraper gets a regression test.
 
-### 4.5 `compare_har.py` — diff two captures
+> **✎ Notes** · `SPEC §4.4`
+> _(your notes here — replace this line)_
+
+### §4.5 compare_har.py — diff two captures
 
 Entries present in one and not the other, status changes, new or missing
 parameters, response-size deltas. The way to answer "what actually changed when
@@ -251,25 +295,37 @@ which is how a diff tool starts inventing changes that did not happen. A pairing
 that relied on ordering alone is reported as such, so a reader can tell a real
 match from a positional one.
 
-### 4.6 `validate_har.py` — is this usable
+> **✎ Notes** · `SPEC §4.5`
+> _(your notes here — replace this line)_
+
+### §4.6 validate_har.py — is this usable
 
 Well-formedness against HAR 1.2, plus a capability report: are bodies present,
 are they base64, is `_resourceType` available, which optional fields this
 exporter omitted. Run when something surprising happens; it distinguishes a bad
 capture from a bad query.
 
-### 4.7 `run_har.py` — replay (deferred)
+> **✎ Notes** · `SPEC §4.6`
+> _(your notes here — replace this line)_
+
+### §4.7 run_har.py — replay (deferred)
 
 Not in v1. Specified only to fix its shape: replay selected entries against the
 live site and diff the responses against the capture, which is a scraper
 regression test. The filter grammar and the index are designed so this is an
 added script, not a refactor.
 
----
+> **✎ Notes** · `SPEC §4.7`
+> _(your notes here — replace this line)_
 
-## 5. Architecture
+## §5 Architecture
 
-### 5.1 The index sidecar
+
+
+> **✎ Notes** · `SPEC §5`
+> _(your notes here — replace this line)_
+
+### §5.1 The index sidecar
 
 `analyze_har.py --index` writes `<file>.har.index.jsonl`: one JSON object per
 entry, no bodies. For a 200 MB HAR this is single-digit MB.
@@ -333,7 +389,10 @@ byte/character distinction — plus a `--verify-offsets` mode that re-parses eve
 entry from its offset and compares. If it proves fragile, the fallback is an index without
 offsets plus a streaming re-scan for bodies: slower, same interface.
 
-### 5.2 One filter grammar, shared
+> **✎ Notes** · `SPEC §5.1`
+> _(your notes here — replace this line)_
+
+### §5.2 One filter grammar, shared
 
 `query_har.py`, `create_har.py`, `compare_har.py` and eventually `run_har.py`
 accept identical selection flags, implemented once in `_filters.py`. A session
@@ -341,7 +400,10 @@ that learns to select entries once can filter, export, prune and replay the same
 set. Divergent flag sets across sibling scripts would be the most likely way for
 this toolkit to become annoying.
 
-### 5.3 Output discipline
+> **✎ Notes** · `SPEC §5.2`
+> _(your notes here — replace this line)_
+
+### §5.3 Output discipline
 
 Default output is a compact table capped two ways: by `--limit` (default 20)
 and by a **hard 4096-byte budget** on the rendered output, whichever binds first.
@@ -356,7 +418,10 @@ chaining. Bodies never reach stdout except through `--show` (truncated) or
 default, because the entire value of the toolkit is that the big data stays out
 of context.
 
-### 5.4 Redaction
+> **✎ Notes** · `SPEC §5.3`
+> _(your notes here — replace this line)_
+
+### §5.4 Redaction
 
 Redaction applies to everything written to disk or emitted as a shareable
 artifact: derived HARs, extracted entries, repro snippets. It covers
@@ -378,16 +443,20 @@ the output directory the first time it writes in a run, and the skill's
 documentation says plainly that extracted bodies are not fixtures until someone
 has looked at them.
 
-### 5.5 Packaging
+> **✎ Notes** · `SPEC §5.4`
+> _(your notes here — replace this line)_
+
+### §5.5 Packaging
 
 One skill, `har`, in a new `web` section defaulting off. Consumers who never
 scrape pay nothing; `--sections web` or `--profile all` installs it. Scripts are
 stdlib-only `python3` so they run in a vendored consumer repo with no
 dependency step, consistent with every other shipped script.
 
----
+> **✎ Notes** · `SPEC §5.5`
+> _(your notes here — replace this line)_
 
-## 6. Decisions taken
+## §6 Decisions taken
 
 | Question | Decision | Why |
 |---|---|---|
@@ -396,7 +465,10 @@ dependency step, consistent with every other shipped script.
 | Secrets | Redact when writing, raw when inspecting | A HAR is full of live session tokens; the risk is a committed file, not a terminal |
 | Repro output | Generic curl + Python `requests` | The natural end of a scraping session; coupling to another repo's connector schema would make an arsenal skill track a foreign format |
 
-## 7. Out of scope
+> **✎ Notes** · `SPEC §6`
+> _(your notes here — replace this line)_
+
+## §7 Out of scope
 
 - Replay (§ 4.7) — deferred, shape fixed.
 - PDF/XLSX/image parsing — extracted to disk, parsed by sibling skills.
@@ -405,7 +477,10 @@ dependency step, consistent with every other shipped script.
 - HAR *editing* as an interactive activity. `create_har.py` derives a new file;
   it does not offer general-purpose mutation.
 
-## 8. Risks
+> **✎ Notes** · `SPEC §7`
+> _(your notes here — replace this line)_
+
+## §8 Risks
 
 | Risk | Severity | Mitigation |
 |---|---|---|
@@ -418,7 +493,10 @@ dependency step, consistent with every other shipped script.
 | An extracted body lands outside `--output-dir` | High — arbitrary file write from an untrusted HAR | Names flattened and sanitised; resolved destination verified inside the output directory before any write |
 | Skill earns its resident cost | Low | Default-off section; 0 tokens for repos that do not enable it |
 
-## 9. Delivery
+> **✎ Notes** · `SPEC §8`
+> _(your notes here — replace this line)_
+
+## §9 Delivery
 
 | Stage | Contents |
 |---|---|
@@ -438,3 +516,7 @@ entry whose URL path contains `../` and a separator, a body value beginning with
 positioned before a later entry** — built by hand rather than captured, so it
 carries no real secrets and no site's data. Each of those exists because a
 specific claim in this document is false if it is not tested.
+
+> **✎ Notes** · `SPEC §9`
+> _(your notes here — replace this line)_
+
