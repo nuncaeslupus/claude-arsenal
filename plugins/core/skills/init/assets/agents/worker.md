@@ -111,9 +111,9 @@ Verify `pwd` at the start of the task if unsure.
    bash claude-arsenal/bin/adversarial_review.sh emit --task <task_id>
    ```
 
-   Spawn ONE subagent whose entire prompt is: read the packet path `emit`
-   printed and follow it, writing the reply to `verdict.md` beside it. Give it
-   nothing else — not your notes, not the approach you took, not which parts you
+   Spawn ONE subagent whose entire prompt is: read the absolute packet path
+   `emit` printed and follow it, writing the reply to `verdict.md` in that same
+   directory. Give it nothing else — not your notes, not the approach you took, not which parts you
    are sure about. Then:
 
    ```bash
@@ -125,8 +125,11 @@ Verify `pwd` at the start of the task if unsure.
 
    Exit 0 clears you to open the PR. Exit 1 is a BLOCK: fix what it found and
    start the review again from `emit` — a cleared review of the tree before the
-   fix does not cover the tree after it. Exit 2 means it returned no verdict,
-   which is not a pass.
+   fix does not cover the tree after it. Exit 2 means no usable verdict came
+   back (no reply file, or a reply with no `VERDICT:` line), which is not a pass
+   — ask again. Exit 3 means the tree changed while the review ran, so the
+   answer describes code that no longer exists: re-emit and review the tree you
+   actually have. Only exit 0 lets you continue to step 6.
 
    **If this surface cannot spawn a subagent at all**, do not stand in for one.
    A review you run on your own work, recorded as an independent review, is

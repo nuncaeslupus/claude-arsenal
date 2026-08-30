@@ -48,7 +48,11 @@ V="tmp/arsenal-review/verdict.md"
 
 # --- 1: the packet carries intent, both kinds of change, and the rubric ---
 out=$(bash "${REVIEW}" emit) || fail "emit exited non-zero: ${out}"
-[[ "${out}" == "tmp/arsenal-review/packet.md" ]] || fail "emit should print the packet path, printed: ${out}"
+# Absolute, because the path is pasted into a subagent's prompt and that
+# subagent does not share this process's cwd.
+[[ "${out}" == /* && "${out}" == */tmp/arsenal-review/packet.md ]] \
+    || fail "emit should print the packet's ABSOLUTE path, printed: ${out}"
+[[ -f "${out}" ]] || fail "the printed path should resolve to the packet: ${out}"
 packet=$(cat "${out}")
 grep -q "Make the app say bye" <<<"${packet}" || fail "the packet must carry the stated intent"
 grep -q "print('bye')" <<<"${packet}" || fail "the packet must carry the uncommitted tracked change"
@@ -111,7 +115,9 @@ alt="${tmp}/norubric"; mkdir -p "${alt}/bin"
 cp "${REVIEW}" "${alt}/bin/"                      # copied WITHOUT ../agents/reviewer.md
 echo "changed" >> app.py
 bash "${alt}/bin/adversarial_review.sh" emit >/dev/null 2>&1
-(( $? == 1 )) || fail "emit must refuse when the rubric is missing — a review with no rubric is the skim this replaces"
+# 2, not 1: exit 1 is reserved for a reviewer's BLOCK, which open_task_pr.sh
+# publishes into a PR body. No error path may borrow it.
+(( $? == 2 )) || fail "emit must refuse with 2 when the rubric is missing — 1 would read as a reviewer's BLOCK"
 echo "PASS: emit refuses to build a packet with no rubric"
 
 # --- 10: an intent the caller named and that is missing is a hard error ---
@@ -201,8 +207,10 @@ bash "${REVIEW}" check --task t-alpha 2>/dev/null \
     || fail "a second worker's emit must not clear the first worker's verdict"
 bash "${REVIEW}" check --task t-beta 2>/dev/null
 (( $? == 2 )) || fail "t-beta has no verdict of its own yet"
-out=$(bash "${REVIEW}" emit --task "../escape" 2>&1)
-(( $? != 0 )) || fail "a task id that escapes the review directory must be refused: ${out}"
+bash "${REVIEW}" emit --task "../escape" >/dev/null 2>&1
+(( $? == 2 )) || fail "a traversing task id must be refused with 2 — 1 would publish a BLOCK nobody made"
+bash "${REVIEW}" check --task "../escape" >/dev/null 2>&1
+(( $? == 2 )) || fail "check must refuse a malformed id with 2; open_task_pr.sh maps 1 to \"the reviewer objected\""
 echo "PASS: the review slot is namespaced per task, and a traversing id is refused"
 
 # --------------------------------------------------------- integration half --

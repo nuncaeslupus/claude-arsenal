@@ -50,7 +50,8 @@
 #      ARSENAL_QUEUE_REMOTE (default origin) — for resolving the default branch
 #      ARSENAL_REVIEW_DIR (packet dir, default tmp/arsenal-review)
 #      ARSENAL_REVIEW_MAX_DIFF_LINES (default 4000) — inline diff cap
-# Exit: emit    0 packet written (path on stdout); 3 nothing to review; 1 error
+# Exit: emit    0 packet written (absolute path on stdout); 3 nothing to
+#               review; 2 error
 #       verdict 0 CLEAR, 1 BLOCK, 2 no usable verdict, 3 stale (tree moved)
 #       check   0 fresh CLEAR, 1 BLOCK on record, 2 no review on record,
 #               3 receipt is stale — the tree changed after it was written
@@ -69,7 +70,11 @@ MAX_DIFF_LINES="${ARSENAL_REVIEW_MAX_DIFF_LINES:-4000}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd 2>/dev/null || echo .)"
 RUBRIC_FILE="${SCRIPT_DIR}/../agents/reviewer.md"
 
-die() { echo "adversarial_review: $1" >&2; exit "${2:-1}"; }
+# Default 2, not 1. Exit 1 is reserved for a reviewer's BLOCK — `open_task_pr.sh`
+# writes "the reviewer objected" into a PR body on seeing it — and `die` is
+# reachable during `check` with an id that caller passes through unvalidated. A
+# malformed task id must not be able to publish an objection nobody made.
+die() { echo "adversarial_review: $1" >&2; exit "${2:-2}"; }
 
 SUB="${1:-}"; shift || true
 [[ -z "${SUB}" ]] && die "usage: adversarial_review.sh <emit|verdict|check> [options]"
@@ -383,7 +388,11 @@ cmd_emit() {
     # `check` would pass a tree nobody has looked at.
     rm -f "${RECEIPT}"
 
-    printf '%s\n' "${PACKET}"
+    # Absolute: this path's whole job is to be pasted into a subagent's prompt,
+    # and nothing guarantees that subagent starts in the repository root this
+    # script just cd'd to. Root-relative resolved only when the caller happened
+    # to be standing there already.
+    _abs "${PACKET}"
 }
 
 cmd_verdict() {

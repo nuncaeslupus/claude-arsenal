@@ -46,10 +46,15 @@ and irrelevant. Naming the intent explicitly is the reliable path.
 
 ### 2. Spawn a reviewer that knows nothing else
 
-Spawn a **subagent** whose entire prompt is:
+`emit` prints the packet's absolute path. Spawn a **subagent** whose entire
+prompt is that path and what to do with it:
 
-> Read `tmp/arsenal-review/packet.md` and follow it. Write your full reply to
-> `tmp/arsenal-review/verdict.md`.
+> Read `<the path emit printed>` and follow it. Write your full reply to
+> `verdict.md` in the same directory.
+
+Use the printed path rather than a remembered one: with `--task <id>` the packet
+lives in a per-task slot, and `verdict` reads the reply from beside the packet it
+answers.
 
 That is the whole prompt. Do not summarize the change for it, do not tell it
 what you were trying to do, do not mention which parts you are confident about,
@@ -160,7 +165,7 @@ paths in four, and it is not answered by this design; on those three a human is
 in the loop and asked for the review, which is a weaker guarantee than a check,
 not an equivalent one.
 
-Making it mechanical everywhere means a `PreToolUse` hook over `gh pr create` —
+Making it mechanical everywhere requires a `PreToolUse` hook over `gh pr create` —
 the shape `skill-workshop` already ships for `skills/` edits. That is a real
 change to every consumer session's ability to open a PR, so it belongs in its
 own change with its own default, not smuggled in behind this one.
