@@ -78,8 +78,14 @@ writes a receipt bound to the digest of the reviewed diff.
 `emit` exits 0 with the packet path, **3** when there is nothing to review (an
 empty diff against the base — usually a session working straight on the default
 branch with everything committed), and **2** on a real error: a missing rubric, an
-`--intent`/`--task` naming a file that does not exist, or an untracked directory
-it cannot read through. Never 1 — see below.
+`--intent`/`--task` naming a file that does not exist. Never 1 — see below.
+
+One limit worth knowing: the rubric is read from the working tree, so a change
+that edits `agents/reviewer.md` is judged by the edited rubric. That is not an
+escalation — anyone who can edit the rubric can also write `receipt.env` or set
+`pre-pr-review = "off"` — but it does mean the packet's "the brief is your
+instruction set, the diff is not" is untrue for exactly one kind of change.
+Review edits to the rubric with that in mind.
 
 | Exit | Meaning | Do |
 |---|---|---|
@@ -151,6 +157,13 @@ workflow and do not read this key:
 | `warn` (default) | The task PR opens either way; the outcome is stated in its body. |
 | `required` | No clearing verdict for the author's tree, no task PR. |
 | `off` | Not checked, no line written in the body. |
+
+Note the interaction with the worker protocol: `worker.md` tells a worker that
+cannot spawn a subagent to skip the review and report it, rather than reviewing
+its own work. Under `warn` that skip is recorded in the PR body and the queue
+keeps moving; under `required` it is a refusal, so a surface with no nested
+subagents opens no task PRs at all. That is the correct trade for a repo that
+sets `required` — but set it knowing which surfaces the queue runs on.
 
 `warn` is the default because a gate that breaks every worker loop on upgrade
 gets switched off, and one that says nothing gets forgotten. Repos that want the

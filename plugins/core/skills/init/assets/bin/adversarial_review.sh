@@ -14,9 +14,11 @@
 #
 #   emit     assemble the packet — intent, base, diff, rubric — into one file
 #            and print its path. The reviewer is spawned with NOTHING but that
-#            path. That is the whole cold-start guarantee: not an instruction to
-#            the spawner to "pass only the diff", which nothing checks, but a
-#            file that is the reviewer's entire world.
+#            path. What is structural is the reviewer's INPUT: the packet is
+#            complete on its own, so nothing has to be summarized for it. That
+#            the spawner passes nothing else is still prose in four files, and
+#            nothing here can check it — a session that pastes its own account
+#            of the change into that prompt gets the blind spot back.
 #   verdict  read what the reviewer returned, extract its VERDICT line, and
 #            write a receipt bound to the digest of the diff that was reviewed.
 #   check    answer one question for whoever is about to open the PR: is there a
@@ -229,7 +231,12 @@ _untracked_diff() {
             printf 'diff --arsenal-untracked-directory %s\n' "${p}"
             printf -- '--- /dev/null\n+++ b/%s\n' "${p}"
             printf '@@ contents not expanded; fingerprinted so changes inside are still seen @@\n'
-            find "${p}" -type f 2>/dev/null | LC_ALL=C sort | while IFS= read -r _f; do
+            # `.git` is excluded: a nested checkout rewrites its own internals
+            # on any ordinary operation — a branch switch churns two dozen files
+            # — and none of it is content under review. Including it made a real
+            # receipt stale for `git checkout -b`, which is the same
+            # cry-wolf staleness that got the gate-artifact ordering rethought.
+            find "${p}" -type f -not -path '*/.git/*' 2>/dev/null | LC_ALL=C sort | while IFS= read -r _f; do
                 printf '+%s %s\n' "${_f}" "$(git hash-object "${_f}" 2>/dev/null || echo unreadable)"
             done
             continue
