@@ -66,6 +66,43 @@ for src in "${sources[@]}"; do
     done < <(grep -oE 'claude-arsenal/(bin|scripts|references)/[A-Za-z0-9_.-]+\.(sh|py|md)' "${src}" | sort -u)
 done
 
+# Cross-skill script paths in SKILL.md bodies. These are written as
+# `${CLAUDE_SKILL_DIR}/../init/assets/bin/<name>.sh`, and the skill validator
+# skips them: it treats any path containing `${` as a placeholder. That blind
+# spot is why `${CLAUDE_SKILL_DIR}/../../init/…` — one level too high, resolving
+# to nothing — sat in github/SKILL.md undetected, and was then copied into three
+# more skills. CLAUDE_SKILL_DIR is the skill's own directory, so the path is
+# resolved from there.
+while read -r hit; do
+    [[ -z "${hit}" ]] && continue
+    src="${hit%%:*}"; ref="${hit#*:}"
+    target="$(dirname "${src}")/${ref#\$\{CLAUDE_SKILL_DIR\}/}"
+    if [[ ! -f "${target}" ]]; then
+        note "${src#"${SCRIPT_DIR}/../"} names ${ref}, which does not resolve (tried ${target#"${SCRIPT_DIR}/../"})"
+    fi
+done < <(grep -rHo '\${CLAUDE_SKILL_DIR}/[A-Za-z0-9_./-]*\.\(sh\|py\)' \
+             "${SCRIPT_DIR}/../skills"/*/SKILL.md 2>/dev/null | sort -u)
+
+# Cross-skill reference cites: `claude-arsenal:<plugin>:<skill> § references/<f>.md`.
+# The skill validator exempts this form from its dangling-reference check —
+# that exemption is the whole reason the form exists — so nothing verified that
+# the cited file was real. Three skills shipped a cite naming a directory the
+# init skill does not have (its references live under `assets/`), pointing at
+# the BLOCK-override rules and the no-bundle procedure. A pointer that resolves
+# to nothing is a step of the protocol that silently is not there, which is the
+# failure this whole file was written for.
+while read -r hit; do
+    [[ -z "${hit}" ]] && continue
+    src="${hit%%:*}"; cite="${hit#*:}"
+    skill="$(sed -E 's/^[^:]*:[^:]*:([A-Za-z0-9_-]+).*/\1/' <<<"${cite}")"
+    relref="$(sed -E 's/.*§[[:space:]]*(references\/[A-Za-z0-9_.\/-]+\.md).*/\1/' <<<"${cite}")"
+    base="${SCRIPT_DIR}/../skills/${skill}"
+    if [[ ! -f "${base}/${relref}" && ! -f "${base}/assets/${relref}" ]]; then
+        note "${src#"${SCRIPT_DIR}/../"} cites ${cite}, which resolves to no file under skills/${skill}/"
+    fi
+done < <(grep -rHo '`claude-arsenal:[a-z-]*:[A-Za-z0-9_-]*[[:space:]]*§[[:space:]]*references/[A-Za-z0-9_./-]*\.md`' \
+             "${SCRIPT_DIR}/../skills"/*/SKILL.md 2>/dev/null | sort -u)
+
 # AGENTS.md rides in every consumer's context window on every turn. 250 lines is
 # the budget: enough for the session-start protocol, the task format, the claim
 # contract and completion, and not enough for anything that belongs behind a

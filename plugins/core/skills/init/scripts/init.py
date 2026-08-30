@@ -75,6 +75,17 @@ merge-policy = "after-ci"
 #   host-gate = "make lint test evidence"
 host-gate = ""
 
+# How hard the pre-PR adversarial review binds when a TASK PR is opened — a
+# reviewer with no history of the change reads it first
+# (claude-arsenal/bin/adversarial_review.sh). The gates above prove the repo
+# still works; only this one can tell whether the change is the change that was
+# asked for. Read by open_task_pr.sh only: the execution, github and ship skills
+# run the same gate as a step of their own workflow and do not consult this.
+#   warn      Open the task PR either way, and state the outcome in its body.
+#   required  No clearing verdict for this exact tree, no task PR.
+#   off       Do not check, write nothing in the body.
+pre-pr-review = "warn"
+
 # test-first writes a failing test before the change; test-after writes tests
 # alongside it.
 test-discipline = "test-first"

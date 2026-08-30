@@ -41,11 +41,22 @@ Body template:
 
 Branches: `feat/<short-description>`, `fix/<short-description>`. Main branch is `main`. The same dynamic Co-Authored-By rule applies inside the PR body (do not hardcode a model name there either).
 
-## Pre-PR gate — always run host lint before `gh pr create`
+## Pre-PR gate — lint, then an independent read, before `gh pr create`
 
 Before any `gh pr create` invocation, run the host repo's full lint/format/test gate (whatever the project's Makefile / package.json exposes — e.g. `make lint`, `make smoke`, `npm run lint`). Pre-commit hooks do not always cover the same checks CI runs; relying on them alone is how PRs land red. Treat a clean local lint as a non-negotiable precondition for opening the PR — the agile review loop assumes CI was green at push time.
 
 If the host project has no lint target, document that gap (propose a Makefile addition to the user) and proceed; but the omission is the proposal, not a license to skip.
+
+A green lint says the change does not break the repo. It says nothing about whether it is the change that was asked for, and the session that just wrote it is the wrong reader for that question. So the second half of the gate is an adversarial review by a subagent with no history of the work:
+
+```bash
+REVIEW="${CLAUDE_SKILL_DIR}/../init/assets/bin/adversarial_review.sh"
+bash "$REVIEW" emit      # prints the packet's absolute path
+# spawn a subagent whose whole prompt is: read THAT path, reply into verdict.md beside it
+bash "$REVIEW" verdict   # 0 CLEAR · 1 BLOCK · 2 no usable verdict · 3 the tree moved mid-review
+```
+
+Neither 2 nor 3 is a pass: 2 means no verdict came back, 3 means the answer describes a tree that no longer exists. Pass `--intent <file>` when the change has a written intent other than `status/specification.md`, which is what auto-discovery reaches for. Pass the reviewer nothing but the packet path — a summary of what the change was meant to do hands it the author's blind spot. On BLOCK, fix and re-emit rather than opening the PR with the findings unaddressed. Full protocol, override rules, and the form for a repo without the vendored bundle: `claude-arsenal:core:init § references/pre-pr-review.md`.
 
 ## The agile review loop
 
@@ -86,7 +97,7 @@ After each merge, immediately rebase the next waiting branch onto `main` to skip
 
 ```bash
 # After fix/iss-A merges into main:
-bash "${CLAUDE_SKILL_DIR}/../../init/assets/bin/rebase_stack.sh" fix/iss-B fix/iss-A
+bash "${CLAUDE_SKILL_DIR}/../init/assets/bin/rebase_stack.sh" fix/iss-B fix/iss-A
 ```
 
 `rebase_stack.sh <branch> <old-base>` computes the fork point, runs `git rebase --onto origin/main`, runs the repo's `host-gate`, and force-pushes with lease in one step. Cascade it down the remaining stack (B→C, C→D, …) after each merge. `--no-push` rebases only.

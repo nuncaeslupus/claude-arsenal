@@ -197,8 +197,11 @@ function signature.
 
 Each worker implements its task in an isolated worktree, cuts a feature branch off
 the **host default branch** via `claude-arsenal/bin/open_task_pr.sh`, which runs the
-host gate (`host-gate` in `arsenal/config.toml`) and `gate_run.sh` itself and
-refuses on either failure — and only then commits (Conventional
+pre-PR adversarial review check, the host gate (`host-gate` in
+`arsenal/config.toml`) and `gate_run.sh` itself, and refuses on either gate's
+failure — or, where `pre-pr-review = "required"`, on a change no independent
+reviewer has cleared. It records the review outcome in the PR body under every
+mode but `off`. Only then does it commit (Conventional
 Commits + the dynamic `Co-Authored-By` from the `github` skill, never a hardcoded
 model), pushes, and opens a PR. The PR diff is just that task's code.
 
@@ -297,5 +300,6 @@ before starting; older versions do not support `statusLine.rate_limits`.
 | Agent | File | When used |
 |-------|------|-----------|
 | Worker | `agents/worker.md` | Spawned via Task tool per claimed task |
+| Reviewer | `agents/reviewer.md` | Spawned by the worker before its PR opens, on a packet from `adversarial_review.sh` — no history of the change |
 
 ---
