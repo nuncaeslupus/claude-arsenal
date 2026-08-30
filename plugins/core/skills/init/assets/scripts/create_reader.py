@@ -454,6 +454,13 @@ def build_html(parts: list[tuple[str, dict]], title: str, gen_date: str, seed_no
 
 def build_markdown(parts: list[tuple[str, dict]], title: str, gen_date: str, seed_notes: dict | None = None,
                    single_label: str = "Specification") -> str:
+    """Render the annotated Markdown edition: the document, with a note slot per section.
+
+    The counterpart to the HTML reader, for a reviewer who would rather annotate
+    in an editor than a browser. `seed_notes` re-seeds slots from a previous
+    export, keyed by DOM id, so a rebuilt reader does not discard the notes
+    someone already wrote against an earlier revision.
+    """
     seed_notes = seed_notes or {}
     out = [f"# {title} — {single_label} (annotated edition)", ""]
     out.append(
