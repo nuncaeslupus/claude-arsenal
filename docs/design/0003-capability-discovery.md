@@ -211,14 +211,16 @@ Measured, per this repo's rule, not estimated:
 
 | Where | What | Paid |
 |---|---|---|
-| `AGENTS.md` step 0c + refs row | ~5 lines | every turn, every session |
-| `--list-sections` stdout | ~60–120 tokens at 4 sections | once per session (and once per compaction restart) |
-| `sections.json` | ~2 KB on disk | never in context; `--section NAME` reads it |
+| `AGENTS.md` step 0c + refs row | **+139 tokens** measured (4370 → 4509 resident) | every turn, every session |
+| `--list-sections` stdout | **496 bytes / ~125 tokens** at 3 sections, measured | once per session (and once per compaction restart) |
+| `sections.json` | 7.6 KB on disk | never in context; `--section NAME` reads it |
+| `references/capability-map.md` | ~900 tokens | only when opened |
 
-`make context-budget` gates the resident tier at 5000 tokens and `AGENTS.md`
-sits at ~2916 before this change, so headroom is not in question — but the
-number goes in the PR body either way, because "it is only a few lines" is a
-claim about the diff and not about the cost.
+Both resident numbers are `make context-budget` before and after, not estimates:
+the step and its references row cost **139 tokens of the 5000-token resident
+budget**, leaving 491 headroom. That is more than the "a few lines" reading of
+the diff suggests, which is exactly why the rule is to measure — five lines of
+prose in a file imported on every turn is not a five-line change.
 
 Set against: one session that reaches for a browser, or hand-writes something a
 shipped skill already does, because it did not know it had an alternative.

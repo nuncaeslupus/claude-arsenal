@@ -1,6 +1,6 @@
 # Claude Arsenal
 
-<!-- claude-arsenal v2.10.0 — imported via @claude-arsenal/AGENTS.md -->
+<!-- claude-arsenal v2.11.0 — imported via @claude-arsenal/AGENTS.md -->
 
 This file is imported by the host repo's `CLAUDE.md` via the session-protocol block
 that `/init` injects, so it sits in context on **every turn of every session**. It
@@ -36,6 +36,11 @@ At the start of every session (fresh start, context compaction, or cold restart)
       itself part of the skill, so if (a) reported `VENDORED SKILL BEHIND BUNDLE`, skip (b)
       entirely: a skill old enough to be behind may be old enough to predate the guard, and
       it will rewrite the bundle backwards. Skip (a) and (b) when that script is not present.
+   c. **Read the capability map** — `python3 .claude/skills/init/scripts/init.py --list-sections`
+      names every skill section this marketplace ships and whether it is installed here. Read
+      it, do not file it: when a later task is squarely covered by a section this repo did
+      **not** install, say so once, then do what was asked.
+      → `claude-arsenal/references/capability-map.md`
 
 1. **Establish the GitHub channel** — `bash claude-arsenal/bin/github_channel.sh --detect`
    prints `gh`, `rest`, or `none`. **`none` is not a failure**: it means no scriptable
@@ -203,3 +208,4 @@ Each is a plain file to open, not an import. Nothing below is in context until y
 | `references/pre-pr-review.md` | About to open a PR: the cold-start adversarial review, its verdicts, `pre-pr-review` modes |
 | `references/state-layout.md` | A lookup: where a file lives, what a task state means |
 | `references/annotatable-reader.md` | Handing over a spec or plan: which documents need a reader, and why the work that consumes them waits for the annotations |
+| `references/capability-map.md` | A task looks like something a skill would do: what the map says, when to volunteer an uninstalled section, and when not to |
