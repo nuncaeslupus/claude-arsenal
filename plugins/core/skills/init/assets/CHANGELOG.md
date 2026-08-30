@@ -41,6 +41,13 @@ Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
   the PR opens either way and the outcome is stated in its body), `required`
   (no CLEAR for this tree, no PR), or `off`. Existing repos are unaffected on
   upgrade beyond the new body line; set `required` to make it binding.
+- **Where it is enforced.** On task PRs the check is mechanical: `open_task_pr.sh`
+  runs it, `required` refuses, and the outcome reaches the PR body whether or not
+  anyone remembered the step. On the `execution`, `github` and `ship` paths it is
+  an instruction in the workflow — nothing wraps `gh pr create` — so a session
+  that skips it opens a PR with no review and no record of the omission. Making
+  those mechanical needs a `PreToolUse` hook over `gh pr create`, which changes
+  every consumer session's ability to open a PR and belongs in its own change.
 - The `execution` skill (Step 4b), the `github` skill (pre-PR gate) and the worker agent now run the
   gate before opening a PR. `ship`'s adversarial gate (Step 7) now uses the same
   mechanism instead of its own inline prompt, so there is one rubric to improve.

@@ -171,7 +171,11 @@ if [[ "${review_mode}" != "off" && -f "${SCRIPT_DIR}/adversarial_review.sh" ]]; 
     # a repo-root-relative path, and `git ls-files --others` only sees from the
     # cwd down — run from a subdirectory this would read a different tree than
     # the one the review was written for, and report a clean "not run".
-    ( cd "${_repo_root:-.}" && bash "${SCRIPT_DIR}/adversarial_review.sh" check ) >&2
+    # --task namespaces the review slot. Without it there is one slot per working
+    # tree and `emit` clears it, so a second worker in a shared tree — which
+    # worker.md expects, because some surfaces ignore `isolation: worktree` —
+    # deletes the first worker's genuine CLEAR out from under this check.
+    ( cd "${_repo_root:-.}" && bash "${SCRIPT_DIR}/adversarial_review.sh" check --task "${TASK_ID}" ) >&2
     case $? in
         0) review_note="Pre-PR adversarial review: **CLEAR** — a clearing verdict is on record for this exact tree." ;;
         1) review_note="Pre-PR adversarial review: **BLOCK** — a blocking verdict is on record for this tree and was not resolved before the PR opened. Read the findings before merging." ;;

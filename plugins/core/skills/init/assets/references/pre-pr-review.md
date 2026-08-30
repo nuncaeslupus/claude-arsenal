@@ -70,16 +70,31 @@ bash claude-arsenal/bin/adversarial_review.sh verdict
 It reads `tmp/arsenal-review/verdict.md`, takes the last `VERDICT:` line, and
 writes a receipt bound to the digest of the reviewed diff.
 
+`emit` exits 0 with the packet path, **3** when there is nothing to review (an
+empty diff against the base — usually a session working straight on the default
+branch with everything committed), and 1 on a real error: a missing rubric, or
+an `--intent`/`--task` naming a file that does not exist.
+
 | Exit | Meaning | Do |
 |---|---|---|
 | 0 | CLEAR | Open the PR. |
 | 1 | BLOCK | Show the findings **verbatim**, fix them, then start again at step 1. |
-| 2 | No verdict line | Not a pass. Ask the reviewer again. |
+| 2 | No usable verdict — no `VERDICT:` line, no reply file at all, or an unreadable tree | Not a pass, and **not a BLOCK**. Ask the reviewer again. |
 | 3 | Stale — the tree moved during the review | Re-emit and review the tree you actually have. |
 
 A second round starts from step 1, not step 2: `emit` retires the previous
 receipt, because a CLEAR for the tree before the fix says nothing about the tree
 after it.
+
+Exit **1 means a reviewer said BLOCK, and nothing else.** Every other way the
+step fails to produce a verdict exits 2. The distinction matters because `ship`
+may override a BLOCK it judges a false positive, and a BLOCK carrying no
+findings — which is what the reviewer never answering would look like — is the
+easiest false positive anyone will ever declare.
+
+Pass `--task <id>` to all three subcommands when there is one. It namespaces the
+review slot; without it there is a single slot per working tree and `emit`
+clears it, so two workers in a shared tree delete each other's verdicts.
 
 ## Handling BLOCK
 
@@ -126,6 +141,29 @@ workflow and do not read this key:
 `warn` is the default because a gate that breaks every worker loop on upgrade
 gets switched off, and one that says nothing gets forgotten. Repos that want the
 hard version set `required`.
+
+### What is enforced, and what is not
+
+Be clear-eyed about this, because the distinction decides how much the gate is
+worth on each path:
+
+| Path | Enforcement |
+|---|---|
+| Task PRs (`open_task_pr.sh`) | **Mechanical.** The check runs, `required` refuses, and the outcome is written into the PR body whether or not anyone remembered the step. |
+| `execution`, `github`, `ship` | **Instruction only.** Nothing wraps `gh pr create`. A session that skips the step opens a PR with no review and no record that none happened. |
+
+This repo has twice ruled that an instruction with no data path behind it is a
+step that does not happen — that is why `open_task_pr.sh` runs the gates itself
+rather than trusting the worker prose, and why `merge-policy` was called out for
+deciding nothing while nothing read it. The same criticism applies here to three
+paths in four, and it is not answered by this design; on those three a human is
+in the loop and asked for the review, which is a weaker guarantee than a check,
+not an equivalent one.
+
+Making it mechanical everywhere means a `PreToolUse` hook over `gh pr create` —
+the shape `skill-workshop` already ships for `skills/` edits. That is a real
+change to every consumer session's ability to open a PR, so it belongs in its
+own change with its own default, not smuggled in behind this one.
 
 ## In a repo without the bundle
 

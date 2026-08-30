@@ -111,14 +111,17 @@ Verify `pwd` at the start of the task if unsure.
    bash claude-arsenal/bin/adversarial_review.sh emit --task <task_id>
    ```
 
-   Spawn ONE subagent whose entire prompt is: read `tmp/arsenal-review/packet.md`
-   and follow it, writing the reply to `tmp/arsenal-review/verdict.md`. Give it
+   Spawn ONE subagent whose entire prompt is: read the packet path `emit`
+   printed and follow it, writing the reply to `verdict.md` beside it. Give it
    nothing else — not your notes, not the approach you took, not which parts you
    are sure about. Then:
 
    ```bash
-   bash claude-arsenal/bin/adversarial_review.sh verdict
+   bash claude-arsenal/bin/adversarial_review.sh verdict --task <task_id>
    ```
+
+   Pass the same `--task` to both: it namespaces the review slot, so two workers
+   sharing a tree do not clear each other's verdict.
 
    Exit 0 clears you to open the PR. Exit 1 is a BLOCK: fix what it found and
    start the review again from `emit` — a cleared review of the tree before the

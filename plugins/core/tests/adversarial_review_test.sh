@@ -148,6 +148,63 @@ grep -q "open the file itself" tmp/arsenal-review/packet.md \
 cd "${REPO}"
 echo "PASS: truncation cuts the recoverable half, not the untracked one"
 
+# --- 19: exit 1 means a reviewer said BLOCK, and nothing else ---
+# die() defaults to exit 1, which five surfaces publish as "the reviewer
+# objected" — and ship may override an objection it judges a false positive,
+# which a BLOCK carrying no findings is the easiest case of. So the reviewer
+# never answering routed straight to a licence to ship.
+cd "${REPO}"
+rm -rf tmp/arsenal-review
+bash "${REVIEW}" emit >/dev/null 2>&1 || fail "setup: emit"
+rm -f "${V}"
+bash "${REVIEW}" verdict 2>/dev/null
+(( $? == 2 )) || fail "a reply that never arrived must exit 2, never 1 — 1 is a reviewer's BLOCK"
+rm -rf tmp/arsenal-review
+bash "${REVIEW}" verdict 2>/dev/null
+(( $? == 2 )) || fail "no packet on record must exit 2, never 1"
+echo "PASS: silence exits 2; exit 1 is reserved for a reviewer's BLOCK"
+
+# --- 20: --base must share history with HEAD ---
+# The auto path already refuses an unrelated history, because diffing against it
+# presents the whole repository as the change. --base fell back to the raw
+# commit — and stacked branches, told to reach for --base, are the population
+# most likely to name a ref that is not an ancestor.
+bash "${REVIEW}" emit >/dev/null 2>&1 || fail "setup: re-emit"
+git checkout -q --orphan unrelated-history
+git rm -rq --cached . 2>/dev/null || true
+echo unrelated > unrelated.txt; git add unrelated.txt; git commit -qm "unrelated root"
+git checkout -q main
+out=$(bash "${REVIEW}" emit --base unrelated-history 2>&1)
+(( $? != 0 )) || fail "--base naming an unrelated history must refuse, not present that tree as the change"
+grep -q "shares no history" <<<"${out}" || fail "the refusal should say why: ${out}"
+echo "PASS: --base refuses a ref that shares no history with HEAD"
+
+# The orphan round-trip above leaves the tree matching HEAD; give the remaining
+# cases something to review again.
+echo "print('after the orphan detour')" >> app.py
+
+# --- 21: a task id namespaces the review slot ---
+# One slot per working tree meant a second worker's emit deleted the first
+# worker's CLEAR — and worker.md expects shared trees, because some surfaces
+# ignore isolation: worktree.
+rm -rf tmp/arsenal-review
+mkdir -p arsenal/tasks
+for _t in t-alpha t-beta; do
+    printf -- '---\nid: %s\ntitle: "Slot fixture"\n---\n\nMake the app say bye.\n' "${_t}" \
+        > "arsenal/tasks/${_t}.md"
+done
+bash "${REVIEW}" emit --task t-alpha >/dev/null 2>&1 || fail "setup: emit for t-alpha"
+printf 'VERDICT: CLEAR — alpha is fine\n' > tmp/arsenal-review/t-alpha/verdict.md
+bash "${REVIEW}" verdict --task t-alpha >/dev/null 2>&1 || fail "setup: clearing t-alpha"
+bash "${REVIEW}" emit --task t-beta >/dev/null 2>&1 || fail "setup: emit for t-beta"
+bash "${REVIEW}" check --task t-alpha 2>/dev/null \
+    || fail "a second worker's emit must not clear the first worker's verdict"
+bash "${REVIEW}" check --task t-beta 2>/dev/null
+(( $? == 2 )) || fail "t-beta has no verdict of its own yet"
+out=$(bash "${REVIEW}" emit --task "../escape" 2>&1)
+(( $? != 0 )) || fail "a task id that escapes the review directory must be refused: ${out}"
+echo "PASS: the review slot is namespaced per task, and a traversing id is refused"
+
 # --------------------------------------------------------- integration half --
 [[ -f "${HELPER}" ]] || { echo "PASS: adversarial_review_test — unit half (open_task_pr.sh absent)"; exit 0; }
 

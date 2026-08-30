@@ -51,9 +51,15 @@
 #      ARSENAL_REVIEW_DIR (packet dir, default tmp/arsenal-review)
 #      ARSENAL_REVIEW_MAX_DIFF_LINES (default 4000) — inline diff cap
 # Exit: emit    0 packet written (path on stdout); 3 nothing to review; 1 error
-#       verdict 0 CLEAR, 1 BLOCK, 2 no parsable verdict, 3 stale (tree moved)
+#       verdict 0 CLEAR, 1 BLOCK, 2 no usable verdict, 3 stale (tree moved)
 #       check   0 fresh CLEAR, 1 BLOCK on record, 2 no review on record,
 #               3 receipt is stale — the tree changed after it was written
+#
+# 1 means A REVIEWER SAID BLOCK, and never anything else. Every other way the
+# step can fail to produce a verdict — no reply file, no packet, an unreadable
+# tree — exits 2, because callers publish 1 as a reviewer's objection and `ship`
+# may override an objection it judges a false positive. Silence routed through
+# that door would be a licence to ship, which is what this gate exists to deny.
 
 set -uo pipefail
 
@@ -99,14 +105,33 @@ git rev-parse --verify --quiet HEAD >/dev/null 2>&1 || die "the repository has n
 _abs() { case "$1" in /*) printf '%s\n' "$1" ;; *) printf '%s/%s\n' "$(pwd -P)" "$1" ;; esac; }
 [[ -n "${INTENT_FILE}" ]] && INTENT_FILE="$(_abs "${INTENT_FILE}")"
 [[ -n "${REPLY_FILE}" ]] && REPLY_FILE="$(_abs "${REPLY_FILE}")"
+# A task id namespaces the slot. Without this there is exactly one review slot
+# per working tree and `emit` clears it: two workers sharing a tree — which
+# worker.md explicitly expects, because some surfaces ignore `isolation:
+# worktree` — means the second worker's `emit` deletes the first's CLEAR, whose
+# PR then reports "not run" and, under `required`, cannot be opened at all.
+if [[ -n "${TASK_ID}" && ! "${TASK_ID}" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
+    die "--task ${TASK_ID} is not a usable id (letters, digits, dot, dash, underscore; not leading with a dot)"
+fi
 if (( OUT_DIR_GIVEN )); then
     OUT_DIR="$(_abs "${OUT_DIR}")"
+elif [[ -n "${TASK_ID}" ]]; then
+    OUT_DIR="tmp/arsenal-review/${TASK_ID}"
 else
     OUT_DIR="tmp/arsenal-review"
 fi
 _repo_root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
 [[ -n "${_repo_root}" ]] || die "could not resolve the repository root"
 cd "${_repo_root}" || die "cannot enter the repository root ${_repo_root}"
+
+# `emit` always writes to the slot computed above. `verdict` and `check` fall
+# back to the unscoped slot when the task-scoped one holds no packet, so a
+# review taken without --task is still found rather than reported "not run" —
+# a review that ran and reads as absent is the confusing half of this failure.
+if [[ "${SUB}" != "emit" && -n "${TASK_ID}" && ! -f "${OUT_DIR}/meta.env" \
+      && -f "tmp/arsenal-review/meta.env" ]]; then
+    OUT_DIR="tmp/arsenal-review"
+fi
 
 PACKET="${OUT_DIR}/packet.md"
 META="${OUT_DIR}/meta.env"
@@ -130,7 +155,14 @@ _resolve_base() {
     if [[ -n "${BASE_OVERRIDE}" ]]; then
         git rev-parse --verify --quiet "${BASE_OVERRIDE}^{commit}" >/dev/null 2>&1 \
             || die "--base ${BASE_OVERRIDE} does not resolve to a commit"
-        git merge-base "${BASE_OVERRIDE}" HEAD 2>/dev/null || git rev-parse "${BASE_OVERRIDE}^{commit}"
+        # The same guard the auto branch applies below. This used to fall back
+        # to the raw commit when there was no merge base, which presents an
+        # unrelated history's entire tree as "the change" — and the population
+        # told to reach for --base is stacked branches, the people most likely
+        # to name a ref that turns out not to be an ancestor.
+        mb="$(git merge-base "${BASE_OVERRIDE}" HEAD 2>/dev/null)"
+        [[ -n "${mb}" ]] || die "--base ${BASE_OVERRIDE} shares no history with HEAD; diffing against it would present an unrelated tree as this change"
+        printf '%s\n' "${mb}"
         return 0
     fi
     db="$(git symbolic-ref --quiet --short "refs/remotes/${REMOTE}/HEAD" 2>/dev/null | sed "s|^${REMOTE}/||")"
@@ -360,9 +392,16 @@ cmd_verdict() {
     # reviewer's answer never becomes part of the change being reviewed. A reply
     # written to the repo root does, and the tree then reads as modified since
     # the review — a stale verdict for a tree nobody touched.
+    # These exit 2, NOT 1. Exit 1 is published by five surfaces as "the reviewer
+    # objected" — and `ship` is licensed to override a BLOCK it judges a false
+    # positive, which a BLOCK carrying zero findings is the easiest case of. So
+    # `die`'s default 1 turned the reviewer never answering into a licence to
+    # ship, which is the exact silence this gate claims to make impossible. A
+    # reply that never arrived is the same absence as a reply with no verdict
+    # line, one layer earlier, and gets the same code.
     [[ -n "${REPLY_FILE}" ]] || REPLY_FILE="${OUT_DIR}/verdict.md"
-    [[ -f "${REPLY_FILE}" ]] || die "no such file: ${REPLY_FILE} (write the reviewer's reply there, or pass it as an argument)"
-    [[ -f "${META}" ]] || die "no packet on record in ${OUT_DIR} — run 'emit' first"
+    [[ -f "${REPLY_FILE}" ]] || die "no reply at ${REPLY_FILE} — the reviewer wrote nothing there. That is not a BLOCK and not a pass: spawn it again, or pass the reply file as an argument." 2
+    [[ -f "${META}" ]] || die "no packet on record in ${OUT_DIR} — run 'emit' first" 2
 
     local base digest now
     base="$(sed -n 's/^base=//p' "${META}")"
@@ -383,7 +422,7 @@ cmd_verdict() {
     # Re-digest now: a reviewer that took long enough for the author to keep
     # editing has reviewed a tree that no longer exists.
     if ! now="$(_diff_digest "${base}")"; then
-        die "could not re-read the diff against ${base}"
+        die "could not re-read the diff against ${base} — nothing was verified" 2
     fi
     if [[ "${now}" != "${digest}" ]]; then
         echo "adversarial_review: the working tree changed while the review ran." >&2
