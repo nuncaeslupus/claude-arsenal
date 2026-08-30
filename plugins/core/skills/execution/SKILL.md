@@ -134,7 +134,14 @@ bash "${CLAUDE_SKILL_DIR}/../init/assets/bin/adversarial_review.sh" verdict
 
 Exit 0 clears Step 5. Exit 1 is a BLOCK — show the findings verbatim, fix them,
 and re-emit, since a review of the tree before the fix does not cover the tree
-after it. Exit 2 means no verdict came back, which is not a pass.
+after it. Exit 2 means no usable verdict came back, which is not a pass. Exit 3
+means the tree changed while the review ran, so the answer describes code that
+no longer exists: re-emit and review what is actually there.
+
+Pass `--intent <file>` when the change has a written statement of intent that is
+not `status/specification.md`. Auto-discovery reaches for that file, and a repo
+that keeps an archived one hands the reviewer a specification nobody is
+implementing.
 
 Load `claude-arsenal:core:init § references/pre-pr-review.md` for the full
 protocol, how to handle a BLOCK that looks wrong, and the manual form for a repo

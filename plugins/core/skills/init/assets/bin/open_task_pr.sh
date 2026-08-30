@@ -252,6 +252,21 @@ if [[ -f "${SCRIPT_DIR}/gate_run.sh" ]]; then
     esac
 fi
 
+# The gates ran after the review, and `git add -A` below commits whatever they
+# left behind. Moving the check ahead of them removed a false STALE; without
+# this it would install a false CLEAR in its place, which is the worse of the
+# two — the PR body would call a tree reviewed while carrying a coverage report
+# or a build log no reviewer saw. The review still stands for the author's work;
+# what changed after it is what this names.
+if [[ "${review_note}" == *CLEAR* ]]; then
+    if ! ( cd "${_repo_root:-.}" && bash "${SCRIPT_DIR}/adversarial_review.sh" check --task "${TASK_ID}" ) >/dev/null 2>&1; then
+        review_note="Pre-PR adversarial review: **CLEAR for the tree as reviewed — but the gates then changed it.** They ran after the review and left files behind, so this PR carries content no reviewer saw. Ignore or clean whatever your gate writes into the tree."
+        if [[ "${review_mode}" == "required" ]]; then
+            _gate_fail "the gates modified the tree after the review cleared it, so this PR would carry unreviewed content — gitignore or clean your gate's artifacts"
+        fi
+    fi
+fi
+
 # Snapshot the working tree to a permanent refs/arsenal-rescue/… ref. Used
 # before the stale-base replay below, which force-moves HEAD across the tree.
 # Echoes the ref (empty when the tree is clean or the helper is unavailable).

@@ -66,6 +66,23 @@ for src in "${sources[@]}"; do
     done < <(grep -oE 'claude-arsenal/(bin|scripts|references)/[A-Za-z0-9_.-]+\.(sh|py|md)' "${src}" | sort -u)
 done
 
+# Cross-skill script paths in SKILL.md bodies. These are written as
+# `${CLAUDE_SKILL_DIR}/../init/assets/bin/<name>.sh`, and the skill validator
+# skips them: it treats any path containing `${` as a placeholder. That blind
+# spot is why `${CLAUDE_SKILL_DIR}/../../init/…` — one level too high, resolving
+# to nothing — sat in github/SKILL.md undetected, and was then copied into three
+# more skills. CLAUDE_SKILL_DIR is the skill's own directory, so the path is
+# resolved from there.
+while read -r hit; do
+    [[ -z "${hit}" ]] && continue
+    src="${hit%%:*}"; ref="${hit#*:}"
+    target="$(dirname "${src}")/${ref#\$\{CLAUDE_SKILL_DIR\}/}"
+    if [[ ! -f "${target}" ]]; then
+        note "${src#"${SCRIPT_DIR}/../"} names ${ref}, which does not resolve (tried ${target#"${SCRIPT_DIR}/../"})"
+    fi
+done < <(grep -rHo '\${CLAUDE_SKILL_DIR}/[A-Za-z0-9_./-]*\.\(sh\|py\)' \
+             "${SCRIPT_DIR}/../skills"/*/SKILL.md 2>/dev/null | sort -u)
+
 # AGENTS.md rides in every consumer's context window on every turn. 250 lines is
 # the budget: enough for the session-start protocol, the task format, the claim
 # contract and completion, and not enough for anything that belongs behind a

@@ -251,6 +251,19 @@ grep -q "untracked directory" <<<"${out}" || fail "the refusal should name what 
 rm -rf nested_checkout
 echo "PASS: an untracked directory fails closed instead of vanishing from packet and digest"
 
+# --- 24: a usage error never borrows the BLOCK exit code ---
+# `${2:?message}` was the natural way to write the option guards and exits 1 —
+# produced by the shell, not by `die`, which is why fixing die's default did not
+# reach it. An empty --intent would have open_task_pr.sh write "a blocking
+# verdict is on record" into a PR body over a typo.
+for _sub in "emit --intent" "check --task" "verdict --task"; do
+    bash "${REVIEW}" ${_sub} "" >/dev/null 2>&1
+    (( $? == 2 )) || fail "'${_sub} \"\"' must exit 2; 1 reads as a reviewer's BLOCK"
+done
+bash "${REVIEW}" emit --base "" >/dev/null 2>&1
+(( $? == 2 )) || fail "'emit --base \"\"' must exit 2, not 1"
+echo "PASS: a usage error exits 2, never the code that means a reviewer objected"
+
 # --------------------------------------------------------- integration half --
 [[ -f "${HELPER}" ]] || { echo "PASS: adversarial_review_test — unit half (open_task_pr.sh absent)"; exit 0; }
 
@@ -273,8 +286,10 @@ done
 # A gate that leaves an untracked artifact behind — a timestamped log, a
 # coverage report, __pycache__. Entirely ordinary, and it used to invalidate the
 # review receipt between the reviewer's verdict and open_task_pr.sh's check.
-printf -- '---\nid: t-rev-artifact\ntitle: "Artifact gate"\npriority: 1\n---\n\n## Acceptance gate\n```bash\ndate +%%s%%N > build-artifact.log\n```\n' \
-    > arsenal/tasks/t-rev-artifact.md
+for _id in t-rev-artifact t-rev-drift; do
+    printf -- '---\nid: %s\ntitle: "Artifact gate"\npriority: 1\n---\n\n## Acceptance gate\n```bash\ndate +%%s%%N > build-artifact.log\n```\n' \
+        "${_id}" > "arsenal/tasks/${_id}.md"
+done
 echo base > base.txt
 git add -A; git commit -qm "chore: base"; git push -q -u origin main
 
@@ -401,5 +416,20 @@ grep -q "ROOT_LEVEL_CANARY" "${sub}/tmp/arsenal-review/packet.md" \
     && fail "the default review directory must be repo-root relative, not cwd relative"
 cd "${REPO}"
 echo "PASS: a review taken from a subdirectory covers the whole worktree"
+
+# --- 25: gates that dirty the tree after the review do not ship as CLEAR ---
+# Moving the check ahead of the gates fixed a false STALE. Left alone it would
+# install the mirror image: the gates run afterwards, `git add -A` commits what
+# they leave behind, and the PR body still calls the tree reviewed.
+_fresh_work
+bash "${REVIEW}" emit --task t-rev-drift >/dev/null 2>&1 || fail "setup: emit"
+printf 'VERDICT: CLEAR — checked it\n' > "tmp/arsenal-review/t-rev-drift/verdict.md"
+bash "${REVIEW}" verdict --task t-rev-drift >/dev/null 2>&1 || fail "setup: recording a CLEAR"
+export GH_BODY_FILE="${tmp}/body7.txt"
+ARSENAL_TASK_ISSUE=7 ARSENAL_COAUTHOR="" bash "${HELPER}" t-rev-drift "Artifact gate" >/dev/null 2>&1 \
+    || fail "warn mode should still open the PR"
+grep -q "the gates then changed it" "${GH_BODY_FILE}" \
+    || fail "a gate that dirties the tree after the review must not be reported as a clean CLEAR: $(cat "${GH_BODY_FILE}")"
+echo "PASS: gate artifacts landing after the review are named, not passed off as reviewed"
 
 echo "PASS: adversarial_review_test — all gates passed"

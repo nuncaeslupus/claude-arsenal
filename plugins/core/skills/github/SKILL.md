@@ -53,10 +53,10 @@ A green lint says the change does not break the repo. It says nothing about whet
 REVIEW="${CLAUDE_SKILL_DIR}/../init/assets/bin/adversarial_review.sh"
 bash "$REVIEW" emit      # prints the packet's absolute path
 # spawn a subagent whose whole prompt is: read THAT path, reply into verdict.md beside it
-bash "$REVIEW" verdict   # 0 CLEAR · 1 BLOCK · 2 no verdict, which is not a pass
+bash "$REVIEW" verdict   # 0 CLEAR · 1 BLOCK · 2 no usable verdict · 3 the tree moved mid-review
 ```
 
-Pass the reviewer nothing but the packet path — a summary of what the change was meant to do hands it the author's blind spot. On BLOCK, fix and re-emit rather than opening the PR with the findings unaddressed. Full protocol, override rules, and the form for a repo without the vendored bundle: `claude-arsenal:core:init § references/pre-pr-review.md`.
+Neither 2 nor 3 is a pass: 2 means no verdict came back, 3 means the answer describes a tree that no longer exists. Pass `--intent <file>` when the change has a written intent other than `status/specification.md`, which is what auto-discovery reaches for. Pass the reviewer nothing but the packet path — a summary of what the change was meant to do hands it the author's blind spot. On BLOCK, fix and re-emit rather than opening the PR with the findings unaddressed. Full protocol, override rules, and the form for a repo without the vendored bundle: `claude-arsenal:core:init § references/pre-pr-review.md`.
 
 ## The agile review loop
 

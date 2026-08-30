@@ -82,12 +82,21 @@ SUB="${1:-}"; shift || true
 BASE_OVERRIDE=""; TASK_ID=""; INTENT_FILE=""; REPLY_FILE=""
 OUT_DIR="${ARSENAL_REVIEW_DIR:-}"; OUT_DIR_GIVEN=0
 [[ -n "${OUT_DIR}" ]] && OUT_DIR_GIVEN=1
+# `${2:?message}` was the obvious way to write these and exits 1 — the status
+# reserved for a reviewer's BLOCK, produced by the shell rather than by `die`,
+# which is why fixing `die`'s default did not reach them. An empty or missing
+# option value would have `open_task_pr.sh` write "a blocking verdict is on
+# record" into a PR body over a usage error.
+_need() {  # $1 = option name, $2 = value (may be unset)
+    [[ -n "${2:-}" ]] || die "${1} needs a value"
+    printf '%s' "$2"
+}
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --base)   BASE_OVERRIDE="${2:?--base needs a ref}"; shift 2 ;;
-        --task)   TASK_ID="${2:?--task needs an id}"; shift 2 ;;
-        --intent) INTENT_FILE="${2:?--intent needs a file}"; shift 2 ;;
-        --out)    OUT_DIR="${2:?--out needs a dir}"; OUT_DIR_GIVEN=1; shift 2 ;;
+        --base)   BASE_OVERRIDE="$(_need --base "${2:-}")" || exit $?; shift 2 ;;
+        --task)   TASK_ID="$(_need --task "${2:-}")" || exit $?; shift 2 ;;
+        --intent) INTENT_FILE="$(_need --intent "${2:-}")" || exit $?; shift 2 ;;
+        --out)    OUT_DIR="$(_need --out "${2:-}")" || exit $?; OUT_DIR_GIVEN=1; shift 2 ;;
         -*)       die "unknown option: $1" ;;
         *)        [[ -z "${REPLY_FILE}" ]] && REPLY_FILE="$1" || die "unexpected argument: $1"; shift ;;
     esac
