@@ -37,6 +37,13 @@ Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 - Guidance to rename the generated `spec-reader.html` / `spec-annotated.md` per
   document where several can share a directory — the names are fixed, so two
   design docs would otherwise overwrite each other's readers.
+- **Design 0002 specifies the `extract` section and how a session learns it
+  exists.** Sections default off, so the failure worth designing against is not
+  that a consumer cannot find a tool — it is that they never go looking. The
+  session-start protocol will run `init.py --list-sections` every session, one
+  short line per section, so a repo handed an unexpected scraping task says "the
+  `extract` section ships a HAR analyser for this, it is not installed here"
+  instead of reaching for a browser. Specified now; shipping as delivery stage 0.
 - The rules live in one place — `claude-arsenal/references/annotatable-reader.md`
   — rather than duplicated in both skill bodies, so they cannot drift apart and
   neither skill pays for them until it needs them.

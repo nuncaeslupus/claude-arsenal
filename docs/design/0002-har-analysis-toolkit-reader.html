@@ -127,7 +127,7 @@ h4.sec-h{font-size:16.5px;color:var(--fg)}
     <button class="btn primary" id="btn-export">Save / Export</button>
   </div>
 </div>
-<div class="statusbar"><div class="wrap"><span class="count" id="count">0 / 28 notes</span><span class="hint"> · notes save automatically; <strong>Save / Export</strong> keeps a file you can send back</span></div></div>
+<div class="statusbar"><div class="wrap"><span class="count" id="count">0 / 29 notes</span><span class="hint"> · notes save automatically; <strong>Save / Export</strong> keeps a file you can send back</span></div></div>
 <div id="warnbar"><div class="wrap"><strong>Heads up —</strong> this browser isn't storing your notes automatically (private/incognito mode or restricted file view). Tap <strong>Save / Export</strong> regularly.</div></div>
 
 <div class="wrap">
@@ -172,6 +172,7 @@ h4.sec-h{font-size:16.5px;color:var(--fg)}
 <li><a href="#s-spec-5-4">§5.4 Redaction</a></li>
 <li><a href="#s-spec-full-fidelity-when-the-work-need">Full fidelity, when the work needs it</a></li>
 <li><a href="#s-spec-5-5">§5.5 Packaging</a></li>
+<li><a href="#s-spec-the-behaviour-this-buys-stated-s">The behaviour this buys, stated so it is expected</a></li>
 <li><a href="#s-spec-6">§6 Decisions taken</a></li>
 <li><a href="#s-spec-7">§7 Out of scope</a></li>
 <li><a href="#s-spec-8">§8 Risks</a></li>
@@ -1001,23 +1002,54 @@ stdlib-only <code>python3</code> so they run in a vendored consumer repo with no
 dependency step, consistent with every other shipped script.</p>
 <p><strong>A section nobody installed still has to be findable.</strong> Default-off is right —
 a repo that never scrapes should pay nothing — but it creates the obvious
-failure: the consumer who needs the tool a year later never learns it exists.
-Two mechanisms, both reusing machinery that is already there, and neither
-costing a resident token:</p>
+failure mode, and it is not the one it first looks like. The problem is not that
+the consumer cannot find the tool when they go looking. It is that <strong>they never
+go looking</strong>, because nothing ever told them there was anything to look for. A
+discovery mechanism that waits to be invoked is a mechanism for people who
+already know the answer.</p>
+<p>So the session is made aware, rather than being given somewhere to ask:</p>
 <ul>
-<li><strong>The upgrade banner announces it once.</strong> <code>/init</code> and <code>check_update.sh</code>
-  already print the CHANGELOG entries between a consumer's installed version and
-  the one they are updating to, on every update. A new section named in that
-  entry reaches every consumer automatically, exactly once, whether or not they
-  install it.</li>
-<li><strong><code>init.py --list-sections</code> answers on demand.</strong> Prints every section that
-  ships, which are on for this repo, what each contains, and the one line that
-  enables one. This is the thing to reach for when a session finds itself
-  wanting a tool it does not have.</li>
-</ul>
-<p>Both are changes to <code>init</code>, not to this skill, and are tracked as delivery
-stage 0 (§ 9) so the section does not ship before the means of discovering it.</p></div>
+<li><strong>The session-start protocol runs <code>init.py --list-sections</code>.</strong> Not optional,
+  not on demand: every session, alongside the bundle refresh it already runs.
+  The output is one short line per section — name, one clause on what it holds,
+  and whether it is on here. A session therefore begins knowing that an
+  <code>extract</code> section exists and is off, without anyone having asked.</li>
+<li><strong>The upgrade banner announces a new section once.</strong> <code>/init</code> and
+  <code>check_update.sh</code> already print the CHANGELOG entries between a consumer's
+  installed version and the one they are updating to. A new section named there
+  reaches every consumer automatically, install or no install.</li>
+</ul></div>
 <div class="note" data-for="s-spec-5-5"><div class="note-head"><span class="note-ico">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC §5.5</span></div><textarea class="note-ta" data-key="s-spec-5-5" data-label="§5.5 Packaging" data-part="0002 Har Analysis Toolkit" rows="1" placeholder="Tap to add a note for this point…"></textarea></div>
+</article>
+<article class="sec" id="s-spec-the-behaviour-this-buys-stated-s">
+<h4 class="sec-h"><span class="chip">▸</span><span class="sec-title">The behaviour this buys, stated so it is expected</span></h4>
+<div class="sec-body"><p>A repo that has never scraped anything gets an unexpected task — pull the
+listings off a site, work out why a page's data is not in its HTML. The session
+knows an <code>extract</code> section exists and is not installed. <strong>It says so, before
+doing the work the hard way:</strong></p>
+<blockquote>
+<p>This repo does not have the <code>extract</code> section installed, which ships <code>har</code> —
+HAR capture analysis for exactly this. Enable it with <code>--sections extract</code>, or
+say the word and I will continue with the browser.</p>
+</blockquote>
+<p>That is the whole point, and it is a <em>behavioural</em> commitment rather than a
+documentation one: the session volunteers the capability instead of waiting to
+be told it exists, and the person deciding is the one who knows whether it is
+worth installing. Getting this wrong in the other direction — a session that
+grinds through a task with a browser while the right tool sits one config line
+away, unmentioned — is the failure the whole section mechanism would otherwise
+have introduced.</p>
+<p><strong>What it costs, stated plainly</strong>, because this repo's rule is that anything
+landing in context on a path every session takes has to justify itself: the
+protocol step is two lines of <code>AGENTS.md</code> (resident, every turn) and its output
+is roughly one short line per section, paid once per session rather than per
+turn. For three or four sections that is well under a hundred tokens a session
+— against a session that would otherwise reach for a browser because it did not
+know it had an alternative.</p>
+<p>Both are changes to <code>init</code> and to the vendored protocol, not to this skill, and
+are tracked as delivery stage 0 (§ 9) so the section does not ship before the
+means of knowing it exists.</p></div>
+<div class="note" data-for="s-spec-the-behaviour-this-buys-stated-s"><div class="note-head"><span class="note-ico">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC › The behaviour this buys, stated so it is expected</span></div><textarea class="note-ta" data-key="s-spec-the-behaviour-this-buys-stated-s" data-label="The behaviour this buys, stated so it is expected" data-part="0002 Har Analysis Toolkit" rows="1" placeholder="Tap to add a note for this point…"></textarea></div>
 </article>
 <article class="sec" id="s-spec-6">
 <h3 class="sec-h"><span class="chip">§6</span><span class="sec-title">Decisions taken</span></h3>
@@ -1145,7 +1177,7 @@ stage 0 (§ 9) so the section does not ship before the means of discovering it.<
 <tbody>
 <tr>
 <td>0</td>
-<td><code>init.py --list-sections</code>, and a CHANGELOG entry naming the new section — the discovery path (§ 5.5), which lands before or with stage 1</td>
+<td><code>init.py --list-sections</code>; the session-start protocol step that runs it every session; the documented behaviour of volunteering an uninstalled section when a task calls for it; and a CHANGELOG entry naming the new section — the discovery path (§ 5.5), which lands before or with stage 1</td>
 </tr>
 <tr>
 <td>1</td>

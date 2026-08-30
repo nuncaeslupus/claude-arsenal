@@ -651,26 +651,63 @@ dependency step, consistent with every other shipped script.
 
 **A section nobody installed still has to be findable.** Default-off is right —
 a repo that never scrapes should pay nothing — but it creates the obvious
-failure: the consumer who needs the tool a year later never learns it exists.
-Two mechanisms, both reusing machinery that is already there, and neither
-costing a resident token:
+failure mode, and it is not the one it first looks like. The problem is not that
+the consumer cannot find the tool when they go looking. It is that **they never
+go looking**, because nothing ever told them there was anything to look for. A
+discovery mechanism that waits to be invoked is a mechanism for people who
+already know the answer.
 
-- **The upgrade banner announces it once.** `/init` and `check_update.sh`
-  already print the CHANGELOG entries between a consumer's installed version and
-  the one they are updating to, on every update. A new section named in that
-  entry reaches every consumer automatically, exactly once, whether or not they
-  install it.
-- **`init.py --list-sections` answers on demand.** Prints every section that
-  ships, which are on for this repo, what each contains, and the one line that
-  enables one. This is the thing to reach for when a session finds itself
-  wanting a tool it does not have.
+So the session is made aware, rather than being given somewhere to ask:
 
-Both are changes to `init`, not to this skill, and are tracked as delivery
-stage 0 (§ 9) so the section does not ship before the means of discovering it.
+- **The session-start protocol runs `init.py --list-sections`.** Not optional,
+  not on demand: every session, alongside the bundle refresh it already runs.
+  The output is one short line per section — name, one clause on what it holds,
+  and whether it is on here. A session therefore begins knowing that an
+  `extract` section exists and is off, without anyone having asked.
+- **The upgrade banner announces a new section once.** `/init` and
+  `check_update.sh` already print the CHANGELOG entries between a consumer's
+  installed version and the one they are updating to. A new section named there
+  reaches every consumer automatically, install or no install.
 
 <!-- -->
 
 > **✎ Notes** · `SPEC §5.5`
+> _(your notes here — replace this line)_
+
+### The behaviour this buys, stated so it is expected
+
+A repo that has never scraped anything gets an unexpected task — pull the
+listings off a site, work out why a page's data is not in its HTML. The session
+knows an `extract` section exists and is not installed. **It says so, before
+doing the work the hard way:**
+
+> This repo does not have the `extract` section installed, which ships `har` —
+> HAR capture analysis for exactly this. Enable it with `--sections extract`, or
+> say the word and I will continue with the browser.
+
+That is the whole point, and it is a *behavioural* commitment rather than a
+documentation one: the session volunteers the capability instead of waiting to
+be told it exists, and the person deciding is the one who knows whether it is
+worth installing. Getting this wrong in the other direction — a session that
+grinds through a task with a browser while the right tool sits one config line
+away, unmentioned — is the failure the whole section mechanism would otherwise
+have introduced.
+
+**What it costs, stated plainly**, because this repo's rule is that anything
+landing in context on a path every session takes has to justify itself: the
+protocol step is two lines of `AGENTS.md` (resident, every turn) and its output
+is roughly one short line per section, paid once per session rather than per
+turn. For three or four sections that is well under a hundred tokens a session
+— against a session that would otherwise reach for a browser because it did not
+know it had an alternative.
+
+Both are changes to `init` and to the vendored protocol, not to this skill, and
+are tracked as delivery stage 0 (§ 9) so the section does not ship before the
+means of knowing it exists.
+
+<!-- -->
+
+> **✎ Notes** · `SPEC › The behaviour this buys, stated so it is expected`
 > _(your notes here — replace this line)_
 
 ## §6 Decisions taken
@@ -727,7 +764,7 @@ stage 0 (§ 9) so the section does not ship before the means of discovering it.
 
 | Stage | Contents |
 |---|---|
-| 0 | `init.py --list-sections`, and a CHANGELOG entry naming the new section — the discovery path (§ 5.5), which lands before or with stage 1 |
+| 0 | `init.py --list-sections`; the session-start protocol step that runs it every session; the documented behaviour of volunteering an uninstalled section when a task calls for it; and a CHANGELOG entry naming the new section — the discovery path (§ 5.5), which lands before or with stage 1 |
 | 1 | `extract` section registered; skill scaffold; `validate_har.py`; index builder with offset tests |
 | 2 | `_filters.py` + `query_har.py` (select, show, extract, schema) |
 | 3 | `analyze_har.py` (overview, stats, errors, endpoints, headers) |
