@@ -187,7 +187,7 @@ silently, which is the class of bug this document exists to prevent.
 |---|---|
 | `--list-only` *(default)* | One line per entry: index, method, status, mime, size, ms, URL |
 | `--show IDX` | One entry in full: request line, headers, query, body, response headers, body (pretty-printed, truncated at `--max-body`) |
-| `--json` | The selection as JSON, for chaining |
+| `--json` | The selection as JSON, for chaining. Bounded output must still **parse**, so the byte budget is applied by dropping whole entries from a fixed envelope — `{"entries": [...], "shown": N, "matched": M, "truncated": true}` — never by cutting bytes mid-structure. Bodies are excluded from `--json` entirely |
 | `--fields a,b,c` | Restrict columns — narrow the fetch, not the reader |
 
 **Extract:**
@@ -228,7 +228,7 @@ Takes the same filter grammar and writes a new, valid HAR.
 |---|---|
 | `--keep <filters>` / `--drop <filters>` | Subset by any filter |
 | `--drop-types image,font,media,stylesheet` | The usual 80 % of a capture by size |
-| `--drop-bodies` | Keep the shape, drop the payloads |
+| `--keep-bodies` | **Bodies are dropped by default.** Redaction covers named fields; a response body is unbounded text that may carry a credential anywhere in it (§ 5.4), so a derived HAR that kept bodies by default would hand back a file that looks sanitised and is not. Dropping them also happens to be what the fixture use case wants — shape, status and headers, no payload. `--keep-bodies` opts back in, and says in its own output that the result is as sensitive as the capture |
 | `--redact` *(default)* | Replace auth headers, cookies, token-shaped params with `<redacted>` |
 | `--output PATH` | Destination. An `--output` that resolves to the input file is **refused before anything is opened** — a direct writer would truncate the source while still reading it. Every other destination is written to a temporary file in the same directory and atomically renamed into place, so an interrupted run leaves either the old file or the new one, never a half-written HAR |
 
@@ -243,8 +243,10 @@ parameters, response-size deltas. The way to answer "what actually changed when
 I clicked page 2" and, later, "did the site change under my scraper".
 
 **Matching is one-to-one and deterministic**, because a capture routinely repeats
-the same method and URL. The key is `(method, path, sorted query pairs, page
-ref, hash of request body)`; entries sharing a key are paired in capture order,
+the same method and URL. The key is `(method, scheme, host, port, path, sorted query pairs, page ref,
+hash of request body)` — the **authority is part of request identity**, so two
+captures that hit the same path on different hosts, or on http and https, are not
+silently paired; entries sharing a key are paired in capture order,
 first with first, second with second. Any left over on either side is reported as
 an addition or a removal — never paired with something that merely resembles it,
 which is how a diff tool starts inventing changes that did not happen. A pairing
@@ -280,15 +282,24 @@ The schema is fixed, because "every scalar" is not a specification:
 { "i": 12, "off": 91823, "len": 4410,          // byte offset + length in the HAR
   "ts": "2026-08-30T20:14:52.311Z", "ms": 231, "page": "page_1",
   "method": "GET", "url": "…", "host": "…", "path": "/api/jobs",
-  "query": { "page": "2", "loc": "NY" },
+  "query": [ ["page", "2"], ["loc", "NY"] ],   // pairs: names repeat
   "status": 200, "statusText": "OK",
   "mime": "application/json", "type": "xhr", "typeSrc": "declared",
   "reqBytes": 812, "respBytes": 44120,
   "cache": true,                                // true | false | null = unknown
-  "reqHeaders": { "accept": "application/json", "authorization": "<redacted>" },
-  "respHeaders": { "content-type": "application/json; charset=utf-8" },
+  "reqHeaders": [ ["accept", "application/json"],
+                  ["authorization", "<redacted>"] ],
+  "respHeaders": [ ["content-type", "application/json; charset=utf-8"],
+                   ["set-cookie", "<redacted>"], ["set-cookie", "<redacted>"] ],
   "hasReqBody": false, "hasRespBody": true, "bodyEncoding": null }
 ```
+
+Query and header fields are **arrays of pairs, not objects**, because both
+repeat: `?tag=a&tag=b` is two values for one name, and `Set-Cookie` appears once
+per cookie. Collapsing them into an object silently keeps the last one, which
+would make `--param tag=a` miss a request that plainly contains it — and would do
+so only on the sites that use repetition, which is the worst possible
+distribution for a bug.
 
 **Header values are indexed, and sensitive ones are redacted in the sidecar.**
 Names alone would not serve `--has-header NAME=REGEX` or `--headers`, so values
@@ -311,7 +322,13 @@ The index is derived data, keyed by a **content digest** of the HAR — not size
 and mtime, which a copy-preserving move or a coarse filesystem clock can carry
 across two different files, after which the tool would seek to offsets belonging
 to a capture it is no longer reading. The digest is stored in the sidecar's
-header line and verified before any offset is trusted; a mismatch rebuilds. It is
+header line and verified before any offset is trusted; a mismatch rebuilds.
+
+The sidecar is **written to a temporary file and atomically renamed**, exactly as
+derived HARs are (§ 4.4). Without that, an interrupted index build leaves a
+truncated JSONL whose header line — and therefore whose digest — is perfectly
+valid, so the next run would trust it and quietly answer every query from a
+partial index. A digest over the input cannot detect damage to the output. It is
 rebuilt automatically when stale, and `.gitignore`d by convention. A `--no-index` path
 streams the original for the rare case where writing next to the input is not
 acceptable.

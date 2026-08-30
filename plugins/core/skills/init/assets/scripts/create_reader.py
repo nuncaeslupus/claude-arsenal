@@ -473,6 +473,12 @@ def build_markdown(parts: list[tuple[str, dict]], title: str, gen_date: str, see
             out.append("")
             out.append(it["raw_body"])
             out.append("")
+            # A section whose body ends in a blockquote would sit one blank line
+            # above the note blockquote, which markdownlint reads as one quote
+            # broken in half (MD028) rather than two. An HTML comment separates
+            # them for the linter and renders as nothing.
+            out.append("<!-- -->")
+            out.append("")
             out.append(f"> **✎ Notes** · `{it['key']}`")
             note_text = seed_notes.get(it["domid"], "").strip()
             if note_text:

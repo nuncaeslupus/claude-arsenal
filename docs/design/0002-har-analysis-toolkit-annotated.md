@@ -19,6 +19,8 @@ outside the default install set.
 > returns the data, which parameter pages it, which header authenticates it —
 > are reachable only through a script. This document specifies that script set.
 
+<!-- -->
+
 > **✎ Notes** · `SPEC · intro`
 > _(your notes here — replace this line)_
 
@@ -40,6 +42,8 @@ Stated by the maintainer, treated here as non-negotiable:
    request, not a report.
 6. **Replay is anticipated, not built yet.** v1 must not foreclose it.
 
+<!-- -->
+
 > **✎ Notes** · `SPEC §1`
 > _(your notes here — replace this line)_
 
@@ -58,6 +62,8 @@ neighbours?").
 The consequence for `integral-job-search` is concrete: every connector begins
 with a browser session that could have begun with a capture, and some sites
 would need no browser at all once their JSON endpoint is known.
+
+<!-- -->
 
 > **✎ Notes** · `SPEC §2`
 > _(your notes here — replace this line)_
@@ -81,6 +87,8 @@ buys is independence from **body bytes**, which is where a HAR's size actually
 lives, so the criterion is a bounded benchmark against a named capture rather
 than a complexity claim that would not survive contact with a 500k-entry file.
 
+<!-- -->
+
 > **✎ Notes** · `SPEC › Success criteria (measurable)`
 > _(your notes here — replace this line)_
 
@@ -88,6 +96,8 @@ than a complexity claim that would not survive contact with a 500k-entry file.
 
 HAR 1.2 is a JSON document with one `log` object. This is the complete raw
 material, and the column on the right is what makes each field worth indexing.
+
+<!-- -->
 
 > **✎ Notes** · `SPEC §3`
 > _(your notes here — replace this line)_
@@ -101,6 +111,8 @@ material, and the column on the right is what makes each field worth indexing.
 | `log.browser` | browser name/version | provenance |
 | `log.pages[]` | `id`, `title`, `startedDateTime`, `pageTimings` | page boundaries; scoping a query to one navigation |
 | `log.entries[]` | the requests | everything below |
+
+<!-- -->
 
 > **✎ Notes** · `SPEC §3.1`
 > _(your notes here — replace this line)_
@@ -128,6 +140,8 @@ material, and the column on the right is what makes each field worth indexing.
 | `timings` | `blocked`,`dns`,`connect`,`send`,`wait`,`receive`,`ssl` | performance analysis (the format's original purpose) |
 | `serverIPAddress`, `connection` | transport detail | host/CDN grouping |
 
+<!-- -->
+
 > **✎ Notes** · `SPEC §3.2`
 > _(your notes here — replace this line)_
 
@@ -148,6 +162,8 @@ Where `_resourceType` is absent, it is inferred from `Content-Type` plus the
 `Accept`/`X-Requested-With` request headers, and the inference is reported as
 inferred rather than presented as fact.
 
+<!-- -->
+
 > **✎ Notes** · `SPEC §3.3`
 > _(your notes here — replace this line)_
 
@@ -161,6 +177,8 @@ inferred rather than presented as fact.
   match"* from *"no body was captured"* — conflating them sends a session
   hunting for an endpoint it already found.
 
+<!-- -->
+
 > **✎ Notes** · `SPEC §3.4`
 > _(your notes here — replace this line)_
 
@@ -168,6 +186,8 @@ inferred rather than presented as fact.
 
 Six scripts, named on the repo's canonical verbs. All read a HAR or its index;
 none mutate the input file.
+
+<!-- -->
 
 > **✎ Notes** · `SPEC §4`
 > _(your notes here — replace this line)_
@@ -193,6 +213,8 @@ The command run first, and the one that answers "what is even in here".
 `?page=2&loc=NY`, `?page=3&loc=NY` into one row that reports `page` varying over
 1–3 and `loc` constant is the difference between reading 40 URLs and reading
 one line that says how to iterate the site.
+
+<!-- -->
 
 > **✎ Notes** · `SPEC §4.1`
 > _(your notes here — replace this line)_
@@ -222,7 +244,7 @@ silently, which is the class of bug this document exists to prevent.
 |---|---|
 | `--list-only` *(default)* | One line per entry: index, method, status, mime, size, ms, URL |
 | `--show IDX` | One entry in full: request line, headers, query, body, response headers, body (pretty-printed, truncated at `--max-body`) |
-| `--json` | The selection as JSON, for chaining |
+| `--json` | The selection as JSON, for chaining. Bounded output must still **parse**, so the byte budget is applied by dropping whole entries from a fixed envelope — `{"entries": [...], "shown": N, "matched": M, "truncated": true}` — never by cutting bytes mid-structure. Bodies are excluded from `--json` entirely |
 | `--fields a,b,c` | Restrict columns — narrow the fetch, not the reader |
 
 **Extract:**
@@ -237,6 +259,8 @@ silently, which is the class of bug this document exists to prevent.
 `--response-match` is the operation the whole toolkit exists for: paste a string
 seen on the page, get back the request that returned it. Combined with
 `--schema`, SC4's two commands are `--response-match` then `--show`.
+
+<!-- -->
 
 > **✎ Notes** · `SPEC §4.2`
 > _(your notes here — replace this line)_
@@ -258,6 +282,8 @@ stays inline data instead of becoming a local-file read. A generated command tha
 executes something the capture did not contain is the worst bug this toolkit
 could have, so this is a correctness requirement, not a hardening note.
 
+<!-- -->
+
 > **✎ Notes** · `SPEC §4.3`
 > _(your notes here — replace this line)_
 
@@ -269,13 +295,15 @@ Takes the same filter grammar and writes a new, valid HAR.
 |---|---|
 | `--keep <filters>` / `--drop <filters>` | Subset by any filter |
 | `--drop-types image,font,media,stylesheet` | The usual 80 % of a capture by size |
-| `--drop-bodies` | Keep the shape, drop the payloads |
+| `--keep-bodies` | **Bodies are dropped by default.** Redaction covers named fields; a response body is unbounded text that may carry a credential anywhere in it (§ 5.4), so a derived HAR that kept bodies by default would hand back a file that looks sanitised and is not. Dropping them also happens to be what the fixture use case wants — shape, status and headers, no payload. `--keep-bodies` opts back in, and says in its own output that the result is as sensitive as the capture |
 | `--redact` *(default)* | Replace auth headers, cookies, token-shaped params with `<redacted>` |
 | `--output PATH` | Destination. An `--output` that resolves to the input file is **refused before anything is opened** — a direct writer would truncate the source while still reading it. Every other destination is written to a temporary file in the same directory and atomically renamed into place, so an interrupted run leaves either the old file or the new one, never a half-written HAR |
 
 This is requirement 4. It is also what makes a HAR committable: a capture
 reduced to twelve XHR entries with redacted headers is a fixture, and fixtures
 are how a scraper gets a regression test.
+
+<!-- -->
 
 > **✎ Notes** · `SPEC §4.4`
 > _(your notes here — replace this line)_
@@ -287,13 +315,17 @@ parameters, response-size deltas. The way to answer "what actually changed when
 I clicked page 2" and, later, "did the site change under my scraper".
 
 **Matching is one-to-one and deterministic**, because a capture routinely repeats
-the same method and URL. The key is `(method, path, sorted query pairs, page
-ref, hash of request body)`; entries sharing a key are paired in capture order,
+the same method and URL. The key is `(method, scheme, host, port, path, sorted query pairs, page ref,
+hash of request body)` — the **authority is part of request identity**, so two
+captures that hit the same path on different hosts, or on http and https, are not
+silently paired; entries sharing a key are paired in capture order,
 first with first, second with second. Any left over on either side is reported as
 an addition or a removal — never paired with something that merely resembles it,
 which is how a diff tool starts inventing changes that did not happen. A pairing
 that relied on ordering alone is reported as such, so a reader can tell a real
 match from a positional one.
+
+<!-- -->
 
 > **✎ Notes** · `SPEC §4.5`
 > _(your notes here — replace this line)_
@@ -305,6 +337,8 @@ are they base64, is `_resourceType` available, which optional fields this
 exporter omitted. Run when something surprising happens; it distinguishes a bad
 capture from a bad query.
 
+<!-- -->
+
 > **✎ Notes** · `SPEC §4.6`
 > _(your notes here — replace this line)_
 
@@ -315,12 +349,16 @@ live site and diff the responses against the capture, which is a scraper
 regression test. The filter grammar and the index are designed so this is an
 added script, not a refactor.
 
+<!-- -->
+
 > **✎ Notes** · `SPEC §4.7`
 > _(your notes here — replace this line)_
 
 ## §5 Architecture
 
 
+
+<!-- -->
 
 > **✎ Notes** · `SPEC §5`
 > _(your notes here — replace this line)_
@@ -336,15 +374,24 @@ The schema is fixed, because "every scalar" is not a specification:
 { "i": 12, "off": 91823, "len": 4410,          // byte offset + length in the HAR
   "ts": "2026-08-30T20:14:52.311Z", "ms": 231, "page": "page_1",
   "method": "GET", "url": "…", "host": "…", "path": "/api/jobs",
-  "query": { "page": "2", "loc": "NY" },
+  "query": [ ["page", "2"], ["loc", "NY"] ],   // pairs: names repeat
   "status": 200, "statusText": "OK",
   "mime": "application/json", "type": "xhr", "typeSrc": "declared",
   "reqBytes": 812, "respBytes": 44120,
   "cache": true,                                // true | false | null = unknown
-  "reqHeaders": { "accept": "application/json", "authorization": "<redacted>" },
-  "respHeaders": { "content-type": "application/json; charset=utf-8" },
+  "reqHeaders": [ ["accept", "application/json"],
+                  ["authorization", "<redacted>"] ],
+  "respHeaders": [ ["content-type", "application/json; charset=utf-8"],
+                   ["set-cookie", "<redacted>"], ["set-cookie", "<redacted>"] ],
   "hasReqBody": false, "hasRespBody": true, "bodyEncoding": null }
 ```
+
+Query and header fields are **arrays of pairs, not objects**, because both
+repeat: `?tag=a&tag=b` is two values for one name, and `Set-Cookie` appears once
+per cookie. Collapsing them into an object silently keeps the last one, which
+would make `--param tag=a` miss a request that plainly contains it — and would do
+so only on the sites that use repetition, which is the worst possible
+distribution for a bug.
 
 **Header values are indexed, and sensitive ones are redacted in the sidecar.**
 Names alone would not serve `--has-header NAME=REGEX` or `--headers`, so values
@@ -367,7 +414,13 @@ The index is derived data, keyed by a **content digest** of the HAR — not size
 and mtime, which a copy-preserving move or a coarse filesystem clock can carry
 across two different files, after which the tool would seek to offsets belonging
 to a capture it is no longer reading. The digest is stored in the sidecar's
-header line and verified before any offset is trusted; a mismatch rebuilds. It is
+header line and verified before any offset is trusted; a mismatch rebuilds.
+
+The sidecar is **written to a temporary file and atomically renamed**, exactly as
+derived HARs are (§ 4.4). Without that, an interrupted index build leaves a
+truncated JSONL whose header line — and therefore whose digest — is perfectly
+valid, so the next run would trust it and quietly answer every query from a
+partial index. A digest over the input cannot detect damage to the output. It is
 rebuilt automatically when stale, and `.gitignore`d by convention. A `--no-index` path
 streams the original for the rare case where writing next to the input is not
 acceptable.
@@ -389,6 +442,8 @@ byte/character distinction — plus a `--verify-offsets` mode that re-parses eve
 entry from its offset and compares. If it proves fragile, the fallback is an index without
 offsets plus a streaming re-scan for bodies: slower, same interface.
 
+<!-- -->
+
 > **✎ Notes** · `SPEC §5.1`
 > _(your notes here — replace this line)_
 
@@ -399,6 +454,8 @@ accept identical selection flags, implemented once in `_filters.py`. A session
 that learns to select entries once can filter, export, prune and replay the same
 set. Divergent flag sets across sibling scripts would be the most likely way for
 this toolkit to become annoying.
+
+<!-- -->
 
 > **✎ Notes** · `SPEC §5.2`
 > _(your notes here — replace this line)_
@@ -417,6 +474,8 @@ chaining. Bodies never reach stdout except through `--show` (truncated) or
 `--extract-body` (to files). This is SC1, and it is a hard rule rather than a
 default, because the entire value of the toolkit is that the big data stays out
 of context.
+
+<!-- -->
 
 > **✎ Notes** · `SPEC §5.3`
 > _(your notes here — replace this line)_
@@ -443,6 +502,8 @@ the output directory the first time it writes in a run, and the skill's
 documentation says plainly that extracted bodies are not fixtures until someone
 has looked at them.
 
+<!-- -->
+
 > **✎ Notes** · `SPEC §5.4`
 > _(your notes here — replace this line)_
 
@@ -452,6 +513,8 @@ One skill, `har`, in a new `web` section defaulting off. Consumers who never
 scrape pay nothing; `--sections web` or `--profile all` installs it. Scripts are
 stdlib-only `python3` so they run in a vendored consumer repo with no
 dependency step, consistent with every other shipped script.
+
+<!-- -->
 
 > **✎ Notes** · `SPEC §5.5`
 > _(your notes here — replace this line)_
@@ -465,6 +528,8 @@ dependency step, consistent with every other shipped script.
 | Secrets | Redact when writing, raw when inspecting | A HAR is full of live session tokens; the risk is a committed file, not a terminal |
 | Repro output | Generic curl + Python `requests` | The natural end of a scraping session; coupling to another repo's connector schema would make an arsenal skill track a foreign format |
 
+<!-- -->
+
 > **✎ Notes** · `SPEC §6`
 > _(your notes here — replace this line)_
 
@@ -476,6 +541,8 @@ dependency step, consistent with every other shipped script.
 - Connector-descriptor generation for `integral-job-search`.
 - HAR *editing* as an interactive activity. `create_har.py` derives a new file;
   it does not offer general-purpose mutation.
+
+<!-- -->
 
 > **✎ Notes** · `SPEC §7`
 > _(your notes here — replace this line)_
@@ -492,6 +559,8 @@ dependency step, consistent with every other shipped script.
 | A generated `curl` executes something the capture did not contain | High — the operator pastes it into their own shell | Every value escaped for its destination; `--data-raw`; tested against adversarial header and body values |
 | An extracted body lands outside `--output-dir` | High — arbitrary file write from an untrusted HAR | Names flattened and sanitised; resolved destination verified inside the output directory before any write |
 | Skill earns its resident cost | Low | Default-off section; 0 tokens for repos that do not enable it |
+
+<!-- -->
 
 > **✎ Notes** · `SPEC §8`
 > _(your notes here — replace this line)_
@@ -516,6 +585,8 @@ entry whose URL path contains `../` and a separator, a body value beginning with
 positioned before a later entry** — built by hand rather than captured, so it
 carries no real secrets and no site's data. Each of those exists because a
 specific claim in this document is false if it is not tested.
+
+<!-- -->
 
 > **✎ Notes** · `SPEC §9`
 > _(your notes here — replace this line)_

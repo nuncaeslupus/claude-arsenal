@@ -28,8 +28,8 @@ Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
   reviewed. A reviewer who says to proceed without annotating is making that
   call — it is not an assumption to act on while waiting.
 - **The rule now covers any document that specifies or plans work**, not only
-  `status/specification.md` and workspace specs, which are all `create_reader.py`
-  auto-discovers. Design documents, RFCs and proposals written into a docs tree
+  `status/specification.md` and workspace specs, which are all that
+  `create_reader.py` auto-discovers. Design documents, RFCs and proposals written into a docs tree
   get a reader too, named explicitly with `--output-dir` beside them. Publishing
   some other way — a chat summary, a hand-built page, a link to the raw file —
   does not satisfy it: the reader exists so notes attach to the section they are

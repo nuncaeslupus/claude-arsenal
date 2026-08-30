@@ -594,7 +594,7 @@ silently, which is the class of bug this document exists to prevent.</p>
 </tr>
 <tr>
 <td><code>--json</code></td>
-<td>The selection as JSON, for chaining</td>
+<td>The selection as JSON, for chaining. Bounded output must still <strong>parse</strong>, so the byte budget is applied by dropping whole entries from a fixed envelope — <code>{"entries": [...], "shown": N, "matched": M, "truncated": true}</code> — never by cutting bytes mid-structure. Bodies are excluded from <code>--json</code> entirely</td>
 </tr>
 <tr>
 <td><code>--fields a,b,c</code></td>
@@ -671,8 +671,8 @@ could have, so this is a correctness requirement, not a hardening note.</p></div
 <td>The usual 80 % of a capture by size</td>
 </tr>
 <tr>
-<td><code>--drop-bodies</code></td>
-<td>Keep the shape, drop the payloads</td>
+<td><code>--keep-bodies</code></td>
+<td><strong>Bodies are dropped by default.</strong> Redaction covers named fields; a response body is unbounded text that may carry a credential anywhere in it (§ 5.4), so a derived HAR that kept bodies by default would hand back a file that looks sanitised and is not. Dropping them also happens to be what the fixture use case wants — shape, status and headers, no payload. <code>--keep-bodies</code> opts back in, and says in its own output that the result is as sensitive as the capture</td>
 </tr>
 <tr>
 <td><code>--redact</code> <em>(default)</em></td>
@@ -695,8 +695,10 @@ are how a scraper gets a regression test.</p></div>
 parameters, response-size deltas. The way to answer "what actually changed when
 I clicked page 2" and, later, "did the site change under my scraper".</p>
 <p><strong>Matching is one-to-one and deterministic</strong>, because a capture routinely repeats
-the same method and URL. The key is <code>(method, path, sorted query pairs, page
-ref, hash of request body)</code>; entries sharing a key are paired in capture order,
+the same method and URL. The key is <code>(method, scheme, host, port, path, sorted query pairs, page ref,
+hash of request body)</code> — the <strong>authority is part of request identity</strong>, so two
+captures that hit the same path on different hosts, or on http and https, are not
+silently paired; entries sharing a key are paired in capture order,
 first with first, second with second. Any left over on either side is reported as
 an addition or a removal — never paired with something that merely resembles it,
 which is how a diff tool starts inventing changes that did not happen. A pairing
@@ -732,15 +734,23 @@ entry, no bodies. For a 200 MB HAR this is single-digit MB.</p>
 <pre><code class="language-jsonc">{ &quot;i&quot;: 12, &quot;off&quot;: 91823, &quot;len&quot;: 4410,          // byte offset + length in the HAR
   &quot;ts&quot;: &quot;2026-08-30T20:14:52.311Z&quot;, &quot;ms&quot;: 231, &quot;page&quot;: &quot;page_1&quot;,
   &quot;method&quot;: &quot;GET&quot;, &quot;url&quot;: &quot;…&quot;, &quot;host&quot;: &quot;…&quot;, &quot;path&quot;: &quot;/api/jobs&quot;,
-  &quot;query&quot;: { &quot;page&quot;: &quot;2&quot;, &quot;loc&quot;: &quot;NY&quot; },
+  &quot;query&quot;: [ [&quot;page&quot;, &quot;2&quot;], [&quot;loc&quot;, &quot;NY&quot;] ],   // pairs: names repeat
   &quot;status&quot;: 200, &quot;statusText&quot;: &quot;OK&quot;,
   &quot;mime&quot;: &quot;application/json&quot;, &quot;type&quot;: &quot;xhr&quot;, &quot;typeSrc&quot;: &quot;declared&quot;,
   &quot;reqBytes&quot;: 812, &quot;respBytes&quot;: 44120,
   &quot;cache&quot;: true,                                // true | false | null = unknown
-  &quot;reqHeaders&quot;: { &quot;accept&quot;: &quot;application/json&quot;, &quot;authorization&quot;: &quot;&lt;redacted&gt;&quot; },
-  &quot;respHeaders&quot;: { &quot;content-type&quot;: &quot;application/json; charset=utf-8&quot; },
+  &quot;reqHeaders&quot;: [ [&quot;accept&quot;, &quot;application/json&quot;],
+                  [&quot;authorization&quot;, &quot;&lt;redacted&gt;&quot;] ],
+  &quot;respHeaders&quot;: [ [&quot;content-type&quot;, &quot;application/json; charset=utf-8&quot;],
+                   [&quot;set-cookie&quot;, &quot;&lt;redacted&gt;&quot;], [&quot;set-cookie&quot;, &quot;&lt;redacted&gt;&quot;] ],
   &quot;hasReqBody&quot;: false, &quot;hasRespBody&quot;: true, &quot;bodyEncoding&quot;: null }
 </code></pre>
+<p>Query and header fields are <strong>arrays of pairs, not objects</strong>, because both
+repeat: <code>?tag=a&amp;tag=b</code> is two values for one name, and <code>Set-Cookie</code> appears once
+per cookie. Collapsing them into an object silently keeps the last one, which
+would make <code>--param tag=a</code> miss a request that plainly contains it — and would do
+so only on the sites that use repetition, which is the worst possible
+distribution for a bug.</p>
 <p><strong>Header values are indexed, and sensitive ones are redacted in the sidecar.</strong>
 Names alone would not serve <code>--has-header NAME=REGEX</code> or <code>--headers</code>, so values
 are stored — which makes the sidecar as sensitive as the HAR beside it unless
@@ -760,7 +770,12 @@ parses only that object.</p>
 and mtime, which a copy-preserving move or a coarse filesystem clock can carry
 across two different files, after which the tool would seek to offsets belonging
 to a capture it is no longer reading. The digest is stored in the sidecar's
-header line and verified before any offset is trusted; a mismatch rebuilds. It is
+header line and verified before any offset is trusted; a mismatch rebuilds.</p>
+<p>The sidecar is <strong>written to a temporary file and atomically renamed</strong>, exactly as
+derived HARs are (§ 4.4). Without that, an interrupted index build leaves a
+truncated JSONL whose header line — and therefore whose digest — is perfectly
+valid, so the next run would trust it and quietly answer every query from a
+partial index. A digest over the input cannot detect damage to the output. It is
 rebuilt automatically when stale, and <code>.gitignore</code>d by convention. A <code>--no-index</code> path
 streams the original for the rare case where writing next to the input is not
 acceptable.</p>
