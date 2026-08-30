@@ -263,4 +263,18 @@ grep -q "adversarial review" "${GH_BODY_FILE}" \
     && fail "pre-pr-review=off must write no review line into the body"
 echo "PASS: pre-pr-review=off writes nothing into the PR body"
 
+# --- 17: a misspelled mode refuses; it does not fall back to warn ---
+# The enum in arsenal_config.py raises exit 2 for a value outside the set, and
+# `|| echo warn` in the helper turned that refusal straight back into the
+# permissive mode the consumer was trying to leave — validation enforced by
+# nobody, which reads as protection while granting none.
+_fresh_work
+printf 'pre-pr-review = "requried"\n' > arsenal/config.toml
+export GH_BODY_FILE="${tmp}/body6.txt"; : > "${GH_BODY_FILE}"
+out=$(ARSENAL_TASK_ISSUE=7 ARSENAL_COAUTHOR="" bash "${HELPER}" t-rev-off "Review fixture" 2>&1)
+(( $? != 0 )) || fail "a pre-pr-review value outside the enum must refuse, not silently open the PR under warn"
+grep -q "pre-pr-review" <<<"${out}" || fail "the refusal should name the key it could not read: ${out}"
+[[ -s "${GH_BODY_FILE}" ]] && fail "no PR should be opened when the mode cannot be read"
+echo "PASS: a misspelled review mode refuses instead of degrading to warn"
+
 echo "PASS: adversarial_review_test — all gates passed"

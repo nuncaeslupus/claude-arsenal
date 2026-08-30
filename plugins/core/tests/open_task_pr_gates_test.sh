@@ -112,7 +112,16 @@ write_task t-gate-cfg "true"
 printf 'merge-policy = "not-a-real-policy"\n' > arsenal/config.toml
 out=$(ARSENAL_COAUTHOR="" bash "${HELPER}" t-gate-cfg "Broken config" 2>&1); rc=$?
 [[ ${rc} -ne 0 ]] || fail "an unreadable config must not silently skip the host gate"
-grep -q "could not read host-gate" <<<"${out}" || fail "the refusal should name the config: ${out}"
+#     Asserted on the refusal and the underlying error rather than on which key
+#     names it: arsenal_config.py validates the whole file on any read, so the
+#     key that surfaces a bad value is whichever the helper reads first — and
+#     that order is a real design decision (the review check moved ahead of both
+#     gates so a gate's own artifacts cannot invalidate the review receipt).
+#     Pinning the message to one key made this test fail for a reordering that
+#     changed nothing it is here to protect.
+grep -q "could not read" <<<"${out}" || fail "the refusal should say the config could not be read: ${out}"
+grep -q "not-a-real-policy" <<<"${out}" \
+    || fail "the refusal should carry the underlying config error, not just a generic failure: ${out}"
 printf 'merge-policy = "after-ci"\n' > arsenal/config.toml
 
 # --- 9: the config is found from a subdirectory ---

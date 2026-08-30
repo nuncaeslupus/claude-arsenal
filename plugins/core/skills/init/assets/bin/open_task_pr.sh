@@ -135,6 +135,14 @@ _gate_fail() {
 #    never be cleared, because every retry re-ran the gate that invalidated
 #    the receipt. Asking before the gates run removes the whole class.
 #
+#    What the receipt covers is the tree the AUTHOR produced, not the final PR
+#    byte-for-byte: this script goes on to archive the task file into
+#    `tasks/_history/` as part of the same diff, after this check. That mutation
+#    is deliberately outside the review's scope — it is this helper's own
+#    bookkeeping, identical on every task PR, and re-reviewing after it would
+#    never converge, because the next run would mutate the tree again. No
+#    author-written change can enter through it.
+#
 #    Default is `warn`, not a refusal, and that is deliberate: a hard gate
 #    added to every existing worker loop overnight is a gate a consumer
 #    disables on the first red morning. So the outcome is written into the PR
@@ -144,8 +152,18 @@ _gate_fail() {
 review_note=""
 review_mode="warn"
 if [[ -f "${BUNDLE_SCRIPTS}/arsenal_config.py" ]]; then
-    review_mode="$(python3 "${BUNDLE_SCRIPTS}/arsenal_config.py" \
-        --repo-root "${_repo_root}" --get pre-pr-review 2>/dev/null || echo warn)"
+    # Errors are NOT swallowed into the default, for the same reason the
+    # host-gate read above does not swallow its own. arsenal_config.py exits 2
+    # on a value outside the enum — which is exactly what a consumer who typed
+    # `requried` or `Required` gets — and `|| echo warn` would turn that
+    # refusal back into the permissive mode they were trying to leave. The
+    # validation would then be enforced by nobody, which is worse than absent:
+    # it reads as protection while granting none.
+    if ! review_mode="$(python3 "${BUNDLE_SCRIPTS}/arsenal_config.py" \
+            --repo-root "${_repo_root}" --get pre-pr-review 2>&1)"; then
+        _gate_fail "could not read pre-pr-review from ${_repo_root}/${ARSENAL_HOME}/config.toml: ${review_mode}"
+    fi
+    review_mode="$(printf '%s' "${review_mode}" | tr -d '[:space:]')"
     [[ -z "${review_mode}" ]] && review_mode="warn"
 fi
 if [[ "${review_mode}" != "off" && -f "${SCRIPT_DIR}/adversarial_review.sh" ]]; then

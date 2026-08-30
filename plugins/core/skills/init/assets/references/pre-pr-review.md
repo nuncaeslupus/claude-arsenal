@@ -106,6 +106,13 @@ that a verdict was recorded for this tree. Nothing can tell a subagent's verdict
 from one a session wrote for itself, which is why the worker protocol says to
 skip the step rather than stand in for the reviewer.
 
+The receipt covers the tree the author produced, not the PR byte-for-byte:
+`open_task_pr.sh` then archives the task file into `tasks/_history/` in the same
+diff. That mutation is out of scope on purpose — it is the helper's own
+bookkeeping, identical on every task PR, and re-reviewing after it could never
+converge because the next run would move the tree again. No author-written code
+reaches the PR through it.
+
 `arsenal/config.toml` sets how hard it binds **on that path only** — the
 `execution`, `github` and `ship` skills run the gate as a step of their own
 workflow and do not read this key:

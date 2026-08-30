@@ -32,7 +32,7 @@ Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
     digest of the reviewed diff, so a CLEAR does not carry over to code written
     after it.
   - `claude-arsenal/agents/reviewer.md` is the reviewer's role and rubric.
-  - No verdict is never a pass: `verdict` exits 2 when the reviewer returned no
+  - A missing verdict never passes: `verdict` exits 2 when the reviewer returned no
     `VERDICT:` line, and `check` exits 2 with nothing on record.
 - **Task PRs now state whether anyone independent looked.** `open_task_pr.sh`
   runs the check and writes the outcome — CLEAR, BLOCK, stale, or never run —
@@ -41,7 +41,7 @@ Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
   the PR opens either way and the outcome is stated in its body), `required`
   (no CLEAR for this tree, no PR), or `off`. Existing repos are unaffected on
   upgrade beyond the new body line; set `required` to make it binding.
-- `execution` (Step 4b), `github` (pre-PR gate) and the worker agent now run the
+- The `execution` skill (Step 4b), the `github` skill (pre-PR gate) and the worker agent now run the
   gate before opening a PR. `ship`'s adversarial gate (Step 7) now uses the same
   mechanism instead of its own inline prompt, so there is one rubric to improve.
 
