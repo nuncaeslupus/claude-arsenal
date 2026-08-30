@@ -119,6 +119,12 @@ jobs:
   queue-doctor:
     name: queue doctor (dogfood)
     runs-on: ubuntu-22.04
+    # The handle check is only worth running if it can fail: without a token the
+    # target has no channel, skips the check, and the job goes green on a board
+    # whose task files have no issues at all.
+    permissions:
+      contents: read
+      issues: read
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -136,3 +142,5 @@ jobs:
 
       - name: make queue-doctor
         run: make queue-doctor
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
