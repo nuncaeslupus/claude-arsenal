@@ -127,7 +127,7 @@ h4.sec-h{font-size:16.5px;color:var(--fg)}
     <button class="btn primary" id="btn-export">Save / Export</button>
   </div>
 </div>
-<div class="statusbar"><div class="wrap"><span class="count" id="count">0 / 27 notes</span><span class="hint"> · notes save automatically; <strong>Save / Export</strong> keeps a file you can send back</span></div></div>
+<div class="statusbar"><div class="wrap"><span class="count" id="count">0 / 28 notes</span><span class="hint"> · notes save automatically; <strong>Save / Export</strong> keeps a file you can send back</span></div></div>
 <div id="warnbar"><div class="wrap"><strong>Heads up —</strong> this browser isn't storing your notes automatically (private/incognito mode or restricted file view). Tap <strong>Save / Export</strong> regularly.</div></div>
 
 <div class="wrap">
@@ -170,6 +170,7 @@ h4.sec-h{font-size:16.5px;color:var(--fg)}
 <li><a href="#s-spec-5-2">§5.2 One filter grammar, shared</a></li>
 <li><a href="#s-spec-5-3">§5.3 Output discipline</a></li>
 <li><a href="#s-spec-5-4">§5.4 Redaction</a></li>
+<li><a href="#s-spec-full-fidelity-when-the-work-need">Full fidelity, when the work needs it</a></li>
 <li><a href="#s-spec-5-5">§5.5 Packaging</a></li>
 <li><a href="#s-spec-6">§6 Decisions taken</a></li>
 <li><a href="#s-spec-7">§7 Out of scope</a></li>
@@ -225,9 +226,14 @@ either not used at all, or used by grepping raw JSON, which finds strings but
 cannot answer structural questions ("which of these 400 requests returned JSON
 containing this job title, and what parameters distinguish it from its
 neighbours?").</p>
-<p>The consequence for <code>integral-job-search</code> is concrete: every connector begins
-with a browser session that could have begun with a capture, and some sites
-would need no browser at all once their JSON endpoint is known.</p></div>
+<p>This is a standalone skill with no dependency on any project that happens to
+want it. The work it serves is generic: a session pointed at an unfamiliar site
+needs to find which request returns the data, what parameters drive it, and what
+headers authenticate it — whether the outcome is a scraper, a one-off
+extraction, or a diagnosis of why a page loads the way it does.</p>
+<p>Concretely, the goal is that a session can do that analysis <strong>from a capture
+instead of a browser</strong>, and reach a working request faster and more cheaply than
+by driving one.</p></div>
 <div class="note" data-for="s-spec-2"><div class="note-head"><span class="note-ico">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC §2</span></div><textarea class="note-ta" data-key="s-spec-2" data-label="§2 Problem statement" data-part="0002 Har Analysis Toolkit" rows="1" placeholder="Tap to add a note for this point…"></textarea></div>
 </article>
 <article class="sec" id="s-spec-success-criteria-measurable">
@@ -274,7 +280,7 @@ would need no browser at all once their JSON endpoint is known.</p></div>
 <tr>
 <td>SC7</td>
 <td>Resident listing cost</td>
-<td>≤ 130 tokens for repos with the <code>web</code> section, 0 for those without</td>
+<td>≤ 130 tokens for repos with the <code>extract</code> section, 0 for those without</td>
 </tr>
 </tbody>
 </table>
@@ -684,9 +690,22 @@ could have, so this is a correctness requirement, not a hardening note.</p></div
 </tr>
 </tbody>
 </table>
-<p>This is requirement 4. It is also what makes a HAR committable: a capture
-reduced to twelve XHR entries with redacted headers is a fixture, and fixtures
-are how a scraper gets a regression test.</p></div>
+<p>This is requirement 4, and the ability to <em>write</em> a valid HAR earns its place
+even though it will be used less often than the reading commands:</p>
+<ul>
+<li><strong>Fixtures.</strong> A capture reduced to twelve XHR entries with redacted headers
+  and no bodies is small enough to commit, and a committed capture is how a
+  scraper gets a regression test that does not touch the network.</li>
+<li><strong>A smaller working copy.</strong> A 400 MB capture with the images, fonts and media
+  dropped is a 3 MB file that opens instantly in any HAR viewer and travels
+  between machines. The reduction is often the whole point, independent of any
+  test.</li>
+<li><strong>Something safe to hand over.</strong> Redacted, body-dropped, filtered to the
+  requests that matter — a file that can go in an issue or a PR without
+  carrying a session.</li>
+</ul>
+<p>All three are the same operation with different flags, which is why this is one
+script rather than three.</p></div>
 <div class="note" data-for="s-spec-4-4"><div class="note-head"><span class="note-ico">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC §4.4</span></div><textarea class="note-ta" data-key="s-spec-4-4" data-label="§4.4 create_har.py — write a derived HAR" data-part="0002 Har Analysis Toolkit" rows="1" placeholder="Tap to add a note for this point…"></textarea></div>
 </article>
 <article class="sec" id="s-spec-4-5">
@@ -695,11 +714,20 @@ are how a scraper gets a regression test.</p></div>
 parameters, response-size deltas. The way to answer "what actually changed when
 I clicked page 2" and, later, "did the site change under my scraper".</p>
 <p><strong>Matching is one-to-one and deterministic</strong>, because a capture routinely repeats
-the same method and URL. The key is <code>(method, scheme, host, port, path, sorted query pairs, page ref,
-hash of request body)</code> — the <strong>authority is part of request identity</strong>, so two
-captures that hit the same path on different hosts, or on http and https, are not
-silently paired; entries sharing a key are paired in capture order,
-first with first, second with second. Any left over on either side is reported as
+the same method and URL. The key is <code>(method, scheme, host, port, path, query pairs in captured order,
+hash of request body)</code>. Three things about it are deliberate:</p>
+<ul>
+<li><strong>The authority is part of request identity</strong>, so two captures hitting the
+  same path on different hosts, or on http and https, are never silently paired.</li>
+<li><strong>Query pairs keep their captured order</strong> rather than being sorted. Sorting
+  would make <code>?tag=a&amp;tag=b</code> and <code>?tag=b&amp;tag=a</code> the same request, and order
+  carries meaning for signed requests and for some APIs.</li>
+<li><strong><code>pageref</code> is not in the key.</strong> HAR page ids are local to one capture, so
+  including it would make the same request in two captures — which is exactly
+  what a diff is looking for — appear as a removal plus an addition. Page
+  context is reportable, never part of identity.</li>
+</ul>
+<p>Entries sharing a key are paired in capture order, first with first, second with second. Any left over on either side is reported as
 an addition or a removal — never paired with something that merely resembles it,
 which is how a diff tool starts inventing changes that did not happen. A pairing
 that relied on ordering alone is reported as such, so a reader can tell a real
@@ -766,13 +794,40 @@ against the index alone: flat memory, sub-second, independent of HAR size
 (SC3). Each index line also records the byte <code>offset</code> and <code>length</code> of its entry
 in the original file, so a body-touching command seeks directly to one entry and
 parses only that object.</p>
-<p>The index is derived data, keyed by a <strong>content digest</strong> of the HAR — not size
-and mtime, which a copy-preserving move or a coarse filesystem clock can carry
-across two different files, after which the tool would seek to offsets belonging
-to a capture it is no longer reading. The digest is stored in the sidecar's
-header line and verified before any offset is trusted; a mismatch rebuilds.</p>
-<p>The sidecar is <strong>written to a temporary file and atomically renamed</strong>, exactly as
-derived HARs are (§ 4.4). Without that, an interrupted index build leaves a
+<p>The index records both a cheap identity (size and mtime) and a <strong>content
+digest</strong>, and they are checked at different moments — because verifying a digest
+means reading the whole HAR, which is the exact cost the index exists to avoid:</p>
+<table>
+<thead>
+<tr>
+<th>Command</th>
+<th>Check</th>
+<th>Cost</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Index-only (filters, statistics, listings)</td>
+<td>size and mtime; a mismatch rebuilds</td>
+<td>free — and never touches the HAR, which is what makes SC3 hold</td>
+</tr>
+<tr>
+<td>Anything that seeks by byte offset (a body read, <code>--show</code>, <code>--extract-body</code>)</td>
+<td>the full content digest, once per run, before the first seek</td>
+<td>one pass over a file this command is already reading</td>
+</tr>
+</tbody>
+</table>
+<p>Size and mtime alone are not a content identity — a copy-preserving move or a
+coarse filesystem clock can carry both across two different files. That is why
+no <em>offset</em> is ever trusted on their word. But metadata queries do not use
+offsets, so making them pay for a digest would buy nothing and cost the whole
+premise of the sidecar.</p>
+<p>The sidecar is <strong>written to a temporary file in the HAR's own directory and
+atomically renamed</strong>, exactly as derived HARs are (§ 4.4). The same directory
+matters: <code>rename</code> is only atomic within a filesystem, so a temporary file in the
+system temp directory fails with <code>EXDEV</code> the moment the capture lives on another
+mount — which is the normal case for a large HAR on an external disk. Without that, an interrupted index build leaves a
 truncated JSONL whose header line — and therefore whose digest — is perfectly
 valid, so the next run would trust it and quietly answer every query from a
 partial index. A digest over the input cannot detect damage to the output. It is
@@ -801,7 +856,24 @@ offsets plus a streaming re-scan for bodies: slower, same interface.</p></div>
 accept identical selection flags, implemented once in <code>_filters.py</code>. A session
 that learns to select entries once can filter, export, prune and replay the same
 set. Divergent flag sets across sibling scripts would be the most likely way for
-this toolkit to become annoying.</p></div>
+this toolkit to become annoying.</p>
+<p><strong>Every script is discoverable the same way.</strong> The rubric asks for this as a
+<em>should</em> (<code>R-HELP-1</code>: argparse with <code>--help</code>, documented invocation, a <code>main()</code>
+guard), which means it is convention rather than contract. This skill treats it
+as a contract, because a toolkit of six scripts is exactly where "mostly
+consistent" stops being good enough:</p>
+<ul>
+<li><code>--help</code> on every script, listing every flag with its meaning — the first
+  thing a session or a person runs, and enough on its own to use the tool.</li>
+<li>The shared selection flags are spelled identically everywhere, and the
+  repo's canonical names (<code>--input</code>, <code>--output</code>, <code>--output-dir</code>, <code>--limit</code>,
+  <code>--json</code>) mean the same thing they mean in every other arsenal script.</li>
+<li>Every script accepts <code>--json</code>, so output can be chained rather than parsed
+  out of a table.</li>
+<li>SKILL.md documents each script's invocation, and a test asserts that the
+  sibling scripts expose the same selection flags — the drift this section
+  exists to prevent is checked, not just asked for.</li>
+</ul></div>
 <div class="note" data-for="s-spec-5-2"><div class="note-head"><span class="note-ico">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC §5.2</span></div><textarea class="note-ta" data-key="s-spec-5-2" data-label="§5.2 One filter grammar, shared" data-part="0002 Har Analysis Toolkit" rows="1" placeholder="Tap to add a note for this point…"></textarea></div>
 </article>
 <article class="sec" id="s-spec-5-3">
@@ -814,10 +886,35 @@ deterministically (URLs keep host, path and a middle ellipsis; the tail always
 survives) and the trailing line reports both what was dropped and that the
 budget, not the limit, did the dropping. The budget applies to every default
 mode, not only the entry list. <code>--json</code> gives machine-readable output for
-chaining. Bodies never reach stdout except through <code>--show</code> (truncated) or
-<code>--extract-body</code> (to files). This is SC1, and it is a hard rule rather than a
-default, because the entire value of the toolkit is that the big data stays out
-of context.</p></div>
+chaining, and stays valid under the budget by dropping whole entries from a
+fixed envelope rather than cutting bytes mid-structure. Bodies never reach
+stdout except through <code>--show</code> (truncated) or <code>--extract-body</code> (to files).</p>
+<p><strong>The budget is a default for the reader, never a ceiling on the tool.</strong> A
+reduced answer that cannot be expanded is a tool that decides for you what you
+were allowed to ask, and this one is meant to be useful rather than
+semi-informative. Two escapes, both first-class:</p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--limit 0</code></td>
+<td>No row cap and no byte budget. Everything that matched, on stdout, deliberately</td>
+</tr>
+<tr>
+<td><code>--output PATH</code></td>
+<td>The complete result written to a file, uncapped, in full fidelity — the budget applies to what is <em>rendered for a reader</em>, not to what the tool can produce. With <code>--json</code>, this is the machine-readable full set</td>
+</tr>
+</tbody>
+</table>
+<p>So the rule is: <strong>small by default, complete on request.</strong> The default exists
+because the common case is a session that needs an answer rather than a dump,
+and the escapes exist because the uncommon case is real — piping every matching
+entry into another tool, or saving a full listing to read properly.</p></div>
 <div class="note" data-for="s-spec-5-3"><div class="note-head"><span class="note-ico">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC §5.3</span></div><textarea class="note-ta" data-key="s-spec-5-3" data-label="§5.3 Output discipline" data-part="0002 Har Analysis Toolkit" rows="1" placeholder="Tap to add a note for this point…"></textarea></div>
 </article>
 <article class="sec" id="s-spec-5-4">
@@ -827,14 +924,54 @@ artifact: derived HARs, extracted entries, repro snippets. It covers
 <code>Authorization</code>, <code>Proxy-Authorization</code>, <code>Cookie</code>, <code>Set-Cookie</code>, <code>X-API-Key</code> and
 neighbours, plus query and body parameters whose names match a token pattern
 (<code>token</code>, <code>key</code>, <code>secret</code>, <code>session</code>, <code>auth</code>, <code>password</code>, <code>signature</code>).</p>
+<p>Header <strong>names are matched case-insensitively</strong> everywhere — the deny-list,
+<code>--has-header</code>, and <code>--headers</code> all normalise to lower case before comparing.
+HTTP header names are case-insensitive by definition, so a deny-list that
+matched literally would let <code>AUTHORIZATION</code> through while catching
+<code>Authorization</code>: a redaction bypass that depends on nothing but an exporter's
+capitalisation.</p>
+<p><strong>Redacted values keep a fingerprint, or <code>--headers</code> stops working.</strong> Replacing
+every sensitive value with a bare <code>&lt;redacted&gt;</code> makes two different <code>Authorization</code>
+values compare equal — which destroys the constant-versus-varying split that is
+the whole point of <code>--headers</code> as an auth-discovery tool. So a redacted value is
+written <code>&lt;redacted:ab12cd34&gt;</code>, where the suffix is a truncated digest of the
+value under a salt generated per index and never stored. Equal values stay equal,
+different values stay different, and nothing about the original is recoverable.
+Cookies keep their names and flags for the same reason; only values are replaced.</p>
 <p><strong>The serialized URL is redacted too, and it is the easy one to miss.</strong> A token
 in a query parameter is caught by the rule above when the parameter is read as a
 parameter — and survives untouched inside <code>request.url</code>, which carries the whole
 query string inline and is written into the sidecar, every listing, and every
 generated reproduction. So the same token pattern is applied to the URL's own
-query pairs, and <strong>userinfo is stripped entirely</strong>: <code>https://user:pass@host/path</code>
-becomes <code>https://host/path</code>, because a password in a URL is a credential that no
-name-matching rule would ever have looked for.
+query pairs, and the URL is re-serialized preserving <strong>pair order, repeated
+names, and each value's percent-encoding</strong> — a redaction pass that normalises the
+query silently changes the request it claims to describe.</p>
+<p>Two more parts of a URL carry credentials that no name-matching rule would look
+for, and both are removed by default from every artifact:</p>
+<ul>
+<li><strong>Userinfo.</strong> <code>https://user:pass@host/path</code> becomes <code>https://host/path</code>.</li>
+<li><strong>Fragment.</strong> <code>https://host/callback#access_token=…</code> loses the fragment
+  entirely. OAuth implicit flows put live tokens there, and a fragment is not
+  a query parameter, so the token pattern above would never have seen it.</li>
+</ul>
+<p><code>--secrets</code> may restore userinfo and fragment <strong>only in <code>create_repro.py</code>
+output</strong>, where a working reproduction is the entire point. They are never
+restored into a sidecar, a listing, or a derived HAR, because those are files
+that get committed.</p></div>
+<div class="note" data-for="s-spec-5-4"><div class="note-head"><span class="note-ico">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC §5.4</span></div><textarea class="note-ta" data-key="s-spec-5-4" data-label="§5.4 Redaction" data-part="0002 Har Analysis Toolkit" rows="1" placeholder="Tap to add a note for this point…"></textarea></div>
+</article>
+<article class="sec" id="s-spec-full-fidelity-when-the-work-need">
+<h4 class="sec-h"><span class="chip">▸</span><span class="sec-title">Full fidelity, when the work needs it</span></h4>
+<div class="sec-body"><p>Redaction is the default because the failure it prevents — a live session token
+in a committed file — is silent and expensive. It is not a wall. <code>--secrets</code>
+returns real values, and it exists precisely for the case where the work needs
+them: reproducing a login means the real <code>Cookie</code> header, the real
+<code>Authorization</code>, and the exact <code>Set-Cookie</code> sequence the server returned, because
+a scraper that authenticates cannot be written from redacted material.</p>
+<p>The rule is the same shape as § 5.3's: <strong>safe by default, complete on request.</strong>
+What <code>--secrets</code> changes is only what is <em>written</em>; <code>--show</code> on a single entry
+has always printed real values, because that is an operator reading their own
+capture on their own machine.
 Interactive <code>--show</code> of a single entry prints real values — that is the operator
 reading their own capture. <code>--secrets</code> opts out where a working reproduction is
 the point.</p>
@@ -848,14 +985,38 @@ than a promise that cannot be kept. The command prints a one-line warning naming
 the output directory the first time it writes in a run, and the skill's
 documentation says plainly that extracted bodies are not fixtures until someone
 has looked at them.</p></div>
-<div class="note" data-for="s-spec-5-4"><div class="note-head"><span class="note-ico">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC §5.4</span></div><textarea class="note-ta" data-key="s-spec-5-4" data-label="§5.4 Redaction" data-part="0002 Har Analysis Toolkit" rows="1" placeholder="Tap to add a note for this point…"></textarea></div>
+<div class="note" data-for="s-spec-full-fidelity-when-the-work-need"><div class="note-head"><span class="note-ico">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC › Full fidelity, when the work needs it</span></div><textarea class="note-ta" data-key="s-spec-full-fidelity-when-the-work-need" data-label="Full fidelity, when the work needs it" data-part="0002 Har Analysis Toolkit" rows="1" placeholder="Tap to add a note for this point…"></textarea></div>
 </article>
 <article class="sec" id="s-spec-5-5">
 <h4 class="sec-h"><span class="chip">§5.5</span><span class="sec-title">Packaging</span></h4>
-<div class="sec-body"><p>One skill, <code>har</code>, in a new <code>web</code> section defaulting off. Consumers who never
-scrape pay nothing; <code>--sections web</code> or <code>--profile all</code> installs it. Scripts are
+<div class="sec-body"><p>One skill, <code>har</code>, in a new <code>extract</code> section defaulting off. Consumers who
+never scrape pay nothing; <code>--sections extract</code> or <code>--profile all</code> installs it.</p>
+<p>The section is named for what its members do — getting structured data out of
+artifacts you did not produce — rather than for the web, which would read as
+frontend tooling and mislead in both directions: a consumer skipping it because
+they do no web development, or installing it expecting some. <code>har</code> is the first
+member; a JSON/HTML/XML reader and the binary-format readers are the obvious
+next ones, and none of them are scraping in themselves. Scripts are
 stdlib-only <code>python3</code> so they run in a vendored consumer repo with no
-dependency step, consistent with every other shipped script.</p></div>
+dependency step, consistent with every other shipped script.</p>
+<p><strong>A section nobody installed still has to be findable.</strong> Default-off is right —
+a repo that never scrapes should pay nothing — but it creates the obvious
+failure: the consumer who needs the tool a year later never learns it exists.
+Two mechanisms, both reusing machinery that is already there, and neither
+costing a resident token:</p>
+<ul>
+<li><strong>The upgrade banner announces it once.</strong> <code>/init</code> and <code>check_update.sh</code>
+  already print the CHANGELOG entries between a consumer's installed version and
+  the one they are updating to, on every update. A new section named in that
+  entry reaches every consumer automatically, exactly once, whether or not they
+  install it.</li>
+<li><strong><code>init.py --list-sections</code> answers on demand.</strong> Prints every section that
+  ships, which are on for this repo, what each contains, and the one line that
+  enables one. This is the thing to reach for when a session finds itself
+  wanting a tool it does not have.</li>
+</ul>
+<p>Both are changes to <code>init</code>, not to this skill, and are tracked as delivery
+stage 0 (§ 9) so the section does not ship before the means of discovering it.</p></div>
 <div class="note" data-for="s-spec-5-5"><div class="note-head"><span class="note-ico">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC §5.5</span></div><textarea class="note-ta" data-key="s-spec-5-5" data-label="§5.5 Packaging" data-part="0002 Har Analysis Toolkit" rows="1" placeholder="Tap to add a note for this point…"></textarea></div>
 </article>
 <article class="sec" id="s-spec-6">
@@ -887,7 +1048,12 @@ dependency step, consistent with every other shipped script.</p></div>
 <tr>
 <td>Repro output</td>
 <td>Generic curl + Python <code>requests</code></td>
-<td>The natural end of a scraping session; coupling to another repo's connector schema would make an arsenal skill track a foreign format</td>
+<td>The natural end of a scraping session; coupling to any one project's connector schema would make a standalone skill track a foreign format</td>
+</tr>
+<tr>
+<td>Full-text index over bodies</td>
+<td><strong>Not in v1</strong></td>
+<td>The sidecar is a <em>metadata</em> index — every scalar and header, no bodies. A second index over decoded body text would make <code>--response-match</code> instant, at the cost of a file near the size of the capture, a second invalidation story, and tokenisation choices that silently decide what "matches" means. Filters usually narrow to a handful of entries before any body is read, so scanning those by offset is fast enough. It stays additive: the sidecar format can gain one later without a redesign</td>
 </tr>
 </tbody>
 </table></div>
@@ -899,9 +1065,11 @@ dependency step, consistent with every other shipped script.</p></div>
 <li>Replay (§ 4.7) — deferred, shape fixed.</li>
 <li>PDF/XLSX/image parsing — extracted to disk, parsed by sibling skills.</li>
 <li>Capturing HARs. The tool reads captures; producing them is the browser's job.</li>
-<li>Connector-descriptor generation for <code>integral-job-search</code>.</li>
 <li>HAR <em>editing</em> as an interactive activity. <code>create_har.py</code> derives a new file;
   it does not offer general-purpose mutation.</li>
+<li>Emitting any project's own parser or connector format. The toolkit's output is
+  generic — entries, bodies, curl, <code>requests</code> — and translating that into a
+  particular schema belongs to whatever owns the schema.</li>
 </ul></div>
 <div class="note" data-for="s-spec-7"><div class="note-head"><span class="note-ico">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC §7</span></div><textarea class="note-ta" data-key="s-spec-7" data-label="§7 Out of scope" data-part="0002 Har Analysis Toolkit" rows="1" placeholder="Tap to add a note for this point…"></textarea></div>
 </article>
@@ -925,6 +1093,11 @@ dependency step, consistent with every other shipped script.</p></div>
 <td>Exporter variance (missing bodies, missing <code>_resourceType</code>)</td>
 <td>Medium — looks like "not found"</td>
 <td><code>validate_har.py</code> capability report; "no body captured" reported distinctly from "no match"</td>
+</tr>
+<tr>
+<td>Encoding handling is wrong somewhere in the chain</td>
+<td>High — a wrong body or a missed match, both silent</td>
+<td>Encoding is where this tool most plausibly fails quietly, so it gets its own test matrix rather than incidental coverage: base64 and identity bodies; <code>gzip</code>, <code>deflate</code> and <code>br</code> content-encodings; charsets that are not UTF-8 (<code>latin-1</code>, <code>shift_jis</code>) declared in <code>Content-Type</code> and <em>undeclared</em>; a body whose declared charset is wrong; BOM-prefixed JSON; lone surrogates and invalid byte sequences; and multi-byte characters positioned before a later entry, which is the only case that exercises byte-versus-character offsets. Every one of them asserts the same thing: the tool either returns the right bytes or says plainly that it cannot decode them — never a silently mangled string</td>
 </tr>
 <tr>
 <td>Filter grammar sprawls across scripts</td>
@@ -971,8 +1144,12 @@ dependency step, consistent with every other shipped script.</p></div>
 </thead>
 <tbody>
 <tr>
+<td>0</td>
+<td><code>init.py --list-sections</code>, and a CHANGELOG entry naming the new section — the discovery path (§ 5.5), which lands before or with stage 1</td>
+</tr>
+<tr>
 <td>1</td>
-<td><code>web</code> section registered; skill scaffold; <code>validate_har.py</code>; index builder with offset tests</td>
+<td><code>extract</code> section registered; skill scaffold; <code>validate_har.py</code>; index builder with offset tests</td>
 </tr>
 <tr>
 <td>2</td>
