@@ -1,0 +1,743 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>claude-arsenal — Specification (annotatable)</title>
+<style>
+:root{
+  --bg:#fbfaf7;--fg:#1d1c1a;--muted:#6b6862;--line:#e6e2da;
+  --card:#ffffff;--accent:#0f766e;--accent2:#b45309;--chip:#eef2f1;
+  --note:#fff8ec;--note-line:#f0cf94;--code:#f3f1ec;--link:#0f766e;
+}
+@media(prefers-color-scheme:dark){
+  :root{
+    --bg:#16151a;--fg:#e9e7e2;--muted:#a09c95;--line:#2e2c33;
+    --card:#1e1d23;--accent:#5eead4;--accent2:#fbbf24;--chip:#26313055;
+    --note:#251f10;--note-line:#6b531c;--code:#26242b;--link:#5eead4;
+  }
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;background:var(--bg);color:var(--fg);
+  font:17px/1.62 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  padding-bottom:96px;
+}
+.wrap{max-width:760px;margin:0 auto;padding:0 16px}
+a{color:var(--link)}
+code{background:var(--code);padding:.08em .35em;border-radius:5px;font-size:.86em;
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;word-break:break-word}
+pre{background:var(--code);padding:12px;border-radius:8px;overflow:auto}
+pre code{background:none;padding:0}
+.topbar{position:sticky;top:0;z-index:30;background:var(--bg);
+  border-bottom:1px solid var(--line);backdrop-filter:saturate(120%) blur(6px)}
+.topbar .wrap{display:flex;align-items:center;gap:8px;padding-top:10px;padding-bottom:10px}
+.brand{font-weight:700;font-size:16px;margin-right:auto;letter-spacing:.2px}
+.brand small{font-weight:500;color:var(--muted);display:block;font-size:11px;letter-spacing:0}
+.btn{appearance:none;border:1px solid var(--line);background:var(--card);color:var(--fg);
+  border-radius:9px;padding:8px 11px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap}
+.btn:active{transform:translateY(1px)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+@media(prefers-color-scheme:dark){.btn.primary{color:#06201d}}
+.count{font-size:12px;color:var(--muted);white-space:nowrap;font-weight:600}
+.savestate{font-size:12px;font-weight:700;white-space:nowrap;transition:color .2s}
+.savestate.ok{color:var(--accent)}
+.savestate.warn{color:#b45309}
+@media(prefers-color-scheme:dark){.savestate.warn{color:#fbbf24}}
+.statusbar{border-bottom:1px solid var(--line);background:var(--card)}
+.statusbar .wrap{padding:7px 16px;font-size:12px;color:var(--muted)}
+#warnbar{display:none;background:#fff4e5;border-bottom:1px solid var(--note-line);color:#7c2d12}
+#warnbar .wrap{padding:10px 16px;font-size:13px;line-height:1.45}
+@media(prefers-color-scheme:dark){#warnbar{background:#3a2a0e;color:#fde68a;border-color:#6b531c}}
+.hero{padding:22px 0 6px}
+.hero h1{font-size:25px;line-height:1.2;margin:.1em 0 .3em}
+.hero p{color:var(--muted);margin:.3em 0}
+.help{border:1px solid var(--line);background:var(--card);border-radius:12px;padding:4px 14px;margin:14px 0}
+.help summary{cursor:pointer;font-weight:600;padding:10px 0}
+.help ul{margin:.2em 0 1em;padding-left:1.2em}
+.help li{margin:.3em 0}
+.toc{border:1px solid var(--line);background:var(--card);border-radius:12px;padding:4px 14px;margin:14px 0}
+.toc>summary{cursor:pointer;font-weight:700;padding:11px 0;font-size:15px}
+.toc-part{margin:2px 0;border-top:1px solid var(--line)}
+.toc-part>summary{cursor:pointer;padding:9px 2px;font-weight:600;font-size:14px}
+.toc-part ul{margin:.1em 0 .7em;padding-left:1.1em}
+.toc-part li{margin:.22em 0;font-size:13.5px;line-height:1.4}
+.toc-part a{text-decoration:none}
+.toc-part a:hover{text-decoration:underline}
+.part{margin:26px 0}
+.part-title{font-size:21px;line-height:1.25;border-bottom:2px solid var(--accent);
+  padding-bottom:8px;margin:18px 0 8px;position:sticky;top:54px;background:var(--bg);z-index:10}
+.badge{display:inline-block;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;
+  vertical-align:middle;padding:3px 7px;border-radius:6px;margin-right:8px}
+.badge.spec,.badge.plan{background:var(--chip);color:var(--accent)}
+.badge.workspace{background:var(--chip);color:var(--accent2)}
+.sec{padding:6px 0 2px;border-bottom:1px solid var(--line);scroll-margin-top:100px}
+.sec:last-child{border-bottom:none}
+.sec-h{margin:10px 0 6px;line-height:1.3;position:sticky;top:94px;background:var(--bg);z-index:5;padding-top:6px}
+h3.sec-h{font-size:18.5px}
+h4.sec-h{font-size:16.5px;color:var(--fg)}
+.chip{display:inline-block;font-family:ui-monospace,Menlo,monospace;font-size:12px;font-weight:700;
+  color:var(--accent);background:var(--chip);border-radius:6px;padding:2px 7px;margin-right:8px;vertical-align:middle}
+.sec-title{vertical-align:middle}
+.sec-body{margin:.2em 0 .4em}
+.sec-body p{margin:.55em 0}
+.sec-body ul,.sec-body ol{margin:.5em 0;padding-left:1.35em}
+.sec-body li{margin:.3em 0}
+.sec-body blockquote{margin:.7em 0;padding:.5em .9em;border-left:3px solid var(--accent2);
+  background:var(--code);border-radius:0 8px 8px 0;color:var(--fg)}
+.sec-body blockquote p{margin:.3em 0}
+.sec-body table{border-collapse:collapse;width:100%;font-size:13.5px;margin:.6em 0;display:block;overflow-x:auto}
+.sec-body th,.sec-body td{border:1px solid var(--line);padding:6px 9px;text-align:left;vertical-align:top}
+.sec-body th{background:var(--chip);font-weight:700}
+.sec-body strong{font-weight:700}
+.note{background:var(--note);border:1px solid var(--note-line);border-radius:10px;
+  padding:8px 11px;margin:10px 0 16px}
+.note-head{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+.note-ico{color:var(--accent2);font-weight:800}
+.note-label{font-size:12px;font-weight:700;color:var(--accent2);text-transform:uppercase;letter-spacing:.05em}
+.note-ref{margin-left:auto;font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:var(--muted)}
+.note-ta{width:100%;border:none;background:transparent;color:var(--fg);font:inherit;font-size:15.5px;
+  resize:none;outline:none;line-height:1.5;padding:2px 0;overflow:hidden;min-height:1.6em}
+.note-ta::placeholder{color:var(--muted);opacity:.8}
+.note.filled{box-shadow:0 0 0 2px var(--note-line) inset}
+.fab{position:fixed;right:14px;bottom:16px;z-index:40;display:flex;flex-direction:column;gap:8px;align-items:flex-end}
+.fab .btn{box-shadow:0 4px 14px #0003}
+.modal{position:fixed;inset:0;z-index:60;background:#0008;display:none;align-items:center;justify-content:center;padding:16px}
+.modal.open{display:flex}
+.modal-card{background:var(--card);border:1px solid var(--line);border-radius:14px;max-width:680px;width:100%;
+  max-height:86vh;display:flex;flex-direction:column;padding:16px}
+.modal-card h3{margin:.1em 0 .5em}
+.modal-card p{color:var(--muted);font-size:13.5px;margin:.2em 0 .6em}
+.modal-card textarea{width:100%;flex:1;min-height:220px;border:1px solid var(--line);border-radius:8px;
+  background:var(--bg);color:var(--fg);font:13px/1.5 ui-monospace,Menlo,monospace;padding:10px;resize:vertical}
+.modal-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.hidden-input{display:none}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:84px;z-index:70;background:#111;color:#fff;
+  padding:9px 14px;border-radius:9px;font-size:13px;opacity:0;transition:opacity .25s;pointer-events:none}
+.toast.show{opacity:.96}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="wrap">
+    <div class="brand">claude-arsenal — Specification<small>annotatable reader · 2026-08-30</small></div>
+    <span class="savestate ok" id="savestate">✓ Auto-saving</span>
+    <button class="btn primary" id="btn-export">Save / Export</button>
+  </div>
+</div>
+<div class="statusbar"><div class="wrap"><span class="count" id="count">0 / 12 notes</span><span class="hint"> · notes save automatically; <strong>Save / Export</strong> keeps a file you can send back</span></div></div>
+<div id="warnbar"><div class="wrap"><strong>Heads up —</strong> this browser isn't storing your notes automatically (private/incognito mode or restricted file view). Tap <strong>Save / Export</strong> regularly.</div></div>
+
+<div class="wrap">
+  <div class="hero">
+    <h1>claude-arsenal specification</h1>
+    <p>Read at your own pace and leave a note on any point you want to discuss.</p>
+  </div>
+  <details class="help">
+    <summary>How to annotate (tap)</summary>
+    <ul>
+      <li>Tap the note field under any section and type. Each note is tagged so your feedback maps to an exact point.</li>
+      <li><strong>Notes save automatically</strong> in this browser as you type.</li>
+      <li><strong>Save / Export</strong> downloads a Markdown file of your notes — the copy to send back. Tap whenever you pause, especially on a phone.</li>
+      <li><strong>Import</strong> reloads notes from a file you exported earlier (after clearing the browser or switching devices).</li>
+      <li><strong>Clear</strong> erases every note in this browser. Export first.</li>
+    </ul>
+  </details>
+  <details class="toc" open><summary>Contents</summary>
+<details class="toc-part">
+<summary>0002 Har Analysis Toolkit Plan</summary><ul>
+<li><a href="#s-spec-intro">Preamble &amp; scope</a></li>
+<li><a href="#s-spec-technical-solution">Technical solution</a></li>
+<li><a href="#s-spec-architecture-overview">Architecture overview</a></li>
+<li><a href="#s-spec-module-contracts">Module contracts</a></li>
+<li><a href="#s-spec-state-changes">State changes</a></li>
+<li><a href="#s-spec-technology-choices">Technology choices</a></li>
+<li><a href="#s-spec-out-of-scope">Out of scope</a></li>
+<li><a href="#s-spec-implementation-tasks">Implementation tasks</a></li>
+<li><a href="#s-spec-merge-order-and-prs">Merge order and PRs</a></li>
+<li><a href="#s-spec-fixtures-built-by-hand-never-cap">Fixtures — built by hand, never captured</a></li>
+<li><a href="#s-spec-evidence-log">Evidence log</a></li>
+<li><a href="#s-spec-sign-off">Sign-off</a></li>
+</ul></details>
+</details>
+  <section class="part">
+<h2 class="part-title"><span class="badge spec">Specification</span>0002 Har Analysis Toolkit Plan</h2>
+<article class="sec" id="s-spec-intro">
+<h3 class="sec-h"><span class="chip">overview</span><span class="sec-title">Preamble &amp; scope</span></h3>
+<div class="sec-body"><p><strong>Date</strong>: 2026-08-30
+<strong>Specification</strong>: <code>docs/design/0002-har-analysis-toolkit.md</code> (merged, v2.9.0)
+<strong>Prerequisite</strong>: <code>docs/design/0003-capability-discovery.md</code> — spec stage 0</p>
+<blockquote>
+<p>The spec fixes <em>what</em> the toolkit does and <em>why</em> each guarantee exists. This
+plan fixes <em>what gets built in what order</em>, the module boundaries the six
+scripts share, and the measurable gate that proves each stage landed. Every
+gate here is derived from a numbered success criterion or risk in the spec;
+where a gate is not a number, the spec's own wording says why it cannot be.</p>
+</blockquote></div>
+<div class="note" data-for="s-spec-intro"><div class="note-head"><span class="note-ico">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC · intro</span></div><textarea class="note-ta" data-key="s-spec-intro" data-label="Preamble &amp; scope" data-part="0002 Har Analysis Toolkit Plan" rows="1" placeholder="Tap to add a note for this point…"></textarea></div>
+</article>
+<article class="sec" id="s-spec-technical-solution">
+<h3 class="sec-h"><span class="chip">▸</span><span class="sec-title">Technical solution</span></h3>
+<div class="note" data-for="s-spec-technical-solution"><div class="note-head"><span class="note-ico">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC › Technical solution</span></div><textarea class="note-ta" data-key="s-spec-technical-solution" data-label="Technical solution" data-part="0002 Har Analysis Toolkit Plan" rows="1" placeholder="Tap to add a note for this point…"></textarea></div>
+</article>
+<article class="sec" id="s-spec-architecture-overview">
+<h4 class="sec-h"><span class="chip">▸</span><span class="sec-title">Architecture overview</span></h4>
+<div class="sec-body"><pre><code>plugins/core/skills/har/            section: extract   (default OFF)
+  SKILL.md                          invocation of every script; the 2-command recipe
+  references/
+    filters.md                      the full selection grammar, one place
+    recipes.md                      capture → endpoint → repro, worked
+  scripts/
+    _harlib.py                      load, scan, decode, redact — no CLI
+    _filters.py                     the selection grammar — no CLI
+    validate_har.py                 well-formedness + capability report
+    analyze_har.py                  overview, --index, stats, endpoints, headers …
+    query_har.py                    select / show / extract
+    create_repro.py                 entry → curl | python
+    create_har.py                   derived HAR
+    compare_har.py                  two captures → differences
+  evals/
+plugins/core/tests/
+  har_test.sh                       bash wrapper: runs the CLI-level assertions
+  har/test_*.py                     pytest: scanner, decoding, redaction units
+  har/fixtures/*.har                hand-built, committed, no real data
+</code></pre>
+<p>Two non-CLI modules and six commands, which is the split the spec's § 5.2
+requires: the selection grammar exists once, so <code>query</code>, <code>create_har</code> and
+<code>compare</code> cannot drift, and a seventh script (<code>run_har.py</code>) is an addition
+rather than a refactor.</p></div>
+<div class="note" data-for="s-spec-architecture-overview"><div class="note-head"><span class="note-ico">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC › Architecture overview</span></div><textarea class="note-ta" data-key="s-spec-architecture-overview" data-label="Architecture overview" data-part="0002 Har Analysis Toolkit Plan" rows="1" placeholder="Tap to add a note for this point…"></textarea></div>
+</article>
+<article class="sec" id="s-spec-module-contracts">
+<h4 class="sec-h"><span class="chip">▸</span><span class="sec-title">Module contracts</span></h4>
+<div class="sec-body"><p><code>_harlib.py</code> — everything that touches the file itself:</p>
+<table>
+<thead>
+<tr>
+<th>Function</th>
+<th>Contract</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>scan_entries(path) -&gt; Iterator[EntrySpan]</code></td>
+<td>Byte offsets and lengths of each <code>log.entries[i]</code> object. <strong>Binary mode throughout</strong>; brace depth tracked with string/escape awareness. Never decodes.</td>
+</tr>
+<tr>
+<td><code>read_entry(path, span) -&gt; dict</code></td>
+<td>Parse exactly one entry from its span. Callers verify the digest once per run before the first call.</td>
+</tr>
+<tr>
+<td><code>decode_body(content) -&gt; Decoded</code></td>
+<td>The whole encoding chain in one place: base64 → content-encoding (<code>gzip</code>/<code>deflate</code>/<code>br</code>) → charset (declared, sniffed, BOM). Returns <code>Decoded(text, bytes, charset, source, ok, reason)</code>. <strong>Never raises on undecodable input and never returns a mangled string</strong> — <code>ok=False</code> with a reason is the honest answer (spec § 8, encoding risk).</td>
+</tr>
+<tr>
+<td><code>redact(value, kind, salt) -&gt; str</code></td>
+<td><code>&lt;redacted:ab12cd34&gt;</code> — truncated digest under a per-index salt that is never stored. Equal values stay equal.</td>
+</tr>
+<tr>
+<td><code>redact_url(url, salt) -&gt; str</code></td>
+<td>Token-shaped query pairs redacted <strong>in place</strong>, preserving pair order, repeated names and each value's percent-encoding; userinfo and fragment removed.</td>
+</tr>
+<tr>
+<td><code>budget(lines, cap=4096) -&gt; tuple[list[str], str]</code></td>
+<td>SC1, applied once for every command rather than per script.</td>
+</tr>
+</tbody>
+</table>
+<p><code>_filters.py</code> — one <code>Selection</code> dataclass built from a shared argparse group,
+one <code>matches(index_row, har_reader) -&gt; bool</code>. Index-only predicates are
+evaluated first and a body-touching predicate is only reached if the cheap ones
+passed, which is what keeps SC3 true for every filter that does not name a body.</p></div>
+<div class="note" data-for="s-spec-module-contracts"><div class="note-head"><span class="note-ico">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC › Module contracts</span></div><textarea class="note-ta" data-key="s-spec-module-contracts" data-label="Module contracts" data-part="0002 Har Analysis Toolkit Plan" rows="1" placeholder="Tap to add a note for this point…"></textarea></div>
+</article>
+<article class="sec" id="s-spec-state-changes">
+<h4 class="sec-h"><span class="chip">▸</span><span class="sec-title">State changes</span></h4>
+<div class="sec-body"><table>
+<thead>
+<tr>
+<th>Artifact</th>
+<th>Change</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>&lt;file&gt;.har.index.jsonl</code></td>
+<td>CREATE / REPLACE</td>
+<td>Same-directory temp + atomic rename. <code>.gitignore</code> convention documented in SKILL.md.</td>
+</tr>
+<tr>
+<td><code>--output-dir</code> files</td>
+<td>CREATE</td>
+<td>Extracted bodies. Destination resolved and verified inside the directory before any write.</td>
+</tr>
+<tr>
+<td><code>--output</code> HAR</td>
+<td>CREATE</td>
+<td>Refuses a destination that resolves to the input.</td>
+</tr>
+<tr>
+<td>The input HAR</td>
+<td>never written</td>
+<td>Asserted by a test that compares the input digest before and after every command.</td>
+</tr>
+</tbody>
+</table></div>
+<div class="note" data-for="s-spec-state-changes"><div class="note-head"><span class="note-ico">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC › State changes</span></div><textarea class="note-ta" data-key="s-spec-state-changes" data-label="State changes" data-part="0002 Har Analysis Toolkit Plan" rows="1" placeholder="Tap to add a note for this point…"></textarea></div>
+</article>
+<article class="sec" id="s-spec-technology-choices">
+<h4 class="sec-h"><span class="chip">▸</span><span class="sec-title">Technology choices</span></h4>
+<div class="sec-body"><table>
+<thead>
+<tr>
+<th>Choice</th>
+<th>Justification</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>stdlib only (<code>json</code>, <code>base64</code>, <code>gzip</code>, <code>zlib</code>, <code>re</code>, <code>urllib</code>, <code>html.parser</code>)</td>
+<td>The skill is vendored into consumer repos with no dependency step, like every other shipped script.</td>
+</tr>
+<tr>
+<td><code>brotli</code> optional, degraded honestly</td>
+<td>Not in the stdlib. Absent, a <code>br</code> body reports <code>ok=False, reason="brotli unavailable"</code> rather than failing the run — an unreadable body is one entry's problem, not the command's.</td>
+</tr>
+<tr>
+<td><code>--css</code> via a small <code>html.parser</code> subset, <code>--xpath</code> via <code>xml.etree</code></td>
+<td>Full CSS/XPath would mean a dependency. The subset (<code>tag</code>, <code>.class</code>, <code>#id</code>, descendant) covers the scraping case; anything beyond it is refused <strong>by name</strong>, not silently mismatched.</td>
+</tr>
+<tr>
+<td>pytest for the unit layer</td>
+<td>Already in the dev group. The scanner and the encoding matrix are unit problems; asserting them through a CLI in bash would test less and cost more. Bash keeps the CLI-level layer, so <code>make test</code> discovers everything through <code>har_test.sh</code>.</td>
+</tr>
+</tbody>
+</table></div>
+<div class="note" data-for="s-spec-technology-choices"><div class="note-head"><span class="note-ico">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC › Technology choices</span></div><textarea class="note-ta" data-key="s-spec-technology-choices" data-label="Technology choices" data-part="0002 Har Analysis Toolkit Plan" rows="1" placeholder="Tap to add a note for this point…"></textarea></div>
+</article>
+<article class="sec" id="s-spec-out-of-scope">
+<h4 class="sec-h"><span class="chip">▸</span><span class="sec-title">Out of scope</span></h4>
+<div class="sec-body"><p>Per spec § 7: replay, PDF/XLSX/image parsing, HAR capture, interactive editing,
+and any project-specific connector format. Also out of scope for this plan: the
+full-text body index (spec § 6 — additive later, no redesign).</p></div>
+<div class="note" data-for="s-spec-out-of-scope"><div class="note-head"><span class="note-ico">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC › Out of scope</span></div><textarea class="note-ta" data-key="s-spec-out-of-scope" data-label="Out of scope" data-part="0002 Har Analysis Toolkit Plan" rows="1" placeholder="Tap to add a note for this point…"></textarea></div>
+</article>
+<article class="sec" id="s-spec-implementation-tasks">
+<h3 class="sec-h"><span class="chip">▸</span><span class="sec-title">Implementation tasks</span></h3>
+<div class="sec-body"><table>
+<thead>
+<tr>
+<th>T#</th>
+<th>Description</th>
+<th>Size</th>
+<th>Depends</th>
+<th>Gate</th>
+<th>Tests</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>T1</td>
+<td><code>extract</code> section registered; <code>har</code> skill scaffold (SKILL.md + argparse stubs); fixture HARs; <code>validate_har.py</code> (well-formedness + capability report)</td>
+<td>M</td>
+<td>stage 0</td>
+<td><code>resident_token_delta_without_extract == 0</code> and <code>validate_har_fixture_pass_rate == 1.0</code></td>
+<td><code>test_validate_reports_absent_bodies_as_capability_not_error</code> in <code>har/test_validate.py</code> — a fixture with no <code>content.text</code> validates OK and reports bodies absent · <code>test_section_extract_defaults_off</code> in <code>plugins/core/tests/skill_sections_test.sh</code></td>
+</tr>
+<tr>
+<td>T2</td>
+<td><code>_harlib.py</code>: byte-offset scanner, <code>--verify-offsets</code>, decode chain, redaction primitives</td>
+<td>L</td>
+<td>T1</td>
+<td><code>offset_reparse_mismatches == 0</code> over all fixtures and <code>encoding_matrix_pass_rate == 1.0</code> (14 cases)</td>
+<td><code>test_scan_entries_multibyte_before_entry_returns_correct_span</code> in <code>har/test_scanner.py</code> — a literal é before entry 3 does not shift its offset · <code>test_decode_body_undeclared_shift_jis_reports_charset_source</code> · <code>test_redact_url_preserves_pair_order_and_encoding</code></td>
+</tr>
+<tr>
+<td>T3</td>
+<td><code>analyze_har.py --index</code>: sidecar writer, the § 5.1 schema, size+mtime vs digest policy, atomic rename</td>
+<td>L</td>
+<td>T2</td>
+<td><code>index_build_seconds_200mb &lt;= 30</code> and <code>index_build_peak_rss_mb &lt;= 400</code> (SC2); <code>index_only_query_seconds &lt;= 1</code> (SC3)</td>
+<td><code>test_index_only_query_never_opens_the_har</code> in <code>har/test_index.py</code> — the HAR handle count stays 0 for a metadata query · <code>test_interrupted_index_build_leaves_previous_sidecar</code></td>
+</tr>
+<tr>
+<td>T4</td>
+<td><code>_filters.py</code> + <code>query_har.py</code> select and show (<code>--list-only</code>, <code>--show</code>, <code>--json</code>, <code>--fields</code>)</td>
+<td>L</td>
+<td>T3</td>
+<td><code>max_default_output_bytes &lt;= 4096</code> across every mode (SC1) and <code>commands_to_locate_endpoint &lt;= 2</code> (SC4)</td>
+<td><code>test_json_output_under_budget_still_parses</code> in <code>har/test_query.py</code> — truncation drops whole entries, never bytes · <code>test_no_cache_excludes_only_false_not_unknown</code> · <code>test_limit_zero_removes_both_caps</code></td>
+</tr>
+<tr>
+<td>T5</td>
+<td><code>query_har.py</code> extract modes: <code>--extract-body</code>, <code>--json-path</code>, <code>--css</code>, <code>--xpath</code>, <code>--schema</code></td>
+<td>M</td>
+<td>T4</td>
+<td><code>extracted_files_outside_output_dir == 0</code> for the hostile-path fixture</td>
+<td><code>test_extract_body_traversal_path_stays_inside_output_dir</code> in <code>har/test_extract.py</code> — <code>..%2f</code> and a reserved device name both land inside · <code>test_schema_of_paginated_json_reports_shape_not_content</code></td>
+</tr>
+<tr>
+<td>T6</td>
+<td><code>analyze_har.py</code> remaining modes: overview, <code>--stats</code>, <code>--errors</code>, <code>--endpoints</code>, <code>--headers</code>, <code>--cookies</code>, <code>--redirects</code>, <code>--slowest</code>/<code>--largest</code>, <code>--websockets</code></td>
+<td>L</td>
+<td>T4</td>
+<td><code>endpoint_rows_for_paginated_fixture == 1</code> with <code>page</code> reported varying and <code>loc</code> constant</td>
+<td><code>test_endpoints_collapses_pagination_to_one_template</code> in <code>har/test_analyze.py</code> · <code>test_headers_split_constant_from_varying_under_redaction</code> — fingerprints keep unequal values unequal</td>
+</tr>
+<tr>
+<td>T7</td>
+<td><code>create_repro.py</code> — curl and python emitters</td>
+<td>M</td>
+<td>T4</td>
+<td><code>adversarial_repro_shell_executions == 0</code> (hostile header/body fixture) and SC6 reproduces the captured status</td>
+<td><code>test_repro_curl_body_starting_with_at_is_data_not_file</code> in <code>har/test_repro.py</code> · <code>test_repro_python_uses_repr_not_concatenation</code> · <code>test_secrets_flag_restores_userinfo_only_in_repro</code></td>
+</tr>
+<tr>
+<td>T8</td>
+<td><code>create_har.py</code> — derived captures</td>
+<td>M</td>
+<td>T4</td>
+<td><code>secrets_in_bounded_fields_of_output == 0</code> (SC5) and <code>derived_har_validates == true</code></td>
+<td><code>test_derived_har_drops_bodies_by_default</code> in <code>har/test_create.py</code> · <code>test_output_equal_to_input_is_refused_before_open</code></td>
+</tr>
+<tr>
+<td>T9</td>
+<td><code>compare_har.py</code> — deterministic one-to-one pairing</td>
+<td>M</td>
+<td>T4</td>
+<td><code>invented_changes_on_repeat_url_fixture == 0</code></td>
+<td><code>test_repeated_identical_requests_pair_in_capture_order</code> in <code>har/test_compare.py</code> · <code>test_pageref_absent_from_identity_key</code></td>
+</tr>
+<tr>
+<td>T10</td>
+<td>SKILL.md complete, <code>references/filters.md</code> + <code>recipes.md</code>, evals, flag-parity test</td>
+<td>M</td>
+<td>T5, T6, T7, T8, T9</td>
+<td><code>resident_listing_tokens_with_extract &lt;= 130</code> (SC7) and <code>shared_flag_parity_failures == 0</code></td>
+<td><code>test_sibling_scripts_expose_identical_selection_flags</code> in <code>har/test_parity.py</code> — the drift § 5.2 exists to prevent is checked, not asked for</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Status legend</strong>: ☐ not started · ◐ in progress · ☑ merged</p></div>
+<div class="note" data-for="s-spec-implementation-tasks"><div class="note-head"><span class="note-ico">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC › Implementation tasks</span></div><textarea class="note-ta" data-key="s-spec-implementation-tasks" data-label="Implementation tasks" data-part="0002 Har Analysis Toolkit Plan" rows="1" placeholder="Tap to add a note for this point…"></textarea></div>
+</article>
+<article class="sec" id="s-spec-merge-order-and-prs">
+<h4 class="sec-h"><span class="chip">▸</span><span class="sec-title">Merge order and PRs</span></h4>
+<div class="sec-body"><table>
+<thead>
+<tr>
+<th>PR</th>
+<th>Tasks</th>
+<th>Spec stage</th>
+<th>Bump</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>T1, T2, T3</td>
+<td>1</td>
+<td>minor — new section, new skill</td>
+</tr>
+<tr>
+<td>2</td>
+<td>T4, T5</td>
+<td>2</td>
+<td>minor</td>
+</tr>
+<tr>
+<td>3</td>
+<td>T6</td>
+<td>3</td>
+<td>minor</td>
+</tr>
+<tr>
+<td>4</td>
+<td>T7, T8</td>
+<td>4</td>
+<td>minor</td>
+</tr>
+<tr>
+<td>5</td>
+<td>T9, T10</td>
+<td>5</td>
+<td>minor</td>
+</tr>
+</tbody>
+</table>
+<p>Stacked in order; each rebased with <code>--onto</code> after the one below it merges.
+Every PR bumps, for the reason recorded in <code>0003-capability-discovery.md</code> § 9 —
+each one changes what a consumer vendors, and CI requires it. <strong>Stages 1–3 are
+the useful minimum</strong>; if the night runs out, it runs out after PR 3 and the
+toolkit still answers "which request has my data" and "how do I iterate it".</p></div>
+<div class="note" data-for="s-spec-merge-order-and-prs"><div class="note-head"><span class="note-ico">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC › Merge order and PRs</span></div><textarea class="note-ta" data-key="s-spec-merge-order-and-prs" data-label="Merge order and PRs" data-part="0002 Har Analysis Toolkit Plan" rows="1" placeholder="Tap to add a note for this point…"></textarea></div>
+</article>
+<article class="sec" id="s-spec-fixtures-built-by-hand-never-cap">
+<h4 class="sec-h"><span class="chip">▸</span><span class="sec-title">Fixtures — built by hand, never captured</span></h4>
+<div class="sec-body"><p>One file per problem, so a failure names its cause:</p>
+<table>
+<thead>
+<tr>
+<th>Fixture</th>
+<th>Exercises</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>basic.har</code></td>
+<td>Chrome-shaped capture: pages, XHR, redirect chain, a paginated JSON API</td>
+</tr>
+<tr>
+<td><code>traps.har</code></td>
+<td>base64 body, absent body, absent <code>_fromCache</code>, a websocket with frames, <code>?tag=a&amp;tag=b</code>, two <code>Set-Cookie</code> headers</td>
+</tr>
+<tr>
+<td><code>encodings.har</code></td>
+<td>The 14-case matrix of spec § 8: base64/identity; gzip/deflate/br; latin-1 and shift_jis declared and undeclared; a wrongly-declared charset; BOM-prefixed JSON; a lone surrogate; <strong>a literal multi-byte character before a later entry</strong></td>
+</tr>
+<tr>
+<td><code>hostile.har</code></td>
+<td><code>../</code> and separators in a path, a body starting with <code>@</code>, shell metacharacters in a header value, a reserved device name as a filename stem, userinfo and an <code>#access_token=</code> fragment</td>
+</tr>
+<tr>
+<td><code>compare_a.har</code> / <code>compare_b.har</code></td>
+<td>The same URL requested three times, one status change, one added parameter</td>
+</tr>
+</tbody>
+</table>
+<p>Hand-built because a real capture carries a real session, and because each
+fixture exists to make one claim in the spec falsifiable.</p></div>
+<div class="note" data-for="s-spec-fixtures-built-by-hand-never-cap"><div class="note-head"><span class="note-ico">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC › Fixtures — built by hand, never captured</span></div><textarea class="note-ta" data-key="s-spec-fixtures-built-by-hand-never-cap" data-label="Fixtures — built by hand, never captured" data-part="0002 Har Analysis Toolkit Plan" rows="1" placeholder="Tap to add a note for this point…"></textarea></div>
+</article>
+<article class="sec" id="s-spec-evidence-log">
+<h3 class="sec-h"><span class="chip">▸</span><span class="sec-title">Evidence log</span></h3>
+<div class="sec-body"><p><code>execution</code> appends one row per task as it lands: measured value, the exact
+command, the commit SHA, and environment provenance. A gated task is not done
+until its row is complete and the measured value meets the gate.</p>
+<table>
+<thead>
+<tr>
+<th>T#</th>
+<th>Gate</th>
+<th>Measured</th>
+<th>Command</th>
+<th>Commit</th>
+<th>Env</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Benchmark provenance.</strong> SC2 and SC3 are wall-clock and RSS numbers, so they
+are meaningless without saying where they ran. Each is measured on the CI
+<code>ubuntu-22.04</code> runner against a generated 200 MB / 50k-entry capture built by
+the benchmark script itself, and the row records the runner and the generator
+seed. A local measurement may be recorded alongside; it never replaces the CI
+one.</p></div>
+<div class="note" data-for="s-spec-evidence-log"><div class="note-head"><span class="note-ico">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC › Evidence log</span></div><textarea class="note-ta" data-key="s-spec-evidence-log" data-label="Evidence log" data-part="0002 Har Analysis Toolkit Plan" rows="1" placeholder="Tap to add a note for this point…"></textarea></div>
+</article>
+<article class="sec" id="s-spec-sign-off">
+<h3 class="sec-h"><span class="chip">▸</span><span class="sec-title">Sign-off</span></h3>
+<div class="sec-body"><ul>
+<li>[ ] Spec § 2 success criteria SC1–SC7 each have a passing gate row</li>
+<li>[ ] Spec § 8 risks each have either a test or an explicit accepted-risk note</li>
+<li>[ ] <code>make context-budget</code> resident delta is 0 for repos without <code>extract</code></li>
+<li>[ ] <code>make audit</code> listing headroom ≥ 50 % with <code>extract</code> installed</li>
+<li>[ ] Annotations from the reader applied, or the reviewer's go-ahead recorded</li>
+</ul></div>
+<div class="note" data-for="s-spec-sign-off"><div class="note-head"><span class="note-ico">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC › Sign-off</span></div><textarea class="note-ta" data-key="s-spec-sign-off" data-label="Sign-off" data-part="0002 Har Analysis Toolkit Plan" rows="1" placeholder="Tap to add a note for this point…"></textarea></div>
+</article>
+</section>
+</div>
+
+<div class="fab">
+  <button class="btn" id="btn-top" title="Back to top">↑ Top</button>
+  <button class="btn" id="btn-import">Import</button>
+  <button class="btn" id="btn-clear">Clear</button>
+  <button class="btn primary" id="btn-export2">💾 Save / Export</button>
+</div>
+<input type="file" id="file-import" class="hidden-input" accept=".md,.markdown,.json,text/markdown,application/json">
+
+<div class="modal" id="modal">
+  <div class="modal-card">
+    <h3>Your notes</h3>
+    <p>Downloaded as a Markdown file. You can also copy the text below and paste it back.</p>
+    <textarea id="modal-ta" readonly></textarea>
+    <div class="modal-actions">
+      <button class="btn primary" id="modal-copy">Copy</button>
+      <button class="btn" id="modal-dl">Download again</button>
+      <button class="btn" id="modal-close">Close</button>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+<script>var SPEC_SEED_NOTES={};</script>
+<script>
+(function(){
+  var NS = 'claude-arsenal-spec-v1:';
+  var tas = Array.prototype.slice.call(document.querySelectorAll('.note-ta'));
+
+  function autoGrow(t){t.style.height='auto';t.style.height=(t.scrollHeight)+'px';}
+  function setFilled(t){var box=t.closest('.note');if(box){box.classList.toggle('filled',t.value.trim()!=='');}}
+  function updateCount(){
+    var n=0;tas.forEach(function(t){if(t.value.trim()!=='')n++;});
+    var el=document.getElementById('count');if(el){el.textContent=n+' / '+tas.length+' notes';}
+    return n;
+  }
+  var lsOK=true,dirty=false;
+  try{localStorage.setItem('__vs__','1');localStorage.removeItem('__vs__');}catch(e){lsOK=false;}
+  var WARN='⚠ Not saving — tap Save / Export';
+  function nowStamp(){var d=new Date();return pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds());}
+  function setState(txt,cls){var el=document.getElementById('savestate');if(el){el.textContent=txt;el.className='savestate '+(cls||'');}}
+  window.addEventListener('beforeunload',function(e){if(!lsOK&&dirty){e.preventDefault();e.returnValue='';}});
+
+  var saveTimers={};
+  function save(t){
+    if(!lsOK){dirty=true;setState(WARN,'warn');return;}
+    var k=NS+t.dataset.key;
+    try{
+      if(t.value.trim()===''){localStorage.removeItem(k);}else{localStorage.setItem(k,t.value);}
+      dirty=true;setState('✓ Saved '+nowStamp(),'ok');
+    }catch(e){lsOK=false;document.getElementById('warnbar').style.display='block';setState(WARN,'warn');}
+  }
+  var SEED=(typeof SPEC_SEED_NOTES!=='undefined')?SPEC_SEED_NOTES:{};
+  tas.forEach(function(t){
+    try{var v=localStorage.getItem(NS+t.dataset.key);
+        if(v!=null){t.value=v;}
+        else if(Object.prototype.hasOwnProperty.call(SEED,t.dataset.key)){
+          var sv=SEED[t.dataset.key];if(typeof sv==='string'){t.value=sv;}}}catch(e){}
+    autoGrow(t);setFilled(t);
+    t.addEventListener('input',function(){
+      autoGrow(t);setFilled(t);updateCount();
+      clearTimeout(saveTimers[t.dataset.key]);
+      saveTimers[t.dataset.key]=setTimeout(function(){save(t);},350);
+    });
+    t.addEventListener('blur',function(){save(t);});
+  });
+  updateCount();
+  if(lsOK){setState('✓ Auto-saving','ok');}else{document.getElementById('warnbar').style.display='block';setState(WARN,'warn');}
+
+  function toast(msg){var el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');setTimeout(function(){el.classList.remove('show');},1900);}
+  function pad(n){return n<10?'0'+n:''+n;}
+  function today(){var d=new Date();return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());}
+
+  function buildExport(){
+    var byPart={},order=[],data={},n=0;
+    tas.forEach(function(t){
+      var v=t.value.trim();if(v==='')return;n++;
+      data[t.dataset.key]=t.value;
+      var part=t.dataset.part||'Other';
+      if(!byPart[part]){byPart[part]=[];order.push(part);}
+      byPart[part].push({label:t.dataset.label,ref:keyFromDom(t.dataset.key,t),note:t.value});
+    });
+    var lines=['# Specification notes','','_Exported '+today()+' · '+n+' note'+(n===1?'':'s')+'._','',
+      '> Send this file back to continue the review. Notes are embedded as data at the bottom','> so importing this file restores them in the reader.',''];
+    order.forEach(function(part){
+      lines.push('## '+part,'');
+      byPart[part].forEach(function(it){
+        lines.push('**'+it.label+'**  `'+it.ref+'`');
+        it.note.split('\n').forEach(function(ln){lines.push('> '+ln);});
+        lines.push('');
+      });
+    });
+    lines.push('<!-- SPEC-NOTES-DATA');
+    lines.push(JSON.stringify(data));
+    lines.push('-->');
+    return{text:lines.join('\n'),n:n};
+  }
+  function keyFromDom(domkey,t){var box=t.closest('.note');var r=box?box.querySelector('.note-ref'):null;return r?r.textContent:domkey;}
+
+  function download(name,text){
+    try{var blob=new Blob([text],{type:'text/markdown'});var url=URL.createObjectURL(blob);
+        var a=document.createElement('a');a.href=url;a.download=name;
+        document.body.appendChild(a);a.click();
+        setTimeout(function(){URL.revokeObjectURL(url);a.remove();},1500);return true;}catch(e){return false;}
+  }
+
+  var modal=document.getElementById('modal');
+  var modalTa=document.getElementById('modal-ta');
+  function openModal(text){modalTa.value=text;modal.classList.add('open');}
+  function closeModal(){modal.classList.remove('open');}
+
+  document.getElementById('btn-export').addEventListener('click',function(){
+    var r=buildExport();
+    if(r.n===0){toast('No notes yet — add some first.');return;}
+    var name='claude-arsenal-spec-notes-'+today()+'.md';
+    download(name,r.text);openModal(r.text);
+    if(navigator.clipboard){navigator.clipboard.writeText(r.text).then(function(){},function(){});}
+    dirty=false;setState('✓ Backup saved '+nowStamp(),'ok');
+    toast('Exported '+r.n+' note'+(r.n===1?'':'s'));
+  });
+  document.getElementById('btn-export2').addEventListener('click',function(){document.getElementById('btn-export').click();});
+
+  document.getElementById('modal-copy').addEventListener('click',function(){
+    modalTa.select();var ok=false;try{ok=document.execCommand('copy');}catch(e){}
+    if(navigator.clipboard){navigator.clipboard.writeText(modalTa.value).then(function(){},function(){});ok=true;}
+    toast(ok?'Copied to clipboard':'Select the text and copy');
+  });
+  document.getElementById('modal-dl').addEventListener('click',function(){download('claude-arsenal-spec-notes-'+today()+'.md',modalTa.value);toast('Download started');});
+  document.getElementById('modal-close').addEventListener('click',closeModal);
+  modal.addEventListener('click',function(e){if(e.target===modal)closeModal();});
+
+  // buildExport only ever writes strings, but an import takes whatever the file
+  // holds: an object arrives as "[object Object]", an array joins on commas,
+  // null becomes "null" — each then persisted over notes the reviewer wrote.
+  // The realistic trigger is a hand-edited or truncated export, not an attack;
+  // it just fails in the least useful way, silently and destructively. Skip
+  // anything that is not a string and say how many were skipped.
+  function applyData(obj){
+    var applied=0,skipped=0;
+    tas.forEach(function(t){
+      if(!Object.prototype.hasOwnProperty.call(obj,t.dataset.key))return;
+      var v=obj[t.dataset.key];
+      if(typeof v!=='string'){skipped++;return;}
+      t.value=v;save(t);autoGrow(t);setFilled(t);applied++;
+    });
+    updateCount();return{applied:applied,skipped:skipped};
+  }
+  document.getElementById('file-import').addEventListener('change',function(e){
+    var f=e.target.files[0];if(!f)return;
+    var rd=new FileReader();
+    rd.onload=function(){
+      var txt=String(rd.result||'');var obj=null;
+      // Last LINE-ANCHORED marker. A plain lastIndexOf lands inside the JSON
+      // string of a note that mentions the marker, and the import then reads as
+      // a corrupt file — the same defect the Python seeder had (#239).
+      var mk=/^[ \t]*<!--[ \t]*SPEC-NOTES-DATA/gm,mm=null,mx;
+      while((mx=mk.exec(txt))!==null){mm=mx;}
+      try{
+        if(mm){var after=txt.slice(mm.index+mm[0].length);var jstart=after.indexOf('{');var jend=after.lastIndexOf('}');
+                  if(jstart>=0&&jend>jstart){obj=JSON.parse(after.slice(jstart,jend+1));}}
+        else{obj=JSON.parse(txt);}
+      }catch(err){obj=null;}
+      if(!obj){toast('Could not read notes from that file');return;}
+      var r=applyData(obj);
+      toast('Imported '+r.applied+' note'+(r.applied===1?'':'s')+
+            (r.skipped?' ('+r.skipped+' skipped — not text)':''));
+    };
+    rd.readAsText(f);e.target.value='';
+  });
+  document.getElementById('btn-import').addEventListener('click',function(){document.getElementById('file-import').click();});
+
+  document.getElementById('btn-clear').addEventListener('click',function(){
+    if(!confirm('Clear ALL notes from this browser? Export first if you want to keep them.'))return;
+    tas.forEach(function(t){t.value='';save(t);autoGrow(t);setFilled(t);});
+    updateCount();toast('All notes cleared');
+  });
+
+  document.getElementById('btn-top').addEventListener('click',function(){window.scrollTo({top:0,behavior:'smooth'});});
+})();
+</script>
+</body>
+</html>

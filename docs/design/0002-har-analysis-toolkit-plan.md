@@ -1,0 +1,165 @@
+# Plan: HAR analysis toolkit
+
+**Date**: 2026-08-30
+**Specification**: `docs/design/0002-har-analysis-toolkit.md` (merged, v2.9.0)
+**Prerequisite**: `docs/design/0003-capability-discovery.md` — spec stage 0
+
+> The spec fixes *what* the toolkit does and *why* each guarantee exists. This
+> plan fixes *what gets built in what order*, the module boundaries the six
+> scripts share, and the measurable gate that proves each stage landed. Every
+> gate here is derived from a numbered success criterion or risk in the spec;
+> where a gate is not a number, the spec's own wording says why it cannot be.
+
+---
+
+## Technical solution
+
+### Architecture overview
+
+```
+plugins/core/skills/har/            section: extract   (default OFF)
+  SKILL.md                          invocation of every script; the 2-command recipe
+  references/
+    filters.md                      the full selection grammar, one place
+    recipes.md                      capture → endpoint → repro, worked
+  scripts/
+    _harlib.py                      load, scan, decode, redact — no CLI
+    _filters.py                     the selection grammar — no CLI
+    validate_har.py                 well-formedness + capability report
+    analyze_har.py                  overview, --index, stats, endpoints, headers …
+    query_har.py                    select / show / extract
+    create_repro.py                 entry → curl | python
+    create_har.py                   derived HAR
+    compare_har.py                  two captures → differences
+  evals/
+plugins/core/tests/
+  har_test.sh                       bash wrapper: runs the CLI-level assertions
+  har/test_*.py                     pytest: scanner, decoding, redaction units
+  har/fixtures/*.har                hand-built, committed, no real data
+```
+
+Two non-CLI modules and six commands, which is the split the spec's § 5.2
+requires: the selection grammar exists once, so `query`, `create_har` and
+`compare` cannot drift, and a seventh script (`run_har.py`) is an addition
+rather than a refactor.
+
+### Module contracts
+
+`_harlib.py` — everything that touches the file itself:
+
+| Function | Contract |
+|---|---|
+| `scan_entries(path) -> Iterator[EntrySpan]` | Byte offsets and lengths of each `log.entries[i]` object. **Binary mode throughout**; brace depth tracked with string/escape awareness. Never decodes. |
+| `read_entry(path, span) -> dict` | Parse exactly one entry from its span. Callers verify the digest once per run before the first call. |
+| `decode_body(content) -> Decoded` | The whole encoding chain in one place: base64 → content-encoding (`gzip`/`deflate`/`br`) → charset (declared, sniffed, BOM). Returns `Decoded(text, bytes, charset, source, ok, reason)`. **Never raises on undecodable input and never returns a mangled string** — `ok=False` with a reason is the honest answer (spec § 8, encoding risk). |
+| `redact(value, kind, salt) -> str` | `<redacted:ab12cd34>` — truncated digest under a per-index salt that is never stored. Equal values stay equal. |
+| `redact_url(url, salt) -> str` | Token-shaped query pairs redacted **in place**, preserving pair order, repeated names and each value's percent-encoding; userinfo and fragment removed. |
+| `budget(lines, cap=4096) -> tuple[list[str], str]` | SC1, applied once for every command rather than per script. |
+
+`_filters.py` — one `Selection` dataclass built from a shared argparse group,
+one `matches(index_row, har_reader) -> bool`. Index-only predicates are
+evaluated first and a body-touching predicate is only reached if the cheap ones
+passed, which is what keeps SC3 true for every filter that does not name a body.
+
+### State changes
+
+| Artifact | Change | Notes |
+|---|---|---|
+| `<file>.har.index.jsonl` | CREATE / REPLACE | Same-directory temp + atomic rename. `.gitignore` convention documented in SKILL.md. |
+| `--output-dir` files | CREATE | Extracted bodies. Destination resolved and verified inside the directory before any write. |
+| `--output` HAR | CREATE | Refuses a destination that resolves to the input. |
+| The input HAR | never written | Asserted by a test that compares the input digest before and after every command. |
+
+### Technology choices
+
+| Choice | Justification |
+|---|---|
+| stdlib only (`json`, `base64`, `gzip`, `zlib`, `re`, `urllib`, `html.parser`) | The skill is vendored into consumer repos with no dependency step, like every other shipped script. |
+| `brotli` optional, degraded honestly | Not in the stdlib. Absent, a `br` body reports `ok=False, reason="brotli unavailable"` rather than failing the run — an unreadable body is one entry's problem, not the command's. |
+| `--css` via a small `html.parser` subset, `--xpath` via `xml.etree` | Full CSS/XPath would mean a dependency. The subset (`tag`, `.class`, `#id`, descendant) covers the scraping case; anything beyond it is refused **by name**, not silently mismatched. |
+| pytest for the unit layer | Already in the dev group. The scanner and the encoding matrix are unit problems; asserting them through a CLI in bash would test less and cost more. Bash keeps the CLI-level layer, so `make test` discovers everything through `har_test.sh`. |
+
+### Out of scope
+
+Per spec § 7: replay, PDF/XLSX/image parsing, HAR capture, interactive editing,
+and any project-specific connector format. Also out of scope for this plan: the
+full-text body index (spec § 6 — additive later, no redesign).
+
+---
+
+## Implementation tasks
+
+| T# | Description | Size | Depends | Gate | Tests |
+|----|-------------|------|---------|------|-------|
+| T1 | `extract` section registered; `har` skill scaffold (SKILL.md + argparse stubs); fixture HARs; `validate_har.py` (well-formedness + capability report) | M | stage 0 | `resident_token_delta_without_extract == 0` and `validate_har_fixture_pass_rate == 1.0` | `test_validate_reports_absent_bodies_as_capability_not_error` in `har/test_validate.py` — a fixture with no `content.text` validates OK and reports bodies absent · `test_section_extract_defaults_off` in `plugins/core/tests/skill_sections_test.sh` |
+| T2 | `_harlib.py`: byte-offset scanner, `--verify-offsets`, decode chain, redaction primitives | L | T1 | `offset_reparse_mismatches == 0` over all fixtures and `encoding_matrix_pass_rate == 1.0` (14 cases) | `test_scan_entries_multibyte_before_entry_returns_correct_span` in `har/test_scanner.py` — a literal é before entry 3 does not shift its offset · `test_decode_body_undeclared_shift_jis_reports_charset_source` · `test_redact_url_preserves_pair_order_and_encoding` |
+| T3 | `analyze_har.py --index`: sidecar writer, the § 5.1 schema, size+mtime vs digest policy, atomic rename | L | T2 | `index_build_seconds_200mb <= 30` and `index_build_peak_rss_mb <= 400` (SC2); `index_only_query_seconds <= 1` (SC3) | `test_index_only_query_never_opens_the_har` in `har/test_index.py` — the HAR handle count stays 0 for a metadata query · `test_interrupted_index_build_leaves_previous_sidecar` |
+| T4 | `_filters.py` + `query_har.py` select and show (`--list-only`, `--show`, `--json`, `--fields`) | L | T3 | `max_default_output_bytes <= 4096` across every mode (SC1) and `commands_to_locate_endpoint <= 2` (SC4) | `test_json_output_under_budget_still_parses` in `har/test_query.py` — truncation drops whole entries, never bytes · `test_no_cache_excludes_only_false_not_unknown` · `test_limit_zero_removes_both_caps` |
+| T5 | `query_har.py` extract modes: `--extract-body`, `--json-path`, `--css`, `--xpath`, `--schema` | M | T4 | `extracted_files_outside_output_dir == 0` for the hostile-path fixture | `test_extract_body_traversal_path_stays_inside_output_dir` in `har/test_extract.py` — `..%2f` and a reserved device name both land inside · `test_schema_of_paginated_json_reports_shape_not_content` |
+| T6 | `analyze_har.py` remaining modes: overview, `--stats`, `--errors`, `--endpoints`, `--headers`, `--cookies`, `--redirects`, `--slowest`/`--largest`, `--websockets` | L | T4 | `endpoint_rows_for_paginated_fixture == 1` with `page` reported varying and `loc` constant | `test_endpoints_collapses_pagination_to_one_template` in `har/test_analyze.py` · `test_headers_split_constant_from_varying_under_redaction` — fingerprints keep unequal values unequal |
+| T7 | `create_repro.py` — curl and python emitters | M | T4 | `adversarial_repro_shell_executions == 0` (hostile header/body fixture) and SC6 reproduces the captured status | `test_repro_curl_body_starting_with_at_is_data_not_file` in `har/test_repro.py` · `test_repro_python_uses_repr_not_concatenation` · `test_secrets_flag_restores_userinfo_only_in_repro` |
+| T8 | `create_har.py` — derived captures | M | T4 | `secrets_in_bounded_fields_of_output == 0` (SC5) and `derived_har_validates == true` | `test_derived_har_drops_bodies_by_default` in `har/test_create.py` · `test_output_equal_to_input_is_refused_before_open` |
+| T9 | `compare_har.py` — deterministic one-to-one pairing | M | T4 | `invented_changes_on_repeat_url_fixture == 0` | `test_repeated_identical_requests_pair_in_capture_order` in `har/test_compare.py` · `test_pageref_absent_from_identity_key` |
+| T10 | SKILL.md complete, `references/filters.md` + `recipes.md`, evals, flag-parity test | M | T5, T6, T7, T8, T9 | `resident_listing_tokens_with_extract <= 130` (SC7) and `shared_flag_parity_failures == 0` | `test_sibling_scripts_expose_identical_selection_flags` in `har/test_parity.py` — the drift § 5.2 exists to prevent is checked, not asked for |
+
+**Status legend**: ☐ not started · ◐ in progress · ☑ merged
+
+### Merge order and PRs
+
+| PR | Tasks | Spec stage | Bump |
+|---|---|---|---|
+| 1 | T1, T2, T3 | 1 | minor — new section, new skill |
+| 2 | T4, T5 | 2 | minor |
+| 3 | T6 | 3 | minor |
+| 4 | T7, T8 | 4 | minor |
+| 5 | T9, T10 | 5 | minor |
+
+Stacked in order; each rebased with `--onto` after the one below it merges.
+Every PR bumps, for the reason recorded in `0003-capability-discovery.md` § 9 —
+each one changes what a consumer vendors, and CI requires it. **Stages 1–3 are
+the useful minimum**; if the night runs out, it runs out after PR 3 and the
+toolkit still answers "which request has my data" and "how do I iterate it".
+
+### Fixtures — built by hand, never captured
+
+One file per problem, so a failure names its cause:
+
+| Fixture | Exercises |
+|---|---|
+| `basic.har` | Chrome-shaped capture: pages, XHR, redirect chain, a paginated JSON API |
+| `traps.har` | base64 body, absent body, absent `_fromCache`, a websocket with frames, `?tag=a&tag=b`, two `Set-Cookie` headers |
+| `encodings.har` | The 14-case matrix of spec § 8: base64/identity; gzip/deflate/br; latin-1 and shift_jis declared and undeclared; a wrongly-declared charset; BOM-prefixed JSON; a lone surrogate; **a literal multi-byte character before a later entry** |
+| `hostile.har` | `../` and separators in a path, a body starting with `@`, shell metacharacters in a header value, a reserved device name as a filename stem, userinfo and an `#access_token=` fragment |
+| `compare_a.har` / `compare_b.har` | The same URL requested three times, one status change, one added parameter |
+
+Hand-built because a real capture carries a real session, and because each
+fixture exists to make one claim in the spec falsifiable.
+
+---
+
+## Evidence log
+
+`execution` appends one row per task as it lands: measured value, the exact
+command, the commit SHA, and environment provenance. A gated task is not done
+until its row is complete and the measured value meets the gate.
+
+| T# | Gate | Measured | Command | Commit | Env |
+|----|------|----------|---------|--------|-----|
+| | | | | | |
+
+**Benchmark provenance.** SC2 and SC3 are wall-clock and RSS numbers, so they
+are meaningless without saying where they ran. Each is measured on the CI
+`ubuntu-22.04` runner against a generated 200 MB / 50k-entry capture built by
+the benchmark script itself, and the row records the runner and the generator
+seed. A local measurement may be recorded alongside; it never replaces the CI
+one.
+
+---
+
+## Sign-off
+
+- [ ] Spec § 2 success criteria SC1–SC7 each have a passing gate row
+- [ ] Spec § 8 risks each have either a test or an explicit accepted-risk note
+- [ ] `make context-budget` resident delta is 0 for repos without `extract`
+- [ ] `make audit` listing headroom ≥ 50 % with `extract` installed
+- [ ] Annotations from the reader applied, or the reviewer's go-ahead recorded
