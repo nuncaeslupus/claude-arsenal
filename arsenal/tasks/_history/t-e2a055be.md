@@ -4,6 +4,7 @@ title: "Make the map unasked-for: session-start step 0c and the volunteering rul
 priority: 5
 deps: [t-c230a7b5]
 tags: [CORE]
+status: merged
 ---
 
 Design: `docs/design/0003-capability-discovery.md` § 5–7.
