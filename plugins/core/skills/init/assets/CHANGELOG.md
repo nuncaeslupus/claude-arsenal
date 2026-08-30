@@ -18,6 +18,33 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [2.8.0] - 2026-08-30
+
+- **`/init` now asks what kind of project this is, and installs only those
+  skills.** Vendoring used to be all-or-nothing: every repo carried all 17 shipped
+  skills, and each one costs a row in the resident skills listing of every
+  session forever, whether or not it ever triggers. Skills are now grouped into
+  sections, chosen at install:
+  - `core` — init, continue, queue-add, queue-status, github, session-end.
+    Always installed; the vendored session protocol names these directly.
+  - `workflow` — specify, design, execution, review, ship, gate-check.
+  - `python` — python-bootstrap, pypi-release, coverage-gaps, dep-upgrade,
+    mutmut-report.
+- **New flags: `init.py --profile {minimal,general,python,all}` and
+  `--sections a,b`.** The profile is a starting point, written out as an
+  editable `[skills]` table in `arsenal/config.toml`. A misspelled section name
+  is a hard error rather than a quietly smaller install.
+- **Switching a section off is durable.** Set `python = false` under `[skills]`
+  and the next `/init` prunes those skills and keeps them pruned — previously,
+  deleting a vendored skill by hand was undone by the next session's
+  `init.py --silent`.
+- **Upgrading changes nothing on its own.** A repo whose `config.toml` predates
+  `[skills]` keeps exactly the skills it already has: the sections in use are
+  detected and recorded, and the shipped defaults (which have `python` off) are
+  applied only to a genuinely fresh install. No skill disappears from an
+  existing repo without someone editing the config.
+- A repo that opts out of `python` drops 5 of 17 skills from its listing.
+
 ## [2.7.0] - 2026-08-30
 
 - **New: a pre-PR adversarial review gate.** Before a PR is opened, the change

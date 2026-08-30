@@ -3,6 +3,8 @@ name: pypi-release
 description: Use whenever a Python package is ready to publish to PyPI — the build, twine check, version bump, tag, and upload runbook, catching version drift and stale dist/ artifacts before upload. Triggers — "publish to PyPI", "cut a release". Do NOT use to scaffold project tooling (see python-bootstrap) or to upgrade dependencies (see dep-upgrade).
 argument-hint: "--tag vX.Y.Z"
 user-invocable: true
+metadata:
+  section: python
 ---
 
 # pypi-release

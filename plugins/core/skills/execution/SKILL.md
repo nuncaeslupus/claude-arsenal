@@ -2,6 +2,7 @@
 name: execution
 description: When the user is implementing code changes from a design — code change, tests, merge-ready output. Do NOT use for investigation (see specify), design (see design), or routine one-off scripts that bypass the design step.
 metadata:
+  section: workflow
   type: workflow
 ---
 

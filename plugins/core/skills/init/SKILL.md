@@ -2,7 +2,7 @@
 name: init
 description: When the user needs claude-arsenal/ set up in a host repo, or wants to register a workspace via --workspace. Re-running is safe (refreshes stale bundle files only). Do NOT use to add tasks (see queue-add) or resume the worker loop (see continue).
 user-invocable: true
-argument-hint: "[--repo-path PATH] [--workspace NAME] [--root PATH] [--spec PATH] [--plan PATH]"
+argument-hint: "[--repo-path PATH] [--profile NAME] [--sections A,B] [--workspace NAME] [--root PATH] [--spec PATH] [--plan PATH]"
 ---
 
 # init
@@ -24,10 +24,30 @@ Load this skill when:
 
 ## How to use
 
-**First-time init:**
+**First-time init — ask before installing.**
+
+Every installed skill costs a row in the resident skills listing of every
+session in this repo from now on, whether or not it ever triggers. So a first
+install asks one question before running anything:
+
+> What kind of project is this? **python** (adds the Python toolchain skills),
+> **general** (spec/design/execute/review/ship), or **minimal** (queue and
+> GitHub only)?
+
+Pass the answer as the profile:
+
 ```bash
-python3 "${CLAUDE_SKILL_DIR}/scripts/init.py" --repo-path .
+python3 "${CLAUDE_SKILL_DIR}/scripts/init.py" --repo-path . --profile general
 ```
+
+Ask only when `arsenal/config.toml` has no `[skills]` table. With one, the repo
+has already answered, and re-asking every session is noise. Never infer the
+answer from the file tree: a repo containing `.py` files is not necessarily one
+whose release process this bundle should be advising on.
+
+The chosen profile is written out as an editable `[skills]` table, so the answer
+is a starting point rather than a one-time decision. `--sections workflow,python`
+names sections directly instead, for a user who would rather skip the profiles.
 
 **Auto-refresh (session start — silent):**
 ```bash
@@ -47,11 +67,12 @@ The script:
 1. Creates `claude-arsenal/` structure: `bin/`, `project/`, `queue/`, `session/`, `agents/`.
 2. Copies bundle scripts from the plugin into `claude-arsenal/bin/` (checksum-based; refreshes stale files only).
 3. Scaffolds the host-owned `arsenal/` tree — `tasks/`, `specs/`, `plans/`, `session/handover.md` — and seeds `arsenal/config.toml`. Upstream owns `claude-arsenal/` and may overwrite it on every re-run; it never writes into `arsenal/` again, so an upgrade cannot touch the host repo's tasks or settings.
-4. Writes a permissive `surface_profile.json` (gitignored) so all tasks are eligible on any surface.
-5. Adds `.gitignore` entries for `surface_profile.json` and the statusLine-written `rate_limits.json`.
-6. Registers `statusline_capture.sh` as the host `statusLine` command (skipped if one already exists) so `budget_check.sh` can read quota.
-7. Injects the session-start protocol block + `@claude-arsenal/AGENTS.md` import into `CLAUDE.md`.
-8. Declares the `claude-arsenal` marketplace and enables `core` + `skill-workshop` in `.claude/settings.json`, pinned to `ref: v<bundle-version>`. An existing declaration is left alone — a consumer who pinned an older ref, a fork, or a local directory meant it.
+4. Vendors the skills for the chosen sections into `.claude/skills/` — `core` always, plus `workflow` and/or `python`. Flipping a section to `false` in `arsenal/config.toml` prunes its skills on the next run and keeps them pruned; an upgrade of a repo that predates sections keeps whatever it already had.
+5. Writes a permissive `surface_profile.json` (gitignored) so all tasks are eligible on any surface.
+6. Adds `.gitignore` entries for `surface_profile.json` and the statusLine-written `rate_limits.json`.
+7. Registers `statusline_capture.sh` as the host `statusLine` command (skipped if one already exists) so `budget_check.sh` can read quota.
+8. Injects the session-start protocol block + `@claude-arsenal/AGENTS.md` import into `CLAUDE.md`.
+9. Declares the `claude-arsenal` marketplace and enables `core` + `skill-workshop` in `.claude/settings.json`, pinned to `ref: v<bundle-version>`. An existing declaration is left alone — a consumer who pinned an older ref, a fork, or a local directory meant it.
 
 **Retiring vendored skill copies:**
 ```bash

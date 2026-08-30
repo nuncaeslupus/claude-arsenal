@@ -2,6 +2,8 @@
 name: gate-check
 description: Use whenever the user wants an objective PASS/FAIL on a task's measurable acceptance gate from status/plan.md, with the measured numbers — reads the gate (metric, op, threshold) and recorded evidence, or audits every task's gate at once. Triggers — "did this task pass its gate", "are all gates met". Do NOT use to write code (see execution) or rank missing tests (see coverage-gaps).
 user-invocable: true
+metadata:
+  section: workflow
 ---
 
 # gate-check

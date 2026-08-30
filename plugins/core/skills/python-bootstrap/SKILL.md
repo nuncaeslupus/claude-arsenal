@@ -3,6 +3,7 @@ name: python-bootstrap
 description: Use whenever a Python project needs scaffolding or retrofitting to the arsenal defaults — uv, ruff, strict mypy, the standard Makefile, a 3.12+ floor — reports the missing pieces and applies them. Triggers — "set up a Python project", "add ruff and mypy config". Do NOT use to publish to PyPI (see pypi-release) or to upgrade dependencies (see dep-upgrade).
 argument-hint: "[project_dir]"
 metadata:
+  section: python
   type: capability
 user-invocable: true
 ---

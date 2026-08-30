@@ -11,7 +11,9 @@ project two plugins:
   `session-end`), the Python toolchain skills
   (`python-bootstrap`, `pypi-release`, `coverage-gaps`, `dep-upgrade`,
   `mutmut-report`), and the git-backed DAG task queue (`init`,
-  `continue`, `queue-add`, `queue-status`). `init` injects a proactive
+  `continue`, `queue-add`, `queue-status`). `/init` asks which of these
+  **sections** a repo wants and installs only those — see "Choosing what gets
+  installed" below. `init` injects a proactive
   session-protocol block into `CLAUDE.md` so Claude auto-seeds the queue
   from workspace plans and auto-starts workers every session without any
   commands. Works on CC Web (no hooks needed).
@@ -67,12 +69,44 @@ git add .claude claude-arsenal arsenal .github CLAUDE.md .gitignore && git commi
 That is it. The plugin gave you `/init`; the commit is what every later
 session — yours, a teammate's, a cloud one — actually loads.
 
+### Choosing what gets installed
+
+`/init` asks what kind of project this is before it installs anything, because
+every installed skill costs a row in the resident skills listing of every
+session from then on — whether or not it ever triggers.
+
+| Profile | Sections installed |
+|---|---|
+| `minimal` | `core` — `init`, `continue`, `queue-add`, `queue-status`, `github`, `session-end` |
+| `general` | `core` + `workflow` (`specify`, `design`, `execution`, `review`, `ship`, `gate-check`) |
+| `python` | `core` + `workflow` + `python` (`python-bootstrap`, `pypi-release`, `coverage-gaps`, `dep-upgrade`, `mutmut-report`) |
+
+`core` is always installed: the vendored session protocol names those skills
+directly. To skip the question, pass it up front:
+
+```bash
+python3 .../init.py --repo-path . --profile python
+```
+
+The answer is recorded as an editable `[skills]` table in `arsenal/config.toml`:
+
+```toml
+[skills]
+workflow = true
+python = false
+```
+
+Flip a value and the next `/init` adds or prunes that section's skills, and the
+change sticks — unlike deleting a vendored skill folder, which the next session's
+`init.py --silent` puts straight back. Upgrading a repo installed before sections
+existed changes nothing: the sections already in use are detected and recorded.
+
 ### If you do not (cloud-only, CI, a fresh container)
 
 No plugin needed — the same script runs straight from a clone:
 
 ```bash
-git clone --depth 1 --branch v2.7.0 https://github.com/nuncaeslupus/claude-arsenal.git /tmp/arsenal
+git clone --depth 1 --branch v2.8.0 https://github.com/nuncaeslupus/claude-arsenal.git /tmp/arsenal
 python3 /tmp/arsenal/plugins/core/skills/init/scripts/init.py --repo-path .
 git add .claude claude-arsenal arsenal .github CLAUDE.md .gitignore && git commit -m "chore: add claude-arsenal"
 ```
