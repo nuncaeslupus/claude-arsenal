@@ -2,6 +2,7 @@
 name: ship
 description: When the user is confirming a change is ready for production before merge — compatibility, tests, observability, rollback. Do NOT use for implementation (see execution) or PR review (see review).
 metadata:
+  section: workflow
   type: workflow
 ---
 

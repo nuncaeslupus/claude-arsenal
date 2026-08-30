@@ -93,6 +93,15 @@ DEFAULTS: dict[str, Any] = {
     "task-label": "arsenal:task",
     # Ref namespace for atomic claim refs.
     "claim-prefix": "arsenal/claims",
+    # Which skill sections /init vendors into .claude/skills/, on top of the
+    # always-installed core. Registered here so `--explain` can report them and
+    # so the loader keeps them; the values are written by init.py from the
+    # profile chosen at install, not hand-seeded into the config template —
+    # one writer, so the shipped defaults and the recorded answer cannot drift.
+    # The defaults here are what a FRESH install gets; an upgrade preserves
+    # whatever the repo already had (init.py:_resolve_sections).
+    "skills.workflow": True,
+    "skills.python": False,
     # Which model runs the session that dispatches work. Advisory, and the one
     # key here nothing can enforce from inside a session: a session cannot
     # change the model it is already running as, so this is read and reported
