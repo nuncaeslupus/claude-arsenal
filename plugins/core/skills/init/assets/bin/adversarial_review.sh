@@ -161,14 +161,13 @@ _diff_digest() { _full_diff "$1" | _digest; }
 _resolve_intent() {
     local c
     if [[ -n "${INTENT_FILE}" ]]; then
-        [[ -f "${INTENT_FILE}" ]] || die "--intent ${INTENT_FILE} does not exist"
         printf '%s\n' "${INTENT_FILE}"; return 0
     fi
     if [[ -n "${TASK_ID}" ]]; then
         for c in "${ARSENAL_HOME}/tasks/${TASK_ID}.md" "${ARSENAL_HOME}/tasks/_history/${TASK_ID}.md"; do
             [[ -f "${c}" ]] && { printf '%s\n' "${c}"; return 0; }
         done
-        die "--task ${TASK_ID} names no file under ${ARSENAL_HOME}/tasks/"
+        return 1
     fi
     for c in status/specification.md status/plan.md; do
         [[ -f "${c}" ]] && { printf '%s\n' "${c}"; return 0; }
@@ -182,6 +181,22 @@ _resolve_intent() {
 cmd_emit() {
     _ensure_out_dir
     local base diff nlines intent
+
+    # An intent the caller NAMED and that does not exist is a hard error, and it
+    # has to be caught here, in the main shell. `_resolve_intent` runs inside a
+    # command substitution, where `die` exits only the subshell — the `|| intent=""`
+    # fallback below would then turn a mistyped `--intent` path into a packet
+    # with no intent at all, and a reviewer with no intent cannot check the one
+    # thing it is here for. Auto-discovery finding nothing stays soft: that is an
+    # absence, not a mistake.
+    if [[ -n "${INTENT_FILE}" && ! -f "${INTENT_FILE}" ]]; then
+        die "--intent ${INTENT_FILE} does not exist"
+    fi
+    if [[ -n "${TASK_ID}" && ! -f "${ARSENAL_HOME}/tasks/${TASK_ID}.md" \
+          && ! -f "${ARSENAL_HOME}/tasks/_history/${TASK_ID}.md" ]]; then
+        die "--task ${TASK_ID} names no file under ${ARSENAL_HOME}/tasks/"
+    fi
+
     base="$(_resolve_base)" || die "could not resolve a base commit to diff against. Pass --base <ref>."
 
     diff="$(_full_diff "${base}")"

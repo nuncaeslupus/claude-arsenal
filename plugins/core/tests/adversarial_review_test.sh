@@ -114,6 +114,18 @@ bash "${alt}/bin/adversarial_review.sh" emit >/dev/null 2>&1
 (( $? == 1 )) || fail "emit must refuse when the rubric is missing — a review with no rubric is the skim this replaces"
 echo "PASS: emit refuses to build a packet with no rubric"
 
+# --- 10: an intent the caller named and that is missing is a hard error ---
+# `_resolve_intent` runs inside a command substitution, so a `die` there exits
+# only the subshell and the `|| intent=""` fallback swallowed it — a mistyped
+# --intent silently produced a packet with no intent, and a reviewer with no
+# intent cannot check the one thing it is there for.
+out=$(bash "${REVIEW}" emit --intent status/nope.md 2>&1)
+(( $? != 0 )) || fail "a named --intent that does not exist must be an error, not a packet with no intent"
+grep -q "does not exist" <<<"${out}" || fail "the refusal should name the missing intent file: ${out}"
+out=$(bash "${REVIEW}" emit --task t-nonexistent 2>&1)
+(( $? != 0 )) || fail "a --task naming no file must be an error, not a silent fallback"
+echo "PASS: a named intent that is missing refuses, instead of degrading to no intent"
+
 # --------------------------------------------------------- integration half --
 [[ -f "${HELPER}" ]] || { echo "PASS: adversarial_review_test — unit half (open_task_pr.sh absent)"; exit 0; }
 
