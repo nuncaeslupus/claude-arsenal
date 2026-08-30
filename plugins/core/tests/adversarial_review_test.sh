@@ -245,11 +245,16 @@ echo "PASS: a hostile intent document stays inside its nonce-delimited envelope"
 rm -rf tmp/arsenal-review
 mkdir -p nested_checkout
 ( cd nested_checkout && git init -q -b main . && echo "os.system('rm -rf /')" > evil.py )
-out=$(bash "${REVIEW}" emit 2>&1); rc=$?
-(( rc == 2 )) || fail "an untracked directory must fail closed with 2, got ${rc}: ${out}"
-grep -q "untracked directory" <<<"${out}" || fail "the refusal should name what it cannot read: ${out}"
-rm -rf nested_checkout
-echo "PASS: an untracked directory fails closed instead of vanishing from packet and digest"
+bash "${REVIEW}" emit >/dev/null 2>&1 || fail "an untracked directory must not make emit refuse — a repo may keep a linked worktree inside itself"
+grep -q "arsenal-untracked-directory" tmp/arsenal-review/packet.md \
+    || fail "the packet must name an untracked directory it could not expand"
+printf 'VERDICT: CLEAR — ok\n' > "${V}"
+bash "${REVIEW}" verdict >/dev/null 2>&1 || fail "setup: clearing with a nested checkout present"
+echo "and more" >> nested_checkout/evil.py
+bash "${REVIEW}" check >/dev/null 2>&1
+(( $? == 3 )) || fail "a change inside an untracked directory must invalidate the receipt — otherwise it is a hole in the digest"
+rm -rf nested_checkout tmp/arsenal-review
+echo "PASS: an untracked directory is fingerprinted, so it is neither refused nor invisible"
 
 # --- 24: a usage error never borrows the BLOCK exit code ---
 # `${2:?message}` was the natural way to write the option guards and exits 1 —
@@ -336,6 +341,8 @@ ARSENAL_TASK_ISSUE=7 ARSENAL_COAUTHOR="" bash "${HELPER}" t-rev-clear "Review fi
     || fail "a cleared change must open its PR"
 grep -q "CLEAR" "${GH_BODY_FILE}" \
     || fail "a cleared review must be recorded in the PR body, got: $(cat "${GH_BODY_FILE}")"
+grep -q "the gates then changed it" "${GH_BODY_FILE}" \
+    && fail "a gate that writes nothing must produce a CLEAN clear, with no drift note: $(cat "${GH_BODY_FILE}")"
 git log -1 --name-only --format= | grep -q "arsenal-review" \
     && fail "the review's own working files must never be committed into the PR"
 echo "PASS: a cleared review is recorded in the PR body, and the packet stays out of the commit"
@@ -366,10 +373,15 @@ bash "${REVIEW}" verdict >/dev/null 2>&1 || fail "setup: recording a CLEAR"
 export GH_BODY_FILE="${tmp}/body4.txt"
 ARSENAL_TASK_ISSUE=7 ARSENAL_COAUTHOR="" bash "${HELPER}" t-rev-artifact "Artifact gate" >/dev/null 2>&1 \
     || fail "a cleared change must open its PR even when the gate writes an artifact"
-grep -q "CLEAR" "${GH_BODY_FILE}" \
-    || fail "a gate artifact must not turn a real CLEAR into STALE, got: $(cat "${GH_BODY_FILE}")"
+# Asserted on the drift wording, not on "CLEAR": the drift note contains that
+# word too, so `grep -q CLEAR` passed on either outcome and this case and the
+# clean-CLEAR case were indistinguishable.
+grep -q "the gates then changed it" "${GH_BODY_FILE}" \
+    || fail "a gate artifact must be reported as drift, not as a clean CLEAR: $(cat "${GH_BODY_FILE}")"
+grep -q "STALE" "${GH_BODY_FILE}" \
+    && fail "a gate artifact must not invalidate the review that ran before it: $(cat "${GH_BODY_FILE}")"
 [[ -f "${WORK}/build-artifact.log" ]] || fail "setup check: the gate should have written its artifact"
-echo "PASS: a gate that leaves an artifact does not invalidate the review it ran after"
+echo "PASS: a gate artifact is reported as drift, not as STALE and not as a clean CLEAR"
 
 # --- 16: off writes no line at all ---
 _fresh_work
@@ -416,20 +428,5 @@ grep -q "ROOT_LEVEL_CANARY" "${sub}/tmp/arsenal-review/packet.md" \
     && fail "the default review directory must be repo-root relative, not cwd relative"
 cd "${REPO}"
 echo "PASS: a review taken from a subdirectory covers the whole worktree"
-
-# --- 25: gates that dirty the tree after the review do not ship as CLEAR ---
-# Moving the check ahead of the gates fixed a false STALE. Left alone it would
-# install the mirror image: the gates run afterwards, `git add -A` commits what
-# they leave behind, and the PR body still calls the tree reviewed.
-_fresh_work
-bash "${REVIEW}" emit --task t-rev-drift >/dev/null 2>&1 || fail "setup: emit"
-printf 'VERDICT: CLEAR — checked it\n' > "tmp/arsenal-review/t-rev-drift/verdict.md"
-bash "${REVIEW}" verdict --task t-rev-drift >/dev/null 2>&1 || fail "setup: recording a CLEAR"
-export GH_BODY_FILE="${tmp}/body7.txt"
-ARSENAL_TASK_ISSUE=7 ARSENAL_COAUTHOR="" bash "${HELPER}" t-rev-drift "Artifact gate" >/dev/null 2>&1 \
-    || fail "warn mode should still open the PR"
-grep -q "the gates then changed it" "${GH_BODY_FILE}" \
-    || fail "a gate that dirties the tree after the review must not be reported as a clean CLEAR: $(cat "${GH_BODY_FILE}")"
-echo "PASS: gate artifacts landing after the review are named, not passed off as reviewed"
 
 echo "PASS: adversarial_review_test — all gates passed"

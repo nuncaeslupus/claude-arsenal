@@ -217,9 +217,22 @@ _untracked_diff() {
         # nested checkout carries its own history and is not this tree's to
         # review, and saying so beats reviewing around it.
         if [[ "${p}" == */ ]]; then
-            echo "adversarial_review: '${p}' is an untracked directory (a nested git checkout?)." >&2
-            echo "adversarial_review: nothing inside it reaches the packet or the digest, so it would be a hole in both. Remove it, commit it, or ignore it." >&2
-            return 4
+            # Fingerprinted rather than refused. Refusing made the whole gate
+            # unusable for a repo that keeps a linked worktree inside itself —
+            # `.claude/worktrees/…` is exactly that shape — and the point was
+            # never to reject these, only to stop them being invisible.
+            #
+            # `git hash-object` per file is content-sensitive, needs nothing
+            # that is not already required, and is bounded in practice: an
+            # untracked directory big enough to hurt is one a repo has
+            # gitignored, and `--exclude-standard` never lists those.
+            printf 'diff --arsenal-untracked-directory %s\n' "${p}"
+            printf -- '--- /dev/null\n+++ b/%s\n' "${p}"
+            printf '@@ contents not expanded; fingerprinted so changes inside are still seen @@\n'
+            find "${p}" -type f 2>/dev/null | LC_ALL=C sort | while IFS= read -r _f; do
+                printf '+%s %s\n' "${_f}" "$(git hash-object "${_f}" 2>/dev/null || echo unreadable)"
+            done
+            continue
         fi
         # Status 1 means "the files differ", which is the whole point of asking,
         # and swallowing it is mandatory: left unhandled under `pipefail` it
@@ -340,7 +353,8 @@ cmd_emit() {
     # run without one is the shallow skim this gate exists to replace.
     [[ -f "${RUBRIC_FILE}" ]] || die "the reviewer rubric is missing (${RUBRIC_FILE}) — refusing to emit a packet with no rubric"
 
-    local digest; digest="$(_diff_digest "${base}")"
+    local digest; digest="$(_diff_digest "${base}")" \
+        || die "could not digest the diff against ${base} — refusing to bind a receipt to a tree that could not be read"
     local nonce; nonce="$(_nonce)"
     [[ ${#nonce} -ge 16 ]] || die "could not mint a packet nonce"
     intent="$(_resolve_intent)" || intent=""

@@ -127,6 +127,14 @@ that a verdict was recorded for this tree. Nothing can tell a subagent's verdict
 from one a session wrote for itself, which is why the worker protocol says to
 skip the step rather than stand in for the reviewer.
 
+`required` binds to the tree **the author produced**. The gates run after the
+check and `git add -A` commits whatever they leave behind, so a gate that writes
+a coverage report or a build log puts content in the PR that no reviewer saw.
+That is stated in the PR body and never absorbed silently — but it does not
+block, because refusing on it cannot converge: each retry re-runs the gate that
+invalidates the receipt, and a setting nobody can satisfy protects nobody. Keep
+gate artifacts out of the tree, or gitignore them, and the question disappears.
+
 The receipt covers the tree the author produced, not the PR byte-for-byte:
 `open_task_pr.sh` then archives the task file into `tasks/_history/` in the same
 diff. That mutation is out of scope on purpose — it is the helper's own
@@ -141,7 +149,7 @@ workflow and do not read this key:
 | `pre-pr-review` | Effect |
 |---|---|
 | `warn` (default) | The task PR opens either way; the outcome is stated in its body. |
-| `required` | No clearing verdict for this tree, no task PR. |
+| `required` | No clearing verdict for the author's tree, no task PR. |
 | `off` | Not checked, no line written in the body. |
 
 `warn` is the default because a gate that breaks every worker loop on upgrade

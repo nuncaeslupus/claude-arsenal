@@ -253,17 +253,25 @@ if [[ -f "${SCRIPT_DIR}/gate_run.sh" ]]; then
 fi
 
 # The gates ran after the review, and `git add -A` below commits whatever they
-# left behind. Moving the check ahead of them removed a false STALE; without
-# this it would install a false CLEAR in its place, which is the worse of the
-# two — the PR body would call a tree reviewed while carrying a coverage report
-# or a build log no reviewer saw. The review still stands for the author's work;
-# what changed after it is what this names.
+# left behind. This names that gap; it does NOT refuse over it, and the
+# distinction was arrived at the hard way.
+#
+# Checking after the gates made a gate's own artifacts invalidate a genuine
+# CLEAR, and under `required` that never converged: each retry re-ran the gate
+# that invalidated the receipt. Checking before them fixed that and put a false
+# CLEAR in its place — a build log riding inside a PR whose body called the tree
+# reviewed. Refusing on the drift detected here brings the first failure
+# straight back, because round N's review covers round N-1's artifact and the
+# gate rewrites it every time.
+#
+# So the guarantee is drawn where it can actually be met: `required` means an
+# independent reviewer cleared THE AUTHOR'S tree. What the gates then wrote is
+# disclosed in the PR body and never silently absorbed, but it does not block —
+# those artifacts are not the author's change, committing them is behaviour this
+# helper already had, and a setting nobody can satisfy protects nobody.
 if [[ "${review_note}" == *CLEAR* ]]; then
     if ! ( cd "${_repo_root:-.}" && bash "${SCRIPT_DIR}/adversarial_review.sh" check --task "${TASK_ID}" ) >/dev/null 2>&1; then
         review_note="Pre-PR adversarial review: **CLEAR for the tree as reviewed — but the gates then changed it.** They ran after the review and left files behind, so this PR carries content no reviewer saw. Ignore or clean whatever your gate writes into the tree."
-        if [[ "${review_mode}" == "required" ]]; then
-            _gate_fail "the gates modified the tree after the review cleared it, so this PR would carry unreviewed content — gitignore or clean your gate's artifacts"
-        fi
     fi
 fi
 
