@@ -158,6 +158,18 @@ RECEIPT="${OUT_DIR}/receipt.env"
 # by one run lands in the diff of the next — changing the digest, and shipping
 # the review into the PR it was reviewing.
 _ensure_out_dir() {
+    # The default review root always carries the self-ignore, even when the slot
+    # in use is a task subdirectory of it. Creating only the subdirectory left
+    # the root existing, non-empty and unmarked — so the guard below, which
+    # exists to refuse SOMEONE ELSE'S directory, fired on this script's own task
+    # slots and made every later unscoped `emit` refuse. Three of the four wired
+    # paths use the unscoped root, and nothing cleans it: `git clean -fdq` in
+    # worker_postcheck.sh has no `-x`, so an ignored slot survives every restore.
+    local _root="tmp/arsenal-review"
+    if [[ "${OUT_DIR}" == "${_root}" || "${OUT_DIR}" == "${_root}/"* ]]; then
+        mkdir -p "${_root}" || die "could not create ${_root}"
+        [[ -f "${_root}/.gitignore" ]] || printf '*\n' > "${_root}/.gitignore"
+    fi
     # The self-ignore is what keeps the review out of the PR it is reviewing, so
     # it is not optional — but writing a `.gitignore` of `*` into a directory
     # that already holds someone else's files would change how git sees them.
@@ -350,6 +362,13 @@ cmd_emit() {
     # absence, not a mistake.
     if [[ -n "${INTENT_FILE}" && ! -f "${INTENT_FILE}" ]]; then
         die "--intent ${INTENT_FILE} does not exist"
+    fi
+    # Readability is checked here, not where the packet is written: a failing
+    # `cat` inside that group is not the group's last command, so its status is
+    # swallowed and an unreadable intent would yield an empty envelope with
+    # exit 0 — a packet that silently states no intent at all.
+    if [[ -n "${INTENT_FILE}" && ! -r "${INTENT_FILE}" ]]; then
+        die "--intent ${INTENT_FILE} is not readable"
     fi
     if [[ -n "${TASK_ID}" && ! -f "${ARSENAL_HOME}/tasks/${TASK_ID}.md" \
           && ! -f "${ARSENAL_HOME}/tasks/_history/${TASK_ID}.md" ]]; then

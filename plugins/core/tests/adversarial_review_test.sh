@@ -235,6 +235,21 @@ bash "${REVIEW}" check --task "../escape" >/dev/null 2>&1
 (( $? == 2 )) || fail "check must refuse a malformed id with 2; open_task_pr.sh maps 1 to \"the reviewer objected\""
 echo "PASS: the review slot is namespaced per task, and a traversing id is refused"
 
+# --- 21b: task slots do not lock out the unscoped root ---
+# The guard that refuses someone else's directory fired on this script's own
+# task slots: `emit --task` created tmp/arsenal-review/<id>/ and left the root
+# non-empty and unmarked, so every later unscoped emit — which is what
+# execution, github and ship all run — refused. Nothing cleans it either:
+# worker_postcheck.sh's `git clean -fdq` has no -x, so an ignored slot survives.
+bash "${REVIEW}" emit >/dev/null 2>&1 \
+    || fail "an unscoped emit must still work after a task-scoped one; three of the four wired paths use the root"
+bash "${REVIEW}" emit --task t-alpha >/dev/null 2>&1 \
+    || fail "and a task-scoped emit must still work after an unscoped one"
+notmine="${tmp}/notmine"; mkdir -p "${notmine}"; echo other > "${notmine}/file.txt"
+bash "${REVIEW}" emit --out "${notmine}" >/dev/null 2>&1
+(( $? == 2 )) || fail "a directory holding someone else's files must still be refused — it would be marked wholly git-ignored"
+echo "PASS: the script's own slots are not mistaken for someone else's directory"
+
 # --- 22: an intent document cannot forge its way out of its own envelope ---
 # The block used literal <intent-document> tags around an unescaped `cat`, so a
 # payload containing the closing tag ended the envelope early and everything
