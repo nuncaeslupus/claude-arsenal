@@ -91,6 +91,53 @@ python3 "$init_py" --repo-path "$repo" --silent >/dev/null 2>&1 || fail "second 
 have "$repo" mutmut-report && fail "the opt-out did not survive the next init"
 echo "PASS: opting a section out prunes it, and it stays pruned"
 
+# --- an explicit --sections list wins outright over --profile ---------------
+# The CLI documents --sections as overriding --profile. Unioning them instead
+# means `--profile python --sections workflow` still installs python: skills the
+# user did not ask for, which is the failure nobody notices because it is silent.
+repo="$tmp/override"; mkdir -p "$repo"
+python3 "$init_py" --repo-path "$repo" --profile python --sections workflow >/dev/null 2>&1 \
+    || fail "--profile with --sections exited non-zero"
+have "$repo" specify     || fail "--sections workflow did not install workflow"
+have "$repo" dep-upgrade && fail "--sections did not override --profile python"
+echo "PASS: --sections overrides --profile"
+
+repo="$tmp/empty"; mkdir -p "$repo"
+python3 "$init_py" --repo-path "$repo" --sections "" >/dev/null 2>&1 \
+    || fail '--sections "" exited non-zero'
+have "$repo" init    || fail '--sections "" dropped core'
+have "$repo" specify && fail '--sections "" fell back to the defaults'
+echo 'PASS: --sections "" means core only, not "unset"'
+
+# --- a malformed [skills] value stops the install, it does not prune --------
+# `workflow = treu` used to read as false and silently delete six skills.
+repo="$tmp/malformed"; mkdir -p "$repo"
+python3 "$init_py" --repo-path "$repo" --profile general >/dev/null 2>&1 || fail "fixture failed"
+sed -i 's/^workflow = true/workflow = "treu"/' "$repo/arsenal/config.toml"
+python3 "$init_py" --repo-path "$repo" --silent >/dev/null 2>&1 \
+    && fail "a non-boolean [skills] value was accepted"
+have "$repo" specify || fail "a refused install pruned skills anyway"
+echo "PASS: non-boolean [skills] value is fatal, and prunes nothing"
+
+# --- a misspelled KEY must not silently disable a section -------------------
+# Unknown names stay tolerated (a repo that ran a newer bundle carries sections
+# this one has not heard of), so the safety comes from the other side: a known
+# name absent from the table falls back to its shipped default, not to off.
+repo="$tmp/typokey"; mkdir -p "$repo"
+python3 "$init_py" --repo-path "$repo" --profile general >/dev/null 2>&1 || fail "fixture failed"
+sed -i 's/^workflow = true/worklfow = true/' "$repo/arsenal/config.toml"
+python3 "$init_py" --repo-path "$repo" --silent >/dev/null 2>&1 || fail "typo key exited non-zero"
+have "$repo" specify || fail "a misspelled key silently pruned the workflow skills"
+echo "PASS: a misspelled [skills] key does not prune anything"
+
+# --- invalid TOML is loud rather than treated as 'no table' -----------------
+repo="$tmp/badtoml"; mkdir -p "$repo"
+python3 "$init_py" --repo-path "$repo" --profile general >/dev/null 2>&1 || fail "fixture failed"
+printf '\nthis is not = = toml\n' >> "$repo/arsenal/config.toml"
+python3 "$init_py" --repo-path "$repo" --silent >/dev/null 2>&1 \
+    && fail "invalid TOML was accepted"
+echo "PASS: invalid config.toml stops the install"
+
 # --- a skill the consumer wrote is still never touched ----------------------
 repo="$tmp/mine"; mkdir -p "$repo/.claude/skills/mine"
 echo "x" > "$repo/.claude/skills/mine/SKILL.md"

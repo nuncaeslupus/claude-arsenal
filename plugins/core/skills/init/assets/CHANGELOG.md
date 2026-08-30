@@ -21,7 +21,7 @@ Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 ## [2.8.0] - 2026-08-30
 
 - **`/init` now asks what kind of project this is, and installs only those
-  skills.** Vendoring used to be all-or-nothing: every repo carried all 17 core
+  skills.** Vendoring used to be all-or-nothing: every repo carried all 17 shipped
   skills, and each one costs a row in the resident skills listing of every
   session forever, whether or not it ever triggers. Skills are now grouped into
   sections, chosen at install:

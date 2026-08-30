@@ -7,6 +7,7 @@ import os
 import re
 import shutil
 import sys
+import tomllib
 from pathlib import Path
 
 CLAUDE_MD_MARKER = "<!-- claude-arsenal: auto-managed -->"
@@ -489,6 +490,25 @@ _PROFILES: dict[str, tuple[str, ...]] = {
 _FRONTMATTER_SECTION = re.compile(r"^\s*section:\s*[\"']?([A-Za-z0-9_-]+)", re.MULTILINE)
 
 
+def _known_sections() -> set[str]:
+    """Every section a consumer may ask for: the registered ones plus any shipped.
+
+    Read from the shipped skills rather than from `_SECTION_DEFAULTS` alone so
+    that adding a section to a SKILL.md is enough to make it requestable. A
+    shipped section with no entry in `_SECTION_DEFAULTS` is simply off by
+    default — opt-in, which is the right default for anything new.
+    """
+    try:
+        shipped = {
+            _skill_section(d)
+            for d in _source_skills_dir().iterdir()
+            if (d / "SKILL.md").is_file()
+        }
+    except OSError:
+        shipped = set()
+    return (set(_SECTION_DEFAULTS) | shipped) - {_CORE_SECTION}
+
+
 def _skill_section(skill_dir: Path) -> str:
     """The section a skill declares in its frontmatter, or `core` if it names none.
 
@@ -521,20 +541,32 @@ def _read_sections_table(config: Path) -> dict[str, bool] | None:
     if not config.is_file():
         return None
     try:
-        text = config.read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError):
+        raw = tomllib.loads(config.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError) as exc:
+        sys.exit(f"init: cannot read {config}: {exc}")
+    except tomllib.TOMLDecodeError as exc:
+        sys.exit(f"init: {config} is not valid TOML — {exc}")
+
+    table = raw.get("skills")
+    if table is None:
         return None
-    match = re.search(r"^\[skills\]\s*$", text, re.MULTILINE)
-    if not match:
-        return None
-    table: dict[str, bool] = {}
-    for line in text[match.end():].splitlines():
-        if re.match(r"^\s*\[", line):
-            break  # next table header ends this one
-        entry = re.match(r"^\s*([A-Za-z0-9_-]+)\s*=\s*(\S+)", line)
-        if entry:
-            table[entry.group(1)] = entry.group(2).strip().strip('"').lower() == "true"
-    return table
+    if not isinstance(table, dict):
+        sys.exit(f"init: {config}: [skills] must be a table of section = true/false")
+
+    # A non-boolean is a typo, and the cost of guessing is pruning skills a repo
+    # is using. `workflow = "treu"` used to read as false and silently delete
+    # six skills; it now stops the install and says which line to fix.
+    for name, value in table.items():
+        if not isinstance(value, bool):
+            sys.exit(
+                f"init: {config}: [skills] {name} = {value!r} is not true or false"
+            )
+    # Unknown names are NOT fatal, deliberately: a repo that has run a newer
+    # bundle carries sections this one has never heard of, and downgrading
+    # should not be an error. They are ignored here, and a name absent from the
+    # table falls back to its shipped default rather than to off (see
+    # _resolve_sections) — so a misspelled key fails toward keeping skills.
+    return dict(table)
 
 
 def _write_sections_table(config: Path, enabled: set[str], known: list[str]) -> None:
@@ -591,16 +623,23 @@ def _resolve_sections(
       * no table, nothing vendored — a FRESH install. Apply the shipped
         defaults and record them.
     """
-    known = sorted(set(_SECTION_DEFAULTS) | (set(by_section) - {_CORE_SECTION}))
+    known = sorted(_known_sections() | (set(by_section) - {_CORE_SECTION}))
 
-    if sections or profile:
-        chosen = set(sections or ())
-        if profile:
-            chosen |= set(_PROFILES[profile])
+    # An explicit list wins outright — `--sections ""` means core only, which
+    # is a different answer from "nothing was passed" and must not fall through
+    # to the recorded table or the defaults.
+    if sections is not None:
+        chosen = set(sections)
+    elif profile:
+        chosen = set(known) if profile == "all" else set(_PROFILES[profile])
     else:
         recorded = _read_sections_table(config)
         if recorded is not None:
-            return {_CORE_SECTION} | {name for name, on in recorded.items() if on}
+            return {_CORE_SECTION} | {
+                name
+                for name in known
+                if recorded.get(name, _SECTION_DEFAULTS.get(name, False))
+            }
         vendored = {
             _skill_section(d)
             for d in dest.iterdir()
@@ -1223,17 +1262,19 @@ def _parse_sections(raw: str | None) -> list[str] | None:
     """
     if raw is None:
         return None
+    known = _known_sections()
     names = [part.strip() for part in raw.split(",") if part.strip()]
-    unknown = sorted(set(names) - set(_SECTION_DEFAULTS) - {_CORE_SECTION})
+    unknown = sorted(set(names) - known - {_CORE_SECTION})
     if unknown:
         sys.exit(
             f"init: unknown section(s) {', '.join(unknown)} — "
-            f"known sections are {', '.join(sorted(_SECTION_DEFAULTS))}"
+            f"known sections are {', '.join(sorted(known))}"
         )
     return names
 
 
 def main() -> None:
+    """Parse the CLI and run either a base install or a workspace registration."""
     p = argparse.ArgumentParser(description="Bootstrap or update claude-arsenal/ in a host repo.")
     p.add_argument("--repo-path", default=".", help="Path to the host repository root.")
     p.add_argument("--workspace", metavar="NAME", help="Register a workspace.")
@@ -1256,7 +1297,7 @@ def main() -> None:
         "--sections",
         metavar="A,B",
         help="Install exactly these skill sections (comma-separated), on top of core. "
-        f"Known: {', '.join(sorted(_SECTION_DEFAULTS))}. Overrides --profile.",
+        f"Known: {', '.join(sorted(_known_sections()))}. Overrides --profile.",
     )
     p.add_argument(
         "--silent", action="store_true",

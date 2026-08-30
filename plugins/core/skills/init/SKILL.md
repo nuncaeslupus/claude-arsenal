@@ -2,7 +2,7 @@
 name: init
 description: When the user needs claude-arsenal/ set up in a host repo, or wants to register a workspace via --workspace. Re-running is safe (refreshes stale bundle files only). Do NOT use to add tasks (see queue-add) or resume the worker loop (see continue).
 user-invocable: true
-argument-hint: "[--repo-path PATH] [--profile NAME] [--workspace NAME] [--root PATH] [--spec PATH] [--plan PATH]"
+argument-hint: "[--repo-path PATH] [--profile NAME] [--sections A,B] [--workspace NAME] [--root PATH] [--spec PATH] [--plan PATH]"
 ---
 
 # init

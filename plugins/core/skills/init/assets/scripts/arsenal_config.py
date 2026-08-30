@@ -213,6 +213,14 @@ def load(repo_root: Path | None = None) -> tuple[dict[str, Any], dict[str, str]]
             raise ConfigError(
                 f"{key}: {values[key]!r} is not one of {sorted(allowed)} (from {sources[key]})"
             )
+    # Same strictness init.py applies when it reads this table: a non-boolean
+    # here decides whether skills are installed or pruned, so a typo must stop
+    # rather than be coerced.
+    for key in (k for k in DEFAULTS if k.startswith("skills.")):
+        if not isinstance(values[key], bool):
+            raise ConfigError(
+                f"{key} must be true or false, got {values[key]!r} (from {sources[key]})"
+            )
     if not isinstance(values["listing-budget"], int) or values["listing-budget"] <= 0:
         raise ConfigError(
             f"listing-budget must be a positive integer, got {values['listing-budget']!r}"

@@ -77,9 +77,9 @@ session from then on — whether or not it ever triggers.
 
 | Profile | Sections installed |
 |---|---|
-| `minimal` | `core` — init, continue, queue-add, queue-status, github, session-end |
-| `general` | `core` + `workflow` (specify, design, execution, review, ship, gate-check) |
-| `python` | `core` + `workflow` + `python` (python-bootstrap, pypi-release, coverage-gaps, dep-upgrade, mutmut-report) |
+| `minimal` | `core` — `init`, `continue`, `queue-add`, `queue-status`, `github`, `session-end` |
+| `general` | `core` + `workflow` (`specify`, `design`, `execution`, `review`, `ship`, `gate-check`) |
+| `python` | `core` + `workflow` + `python` (`python-bootstrap`, `pypi-release`, `coverage-gaps`, `dep-upgrade`, `mutmut-report`) |
 
 `core` is always installed: the vendored session protocol names those skills
 directly. To skip the question, pass it up front:
