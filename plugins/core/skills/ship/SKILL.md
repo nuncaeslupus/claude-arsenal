@@ -65,8 +65,8 @@ landed since, and those commits have had no independent read of their own.
 
 ```bash
 REVIEW="${CLAUDE_SKILL_DIR}/../init/assets/bin/adversarial_review.sh"
-bash "$REVIEW" emit      # writes tmp/arsenal-review/packet.md
-# spawn a sub-agent whose whole prompt is: read that packet, reply into tmp/arsenal-review/verdict.md
+bash "$REVIEW" emit      # prints the packet's absolute path
+# spawn a sub-agent whose whole prompt is: read THAT path, reply into verdict.md beside it
 bash "$REVIEW" verdict   # 0 CLEAR · 1 BLOCK · 2 no verdict · 3 the tree moved mid-review
 ```
 

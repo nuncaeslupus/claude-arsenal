@@ -51,8 +51,8 @@ A green lint says the change does not break the repo. It says nothing about whet
 
 ```bash
 REVIEW="${CLAUDE_SKILL_DIR}/../init/assets/bin/adversarial_review.sh"
-bash "$REVIEW" emit      # writes tmp/arsenal-review/packet.md
-# spawn a subagent whose whole prompt is: read that packet, reply into tmp/arsenal-review/verdict.md
+bash "$REVIEW" emit      # prints the packet's absolute path
+# spawn a subagent whose whole prompt is: read THAT path, reply into verdict.md beside it
 bash "$REVIEW" verdict   # 0 CLEAR · 1 BLOCK · 2 no verdict, which is not a pass
 ```
 

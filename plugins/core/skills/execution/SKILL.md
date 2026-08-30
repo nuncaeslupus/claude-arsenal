@@ -118,11 +118,11 @@ Before Step 5, put the change in front of a reviewer with no history of it:
 
 ```bash
 bash "${CLAUDE_SKILL_DIR}/../init/assets/bin/adversarial_review.sh" emit
-# writes tmp/arsenal-review/packet.md — intent, full diff, rubric
+# prints the packet's absolute path — intent, full diff, rubric
 ```
 
-Spawn a subagent whose **entire prompt** is to read that packet and write its
-reply to `tmp/arsenal-review/verdict.md`. Pass nothing else: no summary of the
+Spawn a subagent whose **entire prompt** is to read the path `emit` printed and
+write its reply to `verdict.md` in that same directory. Pass nothing else: no summary of the
 change, no account of the approach taken, no conversation history. Every such
 addition transplants the blind spot this step exists to escape — a reviewer
 told "this refactor preserves behaviour" checks a different question than one

@@ -77,8 +77,9 @@ writes a receipt bound to the digest of the reviewed diff.
 
 `emit` exits 0 with the packet path, **3** when there is nothing to review (an
 empty diff against the base — usually a session working straight on the default
-branch with everything committed), and 1 on a real error: a missing rubric, or
-an `--intent`/`--task` naming a file that does not exist.
+branch with everything committed), and **2** on a real error: a missing rubric, an
+`--intent`/`--task` naming a file that does not exist, or an untracked directory
+it cannot read through. Never 1 — see below.
 
 | Exit | Meaning | Do |
 |---|---|---|

@@ -166,6 +166,16 @@ if [[ -f "${BUNDLE_SCRIPTS}/arsenal_config.py" ]]; then
     review_mode="$(printf '%s' "${review_mode}" | tr -d '[:space:]')"
     [[ -z "${review_mode}" ]] && review_mode="warn"
 fi
+# A `required` gate whose checker is not installed must not pass. Guarding the
+# whole block on the file's presence made the strictest setting a silent no-op
+# in exactly the bundle that cannot honour it — the failure this repo keeps
+# naming, wearing the label of the safeguard.
+if [[ "${review_mode}" != "off" && ! -f "${SCRIPT_DIR}/adversarial_review.sh" ]]; then
+    if [[ "${review_mode}" == "required" ]]; then
+        _gate_fail "pre-pr-review is 'required' but ${SCRIPT_DIR}/adversarial_review.sh is not installed, so the gate cannot run"
+    fi
+    review_note="Pre-PR adversarial review: **not run** — the review helper is not installed in this bundle."
+fi
 if [[ "${review_mode}" != "off" && -f "${SCRIPT_DIR}/adversarial_review.sh" ]]; then
     # Anchored to the git root like the two gates below. The review directory is
     # a repo-root-relative path, and `git ls-files --others` only sees from the
