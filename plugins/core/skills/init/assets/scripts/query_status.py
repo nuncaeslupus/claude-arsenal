@@ -59,8 +59,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--fail-on-problems", action="store_true")
     args = parser.parse_args(argv)
 
+    # "I did not ask GitHub" and "GitHub has no handle for this" are different
+    # answers, and reporting the first as the second makes the handle check
+    # unfailable-and-unpassable: every task reads `no issue handle` because the
+    # caller supplied no issue data to look in. That is what `make queue-doctor`
+    # does — it has no channel — so the first task file added to a board turned
+    # its dogfood into a build that could not go green. The check is skipped,
+    # visibly, when there is nothing to check it against.
     issues: list[dict[str, Any]] = []
-    if args.issues and args.issues.is_file():
+    handles_known = bool(args.issues and args.issues.is_file())
+    if handles_known:
         payload = json.loads(args.issues.read_text(encoding="utf-8"))
         if isinstance(payload, dict):
             payload = payload.get("issues", [])
@@ -77,6 +85,11 @@ def main(argv: list[str] | None = None) -> int:
     issue_state = state_from_issues(issues, titles=titles, warnings=warnings)
     state = effective_state(tasks, issue_state)
     handled = {t for i in issues if (t := task_id_from_issue(i, titles=titles))}
+    if tasks and not handles_known:
+        print(
+            "query_status: no --issues file — issue handles and issue state not checked",
+            file=sys.stderr,
+        )
 
     counts = {"open": 0, "claimed": 0, "done": 0, "cancelled": 0, "blocked": 0}
     problems: list[str] = []
@@ -94,7 +107,7 @@ def main(argv: list[str] | None = None) -> int:
             continue
         if not task["gate"]:
             problems.append(f"{task['id']}: no fenced gate block — nothing would be checked")
-        if task["id"] not in handled:
+        if handles_known and task["id"] not in handled:
             problems.append(f"{task['id']}: no issue handle — not claimable until one exists")
         for dep in task["deps"]:
             if dep not in known_ids:
@@ -166,7 +179,9 @@ def main(argv: list[str] | None = None) -> int:
                 marks.append("blocked-by " + ",".join(blockers))
             if not task["gate"]:
                 marks.append("no-gate")
-            if task["id"] not in handled:
+            if not handles_known:
+                marks.append("handle?")
+            elif task["id"] not in handled:
                 marks.append("no-handle")
             suffix = f"  [{'; '.join(marks)}]" if marks else ""
             print(f"  {task['id']}  p{task['priority']:<3} {current:<9} {task['title']}{suffix}")

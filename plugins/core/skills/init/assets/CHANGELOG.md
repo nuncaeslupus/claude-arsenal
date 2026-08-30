@@ -18,6 +18,17 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [2.9.1] - 2026-08-30
+
+- **`query_status.py` no longer reports a missing issue handle it never looked
+  for.** Run without `--issues`, it flagged every task as `no issue handle` —
+  not an answer, since nothing was consulted. Any local audit of a board (no
+  GitHub channel, no fetch) therefore failed on every task and could not be made
+  to pass. The check is now skipped, and *reported* as skipped, when there is no
+  issue data to check against; detail rows read `handle?` instead of
+  `no-handle`. With `--issues` supplied, behaviour is unchanged — a genuinely
+  missing handle is still a finding.
+
 ## [2.9.0] - 2026-08-30
 
 - **The annotatable reader is now a gate, not a closing step.** `specify` and

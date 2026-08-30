@@ -115,8 +115,21 @@ test:  ## run every plugin's behaviour tests (plugins/*/tests/*.sh) + repo-tool 
 	done
 
 queue-doctor:  ## dogfood: audit this repo's own task files (arsenal/tasks) the way a consumer would
+	@# Fetch the board's issues when a channel exists, so the handle check is a real
+	@# check rather than a skipped one. Without them query_status reports what it can
+	@# and says so — it cannot tell a missing handle from an unasked question.
+	@set -e; issues=""; \
+	if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then \
+		issues="$$(mktemp)"; \
+		gh issue list --label arsenal:task --state all --limit 200 \
+			--json number,title,state,labels,assignees > "$$issues" \
+			|| { echo "queue-doctor: issue fetch failed; handle check will be skipped" >&2; \
+			     rm -f "$$issues"; issues=""; }; \
+	fi; \
 	uv run python plugins/core/skills/init/assets/scripts/query_status.py \
-		--tasks-dir arsenal/tasks --detail --fail-on-problems
+		--tasks-dir arsenal/tasks --detail --fail-on-problems \
+		$${issues:+--issues "$$issues"}; \
+	status=$$?; [ -n "$$issues" ] && rm -f "$$issues"; exit $$status
 
 sync-dupes:  ## sync_duplicates.py --check across plugins/*/scripts/_shared/
 	uv run python $(SYNC_DUPES) --check
