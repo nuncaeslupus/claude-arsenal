@@ -83,6 +83,26 @@ while read -r hit; do
 done < <(grep -rHo '\${CLAUDE_SKILL_DIR}/[A-Za-z0-9_./-]*\.\(sh\|py\)' \
              "${SCRIPT_DIR}/../skills"/*/SKILL.md 2>/dev/null | sort -u)
 
+# Cross-skill reference cites: `claude-arsenal:<plugin>:<skill> § references/<f>.md`.
+# The skill validator exempts this form from its dangling-reference check —
+# that exemption is the whole reason the form exists — so nothing verified that
+# the cited file was real. Three skills shipped a cite naming a directory the
+# init skill does not have (its references live under `assets/`), pointing at
+# the BLOCK-override rules and the no-bundle procedure. A pointer that resolves
+# to nothing is a step of the protocol that silently is not there, which is the
+# failure this whole file was written for.
+while read -r hit; do
+    [[ -z "${hit}" ]] && continue
+    src="${hit%%:*}"; cite="${hit#*:}"
+    skill="$(sed -E 's/^[^:]*:[^:]*:([A-Za-z0-9_-]+).*/\1/' <<<"${cite}")"
+    relref="$(sed -E 's/.*§[[:space:]]*(references\/[A-Za-z0-9_.\/-]+\.md).*/\1/' <<<"${cite}")"
+    base="${SCRIPT_DIR}/../skills/${skill}"
+    if [[ ! -f "${base}/${relref}" && ! -f "${base}/assets/${relref}" ]]; then
+        note "${src#"${SCRIPT_DIR}/../"} cites ${cite}, which resolves to no file under skills/${skill}/"
+    fi
+done < <(grep -rHo '`claude-arsenal:[a-z-]*:[A-Za-z0-9_-]*[[:space:]]*§[[:space:]]*references/[A-Za-z0-9_./-]*\.md`' \
+             "${SCRIPT_DIR}/../skills"/*/SKILL.md 2>/dev/null | sort -u)
+
 # AGENTS.md rides in every consumer's context window on every turn. 250 lines is
 # the budget: enough for the session-start protocol, the task format, the claim
 # contract and completion, and not enough for anything that belongs behind a
