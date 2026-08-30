@@ -18,6 +18,25 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [2.12.0] - 2026-08-30
+
+- **New section `extract`, and its first skill `har`.** Off by default, so a
+  repo that never scrapes pays nothing for it; `init.py --sections extract`
+  turns it on, and `--list-sections` names it whether it is on or not.
+- **`har` reads browser captures.** A HAR holds the complete network truth of a
+  session and is also 5-500 MB of JSON, so the one thing nobody can do with it
+  is read it. This release ships the foundation: `validate_har.py` (is this
+  capture usable, and what did its exporter leave out) and `analyze_har.py`
+  (what is in here, and `--index` to build the sidecar every later command
+  reads). Searching, extraction and reproduction follow in the next releases.
+- The index sidecar is redacted: auth headers, cookies and token-shaped
+  parameters become `<redacted:ab12cd34>` — a salted fingerprint, so equal
+  values stay equal and header analysis still works, while nothing about the
+  original is recoverable. URL userinfo and fragments are dropped outright.
+- Bodies are decoded before they are searched — base64, gzip, deflate, and
+  charsets declared, undeclared or declared wrongly. A body that cannot be
+  decoded is reported as undecodable, never returned as a mangled string.
+
 ## [2.11.0] - 2026-08-30
 
 - **Every session now reads the capability map at start-up, and volunteers a

@@ -20,7 +20,7 @@ Gates: `offset_reparse_mismatches == 0`, `encoding_matrix_pass_rate == 1.0`, SC2
 ## Acceptance gate
 
 ```bash
-bash plugins/core/tests/har_test.sh --stage 1
-python3 plugins/core/skills/har/scripts/analyze_har.py --input plugins/core/tests/har/fixtures/basic.har --index --verify-offsets
+bash plugins/core/tests/har_test.sh
+make sync-sections-check
 make context-budget
 ```
