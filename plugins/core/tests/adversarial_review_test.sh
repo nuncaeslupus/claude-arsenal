@@ -277,4 +277,26 @@ grep -q "pre-pr-review" <<<"${out}" || fail "the refusal should name the key it 
 [[ -s "${GH_BODY_FILE}" ]] && fail "no PR should be opened when the mode cannot be read"
 echo "PASS: a misspelled review mode refuses instead of degrading to warn"
 
+# --- 18: a review taken from a subdirectory still covers the whole worktree ---
+# `git diff` is repo-wide from anywhere, but `git ls-files --others` lists only
+# what is below the cwd — so emit run from a subdirectory omitted every
+# untracked file above it from both the packet and the digest, then certified
+# the result CLEAR. The default review directory landed under the caller's cwd
+# too, where open_task_pr.sh's root-anchored check reads "never run".
+sub="${tmp}/subrepo"
+mkdir -p "${sub}/nested"; cd "${sub}"
+git init -q -b main .
+git config user.email t@e.x; git config user.name T; git config commit.gpgsign false
+echo seed > root.txt; git add -A; git commit -qm init
+echo "ROOT_LEVEL_CANARY" > root_new.py          # untracked, ABOVE the cwd below
+echo "nested" > nested/nested_new.py
+cd "${sub}/nested"
+bash "${REVIEW}" emit >/dev/null 2>&1 || fail "emit should succeed from a subdirectory"
+grep -q "ROOT_LEVEL_CANARY" "${sub}/tmp/arsenal-review/packet.md" \
+    || fail "a review run from a subdirectory must still see untracked files at the repo root"
+[[ -d "${sub}/nested/tmp/arsenal-review" ]] \
+    && fail "the default review directory must be repo-root relative, not cwd relative"
+cd "${REPO}"
+echo "PASS: a review taken from a subdirectory covers the whole worktree"
+
 echo "PASS: adversarial_review_test — all gates passed"

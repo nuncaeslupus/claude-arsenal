@@ -40,6 +40,12 @@
 # The one thing taken from the reviewer's reply is whether its last VERDICT line
 # says BLOCK or CLEAR.
 #
+# Every path is repo-root-relative by contract: the script anchors itself at the
+# git root, because `git ls-files --others` only sees from the cwd down and a
+# review taken in a subdirectory silently omitted everything above it. Paths the
+# caller passes (`--intent`, `--out`, the reply file) are resolved against the
+# caller's cwd first, so they keep meaning what the caller meant.
+#
 # Env: ARSENAL_HOME (task tree, default arsenal)
 #      ARSENAL_QUEUE_REMOTE (default origin) — for resolving the default branch
 #      ARSENAL_REVIEW_DIR (packet dir, default tmp/arsenal-review)
@@ -63,13 +69,14 @@ SUB="${1:-}"; shift || true
 [[ -z "${SUB}" ]] && die "usage: adversarial_review.sh <emit|verdict|check> [options]"
 
 BASE_OVERRIDE=""; TASK_ID=""; INTENT_FILE=""; REPLY_FILE=""
-OUT_DIR="${ARSENAL_REVIEW_DIR:-tmp/arsenal-review}"
+OUT_DIR="${ARSENAL_REVIEW_DIR:-}"; OUT_DIR_GIVEN=0
+[[ -n "${OUT_DIR}" ]] && OUT_DIR_GIVEN=1
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --base)   BASE_OVERRIDE="${2:?--base needs a ref}"; shift 2 ;;
         --task)   TASK_ID="${2:?--task needs an id}"; shift 2 ;;
         --intent) INTENT_FILE="${2:?--intent needs a file}"; shift 2 ;;
-        --out)    OUT_DIR="${2:?--out needs a dir}"; shift 2 ;;
+        --out)    OUT_DIR="${2:?--out needs a dir}"; OUT_DIR_GIVEN=1; shift 2 ;;
         -*)       die "unknown option: $1" ;;
         *)        [[ -z "${REPLY_FILE}" ]] && REPLY_FILE="$1" || die "unexpected argument: $1"; shift ;;
     esac
@@ -77,6 +84,29 @@ done
 
 git rev-parse --git-dir >/dev/null 2>&1 || die "not a git repository"
 git rev-parse --verify --quiet HEAD >/dev/null 2>&1 || die "the repository has no commits — nothing to review against"
+
+# Anchor the whole run at the git root, like every other script in this bundle.
+# `git diff` is repo-wide from anywhere, but `git ls-files --others` is NOT: run
+# from a subdirectory it lists only untracked files below that directory, so a
+# whole new file at the root was absent from both the packet and the digest —
+# reviewed as though it did not exist, and then certified CLEAR. The default
+# review directory has the same problem from the other end: written under the
+# caller's cwd, it lands where open_task_pr.sh's root-anchored `check` cannot
+# find it, and a real review reads as "never run".
+#
+# Caller-relative paths are resolved BEFORE moving, so `--intent`, `--out` and
+# the reply file still mean what the caller meant by them.
+_abs() { case "$1" in /*) printf '%s\n' "$1" ;; *) printf '%s/%s\n' "$(pwd -P)" "$1" ;; esac; }
+[[ -n "${INTENT_FILE}" ]] && INTENT_FILE="$(_abs "${INTENT_FILE}")"
+[[ -n "${REPLY_FILE}" ]] && REPLY_FILE="$(_abs "${REPLY_FILE}")"
+if (( OUT_DIR_GIVEN )); then
+    OUT_DIR="$(_abs "${OUT_DIR}")"
+else
+    OUT_DIR="tmp/arsenal-review"
+fi
+_repo_root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+[[ -n "${_repo_root}" ]] || die "could not resolve the repository root"
+cd "${_repo_root}" || die "cannot enter the repository root ${_repo_root}"
 
 PACKET="${OUT_DIR}/packet.md"
 META="${OUT_DIR}/meta.env"
@@ -142,10 +172,17 @@ _untracked_diff() {
         # the packet and the digest, so a file nobody could read would be
         # reviewed as though it did not exist, which is the silent pass this
         # whole script exists to make impossible.
-        if ! git --no-pager diff --no-color --no-ext-diff --no-index -- /dev/null "${p}" 2>/dev/null; then
-            status=$?
-            (( status == 1 )) || return "${status}"
-        fi
+        git --no-pager diff --no-color --no-ext-diff --no-index -- /dev/null "${p}" 2>/dev/null
+        status=$?
+        # Captured immediately, and NOT from inside an `if ! cmd` — there `$?`
+        # is the status of the negation, which is 0 whenever the command
+        # failed, so the guard read every ordinary "files differ" as 0 and
+        # returned after the first untracked file. Everything sorting after it
+        # vanished from the packet and the digest, silently.
+        #
+        # 0 is a real outcome too: an empty new file differs from /dev/null in
+        # no lines, so git says nothing and exits 0.
+        (( status <= 1 )) || return "${status}"
     done < <(git ls-files --others --exclude-standard -z 2>/dev/null)
     return 0
 }
