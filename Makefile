@@ -121,15 +121,18 @@ queue-doctor:  ## dogfood: audit this repo's own task files (arsenal/tasks) the 
 	@set -e; issues=""; \
 	if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then \
 		issues="$$(mktemp)"; \
-		gh issue list --label arsenal:task --state all --limit 200 \
-			--json number,title,state,labels,assignees > "$$issues" \
-			|| { echo "queue-doctor: issue fetch failed; handle check will be skipped" >&2; \
-			     rm -f "$$issues"; issues=""; }; \
+		trap 'rm -f "$$issues"' EXIT INT TERM; \
+		if ! gh issue list --label arsenal:task --state all --limit 200 \
+			--json number,title,state,labels,assignees > "$$issues"; then \
+			echo "queue-doctor: the issue fetch failed on an authenticated channel." >&2; \
+			echo "  Not treating that as 'no channel' — that would skip the handle check" >&2; \
+			echo "  and let this pass on a board whose tasks have no issues at all." >&2; \
+			exit 2; \
+		fi; \
 	fi; \
 	uv run python plugins/core/skills/init/assets/scripts/query_status.py \
 		--tasks-dir arsenal/tasks --detail --fail-on-problems \
-		$${issues:+--issues "$$issues"}; \
-	status=$$?; [ -n "$$issues" ] && rm -f "$$issues"; exit $$status
+		$${issues:+--issues "$$issues"}
 
 sync-dupes:  ## sync_duplicates.py --check across plugins/*/scripts/_shared/
 	uv run python $(SYNC_DUPES) --check

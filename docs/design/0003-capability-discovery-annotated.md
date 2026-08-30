@@ -302,14 +302,24 @@ shipped skill already does, because it did not know it had an alternative.
 
 ## §9 Delivery
 
-| Task | Contents | PR |
-|---|---|---|
-| A | `sections.json`, `sync_sections.py`, `make sync-sections{,-check}`, CI wiring, `--list-sections` / `--section NAME`, `list_sections_test.sh` | 1 |
-| B | `AGENTS.md` step 0c + refs row, `references/capability-map.md`, `init` SKILL.md note, CHANGELOG + version bump | 2 (stacked on 1) |
+| Task | Contents | PR | Bump |
+|---|---|---|---|
+| C | `query_status.py` handle check, `make queue-doctor` fetch, CI token, this note, the three task files | 0 | patch |
+| A | `sections.json`, `sync_sections.py`, `make sync-sections{,-check}`, CI wiring, `--list-sections` / `--section NAME`, `list_sections_test.sh` | 1 (on 0) | minor |
+| B | `AGENTS.md` step 0c + refs row, `references/capability-map.md`, `init` SKILL.md note | 2 (on 1) | minor |
 
 Split so that PR 1 is a self-contained, testable capability and PR 2 is the
-wiring that makes it happen unasked. Per the stacking rule, only PR 2 bumps
-`.bundle-version` (minor — a new flag and a new protocol step).
+wiring that makes it happen unasked. PR 0 is a prerequisite found while queuing
+the other two: `make queue-doctor` reports every task file as handle-less
+because it passes no `--issues`, so the first task file added to this repo makes
+its own dogfood job unpassable.
+
+**Every PR in this stack bumps `.bundle-version`, which the stacking rule says
+intermediate PRs should not.** That rule assumes an intermediate PR ships
+nothing a consumer vendors; all three of these touch `plugins/core/skills/`, and
+CI's `version-bump` job requires a bump — correctly, since each one changes what
+a consumer gets. The rule holds for stacks that refactor toward a release; it
+does not fit a stack whose every step is shippable.
 
 <!-- -->
 

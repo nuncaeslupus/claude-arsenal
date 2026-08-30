@@ -470,24 +470,41 @@ shipped skill already does, because it did not know it had an alternative.</p></
 <th>Task</th>
 <th>Contents</th>
 <th>PR</th>
+<th>Bump</th>
 </tr>
 </thead>
 <tbody>
 <tr>
+<td>C</td>
+<td><code>query_status.py</code> handle check, <code>make queue-doctor</code> fetch, CI token, this note, the three task files</td>
+<td>0</td>
+<td>patch</td>
+</tr>
+<tr>
 <td>A</td>
 <td><code>sections.json</code>, <code>sync_sections.py</code>, <code>make sync-sections{,-check}</code>, CI wiring, <code>--list-sections</code> / <code>--section NAME</code>, <code>list_sections_test.sh</code></td>
-<td>1</td>
+<td>1 (on 0)</td>
+<td>minor</td>
 </tr>
 <tr>
 <td>B</td>
-<td><code>AGENTS.md</code> step 0c + refs row, <code>references/capability-map.md</code>, <code>init</code> SKILL.md note, CHANGELOG + version bump</td>
-<td>2 (stacked on 1)</td>
+<td><code>AGENTS.md</code> step 0c + refs row, <code>references/capability-map.md</code>, <code>init</code> SKILL.md note</td>
+<td>2 (on 1)</td>
+<td>minor</td>
 </tr>
 </tbody>
 </table>
 <p>Split so that PR 1 is a self-contained, testable capability and PR 2 is the
-wiring that makes it happen unasked. Per the stacking rule, only PR 2 bumps
-<code>.bundle-version</code> (minor — a new flag and a new protocol step).</p></div>
+wiring that makes it happen unasked. PR 0 is a prerequisite found while queuing
+the other two: <code>make queue-doctor</code> reports every task file as handle-less
+because it passes no <code>--issues</code>, so the first task file added to this repo makes
+its own dogfood job unpassable.</p>
+<p><strong>Every PR in this stack bumps <code>.bundle-version</code>, which the stacking rule says
+intermediate PRs should not.</strong> That rule assumes an intermediate PR ships
+nothing a consumer vendors; all three of these touch <code>plugins/core/skills/</code>, and
+CI's <code>version-bump</code> job requires a bump — correctly, since each one changes what
+a consumer gets. The rule holds for stacks that refactor toward a release; it
+does not fit a stack whose every step is shippable.</p></div>
 <div class="note" data-for="s-spec-9"><div class="note-head"><span class="note-ico">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC §9</span></div><textarea class="note-ta" data-key="s-spec-9" data-label="§9 Delivery" data-part="0003 Capability Discovery" rows="1" placeholder="Tap to add a note for this point…"></textarea></div>
 </article>
 </section>
