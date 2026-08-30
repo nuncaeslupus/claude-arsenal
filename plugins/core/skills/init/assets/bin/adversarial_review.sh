@@ -158,6 +158,15 @@ RECEIPT="${OUT_DIR}/receipt.env"
 # by one run lands in the diff of the next — changing the digest, and shipping
 # the review into the PR it was reviewing.
 _ensure_out_dir() {
+    # The self-ignore is what keeps the review out of the PR it is reviewing, so
+    # it is not optional — but writing a `.gitignore` of `*` into a directory
+    # that already holds someone else's files would change how git sees them.
+    # A pre-existing, non-empty directory that is not already a review slot is
+    # refused instead.
+    if [[ -d "${OUT_DIR}" && ! -f "${OUT_DIR}/.gitignore" ]] \
+       && [[ -n "$(ls -A "${OUT_DIR}" 2>/dev/null)" ]]; then
+        die "${OUT_DIR} already exists and holds other files; the review directory must be its own, because it is marked entirely git-ignored"
+    fi
     mkdir -p "${OUT_DIR}" || die "could not create ${OUT_DIR}"
     [[ -f "${OUT_DIR}/.gitignore" ]] || printf '*\n' > "${OUT_DIR}/.gitignore"
 }
@@ -451,10 +460,14 @@ cmd_emit() {
       printf 'intent=%s\n' "${intent:-none}"
       printf 'emitted=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"; } > "${META}" || die "could not write ${META}"
 
-    # A new packet retires the previous answer. Without this, a second review
-    # round started after a fix would still have round one's CLEAR on disk, and
-    # `check` would pass a tree nobody has looked at.
-    rm -f "${RECEIPT}"
+    # A new packet retires the previous answer — BOTH halves of it. Deleting
+    # only the receipt left round one's reply sitting at the default path, so if
+    # round two's reviewer wrote nothing (it failed, it answered in prose, it was
+    # never spawned) `verdict` read the stale CLEAR, re-digested the tree — which
+    # matched, because `emit` had just run on it — and minted a fresh receipt for
+    # a change nobody had looked at. That is the BLOCK→fix→re-emit loop every
+    # skill in this bundle prescribes, so it was the common path, not the corner.
+    rm -f "${RECEIPT}" "${OUT_DIR}/verdict.md"
 
     # Absolute: this path's whole job is to be pasted into a subagent's prompt,
     # and nothing guarantees that subagent starts in the repository root this
@@ -484,13 +497,30 @@ cmd_verdict() {
     base="$(sed -n 's/^base=//p' "${META}")"
     digest="$(sed -n 's/^digest=//p' "${META}")"
 
-    # The LAST verdict line wins: the packet quotes the format, and a reviewer
-    # that restates it before answering must not have its example counted.
-    local line verdict reason
-    line="$(grep -E '^[[:space:]]*VERDICT:[[:space:]]*(BLOCK|CLEAR)\b' "${REPLY_FILE}" | tail -1)"
-    if [[ -z "${line}" ]]; then
+    # The verdict must be the LAST NON-BLANK LINE, which is what the rubric
+    # demands. Taking the last line that merely *matched* guarded one direction
+    # only: a reviewer restating the format before answering was handled, while
+    # one that ended a genuine BLOCK with "once this is fixed the line will read:
+    # VERDICT: CLEAR — …" had its illustration recorded as the answer. Reading
+    # position instead of pattern closes both, and an inline mention stays safe
+    # because the match is anchored to the start of the line.
+    local line verdict reason count
+    local _pat='^[[:space:]]*VERDICT:[[:space:]]*(BLOCK|CLEAR)([[:space:]]|$)'
+    count="$(grep -cE "${_pat}" "${REPLY_FILE}" || true)"
+    line="$(grep -v '^[[:space:]]*$' "${REPLY_FILE}" | tail -1)"
+    if (( count == 0 )); then
         echo "adversarial_review: no 'VERDICT: BLOCK|CLEAR' line in ${REPLY_FILE}." >&2
         echo "adversarial_review: a review with no verdict is not a pass — ask the reviewer again." >&2
+        exit 2
+    fi
+    if (( count > 1 )); then
+        echo "adversarial_review: ${REPLY_FILE} carries ${count} verdict lines; the rubric asks for exactly one, as the last line." >&2
+        echo "adversarial_review: which one is the answer cannot be guessed — a reply that BLOCKs and then illustrates 'once fixed this will read CLEAR' would otherwise be recorded as CLEAR. Ask the reviewer for a single verdict." >&2
+        exit 2
+    fi
+    if ! printf '%s\n' "${line}" | grep -qE "${_pat}"; then
+        echo "adversarial_review: the verdict in ${REPLY_FILE} is not its last line." >&2
+        echo "adversarial_review: the rubric requires it there, and reading any other position is guesswork — ask the reviewer again." >&2
         exit 2
     fi
     verdict="$(sed -E 's/^[[:space:]]*VERDICT:[[:space:]]*(BLOCK|CLEAR).*/\1/' <<<"${line}")"

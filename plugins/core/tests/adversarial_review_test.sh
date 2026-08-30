@@ -79,13 +79,23 @@ bash "${REVIEW}" verdict 2>/dev/null
 (( $? == 2 )) || fail "a reply with no VERDICT line must exit 2, never 0"
 echo "PASS: a review that returned no verdict is not a pass"
 
-# --- 5: the LAST verdict line wins (the packet quotes the format) ---
-printf 'the format is VERDICT: CLEAR — example\nVERDICT: BLOCK — the real answer\n' > "${V}"
+# --- 5: exactly one verdict line, and it must be the last ---
+# "last matching line wins" guarded a quoted format BEFORE the answer and
+# nothing after it: a reply that blocked and then illustrated "once fixed this
+# will read VERDICT: CLEAR" had the illustration recorded as the answer. An
+# inline mention stays safe because the match is anchored to the line start.
+printf 'the format is VERDICT: CLEAR — example\n\nVERDICT: BLOCK — the real answer\n' > "${V}"
 bash "${REVIEW}" verdict 2>/dev/null
-(( $? == 1 )) || fail "the last VERDICT line must win, so a quoted example cannot clear a blocked change"
+(( $? == 1 )) || fail "an inline mention of the format must not displace the real verdict"
 bash "${REVIEW}" check 2>/dev/null
 (( $? == 1 )) || fail "check must report the recorded BLOCK"
-echo "PASS: the last verdict line wins, and a BLOCK is held"
+printf 'VERDICT: BLOCK — broken\n\nOnce fixed the line will read:\nVERDICT: CLEAR — resolved\n' > "${V}"
+bash "${REVIEW}" verdict 2>/dev/null
+(( $? == 2 )) || fail "a reply carrying two verdict lines must be refused, never resolved in favour of the trailing one"
+printf 'VERDICT: CLEAR — ok\n\n--- signature ---\n' > "${V}"
+bash "${REVIEW}" verdict 2>/dev/null
+(( $? == 2 )) || fail "a verdict that is not the last line must be refused"
+echo "PASS: exactly one verdict line, positioned last, or it is not a verdict"
 
 # --- 6: a tree that moves after CLEAR is stale, not cleared ---
 printf 'VERDICT: CLEAR — nothing blocking\n' > "${V}"
@@ -97,11 +107,23 @@ bash "${REVIEW}" verdict 2>/dev/null
 (( $? == 3 )) || fail "verdict must also refuse to record a review of a tree that has moved"
 echo "PASS: a CLEAR does not carry over to a tree edited after it"
 
-# --- 7: re-emitting retires the previous answer ---
+# --- 7: re-emitting retires the previous answer — receipt AND reply ---
+# Deleting only the receipt left round one's reply at the default path, so if
+# round two's reviewer wrote nothing, `verdict` read the stale CLEAR and
+# re-digested the NEW tree — which matched, because emit had just run on it —
+# and minted a receipt for a change nobody had looked at. That is the
+# BLOCK-fix-re-emit loop every skill prescribes, so it was the common path.
+bash "${REVIEW}" emit >/dev/null || fail "setup: packet for round one"
+printf 'VERDICT: CLEAR — round one was fine\n' > "${V}"
+bash "${REVIEW}" verdict >/dev/null 2>&1 || fail "setup: recording round one"
+echo "an entirely different change" >> app.py
 bash "${REVIEW}" emit >/dev/null || fail "setup: re-emit should succeed"
+[[ -f "${V}" ]] && fail "emit must retire the previous reply, not only the receipt"
+bash "${REVIEW}" verdict 2>/dev/null
+(( $? == 2 )) || fail "round one's reply must not be able to clear round two's tree"
 bash "${REVIEW}" check 2>/dev/null
 (( $? == 2 )) || fail "a new packet must retire the old receipt — round one's CLEAR says nothing about round two"
-echo "PASS: a second review round starts with no verdict on record"
+echo "PASS: a new packet retires both halves of the previous answer"
 
 # --- 8: nothing to review is its own outcome ---
 git stash -q -u 2>/dev/null || { git checkout -q -- .; rm -f extra.txt; }
