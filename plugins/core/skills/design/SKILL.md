@@ -103,6 +103,10 @@ When a returned export arrives — a path in `~/Downloads`, an upload, a paste �
 into the plan's directory beside the reader and commit it. The annotations are the
 sign-off record for this plan; left in Downloads they are gone by the next session.
 
+Full rules — which documents need one, the naming, and why the work that
+consumes the document waits for the annotations:
+`claude-arsenal:core:init § references/annotatable-reader.md`.
+
 ---
 
 ## Abbreviation

@@ -18,6 +18,41 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [2.9.0] - 2026-08-30
+
+- **The annotatable reader is now a gate, not a closing step.** `specify` and
+  `design` already generated a reader; both now say that the work consuming the
+  document waits for the annotations. No PR to merge a spec or plan, and no
+  `design` off a spec or `execution` off a plan, until the reviewer's export has
+  come back and been read. A document reviewed after it merged was ratified, not
+  reviewed. A reviewer who says to proceed without annotating is making that
+  call — it is not an assumption to act on while waiting.
+- **The rule now covers any document that specifies or plans work**, not only
+  `status/specification.md` and workspace specs, which are all that
+  `create_reader.py` auto-discovers. Design documents, RFCs and proposals written into a docs tree
+  get a reader too, named explicitly with `--output-dir` beside them. Publishing
+  some other way — a chat summary, a hand-built page, a link to the raw file —
+  does not satisfy it: the reader exists so notes attach to the section they are
+  about, and a substitute that drops that property is not one.
+- Guidance to rename the generated `spec-reader.html` / `spec-annotated.md` per
+  document where several can share a directory — the names are fixed, so two
+  design docs would otherwise overwrite each other's readers.
+- **Every session will learn what the whole marketplace can do, not just what
+  this repo installed.** Sections default off, so the failure worth designing
+  against is not that a consumer cannot find a tool — it is that they never go
+  looking. The session-start protocol will run `init.py --list-sections` every
+  session: one short line per section, its skills, and whether it is on here.
+  The commitment that follows is behavioural and general — whenever a task is
+  squarely covered by a skill this repo did not install, the session says so
+  before doing the work the long way. A repo handed an unexpected scraping task
+  will say the `extract` section ships a HAR analyser for exactly this instead
+  of reaching for a browser; a repo without the `python` section asked about
+  coverage gaps will mention `coverage-gaps`. Specified in design 0002 § 5.5;
+  shipping as delivery stage 0.
+- The rules live in one place — `claude-arsenal/references/annotatable-reader.md`
+  — rather than duplicated in both skill bodies, so they cannot drift apart and
+  neither skill pays for them until it needs them.
+
 ## [2.8.0] - 2026-08-30
 
 - **`/init` now asks what kind of project this is, and installs only those
