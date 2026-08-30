@@ -109,6 +109,37 @@ Before creating the PR, verify:
 - [ ] Changes match the design scope (no scope creep)
 - [ ] PR description prepared: what changes, why, how to test
 
+Every box above is ticked by the session that wrote the code, against the
+understanding that wrote it. Step 4b covers what that cannot reach.
+
+#### 4b. Adversarial review by a session that has never seen the change
+
+Before Step 5, put the change in front of a reviewer with no history of it:
+
+```bash
+bash "${CLAUDE_SKILL_DIR}/../../init/assets/bin/adversarial_review.sh" emit
+# writes tmp/arsenal-review/packet.md — intent, full diff, rubric
+```
+
+Spawn a subagent whose **entire prompt** is to read that packet and write its
+reply to `tmp/arsenal-review/verdict.md`. Pass nothing else: no summary of the
+change, no account of the approach taken, no conversation history. Every such
+addition transplants the blind spot this step exists to escape — a reviewer
+told "this refactor preserves behaviour" checks a different question than one
+that had to work it out. Then record the answer:
+
+```bash
+bash "${CLAUDE_SKILL_DIR}/../../init/assets/bin/adversarial_review.sh" verdict
+```
+
+Exit 0 clears Step 5. Exit 1 is a BLOCK — show the findings verbatim, fix them,
+and re-emit, since a review of the tree before the fix does not cover the tree
+after it. Exit 2 means no verdict came back, which is not a pass.
+
+Load `claude-arsenal:core:init § references/pre-pr-review.md` for the full
+protocol, how to handle a BLOCK that looks wrong, and the manual form for a repo
+with no vendored bundle.
+
 ### Step 5: Create PR
 
 - Write clear PR description linking to ticket/design

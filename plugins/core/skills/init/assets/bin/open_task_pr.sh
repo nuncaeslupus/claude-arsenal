@@ -29,6 +29,14 @@
 # part of the PR's own diff, so the archive lands exactly when the merge does
 # and no follow-up commit is owed to anyone.
 #
+# Three things are checked before any of that happens: the host's own gate, the
+# task's acceptance gate, and — via `adversarial_review.sh check` — whether an
+# independent reviewer cleared this exact tree. The first two are mechanical and
+# say nothing about whether the change is the change that was asked for; the
+# third is the only one that can. Its outcome is written into the PR body under
+# every mode but `off`, so a PR opened with no independent review says so where
+# the person merging it will read it.
+#
 # Env: ARSENAL_QUEUE_REMOTE (default origin); ARSENAL_COAUTHOR (optional);
 #      ARSENAL_TASK_ISSUE (issue number, when the caller already knows it);
 #      ARSENAL_ISSUES_JSON (saved issue list, default /tmp/arsenal-issues.json);
@@ -154,6 +162,43 @@ if [[ -f "${SCRIPT_DIR}/gate_run.sh" ]]; then
         2) _gate_fail "the task gate could not read ${ARSENAL_HOME}/tasks/${TASK_ID}.md (gate_run.sh exit 2). A repo still on the pre-v0.25 claude-arsenal/queue/ layout must run arsenal_migrate.py first" ;;
         *) _gate_fail "the task gate failed (gate_run.sh exit ${_rc})" ;;
     esac
+fi
+
+# 3. The pre-PR adversarial review. The two gates above prove the change does
+#    not break the repo; neither can tell whether it does what the task asked,
+#    because both are mechanical and the only reader who has judged that so far
+#    is the session that wrote it. `adversarial_review.sh check` asks whether a
+#    reviewer with no history of this work cleared THIS tree — digest-bound, so
+#    a CLEAR from before the last edit does not count.
+#
+#    Default is `warn`, not a refusal, and that is deliberate: a hard gate added
+#    to every existing worker loop overnight is a gate a consumer disables on
+#    the first red morning. So the outcome is written into the PR body instead,
+#    where the human who merges it reads it. Silence is what this repo keeps
+#    getting bitten by, not friction. Set `pre-pr-review = "required"` in
+#    arsenal/config.toml to make it refuse.
+review_note=""
+review_mode="warn"
+if [[ -f "${BUNDLE_SCRIPTS}/arsenal_config.py" ]]; then
+    review_mode="$(python3 "${BUNDLE_SCRIPTS}/arsenal_config.py" \
+        --repo-root "${_repo_root}" --get pre-pr-review 2>/dev/null || echo warn)"
+    [[ -z "${review_mode}" ]] && review_mode="warn"
+fi
+if [[ "${review_mode}" != "off" && -f "${SCRIPT_DIR}/adversarial_review.sh" ]]; then
+    # Anchored to the git root like the two gates above. The review directory is
+    # a repo-root-relative path, and `git ls-files --others` only sees from the
+    # cwd down — run from a subdirectory this would read a different tree than
+    # the one the review was written for, and report a clean "not run".
+    ( cd "${_repo_root:-.}" && bash "${SCRIPT_DIR}/adversarial_review.sh" check ) >&2
+    case $? in
+        0) review_note="Pre-PR adversarial review: **CLEAR** — an independent reviewer with no history of this change read it against the task and found nothing blocking." ;;
+        1) review_note="Pre-PR adversarial review: **BLOCK** — the independent reviewer objected and the objection was not resolved before this PR opened. Read its findings before merging." ;;
+        3) review_note="Pre-PR adversarial review: **STALE** — the change was reviewed, then edited again. What is in this PR has not been reviewed." ;;
+        *) review_note="Pre-PR adversarial review: **not run** — no independent reviewer looked at this change before the PR opened." ;;
+    esac
+    if [[ "${review_mode}" == "required" && "${review_note}" != *CLEAR* ]]; then
+        _gate_fail "pre-pr-review is 'required' and there is no CLEAR review for this tree (run adversarial_review.sh emit, review it, then verdict)"
+    fi
 fi
 
 # Snapshot the working tree to a permanent refs/arsenal-rescue/… ref. Used
@@ -562,8 +607,13 @@ if [[ -n "${ISSUE}" ]]; then
 else
     gate_note="$(printf 'Acceptance gate in `%s/tasks/%s.md`; it passed before the PR was opened. This PR closes no issue, so merging it does NOT complete the task.' "${ARSENAL_HOME}" "${TASK_ID}")"
 fi
-BODY="$(printf '## Summary\n\n%s\n\n%s\n\n## Test plan\n\n%s\n' \
-    "${closes_line}" "${TITLE}" "${gate_note}")"
+# The review outcome rides in the body on purpose. stderr scrolls past and
+# nobody re-reads a worker's log; the PR body is the one surface the person
+# merging this actually looks at, so "nobody independent read this" has to be
+# written where that decision is made.
+BODY="$(printf '## Summary\n\n%s\n\n%s\n\n## Test plan\n\n%s\n%s' \
+    "${closes_line}" "${TITLE}" "${gate_note}" \
+    "$([[ -n "${review_note}" ]] && printf '\n%s\n' "${review_note}")")"
 PR_TITLE="${TYPE}: ${TITLE}"
 
 # Open the PR over whichever channel exists. `gh` first, then REST — the REST

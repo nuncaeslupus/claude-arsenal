@@ -101,7 +101,37 @@ Verify `pwd` at the start of the task if unsure.
      ```
 
      Exit.
-5. **Gate passes** → open the PR with the thin helper. Export the dynamic
+5. **Gate passes** → get an independent read before opening anything. The gates
+   prove the repo is not broken. They cannot tell whether you built what the
+   task asked for, and neither can you: you have been reasoning about this
+   change for the whole task, and that is exactly the context that makes a
+   wrong implementation look right.
+
+   ```bash
+   bash claude-arsenal/bin/adversarial_review.sh emit --task <task_id>
+   ```
+
+   Spawn ONE subagent whose entire prompt is: read `tmp/arsenal-review/packet.md`
+   and follow it, writing the reply to `tmp/arsenal-review/verdict.md`. Give it
+   nothing else — not your notes, not the approach you took, not which parts you
+   are sure about. Then:
+
+   ```bash
+   bash claude-arsenal/bin/adversarial_review.sh verdict
+   ```
+
+   Exit 0 clears you to open the PR. Exit 1 is a BLOCK: fix what it found and
+   start the review again from `emit` — a cleared review of the tree before the
+   fix does not cover the tree after it. Exit 2 means it returned no verdict,
+   which is not a pass.
+
+   **If this surface cannot spawn a subagent at all**, do not stand in for one.
+   A review you run on your own work, recorded as an independent review, is
+   worth less than none — it launders the same blind spot into a PR body that
+   claims someone checked. Skip it, say so in your outcome report, and let
+   `open_task_pr.sh` record that no independent review ran.
+
+6. **Review is clear** → open the PR with the thin helper. Export the dynamic
    Co-Authored-By identity supplied by the harness first (never hardcode a
    model name):
    ```bash
@@ -118,8 +148,8 @@ Verify `pwd` at the start of the task if unsure.
    `ARSENAL_ALLOW_UNLINKED_PR=1`: that opens a PR whose merge closes nothing.
    Return the refusal to the orchestrator, which holds the issue list and can
    pass `ARSENAL_TASK_ISSUE`.
-6. **Return the outcome to the orchestrator** — status `done`, the PR URL
-   or `branch:<name>` line from step 5, and **`toplevel: <git rev-parse --show-toplevel>`**.
+7. **Return the outcome to the orchestrator** — status `done`, the PR URL
+   or `branch:<name>` line from step 6, and **`toplevel: <git rev-parse --show-toplevel>`**.
 
    That last line is how the orchestrator learns whether isolation was real.
    Some surfaces silently ignore `isolation: worktree` and run you in the
@@ -168,7 +198,11 @@ and report it — do not commit through it.
 - Cut per-task branches from the host default branch only, so the PR diff is
   only the task's code.
 - Do not access files outside the worktree root using absolute paths.
-- Do not spawn additional subagents (one worker per task).
+- Do not spawn additional subagents beyond the single pre-PR reviewer in
+  step 5 (one worker per task). That one is exempt because it is the whole
+  point of the step: it claims nothing, opens nothing, and its lack of your
+  context is the thing being bought. Anything that would claim a task or
+  open a PR is not it.
 - Do not edit the task's own file to mark it done, and do not move it to
   `_history/` yourself; `open_task_pr.sh` puts the archive in the PR so it lands
   exactly when the merge does.

@@ -297,5 +297,6 @@ before starting; older versions do not support `statusLine.rate_limits`.
 | Agent | File | When used |
 |-------|------|-----------|
 | Worker | `agents/worker.md` | Spawned via Task tool per claimed task |
+| Reviewer | `agents/reviewer.md` | Spawned by the worker before its PR opens, on a packet from `adversarial_review.sh` — no history of the change |
 
 ---

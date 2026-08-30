@@ -52,6 +52,17 @@ DEFAULTS: dict[str, Any] = {
     # named `make lint` as its example, so a repo whose real gate is five
     # commands had four of them enforced by nobody.
     "host-gate": "",
+    # How hard the pre-PR adversarial review binds. Read by open_task_pr.sh via
+    # bin/adversarial_review.sh, whose `check` asks whether a reviewer that
+    # never saw this work cleared THIS tree.
+    #   warn      (default) open the PR either way, and record the outcome —
+    #             cleared, blocked, stale, or never run — in the PR body, where
+    #             the human merging it looks. Chosen as the default because a
+    #             gate that breaks every existing worker loop on upgrade gets
+    #             turned off, and one that says nothing gets forgotten.
+    #   required  refuse to open the PR without a CLEAR receipt for this tree.
+    #   off       skip the check and write no line.
+    "pre-pr-review": "warn",
     # test-first writes a failing test before the change; test-after writes
     # tests alongside it. Read by `execution`.
     "test-discipline": "test-first",

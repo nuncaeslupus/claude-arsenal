@@ -43,6 +43,7 @@ claude-arsenal/        ← upstream. /init owns it and may overwrite it freely
   AGENTS.md            ← the session protocol; imported via @claude-arsenal/AGENTS.md
   references/          ← the rest of the protocol, read on demand (never imported)
   agents/worker.md     ← worker subagent definition
+  agents/reviewer.md   ← adversarial reviewer: reads a change cold, before its PR
   bin/
     github_channel.sh  ← the ONE place that knows how to reach GitHub (gh | rest | none)
     claim_task.sh      ← atomic claim via ref creation
@@ -50,6 +51,7 @@ claude-arsenal/        ← upstream. /init owns it and may overwrite it freely
     worker_postcheck.sh ← restores a clean tree after each worker
     rescue_snapshot.sh ← snapshots a dirty tree before any forced restore
     open_task_pr.sh    ← worker-side; branch → commit → push → PR
+    adversarial_review.sh ← pre-PR review packet, verdict, and freshness receipt
     gate_run.sh        ← runs the task's fenced gate block
     budget_check.sh    ← quota stop + per-session round cap
     check_update.sh    ← bundle freshness against the upstream tag

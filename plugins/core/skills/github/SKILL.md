@@ -41,11 +41,22 @@ Body template:
 
 Branches: `feat/<short-description>`, `fix/<short-description>`. Main branch is `main`. The same dynamic Co-Authored-By rule applies inside the PR body (do not hardcode a model name there either).
 
-## Pre-PR gate — always run host lint before `gh pr create`
+## Pre-PR gate — lint, then an independent read, before `gh pr create`
 
 Before any `gh pr create` invocation, run the host repo's full lint/format/test gate (whatever the project's Makefile / package.json exposes — e.g. `make lint`, `make smoke`, `npm run lint`). Pre-commit hooks do not always cover the same checks CI runs; relying on them alone is how PRs land red. Treat a clean local lint as a non-negotiable precondition for opening the PR — the agile review loop assumes CI was green at push time.
 
 If the host project has no lint target, document that gap (propose a Makefile addition to the user) and proceed; but the omission is the proposal, not a license to skip.
+
+A green lint says the change does not break the repo. It says nothing about whether it is the change that was asked for, and the session that just wrote it is the wrong reader for that question. So the second half of the gate is an adversarial review by a subagent with no history of the work:
+
+```bash
+REVIEW="${CLAUDE_SKILL_DIR}/../../init/assets/bin/adversarial_review.sh"
+bash "$REVIEW" emit      # writes tmp/arsenal-review/packet.md
+# spawn a subagent whose whole prompt is: read that packet, reply into tmp/arsenal-review/verdict.md
+bash "$REVIEW" verdict   # 0 CLEAR · 1 BLOCK · 2 no verdict, which is not a pass
+```
+
+Pass the reviewer nothing but the packet path — a summary of what the change was meant to do hands it the author's blind spot. On BLOCK, fix and re-emit rather than opening the PR with the findings unaddressed. Full protocol, override rules, and the form for a repo without the vendored bundle: `claude-arsenal:core:init § references/pre-pr-review.md`.
 
 ## The agile review loop
 

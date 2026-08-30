@@ -75,6 +75,15 @@ merge-policy = "after-ci"
 #   host-gate = "make lint test evidence"
 host-gate = ""
 
+# How hard the pre-PR adversarial review binds — a reviewer with no history of
+# the change reads it before the PR opens (claude-arsenal/bin/adversarial_review.sh).
+# The gates above prove the repo still works; only this one can tell whether the
+# change is the change that was asked for.
+#   warn      Open the PR either way, and state the outcome in its body.
+#   required  No CLEAR review for this exact tree, no PR.
+#   off       Do not check, write nothing.
+pre-pr-review = "warn"
+
 # test-first writes a failing test before the change; test-after writes tests
 # alongside it.
 test-discipline = "test-first"
