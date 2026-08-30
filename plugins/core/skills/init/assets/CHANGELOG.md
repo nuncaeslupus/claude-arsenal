@@ -18,7 +18,7 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
-## [2.7.0] - 2026-08-29
+## [2.7.0] - 2026-08-30
 
 - **New: a pre-PR adversarial review gate.** Before a PR is opened, the change
   is now read by a reviewer that has never seen it — spawned with only a case

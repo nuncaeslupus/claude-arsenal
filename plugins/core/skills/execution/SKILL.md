@@ -117,7 +117,7 @@ understanding that wrote it. Step 4b covers what that cannot reach.
 Before Step 5, put the change in front of a reviewer with no history of it:
 
 ```bash
-bash "${CLAUDE_SKILL_DIR}/../../init/assets/bin/adversarial_review.sh" emit
+bash "${CLAUDE_SKILL_DIR}/../init/assets/bin/adversarial_review.sh" emit
 # writes tmp/arsenal-review/packet.md — intent, full diff, rubric
 ```
 
@@ -129,7 +129,7 @@ told "this refactor preserves behaviour" checks a different question than one
 that had to work it out. Then record the answer:
 
 ```bash
-bash "${CLAUDE_SKILL_DIR}/../../init/assets/bin/adversarial_review.sh" verdict
+bash "${CLAUDE_SKILL_DIR}/../init/assets/bin/adversarial_review.sh" verdict
 ```
 
 Exit 0 clears Step 5. Exit 1 is a BLOCK — show the findings verbatim, fix them,

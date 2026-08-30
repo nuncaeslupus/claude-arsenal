@@ -52,9 +52,12 @@ DEFAULTS: dict[str, Any] = {
     # named `make lint` as its example, so a repo whose real gate is five
     # commands had four of them enforced by nobody.
     "host-gate": "",
-    # How hard the pre-PR adversarial review binds. Read by open_task_pr.sh via
-    # bin/adversarial_review.sh, whose `check` asks whether a reviewer that
-    # never saw this work cleared THIS tree.
+    # How hard the pre-PR adversarial review binds ON THE TASK-PR PATH. Read by
+    # open_task_pr.sh and nowhere else, via bin/adversarial_review.sh, whose
+    # `check` asks whether a reviewer that never saw this work cleared THIS
+    # tree. It is not a global switch: `execution`, `github` and `ship` run the
+    # same gate as a step of their own workflow, and a session following those
+    # skills does not consult this key.
     #   warn      (default) open the PR either way, and record the outcome —
     #             cleared, blocked, stale, or never run — in the PR body, where
     #             the human merging it looks. Chosen as the default because a
@@ -114,6 +117,12 @@ ENUMS: dict[str, set[str]] = {
     "merge-policy": {"always", "after-review", "after-ci", "after-ci-and-review", "never"},
     "test-discipline": {"test-first", "test-after"},
     "session-end": {"handoff", "ticket", "none"},
+    # open_task_pr.sh compares this against the literal "required", so anything
+    # else — "Required", "requried", "on" — takes the warn path: the PR opens,
+    # its body says no review ran, and the consumer who wrote the value believes
+    # a binding gate is in place. A misspelled opt-out fails the other way,
+    # writing a line into the body of someone who switched the check off.
+    "pre-pr-review": {"warn", "required", "off"},
 }
 
 CONFIG_RELPATH = "config.toml"

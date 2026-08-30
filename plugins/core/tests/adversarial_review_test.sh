@@ -126,6 +126,28 @@ out=$(bash "${REVIEW}" emit --task t-nonexistent 2>&1)
 (( $? != 0 )) || fail "a --task naming no file must be an error, not a silent fallback"
 echo "PASS: a named intent that is missing refuses, instead of degrading to no intent"
 
+# --- 11: truncation keeps untracked files, which are the unrecoverable half ---
+# _full_diff used to append untracked files LAST, so `head -n MAX_DIFF_LINES`
+# cut them first — every time. The packet then told the reviewer to recover them
+# with `git diff <base> -- <path>`, which prints nothing at all for a path git
+# does not track: a whole new module vanished, and the prescribed recovery
+# returned an empty result that reads as "no change here".
+big="${tmp}/bigrepo"
+mkdir -p "${big}"; cd "${big}"
+git init -q -b main .
+git config user.email t@e.x; git config user.name T; git config commit.gpgsign false
+printf 'seed\n' > tracked.txt; git add -A; git commit -qm init
+for i in $(seq 1 400); do echo "tracked change line ${i}" >> tracked.txt; done
+echo "UNTRACKED_CANARY_STRING" > brand_new_module.py
+ARSENAL_REVIEW_MAX_DIFF_LINES=50 bash "${REVIEW}" emit >/dev/null 2>&1 \
+    || fail "emit should succeed with a capped diff"
+grep -q "UNTRACKED_CANARY_STRING" tmp/arsenal-review/packet.md \
+    || fail "a truncated packet must still carry untracked files — git diff cannot recover them"
+grep -q "open the file itself" tmp/arsenal-review/packet.md \
+    || fail "the truncation notice must tell the reviewer how to read an untracked path"
+cd "${REPO}"
+echo "PASS: truncation cuts the recoverable half, not the untracked one"
+
 # --------------------------------------------------------- integration half --
 [[ -f "${HELPER}" ]] || { echo "PASS: adversarial_review_test — unit half (open_task_pr.sh absent)"; exit 0; }
 
@@ -141,10 +163,15 @@ mkdir -p arsenal/tasks
 # id across cases means the second push is a non-fast-forward onto the branch
 # the first one left on the remote — a failure that has nothing to do with what
 # is being tested.
-for _id in t-rev-warn t-rev-clear t-rev-req; do
+for _id in t-rev-warn t-rev-clear t-rev-req t-rev-off; do
     printf -- '---\nid: %s\ntitle: "Review fixture"\npriority: 1\n---\n\n## Acceptance gate\n```bash\ntrue\n```\n' \
         "${_id}" > "arsenal/tasks/${_id}.md"
 done
+# A gate that leaves an untracked artifact behind — a timestamped log, a
+# coverage report, __pycache__. Entirely ordinary, and it used to invalidate the
+# review receipt between the reviewer's verdict and open_task_pr.sh's check.
+printf -- '---\nid: t-rev-artifact\ntitle: "Artifact gate"\npriority: 1\n---\n\n## Acceptance gate\n```bash\ndate +%%s%%N > build-artifact.log\n```\n' \
+    > arsenal/tasks/t-rev-artifact.md
 echo base > base.txt
 git add -A; git commit -qm "chore: base"; git push -q -u origin main
 
@@ -201,10 +228,39 @@ printf 'pre-pr-review = "required"\n' > arsenal/config.toml
 export GH_BODY_FILE="${tmp}/body3.txt"; : > "${GH_BODY_FILE}"
 out=$(ARSENAL_TASK_ISSUE=7 ARSENAL_COAUTHOR="" bash "${HELPER}" t-rev-req "Review fixture" 2>&1)
 (( $? != 0 )) || fail "pre-pr-review=required must refuse to open a PR with no review"
-grep -q "no PR opened" <<<"${out}" || fail "the refusal should say no PR was opened: ${out}"
+grep -q "pre-pr-review is .required." <<<"${out}" \
+    || fail "the refusal must name the review gate, not just any failing gate: ${out}"
 [[ -s "${GH_BODY_FILE}" ]] && fail "required must refuse BEFORE any PR is opened"
 git rev-parse --verify --quiet "arsenal/t-rev-req" >/dev/null 2>&1 \
     && fail "no branch should exist after a refused review gate"
 echo "PASS: pre-pr-review=required refuses before touching git"
+
+# --- 15: a gate that writes an artifact does not invalidate a real review ---
+# The check used to run AFTER the host gate and gate_run.sh, both of which
+# execute arbitrary consumer commands. Any untracked file they leave moves the
+# tree out from under the receipt, so a genuine CLEAR was reported as STALE —
+# and under `required` the refusal could never be cleared, because every retry
+# re-ran the gate that invalidated it.
+_fresh_work
+bash "${REVIEW}" emit >/dev/null || fail "setup: emit in the work tree"
+printf 'VERDICT: CLEAR — checked it\n' > "${V}"
+bash "${REVIEW}" verdict >/dev/null 2>&1 || fail "setup: recording a CLEAR"
+export GH_BODY_FILE="${tmp}/body4.txt"
+ARSENAL_TASK_ISSUE=7 ARSENAL_COAUTHOR="" bash "${HELPER}" t-rev-artifact "Artifact gate" >/dev/null 2>&1 \
+    || fail "a cleared change must open its PR even when the gate writes an artifact"
+grep -q "CLEAR" "${GH_BODY_FILE}" \
+    || fail "a gate artifact must not turn a real CLEAR into STALE, got: $(cat "${GH_BODY_FILE}")"
+[[ -f "${WORK}/build-artifact.log" ]] || fail "setup check: the gate should have written its artifact"
+echo "PASS: a gate that leaves an artifact does not invalidate the review it ran after"
+
+# --- 16: off writes no line at all ---
+_fresh_work
+printf 'pre-pr-review = "off"\n' > arsenal/config.toml
+export GH_BODY_FILE="${tmp}/body5.txt"
+ARSENAL_TASK_ISSUE=7 ARSENAL_COAUTHOR="" bash "${HELPER}" t-rev-off "Review fixture" >/dev/null 2>&1 \
+    || fail "off must still open the PR"
+grep -q "adversarial review" "${GH_BODY_FILE}" \
+    && fail "pre-pr-review=off must write no review line into the body"
+echo "PASS: pre-pr-review=off writes nothing into the PR body"
 
 echo "PASS: adversarial_review_test — all gates passed"

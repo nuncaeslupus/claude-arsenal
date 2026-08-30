@@ -32,6 +32,18 @@ printing that path. Exit 3 means there is nothing to review.
 
 The directory ignores itself, so nothing the review produces lands in the PR.
 
+**On a stacked branch, pass `--base`.** The base is otherwise
+`merge-base(default branch, HEAD)`, so a branch stacked on another PR presents
+the whole stack as the change and the reviewer re-reads already-reviewed
+commits as new. Pass the parent branch instead: `--base fix/iss-A`.
+
+**If the intent is auto-discovered, check it.** With no `--intent` and no
+`--task` the packet falls back to `status/specification.md`, then
+`status/plan.md` — and `emit` says on stderr which file it picked. A repo that
+keeps an archived spec around will hand the reviewer something that describes a
+design nobody is implementing, and the findings that come back will be confident
+and irrelevant. Naming the intent explicitly is the reliable path.
+
 ### 2. Spawn a reviewer that knows nothing else
 
 Spawn a **subagent** whose entire prompt is:
@@ -86,14 +98,23 @@ that is not a second opinion, it is shopping for one.
 ## Where it binds
 
 `open_task_pr.sh` runs `adversarial_review.sh check` before it opens any task
-PR, and writes the outcome — CLEAR, BLOCK, stale, or never run — into the PR
-body. `arsenal/config.toml` sets how hard it binds:
+PR — ahead of the host gate and the task's acceptance gate, because both of
+those run arbitrary commands and any untracked artifact they leave would move
+the tree out from under the receipt — and writes the outcome (CLEAR, BLOCK,
+stale, or never run) into the PR body. The body states what the receipt proves:
+that a verdict was recorded for this tree. Nothing can tell a subagent's verdict
+from one a session wrote for itself, which is why the worker protocol says to
+skip the step rather than stand in for the reviewer.
+
+`arsenal/config.toml` sets how hard it binds **on that path only** — the
+`execution`, `github` and `ship` skills run the gate as a step of their own
+workflow and do not read this key:
 
 | `pre-pr-review` | Effect |
 |---|---|
-| `warn` (default) | The PR opens either way; the outcome is stated in its body. |
-| `required` | No CLEAR receipt for this tree, no PR. |
-| `off` | Not checked, nothing written. |
+| `warn` (default) | The task PR opens either way; the outcome is stated in its body. |
+| `required` | No clearing verdict for this tree, no task PR. |
+| `off` | Not checked, no line written in the body. |
 
 `warn` is the default because a gate that breaks every worker loop on upgrade
 gets switched off, and one that says nothing gets forgotten. Repos that want the

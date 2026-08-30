@@ -138,7 +138,14 @@ _untracked_diff() {
     return 0
 }
 
-_full_diff() { _tracked_diff "$1" || return 1; _untracked_diff; }
+# Untracked FIRST, tracked second. Truncation cuts the tail, so whichever half
+# goes last is the half a large change loses — and losing the untracked half is
+# unrecoverable in two ways at once: a whole new module vanishes from the packet
+# entirely, and `git diff <base> -- <path>`, the recovery command the truncation
+# notice prints, outputs nothing at all for a path git does not track. A reviewer
+# that follows the instruction sees an empty result and reads it as "no change
+# here". A truncated tracked file, by contrast, is one command away.
+_full_diff() { _untracked_diff; _tracked_diff "$1" || return 1; }
 
 _digest() {
     if command -v sha256sum >/dev/null 2>&1; then sha256sum | cut -d' ' -f1
@@ -212,6 +219,15 @@ cmd_emit() {
 
     local digest; digest="$(_diff_digest "${base}")"
     intent="$(_resolve_intent)" || intent=""
+    # An auto-discovered intent is a guess, and a wrong one is worse than none:
+    # the reviewer measures the change against it and reports confident findings
+    # about a specification nobody was implementing. Repos keep an archived
+    # `status/specification.md` around long after it stopped describing anything
+    # — this one does — so say out loud which file was picked when nobody named it.
+    if [[ -n "${intent}" && -z "${INTENT_FILE}" && -z "${TASK_ID}" ]]; then
+        echo "adversarial_review: intent auto-discovered from ${intent}." >&2
+        echo "adversarial_review: if that does not describe THIS change (an archived spec, a stale plan), re-run with --intent — the reviewer judges the change against it." >&2
+    fi
     nlines="$(printf '%s\n' "${diff}" | wc -l | tr -d ' ')"
 
     {
@@ -252,9 +268,15 @@ cmd_emit() {
         printf 'clear it — is part of what you are reviewing, and is itself a finding.\n\n'
         if (( nlines > MAX_DIFF_LINES )); then
             printf '> **Truncated**: %s lines, showing the first %s. The rest is NOT below.\n' "${nlines}" "${MAX_DIFF_LINES}"
-            printf '> Read the remaining files directly (`git diff %s -- <path>`) before you\n' "${base:0:12}"
-            printf '> reach a verdict. If you do not read them, say so and BLOCK: a verdict\n'
-            printf '> on a diff you only partly saw is worse than no verdict.\n\n'
+            printf '> The file list above is complete even though this diff is not, so treat\n'
+            printf '> every path listed there as unread until confirmed. Read the missing\n'
+            printf '> ones directly before reaching a verdict:\n'
+            printf '>   - tracked:   `git diff %s -- <path>`\n' "${base:0:12}"
+            printf '>   - untracked (marked `(untracked)` in the list): open the file itself.\n'
+            printf '>     `git diff` prints NOTHING for a path git does not track, and an\n'
+            printf '>     empty result there means "not tracked", never "not changed".\n'
+            printf '> If you do not read them, say so and BLOCK: a verdict on a diff you only\n'
+            printf '> partly saw is worse than no verdict.\n\n'
             printf '```diff\n%s\n```\n\n' "$(printf '%s\n' "${diff}" | head -n "${MAX_DIFF_LINES}")"
         else
             printf '```diff\n%s\n```\n\n' "${diff}"

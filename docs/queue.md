@@ -262,6 +262,7 @@ disappears the next time that skill is refreshed.
 ```toml
 merge-policy    = "after-ci"   # always | after-review | after-ci | after-ci-and-review | never
 host-gate       = ""           # shell command; non-zero means no task PR is opened
+pre-pr-review   = "warn"       # warn | required | off — the pre-PR adversarial review
 test-discipline = "test-first" # or test-after
 session-end     = "handoff"    # handoff | ticket | none
 listing-budget  = 8000         # the skills-listing budget the auditor enforces
