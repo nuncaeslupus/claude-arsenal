@@ -4,6 +4,7 @@ title: "har stage 1: extract section, skill scaffold, validate_har.py, the offse
 priority: 1
 deps: [t-e2a055be]
 tags: [EXTRACT]
+status: merged
 ---
 
 Plan: `docs/design/0002-har-analysis-toolkit-plan.md` T1–T3. Spec: `0002-har-analysis-toolkit.md` §§ 3, 4.6, 5.1.
