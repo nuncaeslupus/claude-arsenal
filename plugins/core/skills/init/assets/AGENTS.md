@@ -202,3 +202,4 @@ Each is a plain file to open, not an import. Nothing below is in context until y
 | `references/quota-governance.md` | The loop stopped before dispatch: quota windows, fail-open, the round cap |
 | `references/pre-pr-review.md` | About to open a PR: the cold-start adversarial review, its verdicts, `pre-pr-review` modes |
 | `references/state-layout.md` | A lookup: where a file lives, what a task state means |
+| `references/annotatable-reader.md` | Handing over a spec or plan: which documents need a reader, and why the work that consumes them waits for the annotations |

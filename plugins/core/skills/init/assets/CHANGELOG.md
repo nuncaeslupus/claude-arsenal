@@ -37,6 +37,9 @@ Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 - Guidance to rename the generated `spec-reader.html` / `spec-annotated.md` per
   document where several can share a directory — the names are fixed, so two
   design docs would otherwise overwrite each other's readers.
+- The rules live in one place — `claude-arsenal/references/annotatable-reader.md`
+  — rather than duplicated in both skill bodies, so they cannot drift apart and
+  neither skill pays for them until it needs them.
 
 ## [2.8.0] - 2026-08-30
 

@@ -487,6 +487,15 @@ artifact: derived HARs, extracted entries, repro snippets. It covers
 `Authorization`, `Proxy-Authorization`, `Cookie`, `Set-Cookie`, `X-API-Key` and
 neighbours, plus query and body parameters whose names match a token pattern
 (`token`, `key`, `secret`, `session`, `auth`, `password`, `signature`).
+
+**The serialized URL is redacted too, and it is the easy one to miss.** A token
+in a query parameter is caught by the rule above when the parameter is read as a
+parameter — and survives untouched inside `request.url`, which carries the whole
+query string inline and is written into the sidecar, every listing, and every
+generated reproduction. So the same token pattern is applied to the URL's own
+query pairs, and **userinfo is stripped entirely**: `https://user:pass@host/path`
+becomes `https://host/path`, because a password in a URL is a credential that no
+name-matching rule would ever have looked for.
 Interactive `--show` of a single entry prints real values — that is the operator
 reading their own capture. `--secrets` opts out where a working reproduction is
 the point.

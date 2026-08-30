@@ -826,7 +826,15 @@ of context.</p></div>
 artifact: derived HARs, extracted entries, repro snippets. It covers
 <code>Authorization</code>, <code>Proxy-Authorization</code>, <code>Cookie</code>, <code>Set-Cookie</code>, <code>X-API-Key</code> and
 neighbours, plus query and body parameters whose names match a token pattern
-(<code>token</code>, <code>key</code>, <code>secret</code>, <code>session</code>, <code>auth</code>, <code>password</code>, <code>signature</code>).
+(<code>token</code>, <code>key</code>, <code>secret</code>, <code>session</code>, <code>auth</code>, <code>password</code>, <code>signature</code>).</p>
+<p><strong>The serialized URL is redacted too, and it is the easy one to miss.</strong> A token
+in a query parameter is caught by the rule above when the parameter is read as a
+parameter — and survives untouched inside <code>request.url</code>, which carries the whole
+query string inline and is written into the sidecar, every listing, and every
+generated reproduction. So the same token pattern is applied to the URL's own
+query pairs, and <strong>userinfo is stripped entirely</strong>: <code>https://user:pass@host/path</code>
+becomes <code>https://host/path</code>, because a password in a URL is a credential that no
+name-matching rule would ever have looked for.
 Interactive <code>--show</code> of a single entry prints real values — that is the operator
 reading their own capture. <code>--secrets</code> opts out where a working reproduction is
 the point.</p>

@@ -130,39 +130,6 @@ history for this spec; left in Downloads they are gone by the next session.
 
 Commit the generated files so reviewers can open the HTML directly from the repo.
 
-## The reader is a gate, not a final flourish
-
-Two things follow from that, and both were learned the hard way:
-
-**Any document that specifies or plans work gets a reader** — not only
-`status/specification.md` and workspace specs, which are all auto-discovery
-finds. A design document under `docs/design/`, an RFC, a proposal written
-straight into a docs tree: same rule, named explicitly since discovery will not
-find it, and with `--output-dir` pointed beside it. Publishing it some other way
-— a chat summary, a hand-built page, a link to the raw file — does not satisfy
-this. The reader exists so notes attach to the section they are about; a
-substitute that drops that property is not a substitute.
-
-```bash
-create_reader.py --input docs/design/0007-thing.md --output-dir docs/design \
-                 --name "Thing"
-```
-
-Rename its `spec-reader.html` / `spec-annotated.md` output to match the document
-(`0007-thing-reader.html`) whenever more than one such document can share a
-directory — the generated names are fixed, so two design docs would otherwise
-overwrite each other's readers.
-
-**Work that consumes the document waits for the annotations.** Handing over the
-reader is where this step ends and the next one has not started: do not open a
-pull request to merge the spec or plan, do not begin `design` off a spec or
-`execution` off a plan, until the reviewer's export has come back and been read.
-A document reviewed only after it has been merged, or after the work it
-describes is underway, has been ratified rather than reviewed. When the reviewer
-says to proceed without annotating, that is their call and the work starts — but
-it is their call to make, not an assumption to act on while waiting.
-
-
-## Workspace-aware paths
-
-When `arsenal/project/<WORKSPACE>/` exists, write the spec to `arsenal/project/<WORKSPACE>/spec.md` instead of `status/specification.md`, and in the same pass generate a ≤200-word worker brief at `arsenal/project/<WORKSPACE>/context.md` (the orientation a queue worker reads before touching the task). Otherwise use `status/` as above. The validator takes the path via `--input`; point it at whichever spec file was written.
+Full rules — which documents need one, the naming, and why the work that
+consumes the document waits for the annotations:
+`claude-arsenal:core:init § references/annotatable-reader.md`.
