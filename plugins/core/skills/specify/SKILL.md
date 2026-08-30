@@ -101,8 +101,10 @@ It checks that the required sections (1–4) and the measurable Success criteria
 ## Annotatable reader — required before the spec is merged or built on
 
 Generate the reader once the validator passes, and hand both files to the user in the
-same reply. A spec the reviewer cannot annotate gets reviewed in chat instead, where the
-notes scroll away unattached to the section they were about:
+same reply. This is not optional and chat is not a substitute: a spec the reviewer cannot
+annotate ends up reviewed in chat, where the notes scroll away unattached to the section
+they were about. Proceeding without annotations needs the reviewer to say so, explicitly
+— it is never an inference from their silence or from the reader being inconvenient:
 
 Run `create_reader.py` (in `claude-arsenal/scripts/`; it imports `markdown`, which
 `uv run --with markdown python3` supplies):
