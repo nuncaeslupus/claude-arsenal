@@ -18,6 +18,24 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [2.10.0] - 2026-08-30
+
+- **New: `init.py --list-sections` prints the capability map.** Sections made
+  the install set a choice, and a choice creates a thing nobody knows about — a
+  repo without the `python` section has no way to learn `coverage-gaps` exists,
+  because the only place a skill announces itself is the listing of the skills
+  that *were* installed. The map is one short line per section: its name, what
+  it is for, whether it is installed here, and — for the ones that are not — the
+  skills it would bring. `--section NAME` prints those skills with their full
+  descriptions, which is how to check whether one actually fits before enabling
+  it. Both are read-only; neither installs anything.
+- **Sections are enabled with `--sections a,b` or by editing `[skills]` in
+  `arsenal/config.toml`**, unchanged — the map just makes it possible to know
+  what to ask for.
+- The map ships as data (`sections.json`) rather than being scanned from disk,
+  because a vendored `init.py` can only see the skills its repo already
+  installed. A bundle predating it falls back to what is on disk and says so.
+
 ## [2.9.1] - 2026-08-30
 
 - **`query_status.py` no longer reports a missing issue handle it never looked

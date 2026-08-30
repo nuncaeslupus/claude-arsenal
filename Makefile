@@ -108,6 +108,12 @@ sync-version:  ## write the canonical .bundle-version into both plugin manifests
 sync-version-check:  ## fail if any manifest / AGENTS.md version drifts from .bundle-version
 	uv run python scripts/sync_version.py --check
 
+sync-sections:  ## regenerate the shipped capability map from the skills init vendors
+	uv run python scripts/sync_sections.py
+
+sync-sections-check:  ## fail if sections.json has drifted from the shipped skills
+	uv run python scripts/sync_sections.py --check
+
 test:  ## run every plugin's behaviour tests (plugins/*/tests/*.sh) + repo-tool tests (scripts/*_test.sh)
 	@set -e; for t in plugins/*/tests/*.sh scripts/*_test.sh; do \
 		[ -f "$$t" ] || continue; \

@@ -50,6 +50,9 @@ jobs:
       - name: make sync-version-check
         run: make sync-version-check
 
+      - name: make sync-sections-check
+        run: make sync-sections-check
+
   test:
     name: core tests
     runs-on: ubuntu-22.04
