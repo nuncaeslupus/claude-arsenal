@@ -18,6 +18,32 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [2.13.0] - 2026-08-30
+
+- **`har` can now find things.** `query_har.py` selects entries, shows one in
+  full, and gets data out. The two-command answer a scraping session actually
+  wants: `--response-match "a string from the page"` names the request that
+  returned it, then `--show N --schema` prints that body's shape — keys, types
+  and array lengths, usually 100x smaller than the body and usually the real
+  question.
+- One selection grammar, shared: `--url`, `--host`, `--method`, `--status`
+  (`200`, `4xx`, `400-499`), `--mime`, `--type`, `--min-size`/`--max-size`,
+  `--slower-than`, `--param NAME[=REGEX]`, `--has-header NAME[=REGEX]`,
+  `--body-match`, `--response-match`, `--page`, `--since`/`--until`,
+  `--invert`. Every sibling command will spell them identically.
+- **Three cache flags, not two.** `--no-cache` selects `_fromCache: false`
+  only; `--unknown-cache` selects entries whose exporter never recorded it.
+  Folding those together would make the same command mean different things on
+  a Chrome capture and a Playwright one.
+- Extraction: `--extract-body --output-dir`, `--json-path`, `--css`, `--xpath`.
+  Filenames derived from a URL are flattened and the destination is verified
+  inside the output directory before any write — a capture's URLs are as
+  untrusted as its bodies. A selector the small CSS/XPath subset does not
+  support is refused **by name**, never silently unmatched.
+- Output is capped at 20 rows and 4096 bytes and says which cap dropped what.
+  `--limit 0` removes both; `--output PATH` writes the complete result.
+  `--json` stays parseable under the cap by dropping whole entries.
+
 ## [2.12.0] - 2026-08-30
 
 - **New section `extract`, and its first skill `har`.** Off by default, so a

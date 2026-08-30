@@ -32,30 +32,80 @@ Load this skill when:
 Do not load it to capture a HAR, or to parse a JSON/HTML file that did not come
 out of one.
 
-## Start here
+## The two-command answer
+
+Almost every session here is the same shape. Paste a string that was visible on
+the page; get back the request that returned it, and its shape.
+
+```bash
+python3 "${CLAUDE_SKILL_DIR}/scripts/query_har.py" --input capture.har \
+    --response-match "Senior Rust Engineer"
+python3 "${CLAUDE_SKILL_DIR}/scripts/query_har.py" --input capture.har --show 4 --schema
+```
+
+The first names the entry. The second prints the body's *shape* — keys, types,
+array lengths — which is usually the actual question and is often 100× smaller
+than the body.
+
+Before either, when the capture is unfamiliar:
 
 ```bash
 python3 "${CLAUDE_SKILL_DIR}/scripts/analyze_har.py" --input capture.har
 ```
 
-The overview says whether the site has an API worth reading at all — the
-XHR/JSON count is the number that decides whether the next hour is spent on
-endpoints or on rendered HTML.
+The overview's XHR/JSON count is the number that decides whether the next hour
+is spent on endpoints or on rendered HTML.
 
 ## The scripts
 
 | Script | What it answers |
 |---|---|
-| `analyze_har.py` | What is in here — entries, hosts, resource types, status histogram, and the API-shaped request count. `--index` builds the sidecar every other command reads |
+| `query_har.py` | Which entries match, what one of them contains, and getting bodies out |
+| `analyze_har.py` | What is in here. `--index` builds the sidecar every other command reads |
 | `validate_har.py` | Is this capture usable, and what did its exporter leave out |
 
 Every script takes `--input`, accepts `--json` for chaining, and caps its own
-output. Run `--help` on either for every flag.
+output. Run `--help` for every flag.
 
-Searching, extraction, reproduction and comparison are the next stages of
-`docs/design/0002-har-analysis-toolkit-plan.md`; this bundle ships the two above
-and the index they are built on. Nothing here promises a command it does not
-carry — check `--help`.
+Reproduction (`create_repro.py`), derived captures (`create_har.py`) and
+comparison (`compare_har.py`) are later stages of
+`docs/design/0002-har-analysis-toolkit-plan.md`. Nothing here promises a command
+it does not carry — check `--help`.
+
+## Selecting entries
+
+One grammar, shared by every command that picks entries. All of it composes as
+AND, and `--invert` negates the whole selection.
+
+```bash
+--url REGEX  --host REGEX  --method GET  --status 2xx|404|400-499  --mime REGEX
+--type xhr   --min-size N  --max-size N  --slower-than MS  --page ID
+--param NAME[=REGEX]       --has-header NAME[=REGEX]
+--body-match REGEX         --response-match REGEX
+--since ISO  --until ISO   --from-cache | --no-cache | --unknown-cache
+```
+
+Two of those deserve their own note.
+
+**`--response-match` is the one to reach for first.** It is the operation this
+toolkit exists for: a string seen on the page in, the request that returned it
+out.
+
+**The cache flags are three, not two.** `_fromCache` is `true`, `false`, or
+*the exporter never recorded it*, so `--no-cache` selects `false` **only** and
+`--unknown-cache` is its own flag. Folding the third state into `false` would
+make the same command mean different things on a Chrome capture and a
+Playwright one, silently.
+
+## Getting data out
+
+| Flag | Effect |
+|---|---|
+| `--show IDX` | One entry in full: request line, headers, query, bodies, real values |
+| `--schema` | A JSON body's shape — keys, types, array lengths — instead of its content |
+| `--json-path a.b[*].c` | Pull values out of a JSON body |
+| `--css h1` / `--xpath ./item` | Pull from an HTML or XML body. A selector this does not support is refused **by name**, never silently unmatched |
+| `--extract-body --output-dir DIR` | Decode and write every matching body to a file |
 
 ## Build the index first
 
@@ -78,7 +128,8 @@ that disagree.
 rows and 4096 bytes, whichever binds first, and says which one did the dropping.
 `--limit 0` removes both caps; `--output PATH` writes the complete result to a
 file in full fidelity. A reduced answer that cannot be expanded is a tool that
-decides what may be asked.
+decides what may be asked. `--json` stays parseable under the cap by dropping
+whole entries from a fixed envelope, never by cutting bytes mid-structure.
 
 **Safe by default.** Anything written to disk — the index sidecar included —
 has its auth headers, cookies and token-shaped parameters replaced with
@@ -86,7 +137,12 @@ has its auth headers, cookies and token-shaped parameters replaced with
 stay equal so header analysis still works, and nothing about the original is
 recoverable. URL userinfo and fragments are removed outright, because an OAuth
 implicit flow puts a live token in a fragment and no name-matching rule would
-ever look there.
+ever look there. `--show` prints real values — that is an operator reading their
+own capture — and a value pattern against a redacted header needs `--secrets`,
+because the index cannot answer it. **Extracted response bodies are outside this
+guarantee:** a body is unbounded text that may carry a credential anywhere in
+it, so an extracted body is as sensitive as the capture and is not a fixture
+until someone has read it.
 
 **"No body captured" is not "no match".** Some exporters and some cached entries
 save no body at all. The tool reports the two differently; treat a
