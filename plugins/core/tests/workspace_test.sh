@@ -6,7 +6,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INIT_PY="${SCRIPT_DIR}/../skills/init/scripts/init.py"
-ADD_PY="${SCRIPT_DIR}/../skills/queue-add/scripts/new_task.py"
+ADD_PY="${SCRIPT_DIR}/../skills/queue-add/scripts/create_task.py"
 LIST_SH="${SCRIPT_DIR}/../skills/init/assets/bin/workspace_list.sh"
 SELECT_PY="${SCRIPT_DIR}/../skills/init/assets/scripts/task_select.py"
 

@@ -60,6 +60,14 @@ the check is right to raise, not gaps in the list.
 break touching six to ten files including consumer-facing docs and the shipped
 `AGENTS.md`, so it wants a deliberate pass with aliases and a major bump, not a
 drive-by rename.
+**Resolved 2026-08-31 (v3.0.0)**, and one of the four was misdiagnosed here.
+`--silent` and `--max` took canonical aliases (`--quiet`, `--limit`) with the
+old spellings still working. `new_task.py` became `create_task.py` — the one
+real break, which is what the major carries. But `--repo-path` is **not** a
+duplicate of `--root`: `init.py` already uses `--root` for the workspace root
+it creates, so collapsing them would merge two concepts rather than remove a
+synonym. It joined the canon instead. Reading the argparse block, rather than
+trusting this entry, is what caught that.
 
 ## 2026-08-23 — loading-verification evals are never executed
 

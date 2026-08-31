@@ -1,4 +1,4 @@
-<!-- Load this template when filling in the body of a task file created by `new_task.py`. -->
+<!-- Load this template when filling in the body of a task file created by `create_task.py`. -->
 
 # Payload: <task-id> — <task-title>
 

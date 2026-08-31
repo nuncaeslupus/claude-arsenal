@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""new_task.py — create a task file, and print the issue handle to open for it.
+"""create_task.py — create a task file, and print the issue handle to open for it.
 
 A task is a file in the repository: versioned, reviewed in the pull request
 that adds it, and readable with no network. This script writes that file and
@@ -7,7 +7,7 @@ then prints the issue body its handle needs, because creating the issue itself
 requires GitHub access that differs by surface — the caller makes that call
 with whatever channel it has.
 
-    new_task.py --title "Extract the surface probe" --priority 5 --deps t-aaaa1111
+    create_task.py --title "Extract the surface probe" --priority 5 --deps t-aaaa1111
 
 Ids are random rather than derived from the title. The previous scheme hashed
 the title to four hex characters and checked uniqueness against the local file

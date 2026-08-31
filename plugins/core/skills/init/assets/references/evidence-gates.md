@@ -67,7 +67,7 @@ the evidence/bash gate is a hard precondition, and so is the host's own
 `host-gate` when the repo declares one); and — for a task tagged **`laptop`** — the session
 is not a cloud session. A cloud worker (`CLAUDE_CODE_REMOTE=true`) physically
 cannot satisfy a `[LAPTOP]`-only gate (model training, CPCV Sharpe, soak,
-paper-trade), so tag such tasks `laptop` (`new_task.py --tag laptop`) and the
+paper-trade), so tag such tasks `laptop` (`create_task.py --tag laptop`) and the
 laptop session records `done`; a cloud session is refused.
 
 Evidence files are build products, and that shows up in git: every branch

@@ -169,6 +169,12 @@ CANONICAL_ARGS = {
     "--strict",
     # init_skill consumer flag
     "--plugin",
+    # `init.py` addresses two different roots and needs a name for each: `--root`
+    # is the workspace root it creates, `--repo-path` the host repository it
+    # installs into. Collapsing them onto the canonical `--root` would not remove
+    # a synonym, it would merge two concepts under one flag — so this is the
+    # "intentional, extend the canon" case the check offers, not drift.
+    "--repo-path",
     # github skill flags
     "--pr",
     "--repo",
@@ -1064,6 +1070,7 @@ def check_scripts(skill_dir: Path, result: Result) -> None:
         for syn, canon in FORBIDDEN_ARG_SYNONYMS.items():
             if re.search(
                 rf"add_argument\(\s*"
+                rf"(?:#[^\n]*\n\s*)*"
                 rf"(?:[\"\']-[a-zA-Z][\"\']\s*,\s*)?"
                 rf"[\"\']({re.escape(syn)})[\"\']",
                 text,
@@ -1075,6 +1082,7 @@ def check_scripts(skill_dir: Path, result: Result) -> None:
                 )
         for m in re.finditer(
             r"add_argument\(\s*"
+            r"(?:#[^\n]*\n\s*)*"
             r"(?:[\"\']-[a-zA-Z][\"\']\s*,\s*)?"
             r"[\"\'](--[a-z][a-z0-9-]*)[\"\']",
             text,

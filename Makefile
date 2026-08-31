@@ -8,6 +8,10 @@ SC_SCRIPTS := plugins/skill-workshop/skills/skill-workshop/scripts
 VALIDATE := $(SC_SCRIPTS)/validate.py
 AUDIT_LIB := $(SC_SCRIPTS)/audit_library.py
 AUDIT_DRIFT := $(SC_SCRIPTS)/audit_rule_drift.py
+# Warnings block by default. The library sits at zero, and the cost of letting
+# one back in is that the next one is argued about rather than fixed. Override
+# with `make validate SKILL_SEVERITY=fail` to see fails only while iterating.
+SKILL_SEVERITY ?= warn
 SYNC_DUPES := $(SC_SCRIPTS)/sync_duplicates.py
 SMOKE_SH := plugins/skill-workshop/skills/skill-workshop/tests/skills_smoke.sh
 
@@ -40,7 +44,7 @@ ifeq ($(PLUGIN_SKILLS),)
 else
 	@set -e; for skill in $(PLUGIN_SKILLS); do \
 		echo "=== validate: $$skill ==="; \
-		uv run python $(VALIDATE) $$skill; \
+		uv run python $(VALIDATE) --severity $(SKILL_SEVERITY) $$skill; \
 	done
 endif
 
@@ -49,7 +53,7 @@ ifeq ($(PLUGIN_SKILL_LIBS),)
 	@echo "make audit: no plugin skill libraries discovered." >&2
 	@exit 1
 else
-	uv run python $(AUDIT_LIB) $(PLUGIN_SKILL_LIBS) --by-plugin
+	uv run python $(AUDIT_LIB) $(PLUGIN_SKILL_LIBS) --by-plugin --severity $(SKILL_SEVERITY)
 endif
 
 context-budget:  ## report what this marketplace costs a consumer's context, and cap the resident tier

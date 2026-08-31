@@ -22,7 +22,7 @@ difference between the two cases:
 
 - **Workspace-structured** — `arsenal/project/overview.md` lists the workspaces;
   read `arsenal/project/<workspace>/plan.md` for each, and pass
-  `--workspace <NAME>` on every `new_task.py` call so the task files under the
+  `--workspace <NAME>` on every `create_task.py` call so the task files under the
   right workspace.
 - **Solo / single-workspace** — read `status/plan.md` and omit `--workspace`.
 
@@ -34,7 +34,7 @@ Everything below is the same either way. The table columns are:
 1. Add tasks with no dependencies first, capturing each printed ID. Pass the
    size from the table's Size column and let `--size` write the value:
    ```bash
-   python3 .claude/skills/queue-add/scripts/new_task.py \
+   python3 .claude/skills/queue-add/scripts/create_task.py \
      --title "T1: <Description>" \
      --size S \
      --workspace FRONTEND \
@@ -52,14 +52,14 @@ Everything below is the same either way. The table columns are:
 
 2. Add tasks whose deps are now in the queue:
    ```bash
-   python3 .claude/skills/queue-add/scripts/new_task.py \
+   python3 .claude/skills/queue-add/scripts/create_task.py \
      --title "T3: <Description>" \
      --size M \
      --workspace FRONTEND \
      --deps t-3f8a91c2 \
    ```
 
-3. `new_task.py` writes `arsenal/tasks/<id>.md`; fill in its body and replace the
+3. `create_task.py` writes `arsenal/tasks/<id>.md`; fill in its body and replace the
    placeholder gate:
 
    ```markdown
@@ -129,7 +129,7 @@ handover.
 Minimum task — title it `D-N` (the Nth divergence this session):
 
 ```bash
-python3 .claude/skills/queue-add/scripts/new_task.py \
+python3 .claude/skills/queue-add/scripts/create_task.py \
   --title "D-N: <short description>" \
 ```
 

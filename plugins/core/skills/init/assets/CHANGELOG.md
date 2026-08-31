@@ -18,6 +18,46 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [3.0.0] - 2026-08-31
+
+### Changed — action required
+
+- **`queue-add`'s `new_task.py` is now `create_task.py`.** `create` is the
+  canonical script verb; `new` was the last script outside that vocabulary.
+  `/init` prunes files it no longer ships, so updating renames it for you and
+  the skill's own docs move with it — but **anything of yours that calls
+  `new_task.py` by path needs the new name**. That break is the whole reason
+  this is a major.
+
+### Changed
+
+- **`init.py --quiet` and `analyze_mutmut.py --limit`** are the canonical
+  spellings of what shipped as `--silent` and `--max`. **Both old spellings
+  keep working**, so no existing invocation breaks; the canonical name is
+  simply the one the help text leads with now.
+- `init.py --repo-path` stays as it is, and the argument canon now says so.
+  The flag looked like a duplicate of the canonical `--root`, but `init.py`
+  already uses `--root` for the *workspace* root it creates, while
+  `--repo-path` is the *host repository* it installs into. Collapsing them
+  would have merged two concepts under one flag rather than removed a synonym.
+
+### Fixed
+
+- **A comment could hide a flag from the argument-canon check.** The check read
+  argparse with a pattern that allowed only whitespace between `add_argument(`
+  and the option string, so a comment line above a flag made the whole call
+  invisible — the flag was not approved, it was unseen, and an unseen flag and a
+  clean report look identical. Found while adding a comment above a flag being
+  migrated, which silently removed it from the check in the same change that
+  claimed to fix it.
+
+### Internal
+
+- The skill library reports **zero** validator warnings, and `make validate` /
+  `make audit` now block on warnings rather than only on failures, so the count
+  cannot drift back up unnoticed. `SKILL_SEVERITY=fail` restores the old
+  behaviour while iterating locally.
+
 ## [2.16.3] - 2026-08-31
 
 ### Fixed

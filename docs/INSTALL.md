@@ -98,7 +98,7 @@ python = false
 
 Flip a value and the next `/init` adds or prunes that section's skills, and the
 change sticks — unlike deleting a vendored skill folder, which the next session's
-`init.py --silent` puts straight back. Upgrading a repo installed before sections
+`init.py --quiet` puts straight back. Upgrading a repo installed before sections
 existed changes nothing: the sections already in use are detected and recorded.
 
 ### If you do not (cloud-only, CI, a fresh container)
@@ -106,7 +106,7 @@ existed changes nothing: the sections already in use are detected and recorded.
 No plugin needed — the same script runs straight from a clone:
 
 ```bash
-git clone --depth 1 --branch v2.16.3 https://github.com/nuncaeslupus/claude-arsenal.git /tmp/arsenal
+git clone --depth 1 --branch v3.0.0 https://github.com/nuncaeslupus/claude-arsenal.git /tmp/arsenal
 python3 /tmp/arsenal/plugins/core/skills/init/scripts/init.py --repo-path .
 git add .claude claude-arsenal arsenal .github CLAUDE.md .gitignore && git commit -m "chore: add claude-arsenal"
 ```

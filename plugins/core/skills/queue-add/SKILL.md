@@ -25,7 +25,7 @@ Load this skill when:
 ## How to use
 
 ```bash
-python3 "${CLAUDE_SKILL_DIR}/scripts/new_task.py" \
+python3 "${CLAUDE_SKILL_DIR}/scripts/create_task.py" \
   --title "Extract the surface probe into its own script" \
   --priority 5 \
   --deps t-aaaa1111 \
@@ -91,7 +91,7 @@ DESKTOP and CLI are all one capability, and the tools that only exist on a real 
 Claude Design, the research tool — need no name of their own beyond `surface:cli`.
 
 Tags are for scoping a working session instead: `FRONTEND`, `BACKEND`, `DOCS`, `INFRA`,
-`FLAKY`. Both lists are examples, not an enum — `new_task.py` accepts any string.
+`FLAKY`. Both lists are examples, not an enum — `create_task.py` accepts any string.
 
 ## Gotchas
 
