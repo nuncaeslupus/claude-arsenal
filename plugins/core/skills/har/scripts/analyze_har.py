@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import tempfile
 from collections.abc import Iterable, Iterator
@@ -35,8 +36,10 @@ from _harlib import (
     EntrySpan,
     HarStructureError,
     apply_budget,
+    decode_body,
     digest,
     elide,
+    is_sensitive_header,
     is_textual,
     new_salt,
     read_entry,
@@ -385,6 +388,288 @@ def overview(rows: Iterable[dict[str, Any]]) -> list[str]:
     return lines
 
 
+# --------------------------------------------------------------------------
+# Insight modes
+# --------------------------------------------------------------------------
+
+_ID_SEGMENT = re.compile(
+    r"^(\d+|[0-9a-f]{8,}|[0-9a-f-]{32,}|[A-Za-z0-9_-]{22,})$", re.IGNORECASE
+)
+
+
+def path_template(path: str) -> str:
+    """Collapse identifier-looking segments so two URLs for one endpoint agree.
+
+    `/api/jobs/12345` and `/api/jobs/98765` are one endpoint asked twice, and a
+    listing that shows them as two teaches nothing. Numeric, hex and long
+    opaque segments become `{id}`; everything else is left alone, because a
+    template that collapses real path words invents endpoints that do not exist.
+    """
+    parts = []
+    for segment in path.split("/"):
+        parts.append("{id}" if segment and _ID_SEGMENT.match(segment) else segment)
+    return "/".join(parts)
+
+
+def endpoints(rows: Iterable[dict[str, Any]], limit: int) -> list[str]:
+    """URL paths collapsed to templates, with which parameters vary and over what.
+
+    The pagination finder, and the mode that earns this script. Turning
+    `/api/jobs?page=1&loc=NY`, `?page=2&loc=NY`, `?page=3&loc=NY` into one row
+    saying `page` varies 1-3 while `loc` is constant is the difference between
+    reading forty URLs and reading how to iterate the site.
+    """
+    from collections import defaultdict
+
+    groups: dict[tuple[str, str, str], dict[str, Any]] = {}
+    for row in rows:
+        key = (row.get("method") or "", row.get("host") or "", path_template(row.get("path") or ""))
+        group = groups.setdefault(
+            key, {"n": 0, "params": defaultdict(list), "status": set(), "bytes": 0}
+        )
+        group["n"] += 1
+        group["status"].add(row.get("status"))
+        group["bytes"] += row.get("respBytes") or 0
+        for name, value in row.get("query") or []:
+            group["params"][name].append(value)
+
+    lines: list[str] = []
+    ordered = sorted(groups.items(), key=lambda item: (-item[1]["n"], item[0]))
+    for (method, host, template), group in ordered[: limit or None]:
+        statuses = ",".join(str(s) for s in sorted(x for x in group["status"] if x is not None))
+        lines.append(f"{method:<6} {host}{template}  x{group['n']}  [{statuses}]")
+        for name, values in sorted(group["params"].items()):
+            distinct = sorted(set(values))
+            if len(distinct) == 1:
+                lines.append(f"    {name} = {elide(distinct[0], 40)}  (constant)")
+            else:
+                span = (
+                    f"{distinct[0]}..{distinct[-1]}"
+                    if len(distinct) > 3
+                    else ", ".join(distinct)
+                )
+                lines.append(f"    {name} varies over {len(distinct)}: {elide(span, 46)}")
+    return lines or ["no entries"]
+
+
+def header_analysis(rows: Iterable[dict[str, Any]], limit: int) -> list[str]:
+    """Request headers by host, split into constant across requests versus varying.
+
+    A header sent identically on every request to a host is a candidate
+    credential; one that changes per request is not. The split only works
+    because redacted values keep a salted fingerprint — with a bare marker
+    every `Authorization` would compare equal and the interesting half would
+    disappear into the boring one.
+    """
+    from collections import defaultdict
+
+    by_host: dict[str, dict[str, set[str]]] = defaultdict(lambda: defaultdict(set))
+    counts: dict[str, int] = defaultdict(int)
+    seen: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+    for row in rows:
+        host = row.get("host") or ""
+        counts[host] += 1
+        for name, value in row.get("reqHeaders") or []:
+            by_host[host][name].add(value)
+            seen[host][name] += 1
+
+    lines: list[str] = []
+    for host in sorted(by_host, key=lambda h: -counts[h])[: limit or None]:
+        lines.append(f"{host}  ({counts[host]} requests)")
+        constant = [
+            name
+            for name, values in by_host[host].items()
+            if len(values) == 1 and seen[host][name] == counts[host]
+        ]
+        varying = [n for n in by_host[host] if n not in constant]
+        for name in sorted(constant):
+            value = next(iter(by_host[host][name]))
+            marker = "  ← candidate auth" if is_sensitive_header(name) else ""
+            lines.append(f"    constant  {name}: {elide(value, 44)}{marker}")
+        for name in sorted(varying):
+            lines.append(f"    varying   {name} ({len(by_host[host][name])} distinct)")
+    return lines or ["no entries"]
+
+
+def cookie_analysis(rows: Iterable[dict[str, Any]], limit: int) -> list[str]:
+    """Cookies sent and set, by domain, with their flags.
+
+    Values are redacted; names and attributes are not, because those are what
+    say which cookie authenticates and whether it is `HttpOnly`.
+    """
+    from collections import defaultdict
+
+    sent: dict[str, set[str]] = defaultdict(set)
+    setby: dict[str, set[str]] = defaultdict(set)
+    for row in rows:
+        host = row.get("host") or ""
+        for name, value in row.get("reqHeaders") or []:
+            if name == "cookie":
+                for chunk in value.split(";"):
+                    key = chunk.split("=")[0].strip()
+                    if key:
+                        sent[host].add(key)
+        for name, value in row.get("respHeaders") or []:
+            if name == "set-cookie":
+                parts = [c.strip() for c in value.split(";")]
+                flags = [
+                    part
+                    for part in parts[1:]
+                    if "=" not in part or part.lower().startswith(("path", "domain"))
+                ]
+                setby[host].add(f"{parts[0].split('=')[0]} [{', '.join(flags) or 'no flags'}]")
+
+    lines: list[str] = []
+    for host in sorted(set(sent) | set(setby))[: limit or None]:
+        lines.append(host)
+        if sent[host]:
+            lines.append(f"    sent: {', '.join(sorted(sent[host]))}")
+        for entry in sorted(setby[host]):
+            lines.append(f"    set:  {entry}")
+    return lines or ["no cookies in this capture"]
+
+
+def stats(rows: Iterable[dict[str, Any]], field: str, limit: int) -> list[str]:
+    """A histogram over one field. Sizes and times are bucketed, everything else is exact."""
+    from collections import Counter
+
+    buckets: Counter[str] = Counter()
+    total = 0
+    for row in rows:
+        total += 1
+        if field == "status":
+            buckets[str(row.get("status"))] += 1
+        elif field == "host":
+            buckets[row.get("host") or "<none>"] += 1
+        elif field == "mime":
+            buckets[(row.get("mime") or "<none>").split(";")[0]] += 1
+        elif field == "type":
+            buckets[row.get("type") or "<none>"] += 1
+        elif field == "method":
+            buckets[row.get("method") or "<none>"] += 1
+        elif field == "size":
+            edges = (1_000, 10_000, 100_000, 1_000_000)
+            buckets[_bucket(row.get("respBytes") or 0, edges, "B")] += 1
+        elif field == "time":
+            buckets[_bucket(row.get("ms") or 0, (50, 200, 1_000, 5_000), "ms")] += 1
+        else:
+            raise FilterlessError(
+                f"--stats {field}: choose status, host, mime, type, method, size or time"
+            )
+    width = max((len(k) for k in buckets), default=1)
+    lines = [f"{field} over {total} entries"]
+    for key, count in buckets.most_common(limit or None):
+        bar = "#" * min(40, max(1, round(40 * count / max(1, total))))
+        lines.append(f"  {key:<{width}}  {count:>6}  {bar}")
+    return lines
+
+
+def _bucket(value: float, edges: tuple[float, ...], unit: str) -> str:
+    previous = 0.0
+    for edge in edges:
+        if value < edge:
+            return f"{previous:g}-{edge:g}{unit}"
+        previous = edge
+    return f">{edges[-1]:g}{unit}"
+
+
+class FilterlessError(ValueError):
+    """A mode argument that names nothing this script can compute."""
+
+
+def redirects(rows: Iterable[dict[str, Any]], limit: int) -> list[str]:
+    """Redirect chains, collapsed — where a request actually ended up."""
+    lines: list[str] = []
+    for row in rows:
+        if row.get("status") in (301, 302, 303, 307, 308) or row.get("redirect"):
+            # `response.redirectURL` is the HAR field for this, and exporters
+            # leave it empty often enough that falling back to the `Location`
+            # header is the difference between a chain and a list of dead ends.
+            target = row.get("redirect") or next(
+                (v for k, v in row.get("respHeaders") or [] if k == "location"),
+                "<no Location recorded>",
+            )
+            lines.append(f"{row['i']:>4}  {row.get('status')}  {elide(row.get('url') or '', 44)}")
+            lines.append(f"          → {elide(target, 66)}")
+        if limit and len(lines) >= limit * 2:
+            break
+    return lines or ["no redirects in this capture"]
+
+
+def websockets(
+    rows: Iterable[dict[str, Any]], read_entry_by_index: Any, limit: int
+) -> list[str]:
+    """Per-socket frame counts, direction and the first frames.
+
+    Sites that stream their data over a socket have no HTTP response body to
+    search, so a capture can look empty while carrying everything.
+    """
+    lines: list[str] = []
+    shown = 0
+    for row in rows:
+        if not row.get("ws"):
+            continue
+        entry = read_entry_by_index(row["i"])
+        frames = entry.get("_webSocketMessages") or []
+        sent = sum(1 for f in frames if f.get("type") == "send")
+        received = len(frames) - sent
+        size = sum(len(str(f.get("data", ""))) for f in frames)
+        lines.append(
+            f"{row['i']:>4}  {elide(row.get('url') or '', 52)}  "
+            f"{len(frames)} frames ({sent} sent, {received} received), {size} B"
+        )
+        for frame in frames[:3]:
+            arrow = "→" if frame.get("type") == "send" else "←"
+            lines.append(f"        {arrow} {elide(str(frame.get('data', '')), 70)}")
+        shown += 1
+        if limit and shown >= limit:
+            break
+    return lines or ["no websocket frames in this capture"]
+
+
+def errors(rows: Iterable[dict[str, Any]], read_entry_by_index: Any, limit: int) -> list[str]:
+    """Every non-2xx, with a short body snippet where one exists.
+
+    The snippet is the point: an API that returns 400 with
+    `{"error":"missing page param"}` has told you how to fix the request.
+    """
+    lines: list[str] = []
+    shown = 0
+    for row in rows:
+        status = row.get("status")
+        # Non-2xx, minus 1xx: a 101 is a websocket upgrade succeeding, and
+        # listing protocol handshakes as errors trains a reader to skim the
+        # list that exists to be read.
+        if status is None or 100 <= status < 300:
+            continue
+        lines.append(
+            f"{row['i']:>4}  {status} {row.get('statusText', '')}  "
+            f"{elide(row.get('url') or '', 60)}"
+        )
+        if row.get("hasRespBody"):
+            entry = read_entry_by_index(row["i"])
+            decoded = decode_body((entry.get("response") or {}).get("content") or {})
+            if decoded.ok and decoded.text:
+                snippet = " ".join(decoded.text.split())[:120]
+                lines.append(f"        {snippet}")
+        shown += 1
+        if limit and shown >= limit:
+            break
+    return lines or ["no non-2xx responses in this capture"]
+
+
+def top_by(rows: Iterable[dict[str, Any]], key: str, limit: int) -> list[str]:
+    """Top-N by time or size — the format's original purpose, still useful."""
+    field = "ms" if key == "time" else "respBytes"
+    ranked = sorted(rows, key=lambda r: r.get(field) or 0, reverse=True)[: limit or None]
+    unit = "ms" if key == "time" else "B"
+    return [
+        f"{row.get(field) or 0:>10.0f}{unit}  {row.get('status')}  "
+        f"{elide(row.get('url') or '', 58)}"
+        for row in ranked
+    ] or ["no entries"]
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", type=Path, required=True, help="the .har file")
@@ -397,8 +682,32 @@ def main(argv: list[str] | None = None) -> int:
         help="re-parse every entry from its byte offset and compare — proves the scanner",
     )
     parser.add_argument("--no-index", action="store_true", help="do not read or write a sidecar")
+
+    modes = parser.add_argument_group("insight", "pick one; the default is the overview")
+    modes.add_argument(
+        "--stats", metavar="FIELD",
+        help="histogram over status, host, mime, type, method, size or time",
+    )
+    modes.add_argument("--errors", action="store_true", help="every non-2xx, with a body snippet")
+    modes.add_argument(
+        "--endpoints", action="store_true",
+        help="URL paths collapsed to templates, with which parameters vary — the pagination finder",
+    )
+    modes.add_argument(
+        "--headers", action="store_true",
+        help="request headers by host, constant across requests versus varying",
+    )
+    modes.add_argument("--cookies", action="store_true", help="cookies sent and set, with flags")
+    modes.add_argument("--redirects", action="store_true", help="redirect chains, collapsed")
+    modes.add_argument("--slowest", action="store_true", help="top-N by total time")
+    modes.add_argument("--largest", action="store_true", help="top-N by response body size")
+    modes.add_argument("--websockets", action="store_true", help="per-socket frames and sizes")
+
     parser.add_argument("--json", action="store_true", dest="as_json", help="machine-readable")
     parser.add_argument("--limit", type=int, default=20, help="0 removes the row and byte caps")
+    parser.add_argument(
+        "--output", type=Path, metavar="PATH", help="write the FULL result to a file"
+    )
     args = parser.parse_args(argv)
 
     if not args.input.is_file():
@@ -420,12 +729,13 @@ def main(argv: list[str] | None = None) -> int:
             return 1 if problems else 0
 
         rows: Iterable[dict[str, Any]]
+        header: dict[str, Any] = {}
         if args.no_index:
             data = args.input.read_bytes()
             salt = new_salt()
             rows = (build_row(read_entry(data, span), span, salt) for span in scan_entries(data))
         else:
-            _, rows = ensure_index(args.input)
+            header, rows = ensure_index(args.input)
     except HarStructureError as exc:
         print(f"analyze_har: {exc}", file=sys.stderr)
         return 1
@@ -433,14 +743,74 @@ def main(argv: list[str] | None = None) -> int:
         print(f"analyze_har: cannot read {args.input}: {exc}", file=sys.stderr)
         return 1
 
+    # Modes that need a body read get a lazy reader rather than the capture:
+    # the overview, the histograms and the endpoint collapse must never open it,
+    # and passing the bytes around would make that easy to lose by accident.
+    capture: dict[str, Any] = {}
+
+    def read_entry_by_index(index: int) -> dict[str, Any]:
+        if "spans" not in capture:
+            data = args.input.read_bytes()
+            if not args.no_index:
+                verify_for_seek(args.input, header, data)
+            capture["data"] = data
+            capture["spans"] = scan_entries(data)
+        return read_entry(capture["data"], capture["spans"][index])
+
+    try:
+        lines = _run_mode(args, rows, read_entry_by_index)
+    except (FilterlessError, HarStructureError) as exc:
+        print(f"analyze_har: {exc}", file=sys.stderr)
+        return 2 if isinstance(exc, FilterlessError) else 1
+
     if args.as_json:
-        print(json.dumps({"entries": sum(1 for _ in rows)}))
+        print(json.dumps({"mode": _mode_name(args), "lines": lines}, ensure_ascii=False))
         return 0
-    kept, note = apply_budget(overview(rows), 0 if args.limit == 0 else 4096)
+    if args.output:
+        args.output.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        print(f"wrote {len(lines)} line(s) to {args.output}", file=sys.stderr)
+        return 0
+    kept, note = apply_budget(lines, 0 if args.limit == 0 else 4096)
     print("\n".join(kept))
     if note:
         print(note)
     return 0
+
+
+def _mode_name(args: argparse.Namespace) -> str:
+    for name in (
+        "stats", "errors", "endpoints", "headers", "cookies",
+        "redirects", "slowest", "largest", "websockets",
+    ):
+        if getattr(args, name):
+            return name
+    return "overview"
+
+
+def _run_mode(
+    args: argparse.Namespace, rows: Iterable[dict[str, Any]], read_entry_by_index: Any
+) -> list[str]:
+    """Dispatch to one insight mode. The default is the overview."""
+    limit = args.limit
+    if args.stats:
+        return stats(rows, args.stats, limit)
+    if args.endpoints:
+        return endpoints(rows, limit)
+    if args.headers:
+        return header_analysis(rows, limit)
+    if args.cookies:
+        return cookie_analysis(rows, limit)
+    if args.redirects:
+        return redirects(rows, limit)
+    if args.slowest:
+        return top_by(rows, "time", limit)
+    if args.largest:
+        return top_by(rows, "size", limit)
+    if args.websockets:
+        return websockets(rows, read_entry_by_index, limit)
+    if args.errors:
+        return errors(rows, read_entry_by_index, limit)
+    return overview(rows)
 
 
 if __name__ == "__main__":

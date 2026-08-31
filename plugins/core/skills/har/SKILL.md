@@ -61,7 +61,7 @@ is spent on endpoints or on rendered HTML.
 | Script | What it answers |
 |---|---|
 | `query_har.py` | Which entries match, what one of them contains, and getting bodies out |
-| `analyze_har.py` | What is in here. `--index` builds the sidecar every other command reads |
+| `analyze_har.py` | What is in here, and how to iterate it. `--index` builds the sidecar every other command reads |
 | `validate_har.py` | Is this capture usable, and what did its exporter leave out |
 
 Every script takes `--input`, accepts `--json` for chaining, and caps its own
@@ -71,6 +71,34 @@ Reproduction (`create_repro.py`), derived captures (`create_har.py`) and
 comparison (`compare_har.py`) are later stages of
 `docs/design/0002-har-analysis-toolkit-plan.md`. Nothing here promises a command
 it does not carry — check `--help`.
+
+## Reading the capture as a whole
+
+```bash
+python3 "${CLAUDE_SKILL_DIR}/scripts/analyze_har.py" --input capture.har --endpoints
+```
+
+| Mode | Output |
+|---|---|
+| *(default)* | Overview: entries, hosts, types, statuses, and the XHR/JSON count |
+| `--endpoints` | **The pagination finder.** URL paths collapsed to templates, with which parameters vary and over what range |
+| `--headers` | Request headers by host, split into constant across requests (candidate auth) versus varying |
+| `--cookies` | Cookies sent and set, by domain, with their flags. Values redacted, names and flags kept |
+| `--errors` | Every non-2xx, with the body snippet that usually says how to fix the request |
+| `--stats FIELD` | Histogram over `status`, `host`, `mime`, `type`, `method`, `size`, `time` |
+| `--redirects` | Redirect chains, collapsed |
+| `--slowest` / `--largest` | Top-N by time or body size |
+| `--websockets` | Per-socket frame counts, direction, sizes and first frames |
+
+`--endpoints` is the one to run second. Collapsing `?page=1&loc=NY`,
+`?page=2&loc=NY`, `?page=3&loc=NY` into one row that says `page` varies over
+1–3 while `loc` is constant is the difference between reading forty URLs and
+reading how to iterate the site.
+
+`--headers` is how the auth header is found: a header sent identically on every
+request to a host is a candidate credential, one that changes per request is
+not. It keeps working under redaction because redacted values carry a salted
+fingerprint rather than a bare marker.
 
 ## Selecting entries
 

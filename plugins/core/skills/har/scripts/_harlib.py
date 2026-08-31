@@ -100,6 +100,36 @@ def is_sensitive_param(name: str) -> bool:
     return bool(SENSITIVE_PARAM.search(name))
 
 
+def redact_cookie_header(value: str, salt: str) -> str:
+    """Redact cookie VALUES, keeping names and attributes.
+
+    `Set-Cookie: sid=abc; HttpOnly; Secure` becomes
+    `sid=<redacted:ab12cd34>; HttpOnly; Secure`. Replacing the whole header
+    would be safe and useless: cookie names and flags are how a session
+    identifies which cookie authenticates and whether it is `HttpOnly`, and
+    losing them turns cookie analysis into a count of anonymous strings.
+    """
+    parts = [chunk.strip() for chunk in value.split(";")]
+    out: list[str] = []
+    for i, chunk in enumerate(parts):
+        name, sep, raw = chunk.partition("=")
+        # In a Set-Cookie only the FIRST pair is the cookie; the rest are
+        # attributes (Path, Domain, Expires, Max-Age) and carry no secret.
+        if sep and (i == 0 or not _COOKIE_ATTRIBUTE.fullmatch(name.strip())):
+            out.append(f"{name}={fingerprint(raw, salt)}")
+        else:
+            out.append(chunk)
+    return "; ".join(out)
+
+
+# Set-Cookie attribute names, which are not cookies and hold nothing secret.
+_COOKIE_ATTRIBUTE = re.compile(
+    r"(?i)^(path|domain|expires|max-age|samesite|priority|partitioned)$"
+)
+
+_COOKIE_HEADERS = frozenset({"cookie", "set-cookie"})
+
+
 def redact_pairs(
     pairs: list[tuple[str, str]], salt: str, *, headers: bool
 ) -> list[list[str]]:
@@ -115,7 +145,12 @@ def redact_pairs(
     out: list[list[str]] = []
     for name, value in pairs:
         key = name.lower() if headers else name
-        out.append([key, fingerprint(value, salt) if sensitive(name) else value])
+        if headers and key in _COOKIE_HEADERS:
+            out.append([key, redact_cookie_header(value, salt)])
+        elif sensitive(name):
+            out.append([key, fingerprint(value, salt)])
+        else:
+            out.append([key, value])
     return out
 
 
