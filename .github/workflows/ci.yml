@@ -5,6 +5,10 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # The benchmark job below runs on these two and only these two — see its `if`.
+  workflow_dispatch:
+  schedule:
+    - cron: "37 5 * * 1"
 
 permissions:
   contents: read
@@ -100,6 +104,44 @@ jobs:
 
       - name: make test-units
         run: make test-units
+
+  benchmark:
+    name: har benchmark (SC2/SC3)
+    # The evidence row for the HAR plan's SC2 and SC3, which are wall-clock and
+    # RSS numbers and so mean nothing without saying where they ran. The plan
+    # requires this runner; `har_test.sh` deliberately runs the same benchmark
+    # at a tenth of the scale on every push, because generating 200 MB takes
+    # ~50 s and does not belong on the pull-request path. So this job carries
+    # the full scale and runs only on demand and once a week — enough to notice
+    # a regression, never enough to slow a review down.
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Full-scale index build and index-only query
+        run: |
+          python3 plugins/core/tests/har/benchmark.py \
+            --target-mb 200 --entries 50000 \
+            --output-dir "${RUNNER_TEMP}/bench" --json | tee "${RUNNER_TEMP}/bench.json"
+
+      - name: Check SC2 and SC3
+        run: |
+          python3 - "${RUNNER_TEMP}/bench.json" <<'PY'
+          import json, sys
+
+          report = json.load(open(sys.argv[1]))
+          print(json.dumps(report, indent=2))
+          failed = [name for name in ("sc2_pass", "sc3_pass") if not report.get(name)]
+          if failed:
+              sys.exit("benchmark did not meet " + ", ".join(failed))
+          PY
 
   version-bump:
     name: version bump
