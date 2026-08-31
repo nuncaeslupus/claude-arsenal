@@ -18,6 +18,26 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [2.15.0] - 2026-08-31
+
+- **`create_repro.py` turns a found endpoint into a working request.**
+  `--id N --format curl|python` emits a runnable reproduction with the method,
+  URL, headers and body the capture recorded. Credentials are redacted by
+  default; `--secrets` emits the real ones, which is what reproducing a login
+  needs. Every value is escaped for where it is going — shell arguments quoted
+  uniformly, Python values through `repr()`, bodies through `--data-raw` so one
+  beginning with `@` stays data instead of becoming a local-file read.
+- **`create_har.py` writes a derived capture.** Filtered by the same selection
+  grammar, redacted, and **bodies dropped by default** — redaction covers named
+  fields, and a response body is unbounded text that may carry a credential
+  anywhere in it, so keeping them by default would hand back a file that looks
+  sanitised and is not. `--keep-bodies` opts back in and says so. An `--output`
+  that resolves to the input is refused before anything is opened, and every
+  write is a same-directory temp plus an atomic rename.
+- The derived file stays analysable: because redaction is the same salted
+  fingerprint everywhere, `analyze_har.py --headers` still splits constant from
+  varying on a redacted capture.
+
 ## [2.14.1] - 2026-08-31
 
 - **The annotatable reader no longer loses notes quietly.** Two failure paths

@@ -154,6 +154,39 @@ py "$scripts/analyze_har.py" --input "$tmp/basic.har" --stats banana >/dev/null 
     && fail "--stats with an unknown field should be a usage error"
 echo "PASS: every analyze mode within budget, unknown --stats refused"
 
+# --- create_repro.py: nothing the capture did not contain -------------------
+repro="$(py "$scripts/create_repro.py" --input "$tmp/hostile.har" --id 2 --format curl)"
+grep -q -- "--data-raw" <<<"$repro" || fail "the reproduction used --data instead of --data-raw"
+grep -q -- " --data " <<<"$repro" && fail "--data would read a local file for a body starting with @"
+# The assertion is a script, not an inline snippet: writing it inline means
+# interpolating the fixture's `; rm -rf / #` header into a shell, which is the
+# very thing the command under test exists to make impossible.
+printf '%s\n' "$repro" | py "$here/har/assert_repro_safe.py" \
+    || fail "an adversarial header or body did not survive shell quoting intact"
+grep -q "live-aaaa" <<<"$repro" && fail "the reproduction leaked a credential without --secrets"
+py "$scripts/create_repro.py" --input "$tmp/basic.har" --id 2 --format python \
+    | python3 -c 'import sys; compile(sys.stdin.read(), "<repro>", "exec")' \
+    || fail "the python reproduction is not valid Python"
+echo "PASS: create_repro — adversarial values stay data, in both formats"
+
+# --- create_har.py: safe to commit, honest when it is not -------------------
+py "$scripts/create_har.py" --input "$tmp/hostile.har" --output "$tmp/derived.har" >/dev/null \
+    || fail "create_har exited non-zero"
+for secret in live-aaaa live-bbbb live-cccc live-dddd hunter2; do
+    grep -q "$secret" "$tmp/derived.har" && fail "SC5: $secret survived into the derived HAR"
+done
+py "$here/har/assert_no_bodies.py" "$tmp/derived.har" || fail "bodies are not dropped by default"
+py "$scripts/validate_har.py" --input "$tmp/derived.har" >/dev/null \
+    || fail "the derived file is not a valid HAR"
+out="$(py "$scripts/create_har.py" --input "$tmp/basic.har" --keep-bodies --output "$tmp/fix.har")"
+grep -q "as sensitive as the capture" <<<"$out" \
+    || fail "--keep-bodies did not declare the result sensitive"
+py "$scripts/analyze_har.py" --input "$tmp/derived.har" --headers >/dev/null \
+    || fail "--headers cannot read a derived HAR"
+py "$scripts/create_har.py" --input "$tmp/basic.har" --output "$tmp/basic.har" >/dev/null 2>&1 \
+    && fail "writing the derived HAR over its own input was not refused"
+echo "PASS: create_har — SC5, bodies dropped by default, --keep-bodies declares itself"
+
 # --- SC2/SC3 at reduced scale ----------------------------------------------
 # The recorded evidence is a 200 MB / 50k-entry run, which takes ~45 s to
 # generate and does not belong in every CI run. This is the same benchmark at

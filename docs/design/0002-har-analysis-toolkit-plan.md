@@ -53,7 +53,16 @@ new file rather than a refactor of these.
 | `scan_entries(path) -> Iterator[EntrySpan]` | Byte offsets and lengths of each `log.entries[i]` object. **Binary mode throughout**; brace depth tracked with string/escape awareness. Never decodes. |
 | `read_entry(path, span) -> dict` | Parse exactly one entry from its span. Callers verify the digest once per run before the first call. |
 | `decode_body(content) -> Decoded` | The whole encoding chain in one place: base64 → content-encoding (`gzip`/`deflate`/`br`) → charset (declared, sniffed, BOM). Returns `Decoded(text, bytes, charset, source, ok, reason)`. **Never raises on undecodable input and never returns a mangled string** — `ok=False` with a reason is the honest answer (spec § 8, encoding risk). |
-| `redact(value, kind, salt) -> str` | `<redacted:ab12cd34>` — truncated digest under a per-run salt that is never stored. Equal values stay equal. **One representation everywhere**, including `create_har.py` output: a literal `<redacted>` marker in a derived HAR would make every `Authorization` in it compare equal, so `--headers` on that file would report every header constant. The spec's bare `<redacted>` (§ 4.4) and its fingerprint requirement (§ 5.4) are the same rule, and the fingerprint is the form that satisfies both. |
+| `redact(value, kind, salt) -> str` | `<redacted:ab12cd34>` — truncated digest of **the value**, under a per-run salt that is never stored. **One representation everywhere**, `create_har.py` output included: a literal `<redacted>` marker in a derived HAR makes every `Authorization` in it compare equal, so `--headers` on that file reports every header constant. So does a marker derived from the salt alone (`<redacted:{salt[:8]}>`) — the same bug wearing a fingerprint's clothes, and invisible to any fixture carrying one credential. The spec's bare `<redacted>` (§ 4.4) and its fingerprint requirement (§ 5.4) are the same rule; the per-value fingerprint is the form that satisfies both. |
+
+**The salt is per run, so fingerprints are comparable within one artifact and
+never across two.** That is the entire guarantee, and it is enough for
+everything built here: `--headers` indexes whatever file it is handed and
+compares within it, and `compare_har.py` keys on method, authority, path, query
+and request body — never on a header value. Nothing compares a fingerprint from
+one file against one from another, and nothing should start: a stored salt is a
+stored secret, and a shared one across artifacts would make two captures'
+redactions linkable, which is the property redaction exists to remove.
 | `redact_url(url, salt) -> str` | Token-shaped query pairs redacted **in place**, preserving pair order, repeated names and each value's percent-encoding; userinfo and fragment removed. |
 | `budget(lines, cap=4096) -> tuple[list[str], str]` | SC1, applied once for every command rather than per script. |
 
