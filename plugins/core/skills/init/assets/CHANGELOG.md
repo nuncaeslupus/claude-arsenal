@@ -18,6 +18,16 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [2.16.3] - 2026-08-31
+
+### Fixed
+- The skill validator read a line like ```` ```inline `code` mention ```` as
+  opening a fenced block. CommonMark says a backtick fence's info string may
+  not contain a backtick, so that line is prose — usually an inline code span
+  that happens to start a line. Treating it as a fence failed `body.fences` on
+  valid markdown and made the voice and secret checks stop reading everything
+  after it. Tilde fences have no such rule and are unaffected.
+
 ## [2.16.2] - 2026-08-31
 
 ### Fixed
