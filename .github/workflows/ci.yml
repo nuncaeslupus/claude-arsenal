@@ -77,6 +77,30 @@ jobs:
       - name: make test
         run: make test
 
+  unit-tests:
+    name: unit tests
+    runs-on: ubuntu-22.04
+    # Separate from `core tests` on purpose: that job runs bare python3 to prove
+    # the shipped scripts work the way a consumer runs them, so pytest — a dev
+    # dependency — cannot run there. This job has the toolchain and runs it.
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: make test-units
+        run: make test-units
+
   version-bump:
     name: version bump
     runs-on: ubuntu-22.04

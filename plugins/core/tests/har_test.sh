@@ -25,7 +25,12 @@ stage="${2:-all}"
 tmp="$(mktemp -d)" || { echo "FAIL: mktemp -d failed" >&2; exit 1; }
 trap 'rm -rf "$tmp"' EXIT
 fail() { echo "FAIL: $1" >&2; exit 1; }
-py() { (cd "$root" && uv run python "$@"); }
+# `python3`, not `uv run python`: the `core tests` job sets up bare python3 on
+# purpose — it exists to prove the shipped scripts work the way a consumer runs
+# them, with no `uv` and no installed packages. Every har script is stdlib-only
+# precisely so that holds, and reaching for `uv` here would report a missing
+# tool as a failing toolkit.
+py() { (cd "$root" && python3 "$@"); }
 
 py "$here/har/fixtures.py" --output-dir "$tmp" >/dev/null || fail "fixture generation failed"
 for name in basic traps encodings hostile compare_a compare_b; do
@@ -34,8 +39,16 @@ done
 echo "PASS: fixtures build"
 
 # --- the unit layer ---------------------------------------------------------
-(cd "$root" && uv run pytest plugins/core/tests/har -q) || fail "pytest layer failed"
-echo "PASS: pytest — scanner, encodings, index, validate"
+# pytest is a dev dependency, so it is absent from the bare-python job by
+# design. Skipping is reported by name, never silently: `make test-units` runs
+# this layer in the `unit tests` job, which has the dev toolchain, and a skip
+# that does not say so is how 100 assertions quietly stop running.
+if python3 -c "import pytest" >/dev/null 2>&1; then
+    (cd "$root" && python3 -m pytest plugins/core/tests/har -q) || fail "pytest layer failed"
+    echo "PASS: pytest — scanner, encodings, index, validate"
+else
+    echo "SKIP: pytest not importable here — the unit layer runs in \`make test-units\`"
+fi
 
 # --- validate_har.py --------------------------------------------------------
 out="$(py "$scripts/validate_har.py" --input "$tmp/basic.har")" \
