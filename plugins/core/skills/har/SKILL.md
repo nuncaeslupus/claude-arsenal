@@ -63,14 +63,45 @@ is spent on endpoints or on rendered HTML.
 | `query_har.py` | Which entries match, what one of them contains, and getting bodies out |
 | `analyze_har.py` | What is in here, and how to iterate it. `--index` builds the sidecar every other command reads |
 | `validate_har.py` | Is this capture usable, and what did its exporter leave out |
+| `create_repro.py` | One entry to a runnable `curl` or Python `requests` snippet |
+| `create_har.py` | A derived capture: filtered, redacted, bodies dropped — small enough to commit |
 
 Every script takes `--input`, accepts `--json` for chaining, and caps its own
 output. Run `--help` for every flag.
 
-Reproduction (`create_repro.py`), derived captures (`create_har.py`) and
-comparison (`compare_har.py`) are later stages of
+Comparison (`compare_har.py`) is the last stage of
 `docs/design/0002-har-analysis-toolkit-plan.md`. Nothing here promises a command
 it does not carry — check `--help`.
+
+## From endpoint to scraper
+
+```bash
+python3 "${CLAUDE_SKILL_DIR}/scripts/create_repro.py" --input capture.har --id 4 --format curl
+python3 "${CLAUDE_SKILL_DIR}/scripts/create_repro.py" --input capture.har --id 4 --format python
+```
+
+The handoff from "found the endpoint" to "have a scraper", and the point where a
+HAR stops being a diagnostic artifact. Credentials are redacted by default;
+`--secrets` emits the real ones, which is what reproducing a login needs.
+
+**Every emitted value is escaped for its destination.** A capture is untrusted
+input and this output gets pasted into a shell, so shell arguments are quoted
+uniformly, Python values go through `repr()`, and bodies use `--data-raw` — a
+body beginning with `@` stays inline data instead of becoming a local-file read.
+
+## A capture small enough to commit
+
+```bash
+python3 "${CLAUDE_SKILL_DIR}/scripts/create_har.py" --input capture.har \
+    --type xhr --output fixture.har
+```
+
+Bodies are **dropped by default**: redaction covers named fields, and a response
+body is unbounded text that may carry a credential anywhere in it, so a derived
+HAR that kept them would look sanitised without being it. `--keep-bodies` opts
+back in and says in its own output that the result is as sensitive as the
+capture. An `--output` that resolves to the input is refused before anything is
+opened.
 
 ## Reading the capture as a whole
 
