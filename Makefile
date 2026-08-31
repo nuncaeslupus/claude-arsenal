@@ -126,7 +126,7 @@ test:  ## run every plugin's behaviour tests (plugins/*/tests/*.sh) + repo-tool 
 QUEUE_DOCTOR_FLAGS ?=
 
 test-units:  ## pytest layer — needs the dev toolchain, unlike `make test` (bare python3)
-	uv run pytest plugins/core/tests -q
+	uv run pytest plugins -q
 
 queue-doctor:  ## dogfood: audit this repo's own task files (arsenal/tasks) the way a consumer would
 	@# Fetch the board's issues when a channel exists, so the handle check is a real
