@@ -17,9 +17,20 @@ manifest="$root/plugins/core/skills/init/assets/sections.json"
 fail() { echo "FAIL: $1" >&2; exit 1; }
 
 # --- the committed manifest matches the committed skills --------------------
-uv run python "$script" --check >/dev/null 2>&1 \
-    || fail "committed sections.json has drifted; run 'make sync-sections'"
+# The checker's own output is shown on failure, not swallowed: this check has
+# passed locally and failed in CI, and "it has drifted" without the diff leaves
+# nothing to act on. `--check` prints a unified diff of what differs.
+if ! check_out="$(uv run python "$script" --check 2>&1)"; then
+    printf '%s\n' "$check_out" >&2
+    fail "committed sections.json has drifted; run 'make sync-sections'"
+fi
 echo "PASS: committed manifest matches the shipped skills"
+
+# What the runner actually sees, for the same reason. A skill directory left
+# behind by an earlier test, or one that never got committed, changes the
+# answer and is invisible from the drift message alone.
+echo "  skills on disk: $(find "$root/plugins/core/skills" -mindepth 2 -maxdepth 2 \
+    -name SKILL.md | wc -l | tr -d ' ') SKILL.md files"
 
 # --- drift is detected ------------------------------------------------------
 backup="$(mktemp)"; cp "$manifest" "$backup"
