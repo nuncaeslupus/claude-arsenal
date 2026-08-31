@@ -20,6 +20,14 @@ Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
 ## [2.10.0] - 2026-08-30
 
+- **`query_status.py --pending-merge`, for auditing a branch rather than the
+  default branch.** The completion protocol archives a task file in the same
+  diff that closes its issue, so between opening a PR and merging it every task
+  that PR finishes reads *archived, issue still open*. Reported as drift, that
+  made the documented workflow unable to produce a green build on any PR. With
+  the flag it is a note; without it, on the default branch, it is still the
+  drift it was — a merge that did half its job.
+
 - **New: `init.py --list-sections` prints the capability map.** Sections made
   the install set a choice, and a choice creates a thing nobody knows about — a
   repo without the `python` section has no way to learn `coverage-gaps` exists,

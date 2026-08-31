@@ -144,6 +144,9 @@ jobs:
         run: uv python install 3.12
 
       - name: make queue-doctor
-        run: make queue-doctor
+        # On a pull request, a task this PR archives still has an open issue —
+        # the protocol puts the archive and the close in one diff, so that state
+        # is expected until it merges. On a push to main it is drift.
+        run: make queue-doctor QUEUE_DOCTOR_FLAGS=${{ github.event_name == 'pull_request' && '--pending-merge' || '' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

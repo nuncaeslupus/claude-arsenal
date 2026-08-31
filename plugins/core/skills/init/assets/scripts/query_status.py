@@ -57,6 +57,12 @@ def main(argv: list[str] | None = None) -> int:
         help="emit one JSON object per task with its DERIVED state, for a host check to consume",
     )
     parser.add_argument("--fail-on-problems", action="store_true")
+    parser.add_argument(
+        "--pending-merge",
+        action="store_true",
+        help="a branch, not the default: an archived task whose issue is still open is the "
+        "documented in-flight state, not drift",
+    )
     args = parser.parse_args(argv)
 
     # "I did not ask GitHub" and "GitHub has no handle for this" are different
@@ -93,6 +99,7 @@ def main(argv: list[str] | None = None) -> int:
 
     counts = {"open": 0, "claimed": 0, "done": 0, "cancelled": 0, "blocked": 0}
     problems: list[str] = []
+    notes: list[str] = []
     known_ids = {t["id"] for t in tasks}
     for task in tasks:
         current = state.get(task["id"], "open")
@@ -123,10 +130,23 @@ def main(argv: list[str] | None = None) -> int:
         number = issue_number_for(task["id"], issues, titles=titles)
         where = f"#{number}" if number else "its issue"
         if task.get("status") in TERMINAL and actual in {"open", "claimed"}:
-            problems.append(
-                f"{task['id']}: archived as {task['status']} but {where} is still {actual} — "
-                "the PR merged without closing it; close it as completed"
-            )
+            # `open_task_pr.sh` archives the task file in the SAME diff that
+            # closes its issue, so between opening a PR and merging it, every
+            # task that PR finishes reads archived-with-an-open-issue. On a
+            # branch that is the protocol working; only on the default branch
+            # does it mean a merge did half its job. Without the distinction
+            # the documented workflow cannot produce a green PR — the same
+            # shape as reporting a missing handle nobody looked for.
+            if args.pending_merge:
+                notes.append(
+                    f"{task['id']}: archived as {task['status']}, {where} still {actual} — "
+                    "expected until this branch merges"
+                )
+            else:
+                problems.append(
+                    f"{task['id']}: archived as {task['status']} but {where} is still {actual} — "
+                    "the PR merged without closing it; close it as completed"
+                )
         elif task.get("status") not in TERMINAL and actual == "done":
             problems.append(
                 f"{task['id']}: {where} is closed as completed but the task file is still live "
@@ -165,6 +185,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"query_status: {problem}", file=sys.stderr)
         return 1 if (problems and args.fail_on_problems) else 0
 
+    for note in notes:
+        print(f"query_status: {note}", file=sys.stderr)
     print(
         f"tasks: {len(tasks)} — "
         + ", ".join(f"{k} {v}" for k, v in counts.items() if v or k in {"open", "claimed", "done"})

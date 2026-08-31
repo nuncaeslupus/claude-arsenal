@@ -120,6 +120,11 @@ test:  ## run every plugin's behaviour tests (plugins/*/tests/*.sh) + repo-tool 
 		echo "=== test: $$t ==="; bash "$$t"; \
 	done
 
+# Set to --pending-merge on a branch: a task archived by a PR that has not merged
+# yet legitimately still has an open issue, and only on the default branch does
+# that combination mean a merge did half its job.
+QUEUE_DOCTOR_FLAGS ?=
+
 queue-doctor:  ## dogfood: audit this repo's own task files (arsenal/tasks) the way a consumer would
 	@# Fetch the board's issues when a channel exists, so the handle check is a real
 	@# check rather than a skipped one. Without them query_status reports what it can
@@ -138,7 +143,7 @@ queue-doctor:  ## dogfood: audit this repo's own task files (arsenal/tasks) the 
 	fi; \
 	uv run python plugins/core/skills/init/assets/scripts/query_status.py \
 		--tasks-dir arsenal/tasks --detail --fail-on-problems \
-		$${issues:+--issues "$$issues"}
+		$${issues:+--issues "$$issues"} $(QUEUE_DOCTOR_FLAGS)
 
 sync-dupes:  ## sync_duplicates.py --check across plugins/*/scripts/_shared/
 	uv run python $(SYNC_DUPES) --check
