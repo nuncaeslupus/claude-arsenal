@@ -130,6 +130,30 @@ py "$scripts/query_har.py" --input "$tmp/traps.har" --no-cache | grep -q "unknow
     && fail "--no-cache selected an entry whose exporter never recorded _fromCache"
 echo "PASS: _fromCache stays three-state across the CLI"
 
+# --- analyze_har.py insight modes -------------------------------------------
+out="$(py "$scripts/analyze_har.py" --input "$tmp/basic.har" --endpoints)"
+rows="$(grep -c "api.example.com/api/jobs" <<<"$out")"
+[ "$rows" -eq 1 ] || fail "--endpoints did not collapse the paginated API to one row"
+grep -q "page varies over 4" <<<"$out" || fail "--endpoints did not report the varying parameter"
+grep -q "loc = NY  (constant)" <<<"$out" || fail "--endpoints did not report the constant one"
+echo "PASS: --endpoints — the paginated API collapses to one row"
+
+py "$scripts/analyze_har.py" --input "$tmp/basic.har" --headers | grep -q "candidate auth" \
+    || fail "--headers did not name the constant Authorization as a candidate"
+py "$scripts/analyze_har.py" --input "$tmp/traps.har" --cookies | grep -q "sid \[HttpOnly\]" \
+    || fail "--cookies lost the cookie name or its flags"
+py "$scripts/analyze_har.py" --input "$tmp/traps.har" --websockets | grep -q "Rustacean" \
+    || fail "--websockets did not show the frames a body search cannot find"
+echo "PASS: --headers, --cookies, --websockets"
+
+for mode in --errors --redirects --slowest --largest --cookies --headers --endpoints --websockets; do
+    bytes="$(py "$scripts/analyze_har.py" --input "$tmp/encodings.har" $mode | wc -c)"
+    [ "$bytes" -le 4096 ] || fail "analyze $mode produced $bytes bytes; cap is 4096"
+done
+py "$scripts/analyze_har.py" --input "$tmp/basic.har" --stats banana >/dev/null 2>&1 \
+    && fail "--stats with an unknown field should be a usage error"
+echo "PASS: every analyze mode within budget, unknown --stats refused"
+
 # --- SC2/SC3 at reduced scale ----------------------------------------------
 # The recorded evidence is a 200 MB / 50k-entry run, which takes ~45 s to
 # generate and does not belong in every CI run. This is the same benchmark at

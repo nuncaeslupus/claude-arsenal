@@ -4,6 +4,7 @@ title: "har stage 3: analyze_har.py insight modes"
 deps: [t-275b3739]
 priority: 1
 tags: [EXTRACT]
+status: merged
 ---
 
 Plan T6. Spec § 4.1.
@@ -20,5 +21,5 @@ Gate: `endpoint_rows_for_paginated_fixture == 1` with `page` varying and `loc` c
 ## Acceptance gate
 
 ```bash
-bash plugins/core/tests/har_test.sh --stage 3
+bash plugins/core/tests/har_test.sh
 ```

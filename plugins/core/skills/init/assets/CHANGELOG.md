@@ -18,6 +18,26 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [2.14.0] - 2026-08-30
+
+- **`analyze_har.py` now reduces a capture to insight.** Nine modes, and the
+  one worth running second is `--endpoints`: it collapses URL paths into
+  templates and reports which parameters vary and over what range. Turning
+  `?page=1&loc=NY`, `?page=2&loc=NY`, `?page=3&loc=NY` into one row saying
+  `page` varies 1–3 while `loc` is constant is the difference between reading
+  forty URLs and reading how to iterate the site.
+- `--headers` finds the auth header: request headers grouped by host and split
+  into constant across every request (candidate credential) versus varying.
+- Also `--errors` (non-2xx with the body snippet that says how to fix the
+  request), `--cookies`, `--stats FIELD`, `--redirects`, `--slowest`,
+  `--largest` and `--websockets` — for sites that stream their data over a
+  socket, where an HTTP body search finds nothing because there is no body.
+- **Cookie redaction now keeps names and flags.** `Set-Cookie: sid=abc;
+  HttpOnly` is stored as `sid=<redacted:ab12cd34>; HttpOnly` rather than being
+  replaced wholesale. The name and the flags are what say which cookie
+  authenticates and whether it is `HttpOnly`; losing them made cookie analysis
+  a count of anonymous strings.
+
 ## [2.13.0] - 2026-08-30
 
 - **`har` can now find things.** `query_har.py` selects entries, shows one in
