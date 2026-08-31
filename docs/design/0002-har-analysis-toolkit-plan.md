@@ -159,8 +159,8 @@ until its row is complete and the measured value meets the gate.
 | T1 | `validate_har_fixture_pass_rate == 1.0` | **1.0** — every generated fixture validates, absent bodies reported as a capability | `make test` (`har_test.sh`) | `6a0ec88` | CI `ubuntu-22.04`, py3.12 |
 | T2 | `offset_reparse_mismatches == 0` | **0** over every fixture, including the multi-byte-before-a-later-entry case | `analyze_har.py --verify-offsets`, via `har_test.sh` | `6a0ec88` | CI `ubuntu-22.04`, py3.12 |
 | T2 | `encoding_matrix_pass_rate == 1.0` (14 cases) | **1.0** — 15/15 in `har/test_decode.py` (10 decodable, 5 refused-by-name). The matrix carries one case more than the gate asked for; the extra is a pass, not a shortfall | `make test-units` | `6a0ec88` | CI `ubuntu-22.04`, py3.12 |
-| T3 | `index_build_seconds_200mb <= 30`; `index_build_peak_rss_mb <= 400` (SC2) | **9.37 s / 250.2 MB** on 231.6 MB / 50k entries — *local only, see below* | `benchmark.py --target-mb 200 --entries 50000 --json` | `76635f4` | local container, py3.11.15 — **not canonical** |
-| T3 | `index_only_query_seconds <= 1`; `index_only_query_peak_rss_mb <= 150` (SC3) | **0.353 s / 18.7 MB** — *local only, see below* | as above | `76635f4` | local container, py3.11.15 — **not canonical** |
+| T3 | `index_build_seconds_200mb <= 30`; `index_build_peak_rss_mb <= 400` (SC2) | **7.04 s / 250.4 MB** on a 231.6 MB / 50k-entry capture, seed 20260830 | `benchmark.py --target-mb 200 --entries 50000 --json`, via `benchmark.yml` | `06087a5` | CI `ubuntu-22.04`, py3.12.14 |
+| T3 | `index_only_query_seconds <= 1`; `index_only_query_peak_rss_mb <= 150` (SC3) | **0.39 s / 20.5 MB**, 813 hits — flat in body bytes, as the criterion requires | as above | `06087a5` | CI `ubuntu-22.04`, py3.12.14 |
 | T3 | SC3 regression guard at 1/10 scale | passes on every push: ≤ 1.0 s and ≤ 80 MB at 20 MB / 5k entries | `make test` (`har_test.sh`) | `6a0ec88` | CI `ubuntu-22.04`, py3.12 |
 | T4 | `max_default_output_bytes <= 4096` (SC1) | **3980** — the widest default output across every analyze/query/validate mode over every fixture | `har_test.sh`, byte-counted per mode | `1f424d2` | CI `ubuntu-22.04`, py3.12 |
 | T4 | `json_output_parses_under_budget == true` | **true** — truncation drops whole entries, the `shown`/`matched`/`truncated` envelope survives | `test_json_output_under_budget_still_parses` | `1f424d2` | CI `ubuntu-22.04`, py3.12 |
@@ -173,16 +173,24 @@ until its row is complete and the measured value meets the gate.
 | T10 | `resident_listing_tokens_with_extract <= 130` (SC7) | **96** — the `maximal` listing is 1475 tokens against `python`'s 1379 | `make context-budget` | `6a9ac80` | CI `ubuntu-22.04`, py3.12 |
 | T10 | `shared_flag_parity_failures == 0` | **0** — `query_har`, `create_har` and `compare_har` expose the same eight selection flags | `har_test.sh`, `har/test_parity.py` | `6a9ac80` | CI `ubuntu-22.04`, py3.12 |
 
-**SC2 and SC3 are not signed off yet.** The numbers above are real and pass with
-margin, but they were measured in a development container on Python 3.11.15 —
-below this project's own 3.12 floor — and the provenance rule directly beneath
-this table says a local measurement never replaces the CI one.
-`.github/workflows/benchmark.yml` now carries the full 200 MB / 50k-entry run on
-`ubuntu-22.04`, on `workflow_dispatch` and a weekly schedule rather than on the
-pull-request path, because generating the capture takes ~50 s and no reviewer
-should wait for it. Its own workflow rather than a guarded job in `ci.yml`, so
-dispatching it runs the benchmark and nothing else. Those two rows are replaced with that job's output, and the
-SC2/SC3 sign-off box ticked, once it has run on `main`.
+**SC2 and SC3 carry CI numbers, not local ones.** An earlier measurement in a
+development container on Python 3.11.15 — below this project's own 3.12 floor —
+passed too, but the provenance rule directly beneath this table says a local
+measurement never replaces the CI one, so it was recorded as pending rather than
+as evidence. `.github/workflows/benchmark.yml` carries the full 200 MB /
+50k-entry run on `ubuntu-22.04`, on `workflow_dispatch` and a weekly schedule
+rather than on the pull-request path, because generating the capture takes ~60 s
+and no reviewer should wait for it. It lives in its own workflow rather than as a
+guarded job in `ci.yml`, so that dispatching it runs the benchmark and nothing
+else. The rows above are [run 33392307099's output][bench-run].
+
+Both criteria pass with room: the index build uses 23 % of its time budget and
+63 % of its memory, and the index-only query 39 % of its time budget and 14 % of
+its memory. The memory half is the one worth watching — it is what a reader that
+materialised every row instead of streaming it would blow first, and why the
+1/10-scale guard in `har_test.sh` runs on every push.
+
+[bench-run]: https://github.com/nuncaeslupus/claude-arsenal/actions/runs/33392307099
 
 **Benchmark provenance.** SC2 and SC3 are wall-clock and RSS numbers, so they
 are meaningless without saying where they ran. Each is measured on the CI
@@ -195,11 +203,9 @@ one.
 
 ## Sign-off
 
-- [x] Spec § 2 success criteria SC1–SC7 each have a passing gate row — **SC1,
-      SC4, SC5, SC6 and SC7 signed off** on the rows above. **SC2 and SC3 are
-      measured and passing but not signed off**: the only full-scale run so far
-      was local, and the provenance rule requires the CI runner. The `benchmark`
-      job exists to produce that row.
+- [x] Spec § 2 success criteria SC1–SC7 each have a passing gate row — all
+      seven, with SC2 and SC3 measured on the CI runner the provenance rule
+      requires.
 - [x] Spec § 8 risks each have either a test or an explicit accepted-risk note —
       all nine: offset scanner (`--verify-offsets` plus the multi-byte span
       test), exporter variance (`validate_har.py`'s capability report), encoding
