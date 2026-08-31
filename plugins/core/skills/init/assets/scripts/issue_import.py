@@ -163,7 +163,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     try:
-        from new_task import new_task_id
+        from create_task import new_task_id
     except ImportError:  # standalone bundle without the queue-add skill beside it
         import secrets
 

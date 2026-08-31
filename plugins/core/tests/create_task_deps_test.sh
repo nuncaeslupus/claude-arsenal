@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# new_task_deps_test.sh — a dep on completed work is declarable.
+# create_task_deps_test.sh — a dep on completed work is declarable.
 # Exit: 0 on PASS, 1 on FAIL.
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ADD_PY="${SCRIPT_DIR}/../skills/queue-add/scripts/new_task.py"
+ADD_PY="${SCRIPT_DIR}/../skills/queue-add/scripts/create_task.py"
 [[ -f "${ADD_PY}" ]] || { echo "SKIP: ${ADD_PY} not found" >&2; exit 0; }
 
 tmpdir=$(mktemp -d)
@@ -53,4 +53,4 @@ if python3 "${ADD_PY}" --title "half-quoted dep" --deps t-halfquoted >/dev/null 
     fail "an id behind an unmatched quote is not the id the selector reads"
 fi
 
-echo "PASS: new_task_deps_test.sh"
+echo "PASS: create_task_deps_test.sh"

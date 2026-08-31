@@ -70,12 +70,29 @@ rather than remembered three times.
 | `evaluate(expr, node) -> list[Value]` | The only evaluator. A walker over parsed data — **never `eval`, never `exec`, never interpolated into a shell**. `0002` learned that the hard way when a hostile fixture's own header text reached a shell; a JSON path from an untrusted page gets no exception. |
 | `rank(candidate, samples) -> Rank` | `stable` / `varies` / `sample-specific` / `brittle`. Computed **only from samples actually provided** — with fewer than two samples `stable` is not a reachable value at all (§ 8, the high-severity risk). A positional chain with no semantic anchor ranks `brittle` **by name**, so a weak selector is visibly weak rather than quietly equal. |
 | `witness(values) -> dict` | Bounded shape signature: type, length percentiles, character-class profile. **Never the values** — those are content, they rot on every ordinary edit, and behind a login they may be somebody's data. |
-| `budget(lines, cap=4096) -> tuple[list[str], str]` | SC1, applied once for every command. Copied from `har` for the reason § 3 gives: `extract`'s two skills must install apart. |
+| `apply_budget(lines, cap=4096) -> tuple[list[str], str \| None]` | SC1, applied once for every command. Caps on **encoded UTF-8 bytes**, not on a line count, which is the unit SC1's `max_default_output_bytes` measures — a row cap alone does not bound output. Copied from `har`, where it already works this way, for the reason § 3 gives: `extract`'s two skills must install apart. |
 
 **`emit` and `evaluate` are inverses, and that is a test, not a convention.**
-`evaluate(emit(p), doc)` must yield exactly the node at `p`, for every node of
-every fixture. That property is SC8, and it is what makes the ranked output
-worth reading.
+That property is SC8, and it is what makes the ranked output worth reading. It
+needs stating precisely, because the grammar has two modes and only one of them
+is single-valued:
+
+- **Concrete** — what `emit` returns for a specific node: explicit indices, and
+  for HTML a chain ending in an anchor that selects one element. Here the
+  inverse is exact: `evaluate(emit(p), doc) == [value_at(p)]`, for every node of
+  every fixture. This is the round-trip T2 gates.
+- **Generalised** — what a *candidate* may be after ranking: `[*]`, a bare class
+  or tag selector, anything whose whole purpose is to match the sibling records
+  too. These are set-valued by design; that is what `arity: many` records. The
+  contract here is containment, not equality — `value_at(p)` is in the result —
+  plus a deterministic order, so occurrence *i* means the same thing on every
+  run and across samples.
+
+Occurrence identity comes from the `record` anchor, not from a position in a
+flat result list: field expressions are evaluated relative to a record, so the
+third title belongs to the third record by construction. Without that rule
+`verify` could compare two same-length lists that had silently reordered, which
+is the § 2 failure wearing a different hat.
 
 ### State changes
 
@@ -110,7 +127,7 @@ real case. Also out of scope for this plan: sharing anything with `har`.
 | T# | Description | Size | Depends | Gate | Tests |
 |----|-------------|------|---------|------|-------|
 | T1 | `locate` skill scaffold (SKILL.md stub + argparse stubs); `_doc.py` parse/walk/summarise; fixtures; `describe.py` | M | — | `resident_token_delta_without_extract == 0` (the `general` row stays 862 listing tokens) and `walk_cap_hits_reported == walk_cap_hits_occurred` — an unreported truncation is the failure, not the cap | `test_section_extract_still_defaults_off_with_two_skills` in `plugins/core/tests/skill_sections_test.sh` · `test_walk_reports_the_cut_rather_than_returning_a_short_list` in `locate/test_doc.py` · `test_describe_html_reports_repeated_blocks_not_content` |
-| T2 | `_expr.py`: JSON grammar, `emit` + `evaluate`, escaping | L | T1 | `emit_evaluate_roundtrip_failures == 0` over **every node of every fixture** (SC8) and `dynamic_execution_nodes_in_locate_scripts == 0` — `eval`, `exec`, `compile`, `os.system` and every `subprocess` call, asserted over the parsed AST across all five scripts, not by grep in one of them | `test_every_emitted_expression_reresolves_to_its_own_node` in `locate/test_expr.py` — the SC8 property, over all fixtures · `test_key_containing_a_dot_and_a_bracket_roundtrips` · `test_no_locate_script_reaches_eval_exec_or_a_shell` — the risk says "never `eval`, and never interpolated into a shell", so the check covers both halves and every script, not the one where the paths arrive |
+| T2 | `_expr.py`: JSON grammar, `emit` + `evaluate`, escaping | L | T1 | `emit_evaluate_roundtrip_failures == 0` over **every node the walk reaches, plus the cut marker itself** (SC8) — T1's depth cap makes the nodes below it unreachable by construction, so `awkward.json`'s 40-level nesting is a test of the cut, not a hole in the round-trip · `dynamic_execution_nodes_in_locate_scripts == 0` — `eval`, `exec`, `compile`, `os.system`, `os.popen` and every `subprocess` call, asserted over the parsed AST across all five scripts, not by grep in one of them | `test_every_emitted_expression_reresolves_to_its_own_node` in `locate/test_expr.py` — the SC8 property in its concrete mode, over every reachable node of every fixture · `test_a_generalised_candidate_contains_its_source_node_in_a_stable_order` — the set-valued half, which equality would fail on for the wrong reason · `test_key_containing_a_dot_and_a_bracket_roundtrips` · `test_no_locate_script_reaches_eval_exec_or_a_shell` — the risk says "never `eval`, and never interpolated into a shell", so the check covers both halves and every script, not the one where the paths arrive · `test_os_popen_is_rejected_by_the_safety_gate` — `os.popen` runs its argument through the system shell exactly as `os.system` does, so a gate naming only the latter leaves the same door open |
 | T3 | `locate.py` — JSON, single sample, ranked candidates, `--json` | L | T2 | `locate_seconds_10mb <= 3` and `locate_peak_rss_mb <= 200` (SC2, CI-measured); `candidates_reported / candidates_found == 1.0` for the multi-path fixture (SC6); `stable_ranks_from_a_single_sample == 0`; `max_default_output_bytes <= 4096` (SC1) | `test_value_at_three_paths_reports_all_three_with_ranks` in `locate/test_locate.py` · `test_single_sample_can_never_rank_stable` · `test_json_output_under_budget_still_parses` — truncation drops whole candidates, never bytes |
 | T4 | HTML DOM, selector generation, `--samples` cross-sample ranking | L | T3 | `stable_candidates_resolving_in_every_sample == 1.0` with **no exceptions** (SC3); `positional_only_chains_ranked_brittle == 1.0`; `emit_evaluate_roundtrip_failures == 0` for HTML too (SC8, second half) | `test_a_candidate_failing_any_sample_is_never_stable` in `locate/test_rank.py` — SC3 stated as its own test, since it is the verdict the tool's value rests on · `test_positional_chain_without_a_semantic_anchor_ranks_brittle` · `test_emitted_css_selector_reresolves_on_its_own_document` |
 | T5 | `verify.py`, the § 5.4 descriptor, `--emit-descriptor`, `record` anchoring | L | T4 | `verify_exit_nonzero_on_a_broken_field == true` **and names the field and the observed difference** (SC5); `shape_change_at_unchanged_arity_reported_changed == true` (SC5b); `descriptor_roundtrip_failures == 0`; `commands_from_saved_body_to_verified_descriptor <= 3` (SC4); `files_written_outside_output_dir == 0` for the hostile-path fixture | `test_same_arity_different_shape_reports_changed_not_ok` in `locate/test_verify.py` — SC5b, the case a structural check alone passes · `test_absent_optional_field_is_not_a_failure` · `test_witness_carries_no_values_from_the_document` · `test_descriptor_with_an_unknown_top_level_key_is_refused` · `test_emit_descriptor_traversal_path_stays_inside_output_dir` |

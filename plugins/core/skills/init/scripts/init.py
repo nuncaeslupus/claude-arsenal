@@ -1448,8 +1448,10 @@ def main() -> None:
         help="Detail for one section: every skill it contains, with its description. "
         "Answers whether an uninstalled skill actually fits before recommending it.",
     )
+    # `--quiet` is the canon's spelling; `--silent` shipped first and keeps
+    # working, so no consumer's existing invocation breaks.
     p.add_argument(
-        "--silent", action="store_true",
+        "--quiet", "--silent", action="store_true", dest="silent",
         help="Suppress 'up to date' lines; only print refreshed files and version banner.",
     )
     p.add_argument(
