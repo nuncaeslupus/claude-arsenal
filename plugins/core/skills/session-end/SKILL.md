@@ -97,9 +97,9 @@ Run this for each PR URL, then print a summary table:
 
 | Task | PR | CI | Reviews | Mergeable | Action needed |
 |---|---|---|---|---|---|
-| lo-a3f8 | #42 | ✓ passing | approved | yes | — |
-| lo-b2c1 | #43 | ✗ failing | changes_requested | yes | Fix CI + respond to review |
-| lo-c3d4 | #44 | pending | — | CONFLICTING | Rebase required |
+| lo-a3f8 | #NNN | ✓ passing | approved | yes | — |
+| lo-b2c1 | #NNN | ✗ failing | changes_requested | yes | Fix CI + respond to review |
+| lo-c3d4 | #NNN | pending | — | CONFLICTING | Rebase required |
 
 Mark any PR as **BLOCKED** if: CI is failing, there are `CHANGES_REQUESTED` reviews, or the branch has merge conflicts. Print this table to stdout so the user can review and approve before the session closes.
 
@@ -107,8 +107,8 @@ Mark any PR as **BLOCKED** if: CI is failing, there are `CHANGES_REQUESTED` revi
 Print the PR URL list directly from the queue, with task IDs and titles, so the user can check them manually:
 ```
 PRs from this session requiring human review:
-  t-3f8a91c2  #42  https://github.com/…/pull/42  — Extract the surface probe
-  lo-b2c1  #43  https://github.com/…/pull/43  — T2: Auth gate
+  t-3f8a91c2  #NNN  https://github.com/…/pull/NNN  — Extract the surface probe
+  lo-b2c1  #NNN  https://github.com/…/pull/NNN  — T2: Auth gate
 ```
 
 **Always include escalated tasks** in the summary (they need human reset, not PR review):
