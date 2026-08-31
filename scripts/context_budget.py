@@ -28,10 +28,10 @@ section costs the person who enables it. So the listing is now resolved per
 install — the same `_PROFILES` and `section:` frontmatter `/init` itself reads
 — and each row is a bill somebody actually receives.
 
-The cap applies to `maximal`, every shipped section switched on, because that
-is the largest bill a consumer can choose. A default-off skill is still free
-for everyone who does not enable it, and the `minimal`/`general` rows are there
-so a reviewer can see which of those two a change moved.
+The cap applies to whichever row enables the most sections, because that is the
+largest bill a consumer can choose. A default-off skill is still free for
+everyone who does not enable it, and the `minimal`/`general` rows are there so a
+reviewer can see which of those two a change moved.
 
 The estimate is characters ÷ 4. It is approximate on purpose: the exact count
 depends on a tokenizer this script has no business depending on, and the
@@ -40,7 +40,7 @@ a reference?" — do not turn on the third significant figure.
 
 Usage:
     context_budget.py                    # report every tier
-    context_budget.py --fail-over 5000   # non-zero exit when maximal exceeds it
+    context_budget.py --fail-over 5000   # non-zero exit when the widest install exceeds it
 
 Exit: 0 within budget, 1 over it (with --fail-over), 2 on a layout problem.
 """
@@ -163,7 +163,7 @@ def main(argv: list[str] | None = None) -> int:
         type=int,
         default=None,
         metavar="TOKENS",
-        help=f"exit 1 when the maximal install exceeds this (suggested {DEFAULT_RESIDENT_BUDGET})",
+        help=f"exit 1 when the widest install exceeds this (suggested {DEFAULT_RESIDENT_BUDGET})",
     )
     args = parser.parse_args(argv)
 
@@ -262,7 +262,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  {f'skill listing ({len(skills)} skills)':<44} {listing_tokens:>6}")
 
     resident = agents_tokens + listing_tokens
-    print(f"\n  {'resident total (maximal install)':<44} {resident:>6}")
+    print(f"\n  {'resident total (widest install)':<44} {resident:>6}")
 
     print("\n  worst offenders in the listing")
     for skill, tokens in sorted(entries.items(), key=lambda e: -e[1])[:5]:

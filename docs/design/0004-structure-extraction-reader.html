@@ -209,7 +209,9 @@ then depends on it indefinitely. Today that commitment is made from a single
 sample, by eye, with no record of the alternatives that were rejected and no
 test that fails when it stops being true. The failure mode is silent: a site
 moves a field, the selector still resolves to <em>something</em>, and the scraper
-quietly collects the wrong column.</p>
+quietly collects the wrong column. Detecting that — not merely detecting a
+selector that stopped resolving — is the bar this has to clear; § 5.4 sets out
+how far it gets and where it stops.</p>
 <p><strong>Who is affected.</strong> Anyone building an extraction workflow against a source
 they do not control. The motivating case is a job-search aggregator whose
 per-site connectors are static JSON descriptors carrying JSON key paths and CSS
@@ -252,8 +254,13 @@ currently possible, just manual, unrecorded, and unverifiable.</p></div>
 </tr>
 <tr>
 <td>SC5</td>
-<td><code>verify</code> against a sample where a field moved</td>
+<td><code>verify</code> against a sample where a field stopped resolving or changed arity</td>
 <td>exits non-zero <strong>and</strong> names the field and the observed difference</td>
+</tr>
+<tr>
+<td>SC5b</td>
+<td><code>verify</code> where an expression still resolves at the same arity but yields a different-shaped value</td>
+<td>reported as <strong>changed</strong>, non-zero — this is the § 2 failure, and the structural checks alone do not see it</td>
 </tr>
 <tr>
 <td>SC6</td>
@@ -273,7 +280,9 @@ currently possible, just manual, unrecorded, and unverifiable.</p></div>
 </tbody>
 </table>
 <p>SC8 is the one that makes the rest worth having: a tool that suggests a path it
-cannot itself evaluate has moved the guesswork rather than removed it.</p></div>
+cannot itself evaluate has moved the guesswork rather than removed it. SC5b is
+the one that makes it honest: without it <code>verify</code> passes on exactly the
+breakage § 2 exists to catch.</p></div>
 <div class="note" data-for="s-spec-success-criteria-measurable"><div class="note-head"><span class="note-ico">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC › Success criteria (measurable)</span></div><textarea class="note-ta" data-key="s-spec-success-criteria-measurable" data-label="Success criteria (measurable)" data-part="0004 Structure Extraction" rows="1" placeholder="Tap to add a note for this point…"></textarea></div>
 </article>
 <article class="sec" id="s-spec-3">
@@ -439,8 +448,9 @@ would reintroduce exactly the unrecorded judgement this replaces.</p>
 <h4 class="sec-h"><span class="chip">§5.3</span><span class="sec-title"><code>verify.py</code> — does this still hold</span></h4>
 <div class="sec-body"><pre><code>verify.py --descriptor site.json --input fresh.html
 </code></pre>
-<p>Per-field verdict — resolves, missing, arity changed, now ambiguous — and a
-non-zero exit when any field fails (SC5). This is the connector's regression
+<p>Per-field verdict — resolves, missing, arity changed, now ambiguous, or
+<strong>shape changed</strong> against the witness (§ 5.4) — and a non-zero exit when any
+field fails (SC5). This is the connector's regression
 test, and the direct analogue of <code>compare_har.py</code> one layer down: the same
 "tell me when the site moved" job, against a document instead of a capture.</p></div>
 <div class="note" data-for="s-spec-5-3"><div class="note-head"><span class="note-ico">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC §5.3</span></div><textarea class="note-ta" data-key="s-spec-5-3" data-label="§5.3 verify.py — does this still hold" data-part="0004 Structure Extraction" rows="1" placeholder="Tap to add a note for this point…"></textarea></div>
@@ -454,16 +464,43 @@ thing that can be verified and nothing more:</p>
   &quot;version&quot;: 1,
   &quot;kind&quot;: &quot;json&quot;,
   &quot;fields&quot;: {
-    &quot;title&quot;: {&quot;expr&quot;: &quot;data.results[*].title&quot;, &quot;arity&quot;: &quot;many&quot;}
+    &quot;title&quot;: {
+      &quot;expr&quot;: &quot;data.results[*].title&quot;,
+      &quot;arity&quot;: &quot;many&quot;,
+      &quot;witness&quot;: {&quot;type&quot;: &quot;string&quot;, &quot;len_p50&quot;: 34, &quot;len_p90&quot;: 61, &quot;charset&quot;: &quot;latin-mixed-case&quot;}
+    }
   }
 }
 </code></pre>
-<p>A field name, an expression, an expected arity. <strong>No types, no transforms, no
-pagination, no auth, no output mapping</strong> — every one of those is a connector
-concern, and the moment one is added here this file starts competing with the
-schema of whatever consumes it. It is an interchange format: the job-search
-repo reads it and maps it into its own descriptors in a few lines, and so can
-anyone else.</p></div>
+<p>A field name, an expression, an expected arity, and a <strong>witness</strong>. <strong>No types,
+no transforms, no pagination, no auth, no output mapping</strong> — every one of those
+is a connector concern, and the moment one is added here this file starts
+competing with the schema of whatever consumes it. It is an interchange format:
+the job-search repo reads it and maps it into its own descriptors in a few
+lines, and so can anyone else.</p>
+<p><strong>Why the witness is not scope creep.</strong> <code>expr</code> and <code>arity</code> alone verify that an
+expression still <em>resolves to the right number of things</em> — and that is not the
+failure § 2 describes. When a site swaps two same-shaped fields, the expression
+resolves, the arity is unchanged, and a purely structural <code>verify</code> reports
+success while the scraper collects the wrong column. Shipping a tool whose
+headline claim is "tell me when the site moved" that cannot see the most common
+way a site moves would be worse than shipping nothing, because it would be
+trusted.</p>
+<p>The witness is a bounded <em>shape signature</em> of what the expression yielded when
+the descriptor was written: type, length distribution, character-class profile.
+Deliberately not the values — those are content, they rot on every ordinary
+edit, and on a site behind a login they may be somebody's data. It is
+verification metadata about an expression, not a statement about what the field
+<em>means</em>, so the line against connector semantics still holds: nothing here tells
+a consumer what to do with the value.</p>
+<p><strong>What it still cannot catch, stated plainly.</strong> Two fields of genuinely
+indistinguishable shape — two medium-length title-case strings — can swap and
+the witness will not notice. No structural check can, short of understanding the
+content, which this tool does not attempt. The witness narrows the silent-swap
+window; it does not close it. <code>verify</code> therefore reports <strong>changed</strong> rather than
+<strong>broken</strong> for a shape mismatch, and a clean <code>verify</code> means "nothing detectable
+moved", never "the data is right". A spec that claimed otherwise would be making
+the same overreach twice.</p></div>
 <div class="note" data-for="s-spec-5-4"><div class="note-head"><span class="note-ico">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC §5.4</span></div><textarea class="note-ta" data-key="s-spec-5-4" data-label="§5.4 The descriptor format" data-part="0004 Structure Extraction" rows="1" placeholder="Tap to add a note for this point…"></textarea></div>
 </article>
 <article class="sec" id="s-spec-6">
@@ -606,6 +643,11 @@ which this change does not touch.</p></div>
 <td>A path or value written to an output file escapes <code>--output-dir</code></td>
 <td>High</td>
 <td>Same defence as <code>query_har.py --extract-body</code>: names flattened, destination resolved and checked inside the directory before any write</td>
+</tr>
+<tr>
+<td>Two same-shaped fields swap and <code>verify</code> passes</td>
+<td>Medium — <strong>accepted limit</strong>, not mitigated</td>
+<td>The witness catches a shape change, and nothing structural catches a swap between genuinely indistinguishable shapes. Documented in § 5.4 so a clean <code>verify</code> is read as "nothing detectable moved", never as "the data is right" — an overclaimed green is worse than a known gap</td>
 </tr>
 <tr>
 <td>Descriptor format grows into a connector schema</td>

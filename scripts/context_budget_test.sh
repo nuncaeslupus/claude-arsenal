@@ -117,16 +117,28 @@ for needed in ("minimal", "general", "all"):
         print(f"report has no {needed} row", file=sys.stderr)
         raise SystemExit(1)
 
-# The widest install must reach every skill `/init` can vendor. `--profile all`
+# The capped install must reach every skill `/init` can vendor. `--profile all`
 # is resolved by `_resolve_sections` as *every known section*, which includes a
 # section that exists only as `section:` frontmatter — reading `_PROFILES["all"]`
 # instead silently drops those and understates the bill the cap is applied to.
 # This row is what makes that drift visible; without it the report was wrong by
 # a whole section and still looked orderly.
-widest = max(rows.values(), key=lambda row: row[0])[0]
+#
+# Read the row the report itself marks `<- capped`, not the one with the most
+# skills. The script picks the capped row by *section* count, and checking a
+# row chosen by a different measure would pass while the cap sat somewhere else
+# — the assertion has to be about the row the budget is actually enforced on.
+capped = re.search(r"^\s{4}(\w+)\s+.*<- capped", sys.argv[1], re.M)
+if not capped:
+    print("report marks no row as capped", file=sys.stderr)
+    raise SystemExit(1)
+if capped[1] not in rows:
+    print(f"capped row {capped[1]!r} is not one of {sorted(rows)}", file=sys.stderr)
+    raise SystemExit(1)
+widest = rows[capped[1]][0]
 if widest != int(sys.argv[2]):
     print(
-        f"widest install lists {widest} skills but /init can vendor {sys.argv[2]} — "
+        f"capped install lists {widest} skills but /init can vendor {sys.argv[2]} — "
         f"a section is missing from the capped row: {rows}",
         file=sys.stderr,
     )

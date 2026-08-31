@@ -57,7 +57,9 @@ then depends on it indefinitely. Today that commitment is made from a single
 sample, by eye, with no record of the alternatives that were rejected and no
 test that fails when it stops being true. The failure mode is silent: a site
 moves a field, the selector still resolves to *something*, and the scraper
-quietly collects the wrong column.
+quietly collects the wrong column. Detecting that — not merely detecting a
+selector that stopped resolving — is the bar this has to clear; § 5.4 sets out
+how far it gets and where it stops.
 
 **Who is affected.** Anyone building an extraction workflow against a source
 they do not control. The motivating case is a job-search aggregator whose
@@ -81,13 +83,16 @@ currently possible, just manual, unrecorded, and unverifiable.
 | SC2 | `locate` over a 10 MB JSON document, cold | ≤ 3 s wall, ≤ 200 MB peak RSS |
 | SC3 | A candidate reported **stable** across *k* samples resolves in all *k* | no exceptions — a candidate failing any provided sample is never ranked stable |
 | SC4 | Commands from a saved body to a verified descriptor | ≤ 3 |
-| SC5 | `verify` against a sample where a field moved | exits non-zero **and** names the field and the observed difference |
+| SC5 | `verify` against a sample where a field stopped resolving or changed arity | exits non-zero **and** names the field and the observed difference |
+| SC5b | `verify` where an expression still resolves at the same arity but yields a different-shaped value | reported as **changed**, non-zero — this is the § 2 failure, and the structural checks alone do not see it |
 | SC6 | A value reachable by more than one path | every candidate reported, ranked; never silently collapsed to the first |
 | SC7 | Resident listing cost of the new skill | ≤ 130 tokens, matching `har` |
 | SC8 | Expressions emitted by `locate` | 100 % re-resolvable by `verify` without hand-editing — the two share one grammar |
 
 SC8 is the one that makes the rest worth having: a tool that suggests a path it
-cannot itself evaluate has moved the guesswork rather than removed it.
+cannot itself evaluate has moved the guesswork rather than removed it. SC5b is
+the one that makes it honest: without it `verify` passes on exactly the
+breakage § 2 exists to catch.
 
 <!-- -->
 
@@ -196,8 +201,9 @@ would reintroduce exactly the unrecorded judgement this replaces.
 verify.py --descriptor site.json --input fresh.html
 ```
 
-Per-field verdict — resolves, missing, arity changed, now ambiguous — and a
-non-zero exit when any field fails (SC5). This is the connector's regression
+Per-field verdict — resolves, missing, arity changed, now ambiguous, or
+**shape changed** against the witness (§ 5.4) — and a non-zero exit when any
+field fails (SC5). This is the connector's regression
 test, and the direct analogue of `compare_har.py` one layer down: the same
 "tell me when the site moved" job, against a document instead of a capture.
 
@@ -217,17 +223,47 @@ thing that can be verified and nothing more:
   "version": 1,
   "kind": "json",
   "fields": {
-    "title": {"expr": "data.results[*].title", "arity": "many"}
+    "title": {
+      "expr": "data.results[*].title",
+      "arity": "many",
+      "witness": {"type": "string", "len_p50": 34, "len_p90": 61, "charset": "latin-mixed-case"}
+    }
   }
 }
 ```
 
-A field name, an expression, an expected arity. **No types, no transforms, no
-pagination, no auth, no output mapping** — every one of those is a connector
-concern, and the moment one is added here this file starts competing with the
-schema of whatever consumes it. It is an interchange format: the job-search
-repo reads it and maps it into its own descriptors in a few lines, and so can
-anyone else.
+A field name, an expression, an expected arity, and a **witness**. **No types,
+no transforms, no pagination, no auth, no output mapping** — every one of those
+is a connector concern, and the moment one is added here this file starts
+competing with the schema of whatever consumes it. It is an interchange format:
+the job-search repo reads it and maps it into its own descriptors in a few
+lines, and so can anyone else.
+
+**Why the witness is not scope creep.** `expr` and `arity` alone verify that an
+expression still *resolves to the right number of things* — and that is not the
+failure § 2 describes. When a site swaps two same-shaped fields, the expression
+resolves, the arity is unchanged, and a purely structural `verify` reports
+success while the scraper collects the wrong column. Shipping a tool whose
+headline claim is "tell me when the site moved" that cannot see the most common
+way a site moves would be worse than shipping nothing, because it would be
+trusted.
+
+The witness is a bounded *shape signature* of what the expression yielded when
+the descriptor was written: type, length distribution, character-class profile.
+Deliberately not the values — those are content, they rot on every ordinary
+edit, and on a site behind a login they may be somebody's data. It is
+verification metadata about an expression, not a statement about what the field
+*means*, so the line against connector semantics still holds: nothing here tells
+a consumer what to do with the value.
+
+**What it still cannot catch, stated plainly.** Two fields of genuinely
+indistinguishable shape — two medium-length title-case strings — can swap and
+the witness will not notice. No structural check can, short of understanding the
+content, which this tool does not attempt. The witness narrows the silent-swap
+window; it does not close it. `verify` therefore reports **changed** rather than
+**broken** for a shape mismatch, and a clean `verify` means "nothing detectable
+moved", never "the data is right". A spec that claimed otherwise would be making
+the same overreach twice.
 
 <!-- -->
 
@@ -314,6 +350,7 @@ which this change does not touch.
 | Ambiguity silently resolved | Medium — reintroduces the unrecorded judgement this replaces | SC6: every candidate printed |
 | **An untrusted document drives code execution** | **High** | Expressions are evaluated by a walker over parsed data, never `eval`, and never interpolated into a shell — the rule `0002` learned the hard way, where a hostile fixture's own header text reached a shell. No exception for "just a JSON path" |
 | A path or value written to an output file escapes `--output-dir` | High | Same defence as `query_har.py --extract-body`: names flattened, destination resolved and checked inside the directory before any write |
+| Two same-shaped fields swap and `verify` passes | Medium — **accepted limit**, not mitigated | The witness catches a shape change, and nothing structural catches a swap between genuinely indistinguishable shapes. Documented in § 5.4 so a clean `verify` is read as "nothing detectable moved", never as "the data is right" — an overclaimed green is worse than a known gap |
 | Descriptor format grows into a connector schema | Medium — the tool stops being generic and starts competing with its consumers | § 5.4 fixes the field set; adding a key needs a spec amendment, not a patch |
 | Duplication with `har` drifts | Low | ~40 lines of shape summarisation, copied deliberately (§ 3); the alternative couples two skills that must install apart |
 | The skill does not earn its resident cost | Low | Default-off section; SC7 caps the listing |
