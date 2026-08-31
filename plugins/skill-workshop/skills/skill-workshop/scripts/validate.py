@@ -286,14 +286,55 @@ def _read_text(path: Path) -> str:
 FENCE_OPEN_REGEX = re.compile(r"^( {0,3})(`{3,}|~{3,})(.*)$")
 
 
-def untagged_fences(text: str) -> list[int]:
-    """1-indexed lines of fenced blocks opened without a language tag.
+def scan_fences(text: str) -> tuple[list[tuple[int, int]], list[int]]:
+    """`(spans, untagged)` for one markdown document.
 
-    A closing fence is a marker of the same character, at least as long as the
-    one that opened the block, carrying no info string — so a ```` ```` ````
-    wrapper around a ```` ``` ```` example closes correctly instead of reading
-    as a second untagged block. Counting bare `startswith("```")` gets that
-    case backwards and reports the wrapper's closing line as a violation.
+    `spans` is the 1-indexed `(open_line, close_line)` of every fenced block,
+    with `close_line` past the end for one left open. `untagged` is the open
+    lines of the blocks that carry no language tag.
+
+    Two rules do the work, and both were learned from getting them wrong:
+
+    * **Indent.** Up to three leading spaces still opens a fence; at four the
+      backticks are literal content inside an indented code block (CommonMark
+      4.5). Counting them makes a balanced document look unbalanced.
+    * **Nesting.** While a block is open, a marker either closes it — same
+      character, at least as long, no info string — or is content. It never
+      opens anything. A ```` wrapper showing a bare ``` example is the ordinary
+      way to document a fence, and treating that inner marker as an opening
+      reports the wrapper's own content as a violation.
+
+    Every fence question in this file routes through here. The version that
+    did not had `body.fences` counting markers with `str.strip()` while the
+    language check parsed them properly, so one could fail a document the other
+    read as clean.
+    """
+    spans: list[tuple[int, int]] = []
+    untagged: list[int] = []
+    open_line = 0
+    marker_open = ""
+    lines = text.splitlines()
+    for i, line in enumerate(lines, 1):
+        m = FENCE_OPEN_REGEX.match(line)
+        if not m:
+            continue
+        marker, info = m.group(2), m.group(3).strip()
+        if marker_open:
+            if marker[0] == marker_open[0] and len(marker) >= len(marker_open) and not info:
+                spans.append((open_line, i))
+                marker_open = ""
+            continue
+        marker_open = marker
+        open_line = i
+        if not info:
+            untagged.append(i)
+    if marker_open:
+        spans.append((open_line, len(lines) + 1))
+    return spans, untagged
+
+
+def untagged_fences(text: str) -> list[int]:
+    """Lines, 1-indexed in the file, where a fence opens without a language tag.
 
     Untagged is a `should`, not a `must`: markdown renders either way. It costs
     syntax highlighting where the block is code, and it is what `markdownlint`
@@ -305,40 +346,26 @@ def untagged_fences(text: str) -> list[int]:
     by the height of the frontmatter, which is a wrong answer delivered
     confidently.
     """
-    stack: list[str] = []
-    untagged: list[int] = []
-    for i, line in enumerate(text.splitlines(), 1):
-        m = FENCE_OPEN_REGEX.match(line)
-        if not m:
-            continue
-        marker, info = m.group(2), m.group(3).strip()
-        if stack and marker[0] == stack[-1][0] and len(marker) >= len(stack[-1]) and not info:
-            stack.pop()
-            continue
-        stack.append(marker)
-        if not info:
-            untagged.append(i)
-    return untagged
+    return scan_fences(text)[1]
+
+
+def unbalanced_fence(text: str) -> bool:
+    """Whether a fenced block is left open at the end of the document."""
+    spans, _ = scan_fences(text)
+    return any(close > len(text.splitlines()) for _, close in spans)
 
 
 def _strip_fences(text: str) -> str:
     """The text with fenced blocks removed, for checks that must ignore code.
 
-    Deliberately cruder than `untagged_fences`: it toggles on any line starting
-    with a fence marker, which is right for "is this prose or code" and wrong
-    for "where does this block open". A ```` wrapper around a ``` example
-    toggles this four times and still ends balanced, so the stripping is
-    correct even though the individual toggles are not.
+    Shares `scan_fences`, so a four-space-indented literal marker stays prose
+    here instead of silently swallowing the paragraphs after it.
     """
-    out, in_fence = [], False
-    fence_re = re.compile(r"^(```|~~~)")
-    for line in text.splitlines():
-        if fence_re.match(line.strip()):
-            in_fence = not in_fence
-            continue
-        if not in_fence:
-            out.append(line)
-    return "\n".join(out)
+    spans, _ = scan_fences(text)
+    inside = {n for open_line, close in spans for n in range(open_line, close + 1)}
+    return "\n".join(
+        line for i, line in enumerate(text.splitlines(), 1) if i not in inside
+    )
 
 
 def _strip_inline_code(text: str) -> str:
@@ -644,8 +671,7 @@ def check_body(skill_dir: Path, result: Result) -> tuple[str, str]:
         result.fail("body.length", f"SKILL.md body is {line_count} lines (>500)", skill_md)
     elif line_count > 400:
         result.warn("body.length", f"SKILL.md body is {line_count} lines (>400)", skill_md)
-    fence_count = sum(1 for line in body.splitlines() if line.strip().startswith(("```", "~~~")))
-    if fence_count % 2 != 0:
+    if unbalanced_fence(body):
         result.fail("body.fences", "unbalanced fenced code blocks in SKILL.md body", skill_md)
     for line_no in untagged_fences(text):
         result.warn(
@@ -860,10 +886,7 @@ def check_references(skill_dir: Path, body: str, result: Result) -> None:
                     "reference >100 lines without '## Contents' in first 50 lines",
                     ref,
                 )
-        fence_count = sum(
-            1 for ln in body_text.splitlines() if ln.strip().startswith(("```", "~~~"))
-        )
-        if fence_count % 2 != 0:
+        if unbalanced_fence(body_text):
             result.fail("references.fences", "unbalanced fenced code blocks", ref)
         for line_no in untagged_fences(text):
             result.warn(

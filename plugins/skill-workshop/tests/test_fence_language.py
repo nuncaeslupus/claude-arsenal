@@ -128,3 +128,38 @@ def test_four_space_indent_is_content_not_a_fence(validate_module):
 @pytest.mark.parametrize("pad", ["", " ", "  ", "   "])
 def test_up_to_three_spaces_still_opens_a_fence(validate_module, pad):
     assert validate_module.untagged_fences(f"text\n\n{pad}```\n{pad}body\n{pad}```\n") == [3]
+
+
+def test_a_marker_inside_an_open_fence_is_content(validate_module):
+    """A ```` wrapper showing a bare ``` example is documenting a fence.
+
+    While a block is open a marker either closes it or is content — it never
+    opens anything. The first version of this check reported the wrapper's own
+    example as a violation, and the test that was supposed to cover it used a
+    *tagged* inner example, which does not exercise the path.
+    """
+    assert validate_module.untagged_fences("````markdown\n```\nexample\n```\n````\n") == []
+
+
+def test_an_indented_literal_marker_does_not_unbalance_the_document(validate_module):
+    """The false-`fail` half of the same bug.
+
+    Counting markers with `str.strip()` made one literal marker inside an
+    indented block flip the parity of a document whose real fences are matched,
+    failing `body.fences` on correct markdown.
+    """
+    doc = "text\n\n    Literal marker:\n\n    ```\n\n```bash\necho hi\n```\n"
+    assert validate_module.unbalanced_fence(doc) is False
+
+
+def test_a_genuinely_unclosed_fence_is_still_reported(validate_module):
+    assert validate_module.unbalanced_fence("text\n\n```bash\nno close\n") is True
+
+
+def test_stripping_keeps_prose_after_an_indented_literal_marker(validate_module):
+    """`_strip_fences` feeds the voice and secret checks.
+
+    Treating an indented literal marker as a fence opening swallowed every
+    following paragraph, so those checks silently stopped seeing the rest.
+    """
+    assert "after" in validate_module._strip_fences("before\n\n    ```\n\nafter\n")
