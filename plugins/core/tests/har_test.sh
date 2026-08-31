@@ -187,6 +187,29 @@ py "$scripts/create_har.py" --input "$tmp/basic.har" --output "$tmp/basic.har" >
     && fail "writing the derived HAR over its own input was not refused"
 echo "PASS: create_har — SC5, bodies dropped by default, --keep-bodies declares itself"
 
+# --- compare_har.py: never invent a change that did not happen --------------
+py "$scripts/compare_har.py" --input "$tmp/compare_a.har" --against "$tmp/compare_a.har" \
+    >/dev/null || fail "identical captures did not compare clean (exit must be 0)"
+out="$(py "$scripts/compare_har.py" --input "$tmp/compare_a.har" --against "$tmp/compare_b.har")" \
+    || true
+changes="$(grep -c "status .* → " <<<"$out")"
+[ "$changes" -eq 1 ] \
+    || fail "expected exactly one status change; a URL-only matcher reports three ($changes)"
+grep -q "positional match" <<<"$out" \
+    || fail "a match made on capture order alone was not reported as one"
+grep -q "parameters added: expand" <<<"$out" \
+    || fail "a changed parameter set was paired instead of reported"
+echo "PASS: compare_har — one real change found, none invented"
+
+# --- the sibling scripts have not drifted apart -----------------------------
+for script in query_har.py create_har.py compare_har.py; do
+    for flag in --url --host --status --type --param --has-header --unknown-cache --invert; do
+        py "$scripts/$script" --help 2>/dev/null | grep -q -- "$flag" \
+            || fail "$script no longer offers the shared selection flag $flag"
+    done
+done
+echo "PASS: one selection grammar, spelled the same in every sibling"
+
 # --- SC2/SC3 at reduced scale ----------------------------------------------
 # The recorded evidence is a 200 MB / 50k-entry run, which takes ~45 s to
 # generate and does not belong in every CI run. This is the same benchmark at
