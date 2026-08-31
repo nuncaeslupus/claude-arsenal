@@ -28,10 +28,10 @@ section costs the person who enables it. So the listing is now resolved per
 install — the same `_PROFILES` and `section:` frontmatter `/init` itself reads
 — and each row is a bill somebody actually receives.
 
-The cap applies to `maximal`, every shipped section switched on, because that
-is the largest bill a consumer can choose. A default-off skill is still free
-for everyone who does not enable it, and the `minimal`/`general` rows are there
-so a reviewer can see which of those two a change moved.
+The cap applies to whichever row enables the most sections, because that is the
+largest bill a consumer can choose. A default-off skill is still free for
+everyone who does not enable it, and the `minimal`/`general` rows are there so a
+reviewer can see which of those two a change moved.
 
 The estimate is characters ÷ 4. It is approximate on purpose: the exact count
 depends on a tokenizer this script has no business depending on, and the
@@ -40,7 +40,7 @@ a reference?" — do not turn on the third significant figure.
 
 Usage:
     context_budget.py                    # report every tier
-    context_budget.py --fail-over 5000   # non-zero exit when maximal exceeds it
+    context_budget.py --fail-over 5000   # non-zero exit when the widest install exceeds it
 
 Exit: 0 within budget, 1 over it (with --fail-over), 2 on a layout problem.
 """
@@ -128,17 +128,23 @@ def load_installer(root: Path) -> Any | None:
 def installs(init: Any, sections: set[str]) -> list[tuple[str, str, set[str]]]:
     """`(label, what it means, enabled sections)` for every install a consumer reaches.
 
-    `maximal` is computed from what is actually shipped rather than taken from
-    `_PROFILES["all"]`, which is built from `_SECTION_DEFAULTS` and so does not
-    include a section that exists only as `section:` frontmatter. Printing both
-    keeps that gap visible instead of letting the widest row quietly understate
-    the widest install.
+    `all` is resolved the way `_resolve_sections` resolves it — every *known*
+    section — not by reading `_PROFILES["all"]`. Those two disagree, and only
+    the first one is what a consumer gets: `_PROFILES` is built from
+    `_SECTION_DEFAULTS`, which does not list a section that exists only as
+    `section:` frontmatter, so reading it makes `--profile all` look narrower
+    than it is and understates the bill the cap is applied to. A report that
+    gets the widest install wrong is worse than no report.
     """
     core = init._CORE_SECTION
-    rows = [(name, f"--profile {name}", {core} | set(profile))
-            for name, profile in init._PROFILES.items()]
-    rows.append(("maximal", "every shipped section", {core} | sections))
-    return rows
+    return [
+        (
+            name,
+            f"--profile {name}",
+            {core} | (sections if name == "all" else set(profile)),
+        )
+        for name, profile in init._PROFILES.items()
+    ]
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -157,7 +163,7 @@ def main(argv: list[str] | None = None) -> int:
         type=int,
         default=None,
         metavar="TOKENS",
-        help=f"exit 1 when the maximal install exceeds this (suggested {DEFAULT_RESIDENT_BUDGET})",
+        help=f"exit 1 when the widest install exceeds this (suggested {DEFAULT_RESIDENT_BUDGET})",
     )
     args = parser.parse_args(argv)
 
@@ -210,7 +216,12 @@ def main(argv: list[str] | None = None) -> int:
         default_on = {name for name, on in init._SECTION_DEFAULTS.items() if on}
         default_install = {init._CORE_SECTION} | default_on
         rows = installs(init, shipped)
-        capped = rows[-1][2]
+        # Whichever row enables the most sections is the largest bill a consumer
+        # can choose, and so the one the cap applies to. Computed rather than
+        # assumed to be the last row: the cap must follow the widest install
+        # even if the profile table is reordered or another profile is added.
+        widest = max(rows, key=lambda row: len(row[2]))
+        capped = widest[2]
 
         print("\n  skill listing, by what the consumer installed")
         print(
@@ -225,7 +236,7 @@ def main(argv: list[str] | None = None) -> int:
             marks = []
             if enabled == default_install:
                 marks.append("<- /init default")
-            if label == "maximal":
+            if enabled == capped:
                 marks.append("<- capped")
             print(
                 f"    {label:<10} {meaning:<26} {len(picked):>6} {listing:>8}"
@@ -251,7 +262,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  {f'skill listing ({len(skills)} skills)':<44} {listing_tokens:>6}")
 
     resident = agents_tokens + listing_tokens
-    print(f"\n  {'resident total (maximal install)':<44} {resident:>6}")
+    print(f"\n  {'resident total (widest install)':<44} {resident:>6}")
 
     print("\n  worst offenders in the listing")
     for skill, tokens in sorted(entries.items(), key=lambda e: -e[1])[:5]:
