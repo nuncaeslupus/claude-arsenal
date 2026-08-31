@@ -16,11 +16,22 @@ script="$root/scripts/sync_sections.py"
 manifest="$root/plugins/core/skills/init/assets/sections.json"
 fail() { echo "FAIL: $1" >&2; exit 1; }
 
+# `python3`, not `uv run python`: the `core tests` job sets up bare python3 on
+# purpose — it exists to prove the scripts work the way a consumer runs them —
+# so `uv` is not on PATH there. Reaching for it turned a missing TOOL into a
+# reported content failure, which is the same conflation this suite already
+# fixed twice today.
+run_check() { python3 "$script" "$@"; }
+
 # --- the committed manifest matches the committed skills --------------------
-# The checker's own output is shown on failure, not swallowed: this check has
-# passed locally and failed in CI, and "it has drifted" without the diff leaves
-# nothing to act on. `--check` prints a unified diff of what differs.
-if ! check_out="$(uv run python "$script" --check 2>&1)"; then
+# The checker's own output is shown on failure, not swallowed: "it has drifted"
+# without the diff leaves nothing to act on. `--check` prints a unified diff.
+check_out="$(run_check --check 2>&1)"; rc=$?
+if [ "$rc" -ne 0 ] && [ "$rc" -ne 1 ]; then
+    printf '%s\n' "$check_out" >&2
+    fail "the drift checker could not run (exit $rc) — that is not the same as drift"
+fi
+if [ "$rc" -eq 1 ]; then
     printf '%s\n' "$check_out" >&2
     fail "committed sections.json has drifted; run 'make sync-sections'"
 fi
@@ -44,7 +55,7 @@ d = json.load(open(p))
 d["sections"][0]["skills"].append({"name": "not-a-skill", "description": "invented"})
 json.dump(d, open(p, "w"), indent=2, ensure_ascii=False)
 PY
-uv run python "$script" --check >/dev/null 2>&1 \
+run_check --check >/dev/null 2>&1 \
     && fail "--check passed a manifest listing a skill that does not exist"
 echo "PASS: drift between the manifest and the skills is detected"
 restore; trap - EXIT
@@ -65,7 +76,7 @@ metadata:
 # probe
 SKILL
 
-out="$(uv run python "$script" 2>&1)"
+out="$(run_check 2>&1)"
 rc=$?
 [ "$rc" -eq 0 ] && fail "a section with no SECTION_BLURBS entry was accepted"
 grep -q "SECTION_BLURBS" <<<"$out" \
@@ -73,5 +84,5 @@ grep -q "SECTION_BLURBS" <<<"$out" \
 echo "PASS: a shipped section with no blurb fails the generator"
 
 cleanup; trap - EXIT
-uv run python "$script" --check >/dev/null 2>&1 || fail "cleanup left the manifest drifted"
+run_check --check >/dev/null 2>&1 || fail "cleanup left the manifest drifted"
 echo "PASS: sync_sections_test.sh"

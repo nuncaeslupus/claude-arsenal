@@ -20,8 +20,14 @@ one hand-written part: a skill's ``description`` is written to trigger loading,
 and a section has no frontmatter to carry a summary of its own. A shipped
 section with no blurb is an error, not a blank line on every consumer's map.
 
-Stdlib plus PyYAML, which the repo already depends on. This script is a repo
-dev tool; it is not vendored.
+**Stdlib only, and deliberately.** `make test` runs it through the `core tests`
+job, which sets up bare `python3` on purpose — that job exists to prove the
+shipped scripts work the way a consumer runs them, with no `uv` and no
+installed dependencies. Reaching for PyYAML there fails with
+`uv: command not found`, and the frontmatter parser below is the same shape as
+`init.py`'s, so the two cannot disagree about what a skill's `section:` is.
+
+This script is a repo dev tool; it is not vendored.
 """
 
 from __future__ import annotations
@@ -29,11 +35,10 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Any, NoReturn
-
-import yaml
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 MANIFEST = REPO_ROOT / "plugins/core/skills/init/assets/sections.json"
@@ -65,12 +70,28 @@ def _init_module() -> Any:
     return module
 
 
-def _frontmatter(skill_md: Path) -> dict[str, Any]:
-    """The YAML frontmatter block of a SKILL.md, or {} if it has none.
+_SCALAR = re.compile(r"^(?P<indent>\s*)(?P<key>[A-Za-z0-9_-]+):\s*(?P<value>.*)$")
 
-    Only the block between the opening ``---`` and the next ``---`` is parsed,
+
+def _unquote(value: str) -> str:
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+        return value[1:-1]
+    return value
+
+
+def _frontmatter(skill_md: Path) -> dict[str, Any]:
+    """The frontmatter block of a SKILL.md, or {} if it has none.
+
+    Only the block between the opening ``---`` and the next ``---`` is read,
     matching ``init.py``'s ``_skill_section``: the word ``section:`` in body
     prose must not be able to re-file a skill.
+
+    A deliberately small parser rather than a YAML one — see the module
+    docstring. It reads top-level ``key: value`` scalars plus one level of
+    nesting (``metadata:``), which is the whole shape these files use. A value
+    that continues onto the next line is refused by name instead of being
+    silently truncated: this feeds a manifest every consumer reads, and half a
+    description is worse than a loud failure.
     """
     text = skill_md.read_text(encoding="utf-8")
     if not text.startswith("---"):
@@ -78,8 +99,30 @@ def _frontmatter(skill_md: Path) -> dict[str, Any]:
     end = text.find("\n---", 3)
     if end == -1:
         return {}
-    parsed = yaml.safe_load(text[3:end])
-    return parsed if isinstance(parsed, dict) else {}
+
+    out: dict[str, Any] = {}
+    nested: dict[str, str] | None = None
+    for line in text[3:end].splitlines():
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        match = _SCALAR.match(line)
+        if not match:
+            die(
+                f"{skill_md}: frontmatter line is not a `key: value` scalar: {line!r}. "
+                "Multi-line and folded values are not supported here — keep it on one line."
+            )
+        indent, key, value = match["indent"], match["key"], match["value"].strip()
+        if indent:
+            if nested is not None:
+                nested[key] = _unquote(value)
+            continue
+        if not value:
+            nested = {}
+            out[key] = nested
+            continue
+        nested = None
+        out[key] = _unquote(value)
+    return out
 
 
 def build() -> dict[str, Any]:
