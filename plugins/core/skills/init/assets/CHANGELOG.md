@@ -18,6 +18,21 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [2.16.2] - 2026-08-31
+
+### Fixed
+- Sixteen fenced code blocks across the library opened without a language tag,
+  so they rendered without syntax highlighting and tripped `markdownlint`
+  MD040. All are tagged, and the validator now reports untagged fences itself
+  (`body.fence-language`, `references.fence-language`) so they cannot drift
+  back one review at a time.
+- `review` had no runnable example anywhere in its body — the `gate-check`
+  invocation it depends on was buried in prose. It is a `bash` block now, which
+  is what the rest of the library does with a command.
+- `github` asserted a reply rule in capitals instead of saying why it exists.
+  The reason was already one clause away: a fix without a reply leaves the
+  thread unresolved, so the next pass re-reads a comment already handled.
+
 ## [2.16.1] - 2026-08-31
 
 ### Fixed

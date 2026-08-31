@@ -18,7 +18,7 @@ buys nothing. References add link bookkeeping.
 
 ## Reference layout
 
-```
+```text
 .claude/skills/<skill>/
 └── references/
     ├── topic-a.md

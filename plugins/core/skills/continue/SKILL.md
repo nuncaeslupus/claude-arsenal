@@ -44,7 +44,7 @@ picks up work another agent is already doing.
 
 Run `task_select.py` (in `claude-arsenal/scripts/`) with the saved issues:
 
-```
+```bash
 task_select.py --tasks-dir arsenal/tasks --issues /tmp/issues.json \
                --capability surface:cli --workspace FRONTEND --tag DOCS
 ```

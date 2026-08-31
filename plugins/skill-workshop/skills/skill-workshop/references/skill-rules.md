@@ -93,7 +93,7 @@ alignment state of the skill **at that moment**, file-keyed, not
 diff-keyed. Files that have no violations do not appear under that
 date. A fully clean skill writes one line.
 
-```
+```text
 ## 2026-05-14
 
 references/foo.md is not aligned with the guidelines:
@@ -108,7 +108,7 @@ plugins/<plugin>/skills/<skill>/scripts/audit_repo.py is not aligned with the gu
 
 A clean run writes a single line under the date:
 
-```
+```text
 ## 2026-05-14 — all files aligned with guidelines
 ```
 

@@ -31,7 +31,7 @@ Always end the commit with `Co-Authored-By: <ACTIVE-MODEL-NAME> <noreply@anthrop
 
 Body template:
 
-```
+```markdown
 ## Summary
 <1-3 bullets>
 
@@ -79,7 +79,7 @@ The script returns JSON to stdout and exits with:
 Handle each state per the rubric in [pr-review-loop](references/pr-review-loop.md):
 
 - `bot_eyeing` → loop continues. Bot owns clearing `:eyes:` by acting again. Exception: with `--unresolved-only`, when every comment the bot wrote is filtered out and the bot did review at some point, the script promotes the state to `bot_approved` / `ready_to_merge` — the loop has done its part and stale eyes lose their blocking force.
-- `bot_commented` → for each comment in `bot_line_comments`, judge: **already addressed** (reply "addressed in <sha>"), **agree** (fix + push + **reply** "addressed in <sha>" — the reply is what `--unresolved-only` anchors on), **disagree** (reply with rationale via `gh api .../pulls/<N>/comments/<id>/replies`), or **ambiguous** (reply asking for clarification + ping the user). Loop continues after action. **Every fix or dismissal MUST be paired with a reply on the thread.**
+- `bot_commented` → for each comment in `bot_line_comments`, judge: **already addressed** (reply "addressed in <sha>"), **agree** (fix + push + **reply** "addressed in <sha>" — the reply is what `--unresolved-only` anchors on), **disagree** (reply with rationale via `gh api .../pulls/<N>/comments/<id>/replies`), or **ambiguous** (reply asking for clarification + ping the user). Loop continues after action. A fix or dismissal without a reply leaves the thread unresolved, so the next pass re-reads a comment that has already been handled — pair every one with a reply.
 - `conflicts` → the PR branch conflicts with its base. Rebase onto (or merge) the base branch, resolve the conflicts, and push. Loop continues. A conflicted PR cannot merge regardless of CI/review state, so this is surfaced first. When the branch is stacked on a PR that already merged, use `rebase_stack.sh` (see *Multi-PR stacking* below) rather than replaying by hand — it skips the merged commits and knows which conflicts are regenerable.
 - `ci_failed` → fetch the failed log via `gh run view --log-failed <run-id>`, fix, push. Reply on any comments the fix relates to. Loop continues.
 - `ready_to_merge` → exit the loop, tell the user "PR #N ready to merge". In a repo carrying `arsenal/config.toml`, handing back is not automatically the right ending: `merge-policy` there is the host's standing answer to whether an agent may merge it, and the vendored protocol's completion step gives the rule for each value. Read it before asking a question the host already answered.

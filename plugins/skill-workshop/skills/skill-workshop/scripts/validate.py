@@ -281,6 +281,38 @@ def _read_text(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
+FENCE_OPEN_REGEX = re.compile(r"^(\s*)(`{3,}|~{3,})(.*)$")
+
+
+def untagged_fences(text: str) -> list[int]:
+    """1-indexed lines of fenced blocks opened without a language tag.
+
+    A closing fence is a marker of the same character, at least as long as the
+    one that opened the block, carrying no info string — so a ```` ```` ````
+    wrapper around a ```` ``` ```` example closes correctly instead of reading
+    as a second untagged block. Counting bare `startswith("```")` gets that
+    case backwards and reports the wrapper's closing line as a violation.
+
+    Untagged is a `should`, not a `must`: markdown renders either way. It costs
+    syntax highlighting where the block is code, and it is what `markdownlint`
+    MD040 reports, so a reviewer sees it whether or not this does.
+    """
+    stack: list[str] = []
+    untagged: list[int] = []
+    for i, line in enumerate(text.splitlines(), 1):
+        m = FENCE_OPEN_REGEX.match(line)
+        if not m:
+            continue
+        marker, info = m.group(2), m.group(3).strip()
+        if stack and marker[0] == stack[-1][0] and len(marker) >= len(stack[-1]) and not info:
+            stack.pop()
+            continue
+        stack.append(marker)
+        if not info:
+            untagged.append(i)
+    return untagged
+
+
 def _strip_fences(text: str) -> str:
     out, in_fence = [], False
     fence_re = re.compile(r"^(```|~~~)")
@@ -591,6 +623,12 @@ def check_body(skill_dir: Path, result: Result) -> tuple[str, str]:
     fence_count = sum(1 for line in body.splitlines() if line.strip().startswith(("```", "~~~")))
     if fence_count % 2 != 0:
         result.fail("body.fences", "unbalanced fenced code blocks in SKILL.md body", skill_md)
+    for line_no in untagged_fences(body):
+        result.warn(
+            "body.fence-language",
+            f"line {line_no}: fenced block opened without a language tag (MD040)",
+            skill_md,
+        )
     body_no_code = _strip_all_code(body)
     if WINDOWS_BACKSLASH_REGEX.search(body_no_code):
         result.fail("body.windows-paths", "body contains Windows-style backslash path", skill_md)
@@ -798,6 +836,12 @@ def check_references(skill_dir: Path, body: str, result: Result) -> None:
         )
         if fence_count % 2 != 0:
             result.fail("references.fences", "unbalanced fenced code blocks", ref)
+        for line_no in untagged_fences(body_text):
+            result.warn(
+                "references.fence-language",
+                f"line {line_no}: fenced block opened without a language tag (MD040)",
+                ref,
+            )
         text_no_code = _strip_all_code(body_text)
         if WINDOWS_BACKSLASH_REGEX.search(text_no_code):
             result.fail(
