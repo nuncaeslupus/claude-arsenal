@@ -16,7 +16,7 @@
 
 ### Architecture overview
 
-```
+```text
 plugins/core/skills/har/            section: extract   (default OFF)
   SKILL.md                          invocation of every script; the 2-command recipe
   references/
@@ -40,8 +40,9 @@ plugins/core/tests/
 
 Two non-CLI modules and six commands, which is the split the spec's § 5.2
 requires: the selection grammar exists once, so `query`, `create_har` and
-`compare` cannot drift, and a seventh script (`run_har.py`) is an addition
-rather than a refactor.
+`compare` cannot drift. `run_har.py` is **not built here** — it is deferred
+(spec § 4.7), and the point of the shared grammar is that adding it later is a
+new file rather than a refactor of these.
 
 ### Module contracts
 
@@ -52,7 +53,7 @@ rather than a refactor.
 | `scan_entries(path) -> Iterator[EntrySpan]` | Byte offsets and lengths of each `log.entries[i]` object. **Binary mode throughout**; brace depth tracked with string/escape awareness. Never decodes. |
 | `read_entry(path, span) -> dict` | Parse exactly one entry from its span. Callers verify the digest once per run before the first call. |
 | `decode_body(content) -> Decoded` | The whole encoding chain in one place: base64 → content-encoding (`gzip`/`deflate`/`br`) → charset (declared, sniffed, BOM). Returns `Decoded(text, bytes, charset, source, ok, reason)`. **Never raises on undecodable input and never returns a mangled string** — `ok=False` with a reason is the honest answer (spec § 8, encoding risk). |
-| `redact(value, kind, salt) -> str` | `<redacted:ab12cd34>` — truncated digest under a per-index salt that is never stored. Equal values stay equal. |
+| `redact(value, kind, salt) -> str` | `<redacted:ab12cd34>` — truncated digest under a per-run salt that is never stored. Equal values stay equal. **One representation everywhere**, including `create_har.py` output: a literal `<redacted>` marker in a derived HAR would make every `Authorization` in it compare equal, so `--headers` on that file would report every header constant. The spec's bare `<redacted>` (§ 4.4) and its fingerprint requirement (§ 5.4) are the same rule, and the fingerprint is the form that satisfies both. |
 | `redact_url(url, salt) -> str` | Token-shaped query pairs redacted **in place**, preserving pair order, repeated names and each value's percent-encoding; userinfo and fragment removed. |
 | `budget(lines, cap=4096) -> tuple[list[str], str]` | SC1, applied once for every command rather than per script. |
 
@@ -93,12 +94,12 @@ full-text body index (spec § 6 — additive later, no redesign).
 |----|-------------|------|---------|------|-------|
 | T1 | `extract` section registered; `har` skill scaffold (SKILL.md + argparse stubs); fixture HARs; `validate_har.py` (well-formedness + capability report) | M | stage 0 | `resident_token_delta_without_extract == 0` and `validate_har_fixture_pass_rate == 1.0` | `test_validate_reports_absent_bodies_as_capability_not_error` in `har/test_validate.py` — a fixture with no `content.text` validates OK and reports bodies absent · `test_section_extract_defaults_off` in `plugins/core/tests/skill_sections_test.sh` |
 | T2 | `_harlib.py`: byte-offset scanner, `--verify-offsets`, decode chain, redaction primitives | L | T1 | `offset_reparse_mismatches == 0` over all fixtures and `encoding_matrix_pass_rate == 1.0` (14 cases) | `test_scan_entries_multibyte_before_entry_returns_correct_span` in `har/test_scanner.py` — a literal é before entry 3 does not shift its offset · `test_decode_body_undeclared_shift_jis_reports_charset_source` · `test_redact_url_preserves_pair_order_and_encoding` |
-| T3 | `analyze_har.py --index`: sidecar writer, the § 5.1 schema, size+mtime vs digest policy, atomic rename | L | T2 | `index_build_seconds_200mb <= 30` and `index_build_peak_rss_mb <= 400` (SC2); `index_only_query_seconds <= 1` (SC3) | `test_index_only_query_never_opens_the_har` in `har/test_index.py` — the HAR handle count stays 0 for a metadata query · `test_interrupted_index_build_leaves_previous_sidecar` |
-| T4 | `_filters.py` + `query_har.py` select and show (`--list-only`, `--show`, `--json`, `--fields`) | L | T3 | `max_default_output_bytes <= 4096` across every mode (SC1) and `commands_to_locate_endpoint <= 2` (SC4) | `test_json_output_under_budget_still_parses` in `har/test_query.py` — truncation drops whole entries, never bytes · `test_no_cache_excludes_only_false_not_unknown` · `test_limit_zero_removes_both_caps` |
+| T3 | `analyze_har.py --index`: sidecar writer, the § 5.1 schema, size+mtime vs digest policy, atomic rename | L | T2 | `index_build_seconds_200mb <= 30` and `index_build_peak_rss_mb <= 400` (SC2); `index_only_query_seconds <= 1` **and `index_only_query_peak_rss_mb <= 150`** (SC3 — both halves, since a reader that materialises every row satisfies the time bound and blows the memory one) | `test_index_only_query_never_opens_the_har` in `har/test_index.py` — the HAR handle count stays 0 for a metadata query · `test_interrupted_index_build_leaves_previous_sidecar` |
+| T4 | `_filters.py` + `query_har.py` select and show (`--list-only`, `--show`, `--json`, `--fields`) | L | T3 | `max_default_output_bytes <= 4096` across every mode (SC1); `json_output_parses_under_budget == true` with the `shown`/`matched`/`truncated` envelope intact; both escapes (`--limit 0`, `--output PATH`) return the full set; `commands_to_locate_endpoint <= 2` (SC4) | `test_json_output_under_budget_still_parses` in `har/test_query.py` — truncation drops whole entries, never bytes · `test_no_cache_excludes_only_false_not_unknown` · `test_limit_zero_removes_both_caps` |
 | T5 | `query_har.py` extract modes: `--extract-body`, `--json-path`, `--css`, `--xpath`, `--schema` | M | T4 | `extracted_files_outside_output_dir == 0` for the hostile-path fixture | `test_extract_body_traversal_path_stays_inside_output_dir` in `har/test_extract.py` — `..%2f` and a reserved device name both land inside · `test_schema_of_paginated_json_reports_shape_not_content` |
-| T6 | `analyze_har.py` remaining modes: overview, `--stats`, `--errors`, `--endpoints`, `--headers`, `--cookies`, `--redirects`, `--slowest`/`--largest`, `--websockets` | L | T4 | `endpoint_rows_for_paginated_fixture == 1` with `page` reported varying and `loc` constant | `test_endpoints_collapses_pagination_to_one_template` in `har/test_analyze.py` · `test_headers_split_constant_from_varying_under_redaction` — fingerprints keep unequal values unequal |
+| T6 | `analyze_har.py` remaining modes: overview, `--stats`, `--errors`, `--endpoints`, `--headers`, `--cookies`, `--redirects`, `--slowest`/`--largest`, `--websockets` | L | T4 | `endpoint_rows_for_paginated_fixture == 1` with `page` varying over exactly `1,2,3,4` and `loc` constant, **every input entry still represented, and distinct paths not merged** — an implementation that over-merges collapses to one row and passes a weaker gate | `test_endpoints_collapses_pagination_to_one_template` in `har/test_analyze.py` · `test_headers_split_constant_from_varying_under_redaction` — fingerprints keep unequal values unequal |
 | T7 | `create_repro.py` — curl and python emitters | M | T4 | `adversarial_repro_shell_executions == 0` (hostile header/body fixture) and SC6 reproduces the captured status | `test_repro_curl_body_starting_with_at_is_data_not_file` in `har/test_repro.py` · `test_repro_python_uses_repr_not_concatenation` · `test_secrets_flag_restores_userinfo_only_in_repro` |
-| T8 | `create_har.py` — derived captures | M | T4 | `secrets_in_bounded_fields_of_output == 0` (SC5) and `derived_har_validates == true` | `test_derived_har_drops_bodies_by_default` in `har/test_create.py` · `test_output_equal_to_input_is_refused_before_open` |
+| T8 | `create_har.py` — derived captures | M | T4 | `secrets_in_bounded_fields_of_output == 0` (SC5); `response_bodies_in_default_output == 0` and `keep_bodies_output_declares_itself_sensitive == true` — SC5 counts only bounded fields, so a default output could keep a token inside a body and still pass it; `derived_har_validates == true` | `test_derived_har_drops_bodies_by_default` in `har/test_create.py` · `test_output_equal_to_input_is_refused_before_open` |
 | T9 | `compare_har.py` — deterministic one-to-one pairing | M | T4 | `invented_changes_on_repeat_url_fixture == 0` | `test_repeated_identical_requests_pair_in_capture_order` in `har/test_compare.py` · `test_pageref_absent_from_identity_key` |
 | T10 | SKILL.md complete, `references/filters.md` + `recipes.md`, evals, flag-parity test | M | T5, T6, T7, T8, T9 | `resident_listing_tokens_with_extract <= 130` (SC7) and `shared_flag_parity_failures == 0` | `test_sibling_scripts_expose_identical_selection_flags` in `har/test_parity.py` — the drift § 5.2 exists to prevent is checked, not asked for |
 

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
-<title>claude-arsenal — Specification (annotatable)</title>
+<title>Claude Arsenal — Specification (annotatable)</title>
 <style>
 :root{
   --bg:#fbfaf7;--fg:#1d1c1a;--muted:#6b6862;--line:#e6e2da;
@@ -122,7 +122,7 @@ h4.sec-h{font-size:16.5px;color:var(--fg)}
 <body>
 <div class="topbar">
   <div class="wrap">
-    <div class="brand">claude-arsenal — Specification<small>annotatable reader · 2026-08-30</small></div>
+    <div class="brand">Claude Arsenal — Specification<small>annotatable reader · 2026-08-31</small></div>
     <span class="savestate ok" id="savestate">✓ Auto-saving</span>
     <button class="btn primary" id="btn-export">Save / Export</button>
   </div>
@@ -132,7 +132,7 @@ h4.sec-h{font-size:16.5px;color:var(--fg)}
 
 <div class="wrap">
   <div class="hero">
-    <h1>claude-arsenal specification</h1>
+    <h1>Claude Arsenal specification</h1>
     <p>Read at your own pace and leave a note on any point you want to discuss.</p>
   </div>
   <details class="help">
@@ -184,7 +184,7 @@ where a gate is not a number, the spec's own wording says why it cannot be.</p>
 </article>
 <article class="sec" id="s-spec-architecture-overview">
 <h4 class="sec-h"><span class="chip">▸</span><span class="sec-title">Architecture overview</span></h4>
-<div class="sec-body"><pre><code>plugins/core/skills/har/            section: extract   (default OFF)
+<div class="sec-body"><pre><code class="language-text">plugins/core/skills/har/            section: extract   (default OFF)
   SKILL.md                          invocation of every script; the 2-command recipe
   references/
     filters.md                      the full selection grammar, one place
@@ -206,8 +206,9 @@ plugins/core/tests/
 </code></pre>
 <p>Two non-CLI modules and six commands, which is the split the spec's § 5.2
 requires: the selection grammar exists once, so <code>query</code>, <code>create_har</code> and
-<code>compare</code> cannot drift, and a seventh script (<code>run_har.py</code>) is an addition
-rather than a refactor.</p></div>
+<code>compare</code> cannot drift. <code>run_har.py</code> is <strong>not built here</strong> — it is deferred
+(spec § 4.7), and the point of the shared grammar is that adding it later is a
+new file rather than a refactor of these.</p></div>
 <div class="note" data-for="s-spec-architecture-overview"><div class="note-head"><span class="note-ico">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC › Architecture overview</span></div><textarea class="note-ta" data-key="s-spec-architecture-overview" data-label="Architecture overview" data-part="0002 Har Analysis Toolkit Plan" rows="1" placeholder="Tap to add a note for this point…"></textarea></div>
 </article>
 <article class="sec" id="s-spec-module-contracts">
@@ -235,7 +236,7 @@ rather than a refactor.</p></div>
 </tr>
 <tr>
 <td><code>redact(value, kind, salt) -&gt; str</code></td>
-<td><code>&lt;redacted:ab12cd34&gt;</code> — truncated digest under a per-index salt that is never stored. Equal values stay equal.</td>
+<td><code>&lt;redacted:ab12cd34&gt;</code> — truncated digest under a per-run salt that is never stored. Equal values stay equal. <strong>One representation everywhere</strong>, including <code>create_har.py</code> output: a literal <code>&lt;redacted&gt;</code> marker in a derived HAR would make every <code>Authorization</code> in it compare equal, so <code>--headers</code> on that file would report every header constant. The spec's bare <code>&lt;redacted&gt;</code> (§ 4.4) and its fingerprint requirement (§ 5.4) are the same rule, and the fingerprint is the form that satisfies both.</td>
 </tr>
 <tr>
 <td><code>redact_url(url, salt) -&gt; str</code></td>
@@ -360,7 +361,7 @@ full-text body index (spec § 6 — additive later, no redesign).</p></div>
 <td><code>analyze_har.py --index</code>: sidecar writer, the § 5.1 schema, size+mtime vs digest policy, atomic rename</td>
 <td>L</td>
 <td>T2</td>
-<td><code>index_build_seconds_200mb &lt;= 30</code> and <code>index_build_peak_rss_mb &lt;= 400</code> (SC2); <code>index_only_query_seconds &lt;= 1</code> (SC3)</td>
+<td><code>index_build_seconds_200mb &lt;= 30</code> and <code>index_build_peak_rss_mb &lt;= 400</code> (SC2); <code>index_only_query_seconds &lt;= 1</code> <strong>and <code>index_only_query_peak_rss_mb &lt;= 150</code></strong> (SC3 — both halves, since a reader that materialises every row satisfies the time bound and blows the memory one)</td>
 <td><code>test_index_only_query_never_opens_the_har</code> in <code>har/test_index.py</code> — the HAR handle count stays 0 for a metadata query · <code>test_interrupted_index_build_leaves_previous_sidecar</code></td>
 </tr>
 <tr>
@@ -368,7 +369,7 @@ full-text body index (spec § 6 — additive later, no redesign).</p></div>
 <td><code>_filters.py</code> + <code>query_har.py</code> select and show (<code>--list-only</code>, <code>--show</code>, <code>--json</code>, <code>--fields</code>)</td>
 <td>L</td>
 <td>T3</td>
-<td><code>max_default_output_bytes &lt;= 4096</code> across every mode (SC1) and <code>commands_to_locate_endpoint &lt;= 2</code> (SC4)</td>
+<td><code>max_default_output_bytes &lt;= 4096</code> across every mode (SC1); <code>json_output_parses_under_budget == true</code> with the <code>shown</code>/<code>matched</code>/<code>truncated</code> envelope intact; both escapes (<code>--limit 0</code>, <code>--output PATH</code>) return the full set; <code>commands_to_locate_endpoint &lt;= 2</code> (SC4)</td>
 <td><code>test_json_output_under_budget_still_parses</code> in <code>har/test_query.py</code> — truncation drops whole entries, never bytes · <code>test_no_cache_excludes_only_false_not_unknown</code> · <code>test_limit_zero_removes_both_caps</code></td>
 </tr>
 <tr>
@@ -384,7 +385,7 @@ full-text body index (spec § 6 — additive later, no redesign).</p></div>
 <td><code>analyze_har.py</code> remaining modes: overview, <code>--stats</code>, <code>--errors</code>, <code>--endpoints</code>, <code>--headers</code>, <code>--cookies</code>, <code>--redirects</code>, <code>--slowest</code>/<code>--largest</code>, <code>--websockets</code></td>
 <td>L</td>
 <td>T4</td>
-<td><code>endpoint_rows_for_paginated_fixture == 1</code> with <code>page</code> reported varying and <code>loc</code> constant</td>
+<td><code>endpoint_rows_for_paginated_fixture == 1</code> with <code>page</code> varying over exactly <code>1,2,3,4</code> and <code>loc</code> constant, <strong>every input entry still represented, and distinct paths not merged</strong> — an implementation that over-merges collapses to one row and passes a weaker gate</td>
 <td><code>test_endpoints_collapses_pagination_to_one_template</code> in <code>har/test_analyze.py</code> · <code>test_headers_split_constant_from_varying_under_redaction</code> — fingerprints keep unequal values unequal</td>
 </tr>
 <tr>
@@ -400,7 +401,7 @@ full-text body index (spec § 6 — additive later, no redesign).</p></div>
 <td><code>create_har.py</code> — derived captures</td>
 <td>M</td>
 <td>T4</td>
-<td><code>secrets_in_bounded_fields_of_output == 0</code> (SC5) and <code>derived_har_validates == true</code></td>
+<td><code>secrets_in_bounded_fields_of_output == 0</code> (SC5); <code>response_bodies_in_default_output == 0</code> and <code>keep_bodies_output_declares_itself_sensitive == true</code> — SC5 counts only bounded fields, so a default output could keep a token inside a body and still pass it; <code>derived_har_validates == true</code></td>
 <td><code>test_derived_har_drops_bodies_by_default</code> in <code>har/test_create.py</code> · <code>test_output_equal_to_input_is_refused_before_open</code></td>
 </tr>
 <tr>
