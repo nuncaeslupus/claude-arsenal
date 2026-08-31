@@ -95,6 +95,41 @@ after="$(python3 -c 'import hashlib,sys;print(hashlib.sha256(open(sys.argv[1],"r
 [ "$before" = "$after" ] || fail "a command modified the input capture"
 echo "PASS: the input capture is never written"
 
+# --- query_har.py: SC4, the two-command answer ------------------------------
+idx="$(py "$scripts/query_har.py" --input "$tmp/basic.har" \
+    --response-match "Senior Rust Engineer 2" | awk 'NR==1{print $1}')"
+[ -n "$idx" ] || fail "--response-match found nothing; it is the operation this toolkit is for"
+py "$scripts/query_har.py" --input "$tmp/basic.har" --show "$idx" --schema | grep -q '"results"' \
+    || fail "--schema on the located entry did not print the body shape"
+echo "PASS: SC4 — two commands from a string on the page to the endpoint's shape"
+
+# --- the output budget, every mode (SC1) ------------------------------------
+for args in "" "--type xhr" "--json" "--show 1" "--limit 100"; do
+    # shellcheck disable=SC2086
+    bytes="$(py "$scripts/query_har.py" --input "$tmp/encodings.har" $args | wc -c)"
+    [ "$bytes" -le 4096 ] || fail "query_har ${args:-default} produced $bytes bytes; cap is 4096"
+done
+py "$scripts/query_har.py" --input "$tmp/encodings.har" --json --limit 100 \
+    | python3 -c 'import json,sys; json.load(sys.stdin)' \
+    || fail "--json under the budget no longer parses — it must drop whole entries"
+echo "PASS: SC1 — query_har within budget in every mode, --json still parses"
+
+# --- extraction stays inside --output-dir -----------------------------------
+mkdir -p "$tmp/out"
+py "$scripts/query_har.py" --input "$tmp/hostile.har" --extract-body --output-dir "$tmp/out" \
+    >/dev/null || fail "--extract-body exited non-zero on the hostile fixture"
+escaped="$(find "$tmp" -maxdepth 1 -name '*passwd*' -o -maxdepth 1 -name 'CON*' | wc -l)"
+[ "$escaped" -eq 0 ] || fail "extraction wrote outside --output-dir"
+find "$tmp/out" -mindepth 2 | grep -q . && fail "extraction created nested paths from a URL"
+echo "PASS: extraction — every body lands flat inside --output-dir"
+
+# --- three-state cache ------------------------------------------------------
+py "$scripts/query_har.py" --input "$tmp/traps.har" --unknown-cache | grep -q "unknown-cache" \
+    || fail "--unknown-cache did not select the entry with no _fromCache"
+py "$scripts/query_har.py" --input "$tmp/traps.har" --no-cache | grep -q "unknown-cache" \
+    && fail "--no-cache selected an entry whose exporter never recorded _fromCache"
+echo "PASS: _fromCache stays three-state across the CLI"
+
 # --- SC2/SC3 at reduced scale ----------------------------------------------
 # The recorded evidence is a 200 MB / 50k-entry run, which takes ~45 s to
 # generate and does not belong in every CI run. This is the same benchmark at
