@@ -31,7 +31,7 @@ feature's success criteria, defer to `specify`; to rank untested lines, defer to
 A gate is a measurable acceptance condition in the plan's task table, written
 `<metric> <op> <threshold>` with one of `< <= > >= == !=`:
 
-```
+```markdown
 | T# | Description | Gate                    | Tests |
 |----|-------------|-------------------------|-------|
 | T1 | parser      | `line_coverage >= 0.90` | …     |

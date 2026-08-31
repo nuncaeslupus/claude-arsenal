@@ -81,7 +81,7 @@ Append a content-pass block under the same dated header as the
 structural pass. Distinguish the two by a `(content)` tag after the
 rule ID so reviewers can tell which rubric flagged which issue.
 
-```
+```text
 ## 2026-05-15
 
 SKILL.md is not aligned with the guidelines:
@@ -96,7 +96,7 @@ references/topic-a.md is not aligned with the guidelines:
 
 A clean run writes a single line under the same date:
 
-```
+```text
 ## 2026-05-15 — all files aligned with guidelines
 ```
 

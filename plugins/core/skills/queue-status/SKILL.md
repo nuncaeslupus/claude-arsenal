@@ -32,7 +32,7 @@ Then:
 
 Run `query_status.py` (in `claude-arsenal/scripts/`, beside `task_select.py`):
 
-```
+```bash
 # Summary counts
 query_status.py --issues /tmp/issues.json
 

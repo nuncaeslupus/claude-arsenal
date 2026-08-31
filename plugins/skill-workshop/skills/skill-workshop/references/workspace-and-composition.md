@@ -5,7 +5,7 @@ planning a plugin migration.
 
 ## Single-depth folder layout
 
-```
+```text
 plugins/<plugin>/skills/<skill>/SKILL.md          # ← discovered
 plugins/<plugin>/skills/<scope>/<skill>/SKILL.md  # ← INVISIBLE
 .claude/skills/<skill>/SKILL.md                   # ← discovered (personal/project scope)

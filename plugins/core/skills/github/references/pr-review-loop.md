@@ -36,7 +36,7 @@ hand between ticks is. Read the comments, not the check.
 
 ## Default watched bots
 
-```
+```text
 gemini-code-assist[bot]
 coderabbitai[bot]
 claude[bot]
@@ -80,7 +80,7 @@ The fetch costs one extra GraphQL call per tick (~50 ms typical), well under the
 - **Cron's floor is 1 minute.** `/loop` converts `Ns` to `ceil(N/60)m`, so `90s` schedules as `*/2 * * * *` (every 2 min) — it does NOT poll sub-minute. Treat the `90s` figure as user-facing intent; the underlying cron cadence is 2 min. If you genuinely need every-minute polling, write `/loop 1m …` and accept the higher API load.
 - **Always include the agree/disagree/ambiguous rubric inline in the `/loop` prompt** AND pass `--unresolved-only` to the script. A bare `/loop 90s python3 .../query_pr_state.py --pr <N>` produces a JSON snapshot each tick and forces the LLM to re-derive what to do from the skill body every time. `--unresolved-only` filters out comments whose review thread is GH-side resolved OR has a human reply (the "addressed in <sha>" pattern) so each tick stays focused on what actually still needs attention. The rubric-inlined form keeps each tick self-contained:
 
-  ```
+  ```text
   /loop 90s python3 "${CLAUDE_SKILL_DIR}/scripts/query_pr_state.py" --pr <N> --unresolved-only — if state is bot_commented, address per the rubric (agree → fix + push + reply "addressed in <sha>" via gh api repos/<owner>/<repo>/pulls/<N>/comments/<id>/replies; disagree → reply with rationale on the same endpoint; ambiguous → reply asking for clarification + ping the user). If ci_failed, fetch the failing job log and fix + reply on any related comments. Every fix or dismissal MUST be paired with a reply on the thread — that is what makes --unresolved-only filter the comment on the next tick. Only stop the loop on ready_to_merge, merged, or closed — bot_approved still waits for the quiet window. When stopping, CronDelete <job-id> and hand back to user to merge.
   ```
 

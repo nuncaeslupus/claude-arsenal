@@ -59,7 +59,7 @@ query_har.py --input capture.har --show 4 --json-path 'results[*].title'
 analyze_har.py --input capture.har --endpoints
 ```
 
-```
+```text
 GET    api.example.com/api/jobs  x4  [200,404]
     loc = NY  (constant)
     page varies over 4: 1..4
