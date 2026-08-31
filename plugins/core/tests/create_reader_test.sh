@@ -185,3 +185,27 @@ out=$(run_reader --input status/specification.md --output-dir status --notes sta
 [[ ${rc} -ne 0 ]] || fail "--notes with a missing file should fail loudly"
 
 echo "PASS: create_reader_test — all gates passed"
+
+# --- a storage failure must not silence the unload warning ------------------
+# `save()` sets `dirty` on the SUCCESS path only. When the first
+# `localStorage.setItem` throws — a private window, blocked site data — the
+# catch marked storage unusable and left `dirty` false, so `beforeunload` said
+# nothing and the note the reviewer had just typed was lost on navigation. The
+# one place their work exists is the one place that must not fail quietly.
+reader_html="$(find "$tmp" -name '*reader*.html' | head -1)"
+[ -n "$reader_html" ] || reader_html="$(find "$tmp" -name 'spec-reader.html' | head -1)"
+if [ -n "$reader_html" ] && [ -f "$reader_html" ]; then
+    grep -q "dirty=true;lsOK=false" "$reader_html" \
+        || fail "a localStorage write failure leaves dirty false — the unload warning never fires"
+    echo "PASS: a storage failure still arms the unload warning"
+
+    # And a blocked download must not be reported as a saved backup: in the
+    # no-storage mode the download IS the only copy, so clearing `dirty` after
+    # it failed removes the last thing standing between the reviewer and losing
+    # their notes.
+    grep -q "var saved=download" "$reader_html" \
+        || fail "the export handler ignores download()'s result"
+    grep -q "Download blocked" "$reader_html" \
+        || fail "a blocked download is not reported to the reviewer"
+    echo "PASS: a blocked download is reported, not counted as a backup"
+fi
