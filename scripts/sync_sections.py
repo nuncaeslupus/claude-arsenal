@@ -139,11 +139,23 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.check:
         if want != have:
+            # The diff, not just the verdict. "It has drifted" is unactionable
+            # when the check passes locally and fails in CI: the useful half of
+            # the message is which lines differ, and printing it costs nothing
+            # on the path where everything is fine.
+            import difflib
+
             print(
                 f"DRIFT: {MANIFEST.relative_to(REPO_ROOT)} does not match the shipped skills. "
                 "Run `make sync-sections` and commit the result.",
                 file=sys.stderr,
             )
+            diff = difflib.unified_diff(
+                have.splitlines(), want.splitlines(),
+                fromfile="committed", tofile="regenerated", lineterm="", n=1,
+            )
+            for line in list(diff)[:60]:
+                print(f"  {line}", file=sys.stderr)
             return 1
         count = len(json.loads(have)["sections"])
         print(f"OK: sections.json matches the shipped skills ({count} sections).")

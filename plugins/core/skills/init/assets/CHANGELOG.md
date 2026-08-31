@@ -20,6 +20,12 @@ Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
 ## [2.10.0] - 2026-08-30
 
+- **A live issue now outranks a closed duplicate when reading the board.** A
+  task can carry two handles — a duplicate created against a stale fetch, or a
+  re-seeded board — and the state map took whichever GitHub returned last. With
+  the open one listed first, an old closed duplicate made the task read `done`,
+  so completion-drift checks went silent on a task that was still open.
+  `issue_number_for` already preferred the open handle; the two now agree.
 - **`query_status.py --pending-merge`, for auditing a branch rather than the
   default branch.** The completion protocol archives a task file in the same
   diff that closes its issue, so between opening a PR and merging it every task
