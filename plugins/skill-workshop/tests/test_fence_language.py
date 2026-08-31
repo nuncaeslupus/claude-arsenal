@@ -167,3 +167,21 @@ def test_stripping_keeps_prose_after_an_indented_literal_marker(validate_module)
     following paragraph, so those checks silently stopped seeing the rest.
     """
     assert "after" in validate_module._strip_fences("before\n\n    ```\n\nafter\n")
+
+
+def test_backticks_in_a_backtick_info_string_make_it_prose(validate_module):
+    """CommonMark 4.5: a backtick fence's info string may not contain a backtick.
+
+    Most often this is an inline code span that happens to start a line. Opening
+    a fence there is expensive twice: the document reads as unbalanced, failing
+    `body.fences` on valid markdown, and `_strip_fences` drops every line after
+    it — so the voice and secret checks quietly stop seeing the rest of the file.
+    """
+    doc = "before\n\n```inline ``code`` mention\n\nafter\n"
+    assert validate_module.unbalanced_fence(doc) is False
+    assert "after" in validate_module._strip_fences(doc)
+
+
+def test_a_tilde_fence_may_carry_backticks_in_its_info_string(validate_module):
+    """The rule is backtick-specific; applying it to `~~~` would lose real fences."""
+    assert validate_module.scan_fences("~~~x `y`\nbody\n~~~\n")[0] == [(1, 3)]

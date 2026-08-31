@@ -319,6 +319,14 @@ def scan_fences(text: str) -> tuple[list[tuple[int, int]], list[int]]:
         if not m:
             continue
         marker, info = m.group(2), m.group(3).strip()
+        if marker[0] == "`" and "`" in info:
+            # CommonMark 4.5: a backtick fence's info string may not contain a
+            # backtick, so this line is prose — most often an inline code span
+            # that happens to start the line. Opening a fence here is expensive
+            # twice over: the document reads as unbalanced, and `_strip_fences`
+            # drops every line after it, so the voice and secret checks quietly
+            # stop seeing the rest of the file. Tilde fences have no such rule.
+            continue
         if marker_open:
             if marker[0] == marker_open[0] and len(marker) >= len(marker_open) and not info:
                 spans.append((open_line, i))
