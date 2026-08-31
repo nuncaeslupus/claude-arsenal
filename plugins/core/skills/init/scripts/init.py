@@ -9,6 +9,7 @@ import shutil
 import sys
 import tomllib
 from pathlib import Path
+from typing import Any
 
 CLAUDE_MD_MARKER = "<!-- claude-arsenal: auto-managed -->"
 CLAUDE_MD_END_MARKER = "<!-- /claude-arsenal: auto-managed -->"
@@ -528,6 +529,142 @@ def _skill_section(skill_dir: Path) -> str:
         return _CORE_SECTION
     match = _FRONTMATTER_SECTION.search(text[3:end])
     return match.group(1) if match else _CORE_SECTION
+
+
+# The shipped capability map. A vendored init.py's `_source_skills_dir()` is the
+# consumer's own `.claude/skills/`, already pruned to the sections that repo
+# installed — so it can enumerate the skills a repo HAS and not the ones it does
+# not, which is exactly the question a map exists to answer. The manifest is
+# written in the marketplace, where every skill is visible, and travels with the
+# skill; `scripts/sync_sections.py` generates it and CI fails on drift.
+_SECTIONS_MANIFEST = Path(__file__).resolve().parent.parent / "assets" / "sections.json"
+
+
+def _load_manifest() -> dict[str, Any] | None:
+    """The shipped section manifest, or None when this bundle predates it."""
+    try:
+        data = json.loads(_SECTIONS_MANIFEST.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return data if isinstance(data, dict) and isinstance(data.get("sections"), list) else None
+
+
+def _manifest_from_disk() -> dict[str, Any]:
+    """A manifest shaped like the shipped one, built from whatever is on disk.
+
+    The degraded path for a consumer whose bundle predates `sections.json`. It
+    can only see installed skills, so the caller says so rather than printing a
+    partial map as though it were the whole one.
+    """
+    by_section: dict[str, list[dict[str, str]]] = {}
+    try:
+        skills = sorted(d for d in _source_skills_dir().iterdir() if (d / "SKILL.md").is_file())
+    except OSError:
+        skills = []
+    for skill_dir in skills:
+        by_section.setdefault(_skill_section(skill_dir), []).append(
+            {"name": skill_dir.name, "description": ""}
+        )
+    return {
+        "sections": [
+            {
+                "name": name,
+                "default": name == _CORE_SECTION or _SECTION_DEFAULTS.get(name, False),
+                "core": name == _CORE_SECTION,
+                "blurb": "",
+                "skills": by_section[name],
+            }
+            for name in sorted(by_section, key=lambda s: (s != _CORE_SECTION, s))
+        ]
+    }
+
+
+def _installed_skills(repo_path: Path) -> set[str] | None:
+    """Skill names present in the host's `.claude/skills/`, or None if there is none.
+
+    Ground truth for the map's on/off column: a section is on here if a skill of
+    it is actually loadable, which is what a session cares about and what stays
+    right when `arsenal/config.toml` has been edited but no install has run yet.
+    """
+    dest = repo_path / ".claude" / "skills"
+    try:
+        return {d.name for d in dest.iterdir() if (d / "SKILL.md").is_file()}
+    except OSError:
+        return None
+
+
+def _section_is_on(section: dict[str, Any], installed: set[str] | None, config: Path) -> bool:
+    """Whether this repo has the section, read from disk and falling back to config."""
+    if section.get("core"):
+        return True
+    names = {s["name"] for s in section.get("skills", [])}
+    if installed is not None and names:
+        return bool(names & installed)
+    recorded = _read_sections_table(config)
+    if recorded is not None:
+        return bool(recorded.get(section["name"], section.get("default", False)))
+    return bool(section.get("default", False))
+
+
+def list_sections(repo_path: Path, only: str | None = None) -> int:
+    """Print the capability map: every section this bundle ships, and what is on here.
+
+    Writes nothing — no config, no vendoring, no bundle refresh. The session-start
+    protocol runs this unattended on every session, and a discovery command with a
+    side effect is a discovery command nobody dares run.
+
+    Skills are named for sections that are OFF and not for ones that are ON,
+    which is the whole budget of this output: an installed skill already carries
+    its name and full description in the resident skills listing, so naming it
+    again pays twice for one fact, while an uninstalled one appears nowhere else
+    at all.
+    """
+    manifest = _load_manifest()
+    degraded = manifest is None
+    if manifest is None:
+        manifest = _manifest_from_disk()
+
+    sections: list[dict[str, Any]] = manifest["sections"]
+    if only is not None:
+        sections = [s for s in sections if s["name"] == only]
+        if not sections:
+            known = ", ".join(s["name"] for s in manifest["sections"])
+            print(f"init: no section named {only!r}. Known: {known}", file=sys.stderr)
+            return 2
+
+    installed = _installed_skills(repo_path)
+    config = _home(repo_path) / "config.toml"
+    on = {s["name"] for s in sections if _section_is_on(s, installed, config)}
+
+    if only is not None:
+        section = sections[0]
+        state = "installed here" if section["name"] in on else "NOT installed here"
+        print(f"{section['name']} — {section['blurb'] or 'no description'} [{state}]")
+        for skill in section["skills"]:
+            print(f"  {skill['name']}")
+            if skill["description"]:
+                print(f"    {skill['description']}")
+        return 0
+
+    width = max((len(s["name"]) for s in sections), default=4)
+    print(f"skill sections — {len(on)} of {len(sections)} installed here")
+    for section in sections:
+        is_on = section["name"] in on
+        detail = section["blurb"] or "no description"
+        if not is_on and section["skills"]:
+            detail += " (" + ", ".join(s["name"] for s in section["skills"]) + ")"
+        print(f"  {section['name']:<{width}}  {'on ' if is_on else 'off'}  {detail}")
+    if degraded:
+        print(
+            "  (installed sections only — this bundle predates the shipped map; "
+            "run claude-arsenal/bin/check_update.sh)"
+        )
+    else:
+        print(
+            "  off sections: `init.py --sections a,b` or edit [skills] in arsenal/config.toml; "
+            "`--section NAME` for detail"
+        )
+    return 0
 
 
 def _read_sections_table(config: Path) -> dict[str, bool] | None:
@@ -1300,6 +1437,18 @@ def main() -> None:
         f"Known: {', '.join(sorted(_known_sections()))}. Overrides --profile.",
     )
     p.add_argument(
+        "--list-sections",
+        action="store_true",
+        help="Print the capability map — every skill section this bundle ships, whether it is "
+        "installed here, and the skills of the ones that are not. Writes nothing.",
+    )
+    p.add_argument(
+        "--section",
+        metavar="NAME",
+        help="Detail for one section: every skill it contains, with its description. "
+        "Answers whether an uninstalled skill actually fits before recommending it.",
+    )
+    p.add_argument(
         "--silent", action="store_true",
         help="Suppress 'up to date' lines; only print refreshed files and version banner.",
     )
@@ -1311,6 +1460,11 @@ def main() -> None:
 
     repo_path = Path(args.repo_path).resolve()
     bundle_override = Path(args.bundle_dir) if args.bundle_dir else None
+
+    # Read-only, and answered before anything else: this is what the session-start
+    # protocol runs, and it must never be a path into an install.
+    if args.list_sections or args.section:
+        raise SystemExit(list_sections(repo_path, only=args.section))
 
     if args.workspace:
         name = args.workspace

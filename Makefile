@@ -108,11 +108,22 @@ sync-version:  ## write the canonical .bundle-version into both plugin manifests
 sync-version-check:  ## fail if any manifest / AGENTS.md version drifts from .bundle-version
 	uv run python scripts/sync_version.py --check
 
+sync-sections:  ## regenerate the shipped capability map from the skills init vendors
+	uv run python scripts/sync_sections.py
+
+sync-sections-check:  ## fail if sections.json has drifted from the shipped skills
+	uv run python scripts/sync_sections.py --check
+
 test:  ## run every plugin's behaviour tests (plugins/*/tests/*.sh) + repo-tool tests (scripts/*_test.sh)
 	@set -e; for t in plugins/*/tests/*.sh scripts/*_test.sh; do \
 		[ -f "$$t" ] || continue; \
 		echo "=== test: $$t ==="; bash "$$t"; \
 	done
+
+# Set to --pending-merge on a branch: a task archived by a PR that has not merged
+# yet legitimately still has an open issue, and only on the default branch does
+# that combination mean a merge did half its job.
+QUEUE_DOCTOR_FLAGS ?=
 
 queue-doctor:  ## dogfood: audit this repo's own task files (arsenal/tasks) the way a consumer would
 	@# Fetch the board's issues when a channel exists, so the handle check is a real
@@ -132,7 +143,7 @@ queue-doctor:  ## dogfood: audit this repo's own task files (arsenal/tasks) the 
 	fi; \
 	uv run python plugins/core/skills/init/assets/scripts/query_status.py \
 		--tasks-dir arsenal/tasks --detail --fail-on-problems \
-		$${issues:+--issues "$$issues"}
+		$${issues:+--issues "$$issues"} $(QUEUE_DOCTOR_FLAGS)
 
 sync-dupes:  ## sync_duplicates.py --check across plugins/*/scripts/_shared/
 	uv run python $(SYNC_DUPES) --check

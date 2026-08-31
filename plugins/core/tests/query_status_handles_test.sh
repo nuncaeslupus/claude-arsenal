@@ -71,3 +71,77 @@ grep -q "no issue handle" <<<"$out" || fail "handle missing: finding not reporte
 echo "PASS: --issues without the handle — reported, exit 1"
 
 echo "PASS: query_status_handles_test.sh"
+
+# --- an archived task whose PR has not merged is not drift ------------------
+# `open_task_pr.sh` archives the task file in the SAME diff that closes its
+# issue, so between opening a PR and merging it every task that PR finishes
+# reads archived-with-an-open-issue. Reporting that as drift makes the
+# documented workflow unable to produce a green PR — the same shape as
+# reporting a missing handle nobody looked for.
+archived="$tmp/archived"; mkdir -p "$archived"
+cat > "$archived/t-33334444.md" <<'TASK'
+---
+id: t-33334444
+title: A task archived by a PR still in flight
+priority: 5
+status: merged
+---
+
+## Acceptance gate
+
+```bash
+true
+```
+TASK
+cat > "$tmp/open.json" <<'JSON'
+[{"number": 42, "title": "A task archived by a PR still in flight", "state": "open",
+  "labels": [], "assignees": [], "body": "`arsenal-task: t-33334444`"}]
+JSON
+
+out="$(python3 "$qs" --tasks-dir "$archived" --detail --fail-on-problems --issues "$tmp/open.json" 2>&1)"
+rc=$?
+[ "$rc" -eq 1 ] || fail "on the default branch, archived-but-open must still be drift (got $rc)"
+grep -q "the PR merged without closing it" <<<"$out" || fail "the drift was not reported"
+
+out="$(python3 "$qs" --tasks-dir "$archived" --detail --fail-on-problems --pending-merge \
+    --issues "$tmp/open.json" 2>&1)"
+rc=$?
+[ "$rc" -eq 0 ] || fail "--pending-merge: the in-flight state must not fail the build (got $rc)"
+grep -q "expected until this branch merges" <<<"$out" \
+    || fail "--pending-merge silently dropped the observation instead of noting it"
+echo "PASS: --pending-merge — in flight is a note, on main it is still drift"
+
+# --- a live handle outranks a closed duplicate ------------------------------
+# A task can carry two handles: a duplicate created against a stale fetch, or a
+# re-seeded board. `issue_number_for` already prefers the OPEN one; the state
+# map was last-write-wins, so the answer depended on the order GitHub returned
+# them — and with the open issue listed first, an old closed duplicate made the
+# task read `done`. Both drift checks then went silent on a task that is very
+# much still open.
+for order in open-first closed-first; do
+    if [ "$order" = open-first ]; then
+        cat > "$tmp/dupes.json" <<'JSON'
+[{"number": 10, "title": "A task archived by a PR still in flight", "state": "open",
+  "labels": [], "assignees": [], "body": "`arsenal-task: t-33334444`"},
+ {"number": 4, "title": "A task archived by a PR still in flight", "state": "closed",
+  "state_reason": "completed", "labels": [], "assignees": [],
+  "body": "`arsenal-task: t-33334444`"}]
+JSON
+    else
+        cat > "$tmp/dupes.json" <<'JSON'
+[{"number": 4, "title": "A task archived by a PR still in flight", "state": "closed",
+  "state_reason": "completed", "labels": [], "assignees": [],
+  "body": "`arsenal-task: t-33334444`"},
+ {"number": 10, "title": "A task archived by a PR still in flight", "state": "open",
+  "labels": [], "assignees": [], "body": "`arsenal-task: t-33334444`"}]
+JSON
+    fi
+    out="$(python3 "$qs" --tasks-dir "$archived" --detail --fail-on-problems \
+        --issues "$tmp/dupes.json" 2>&1)"
+    rc=$?
+    [ "$rc" -eq 1 ] \
+        || fail "$order: a closed duplicate hid a task whose live handle is open (exit $rc)"
+    grep -q "the PR merged without closing it" <<<"$out" \
+        || fail "$order: drift not reported — the open handle lost to the closed duplicate"
+done
+echo "PASS: an open handle outranks a closed duplicate, in either fetch order"

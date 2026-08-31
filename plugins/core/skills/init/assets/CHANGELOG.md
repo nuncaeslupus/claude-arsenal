@@ -18,6 +18,38 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [2.10.0] - 2026-08-30
+
+- **A live issue now outranks a closed duplicate when reading the board.** A
+  task can carry two handles — a duplicate created against a stale fetch, or a
+  re-seeded board — and the state map took whichever GitHub returned last. With
+  the open one listed first, an old closed duplicate made the task read `done`,
+  so completion-drift checks went silent on a task that was still open.
+  `issue_number_for` already preferred the open handle; the two now agree.
+- **`query_status.py --pending-merge`, for auditing a branch rather than the
+  default branch.** The completion protocol archives a task file in the same
+  diff that closes its issue, so between opening a PR and merging it every task
+  that PR finishes reads *archived, issue still open*. Reported as drift, that
+  made the documented workflow unable to produce a green build on any PR. With
+  the flag it is a note; without it, on the default branch, it is still the
+  drift it was — a merge that did half its job.
+
+- **New: `init.py --list-sections` prints the capability map.** Sections made
+  the install set a choice, and a choice creates a thing nobody knows about — a
+  repo without the `python` section has no way to learn `coverage-gaps` exists,
+  because the only place a skill announces itself is the listing of the skills
+  that *were* installed. The map is one short line per section: its name, what
+  it is for, whether it is installed here, and — for the ones that are not — the
+  skills it would bring. `--section NAME` prints those skills with their full
+  descriptions, which is how to check whether one actually fits before enabling
+  it. Both are read-only; neither installs anything.
+- **Sections are enabled with `--sections a,b` or by editing `[skills]` in
+  `arsenal/config.toml`**, unchanged — the map just makes it possible to know
+  what to ask for.
+- The map ships as data (`sections.json`) rather than being scanned from disk,
+  because a vendored `init.py` can only see the skills its repo already
+  installed. A bundle predating it falls back to what is on disk and says so.
+
 ## [2.9.1] - 2026-08-30
 
 - **`query_status.py` no longer reports a missing issue handle it never looked
