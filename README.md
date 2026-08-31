@@ -217,12 +217,14 @@ So the cost is measured, and CI fails over it:
 
 | Tier | What's in it | Paid |
 |---|---|---|
-| **Resident** | vendored `AGENTS.md` + every skill's name and description | every turn, every session, forever |
+| **Resident** | vendored `AGENTS.md` + the name and description of every installed skill | every turn, every session, forever |
 | **On invocation** | one `SKILL.md` body | once, when that skill triggers |
 | **On demand** | `references/`, agent definitions | only when something opens them |
 
-`make context-budget` reports all three. The resident tier is capped at 5,000
-tokens. When a change pushes it over, what grew moves behind a reference or into
+`make context-budget` reports all three, and breaks the resident listing down by
+what a consumer actually installed — a default-off section costs nothing to
+anyone who did not ask for it. The cap of 5,000 tokens applies to the widest
+install. When a change pushes it over, what grew moves behind a reference or into
 a script — the cap does not get raised.
 
 The same discipline shapes the skills themselves. Anything deterministic —

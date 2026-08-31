@@ -78,4 +78,54 @@ grep -q "Traceback" <<<"${out}" && fail "an undecodable input must be reported, 
 grep -q "cannot read" <<<"${out}" || fail "an undecodable input must say it could not be read: ${out}"
 grep -q "SKILL.md" <<<"${out}" || fail "the read error must name the file: ${out}"
 
+# --- the listing is billed per install, not per repo -------------------------
+# The number that used to be reported was a sum over every SKILL.md in the tree,
+# which is a bill no consumer receives: it counted a marketplace plugin `/init`
+# never vendors, and charged every repo for default-off sections nobody enabled.
+# These assert the report says whose bill each row is.
+out=$(python3 "${BUDGET_PY}" --root "${REPO_ROOT}" --fail-over "${budget}" 2>&1) \
+    || fail "the repo is over its own resident budget:\n${out}"
+
+grep -q "by what the consumer installed" <<<"${out}" \
+    || fail "the listing must be broken down by install: ${out}"
+grep -q -- "<- /init default" <<<"${out}" \
+    || fail "the report must mark which row a default install actually pays: ${out}"
+grep -q -- "<- capped" <<<"${out}" \
+    || fail "the report must mark which row the cap applies to: ${out}"
+
+# A plugin `/init` does not vendor is resident for nobody, so it must not be
+# billed to anyone. skill-workshop is the whole class: a marketplace plugin,
+# never installed into a consumer's skills dir.
+grep -q "not vendored by /init, so resident for nobody" <<<"${out}" \
+    || fail "skills outside the vendored set must be reported as costing nobody: ${out}"
+
+# The gate the har plan calls `resident_token_delta_without_extract == 0`: a
+# default-off section is free for every consumer who did not ask for it. If the
+# default install ever costs the same as the maximal one, either a section was
+# switched on by default or the breakdown stopped distinguishing them — both are
+# the regression this row exists to catch.
+python3 - "${out}" <<'PY' || fail "default install is not cheaper than the maximal one:\n${out}"
+import re, sys
+
+rows = dict(
+    (m[0], (int(m[1]), int(m[2])))
+    for m in re.findall(r"^\s{4}(\w+)\s+.*?\s+(\d+)\s+(\d+)\s+\d+", sys.argv[1], re.M)
+)
+for needed in ("minimal", "general", "maximal"):
+    if needed not in rows:
+        print(f"report has no {needed} row", file=sys.stderr)
+        raise SystemExit(1)
+if not rows["minimal"][0] < rows["general"][0] < rows["maximal"][0]:
+    print(f"installs are not strictly nested: {rows}", file=sys.stderr)
+    raise SystemExit(1)
+if rows["general"][1] >= rows["maximal"][1]:
+    print(f"default install costs as much as maximal: {rows}", file=sys.stderr)
+    raise SystemExit(1)
+PY
+
+# A tree with no installer cannot resolve sections, and must still report a
+# number rather than refusing: the synthetic trees below are exactly that case.
+grep -q "skill listing (" <<<"$(python3 "${BUDGET_PY}" --root "${tmpdir}/tree" 2>&1)" \
+    && fail "the real tree has an installer and must not use the flat fallback"
+
 echo "PASS: context_budget_test — resident tier reported and capped"
