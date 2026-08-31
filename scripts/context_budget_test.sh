@@ -123,9 +123,35 @@ if rows["general"][1] >= rows["maximal"][1]:
     raise SystemExit(1)
 PY
 
-# A tree with no installer cannot resolve sections, and must still report a
-# number rather than refusing: the synthetic trees below are exactly that case.
-grep -q "skill listing (" <<<"$(python3 "${BUDGET_PY}" --root "${tmpdir}/tree" 2>&1)" \
-    && fail "the real tree has an installer and must not use the flat fallback"
+# A tree with no installer cannot resolve sections, so it falls back to one flat
+# number over every skill — the pre-sections behaviour. That fallback must work,
+# not merely not-crash: a report that silently dropped to zero rows would still
+# print a RESIDENT header and still say "Within budget".
+#
+# On its own tree rather than the shared one, because the shared tree is
+# deliberately corrupted further down to test the read-error path, and an
+# assertion that only passes because its input was already broken is not an
+# assertion. (An earlier revision of this file asserted the *opposite* of the
+# correct behaviour and passed for exactly that reason.)
+flat=$(mktemp -d)
+trap 'rm -rf "${tmpdir}" "${flat}"' EXIT
+mkdir -p "${flat}/plugins/core/skills/demo" "${flat}/plugins/core/skills/init/assets"
+cat > "${flat}/plugins/core/skills/demo/SKILL.md" <<'SKILL'
+---
+name: demo
+description: A skill in a tree that ships no installer to resolve sections with.
+---
+
+Body.
+SKILL
+echo "resident text" > "${flat}/plugins/core/skills/init/assets/AGENTS.md"
+
+out=$(python3 "${BUDGET_PY}" --root "${flat}" --fail-over 5000 2>&1) \
+    || fail "a tree with no installer must still report a budget: ${out}"
+grep -q "skill listing (1 skills)" <<<"${out}" \
+    || fail "no installer means the flat listing, counting every skill: ${out}"
+grep -q "by what the consumer installed" <<<"${out}" \
+    && fail "sections cannot be resolved without an installer, so no breakdown: ${out}"
+grep -q "Within budget" <<<"${out}" || fail "the fallback must still be capped: ${out}"
 
 echo "PASS: context_budget_test — resident tier reported and capped"

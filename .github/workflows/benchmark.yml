@@ -1,0 +1,53 @@
+name: benchmark
+
+# Separate from `ci.yml` on purpose. This is the evidence row for the HAR
+# plan's SC2 and SC3, which are wall-clock and RSS numbers and so mean nothing
+# without saying where they ran — the plan requires this runner. Generating the
+# 200 MB capture takes ~50 s, which is why `har_test.sh` runs the same benchmark
+# at a tenth of the scale on every push and this carries the full one on demand
+# and once a week. Its own workflow rather than a guarded job in `ci.yml`, so
+# that dispatching it runs the benchmark and nothing else, and so the weekly
+# schedule does not re-run five unrelated jobs to reach it.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "37 5 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark:
+    name: har benchmark (SC2/SC3)
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Nothing here pushes, and the benchmark writes a 200 MB file it
+          # generates itself; a checkout token left in .git/config would be
+          # ambient authority this job has no use for.
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Full-scale index build and index-only query
+        run: |
+          python3 plugins/core/tests/har/benchmark.py \
+            --target-mb 200 --entries 50000 \
+            --output-dir "${RUNNER_TEMP}/bench" --json | tee "${RUNNER_TEMP}/bench.json"
+
+      - name: Check SC2 and SC3
+        run: |
+          python3 - "${RUNNER_TEMP}/bench.json" <<'PY'
+          import json, sys
+
+          report = json.load(open(sys.argv[1]))
+          print(json.dumps(report, indent=2))
+          failed = [name for name in ("sc2_pass", "sc3_pass") if not report.get(name)]
+          if failed:
+              sys.exit("benchmark did not meet " + ", ".join(failed))
+          PY

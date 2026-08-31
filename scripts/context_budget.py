@@ -72,6 +72,7 @@ LISTING_BUDGET_CHARS = 8000
 
 
 def approx_tokens(text: str) -> int:
+    """Characters ÷ 4 — approximate on purpose, see the module docstring."""
     return len(text) // 4
 
 
@@ -141,6 +142,14 @@ def installs(init: Any, sections: set[str]) -> list[tuple[str, str, set[str]]]:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Print the three tiers, and cap the resident one against ``--fail-over``.
+
+    Returns 0 within budget, 1 over it, and 2 for a layout problem — a tree with
+    no skills, a missing ``AGENTS.md``, or an input that cannot be read. The
+    exit-2 cases print no tier report at all: a measurement that could not be
+    taken must not be reported as a number, which is the failure mode a budget
+    check is least able to survive.
+    """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=Path())
     parser.add_argument(

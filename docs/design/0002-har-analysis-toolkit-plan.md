@@ -176,11 +176,12 @@ until its row is complete and the measured value meets the gate.
 **SC2 and SC3 are not signed off yet.** The numbers above are real and pass with
 margin, but they were measured in a development container on Python 3.11.15 —
 below this project's own 3.12 floor — and the provenance rule directly beneath
-this table says a local measurement never replaces the CI one. The `benchmark`
-job in `.github/workflows/ci.yml` now carries the full 200 MB / 50k-entry run on
+this table says a local measurement never replaces the CI one.
+`.github/workflows/benchmark.yml` now carries the full 200 MB / 50k-entry run on
 `ubuntu-22.04`, on `workflow_dispatch` and a weekly schedule rather than on the
 pull-request path, because generating the capture takes ~50 s and no reviewer
-should wait for it. Those two rows are replaced with that job's output, and the
+should wait for it. Its own workflow rather than a guarded job in `ci.yml`, so
+dispatching it runs the benchmark and nothing else. Those two rows are replaced with that job's output, and the
 SC2/SC3 sign-off box ticked, once it has run on `main`.
 
 **Benchmark provenance.** SC2 and SC3 are wall-clock and RSS numbers, so they
