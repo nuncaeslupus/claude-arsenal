@@ -42,8 +42,13 @@ echo "PASS: SC5 — a vendored copy names the skills it did not install"
 grep -qE "^  python +off" <<<"$out" || fail "python not marked off in a repo that lacks it"
 grep -qE "^  workflow +on" <<<"$out" || fail "workflow not marked on in a repo that has it"
 grep -qE "^  core +on" <<<"$out" || fail "core not marked on"
-grep -q "1 of 3 installed here\|2 of 3 installed here" <<<"$out" \
-    || fail "header count does not match the sections: $out"
+# Not a hard-coded total: a new section is added by shipping a skill, and a test
+# that counts them turns every such addition into an unrelated failure. What has
+# to hold is that the header agrees with the rows below it.
+total="$(grep -cE "^  [a-z0-9_-]+ +(on |off) " <<<"$out")"
+on_count="$(grep -cE "^  [a-z0-9_-]+ +on  " <<<"$out")"
+grep -q "$on_count of $total installed here" <<<"$out" \
+    || fail "header count disagrees with the rows ($on_count on, $total total): $out"
 
 repo2="$tmp/all"; mkdir -p "$repo2"
 python3 "$init_py" --repo-path "$repo2" --profile all >/dev/null 2>&1 \

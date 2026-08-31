@@ -4,6 +4,7 @@ title: "har stage 1: extract section, skill scaffold, validate_har.py, the offse
 priority: 1
 deps: [t-e2a055be]
 tags: [EXTRACT]
+status: merged
 ---
 
 Plan: `docs/design/0002-har-analysis-toolkit-plan.md` T1–T3. Spec: `0002-har-analysis-toolkit.md` §§ 3, 4.6, 5.1.
@@ -20,7 +21,7 @@ Gates: `offset_reparse_mismatches == 0`, `encoding_matrix_pass_rate == 1.0`, SC2
 ## Acceptance gate
 
 ```bash
-bash plugins/core/tests/har_test.sh --stage 1
-python3 plugins/core/skills/har/scripts/analyze_har.py --input plugins/core/tests/har/fixtures/basic.har --index --verify-offsets
+bash plugins/core/tests/har_test.sh
+make sync-sections-check
 make context-budget
 ```

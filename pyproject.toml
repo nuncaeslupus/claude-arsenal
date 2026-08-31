@@ -61,7 +61,12 @@ show_error_codes = true
 # travel with vendored skills. mypy refuses two modules of the same name; the
 # canonical copy under plugins/skill-workshop/hooks/ is the one type-checked,
 # and gate_bash_test.sh fails if the two ever drift.
-exclude = "^plugins/core/skills/init/assets/bin/gate_target\\.py$"
+# Second pattern: test modules under plugins/*/tests/. A pytest function's
+# signature is a list of fixture names whose types conftest decides, so holding
+# them to `disallow_untyped_defs` restates the fixtures rather than catching
+# anything. The shipped code they exercise is fully typed either way, and ruff
+# still lints them.
+exclude = "(^plugins/core/skills/init/assets/bin/gate_target\\.py$|^plugins/[^/]+/tests/.*\\.py$)"
 
 [tool.pytest.ini_options]
 testpaths = ["plugins"]

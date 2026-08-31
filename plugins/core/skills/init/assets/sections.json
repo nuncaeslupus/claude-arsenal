@@ -35,6 +35,18 @@
       ]
     },
     {
+      "name": "extract",
+      "default": false,
+      "core": false,
+      "blurb": "structured data out of artifacts you did not produce",
+      "skills": [
+        {
+          "name": "har",
+          "description": "Use whenever a HAR capture has to be read, searched, filtered or turned into a scraper — which request returned a string seen on the page, which parameter pages the results, what to send to reproduce it. Triggers — \"I have a HAR\", \"which request returns this\". Do NOT use to capture a HAR (the browser's job) or to parse a JSON/HTML file with no capture around it."
+        }
+      ]
+    },
+    {
       "name": "python",
       "default": false,
       "core": false,

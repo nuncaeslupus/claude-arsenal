@@ -125,6 +125,9 @@ test:  ## run every plugin's behaviour tests (plugins/*/tests/*.sh) + repo-tool 
 # that combination mean a merge did half its job.
 QUEUE_DOCTOR_FLAGS ?=
 
+test-units:  ## pytest layer — needs the dev toolchain, unlike `make test` (bare python3)
+	uv run pytest plugins/core/tests -q
+
 queue-doctor:  ## dogfood: audit this repo's own task files (arsenal/tasks) the way a consumer would
 	@# Fetch the board's issues when a channel exists, so the handle check is a real
 	@# check rather than a skipped one. Without them query_status reports what it can
