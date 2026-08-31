@@ -105,14 +105,14 @@ Mark any PR as **BLOCKED** if: CI is failing, there are `CHANGES_REQUESTED` revi
 
 **When `gh` is not available** (web, or no GitHub CLI):
 Print the PR URL list directly from the queue, with task IDs and titles, so the user can check them manually:
-```
+```text
 PRs from this session requiring human review:
   t-3f8a91c2  #NNN  https://github.com/…/pull/NNN  — Extract the surface probe
   lo-b2c1  #NNN  https://github.com/…/pull/NNN  — T2: Auth gate
 ```
 
 **Always include escalated tasks** in the summary (they need human reset, not PR review):
-```
+```text
 Escalated tasks (exhausted retry cap — no PR opened):
   lo-c3d4  attempts=3/3  T3: Data migration
   → Recovery: the next attempt claims <id>.a2; past max-attempts a human decides
