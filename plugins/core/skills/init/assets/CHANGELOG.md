@@ -18,6 +18,23 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [2.11.0] - 2026-08-30
+
+- **Every session now reads the capability map at start-up, and volunteers a
+  skill you did not install when a task calls for it.** The session-start
+  protocol gained step 0c: run `init.py --list-sections`. A discovery mechanism
+  that waits to be invoked only serves people who already know the answer, and
+  the failure here was never "the tool could not be found" — it was that nobody
+  goes looking, because nothing said there was anything to look for.
+- **What that changes in practice:** asked to do something a section this repo
+  skipped would do properly, the session says so once — "this repo does not have
+  `python` installed, which ships `coverage-gaps` for exactly this; enable it
+  with `--sections python`, or say the word and I will carry on by hand" — and
+  then does what was asked. The trigger is a task *squarely* covered by a skill,
+  not one loosely related to it, and the answer is not re-litigated afterwards.
+- New `claude-arsenal/references/capability-map.md` covers the map, when to
+  volunteer a section and when not to, and how to enable one.
+
 ## [2.10.0] - 2026-08-30
 
 - **A live issue now outranks a closed duplicate when reading the board.** A

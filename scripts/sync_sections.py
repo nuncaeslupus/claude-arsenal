@@ -193,12 +193,30 @@ def main(argv: list[str] | None = None) -> int:
                 "Run `make sync-sections` and commit the result.",
                 file=sys.stderr,
             )
-            diff = difflib.unified_diff(
-                have.splitlines(), want.splitlines(),
-                fromfile="committed", tofile="regenerated", lineterm="", n=1,
+            # keepends, so a difference that is ONLY the trailing newline still
+            # shows up. Without it `splitlines()` hands difflib two identical
+            # lists, the diff comes out empty, and the failure is exactly the
+            # unactionable kind this diff was added to replace.
+            diff = list(
+                difflib.unified_diff(
+                    have.splitlines(keepends=True),
+                    want.splitlines(keepends=True),
+                    fromfile="committed",
+                    tofile="regenerated",
+                    n=1,
+                )
             )
-            for line in list(diff)[:60]:
-                print(f"  {line}", file=sys.stderr)
+            # A newline-only difference renders as two identical-looking lines
+            # (`-}` / `+}`), which tells a reader nothing. Say it in words.
+            if have.splitlines() == want.splitlines():
+                print(
+                    "  the lines are identical — they differ only in line endings or the "
+                    f"trailing newline (committed ends {have[-1:]!r}, "
+                    f"regenerated ends {want[-1:]!r})",
+                    file=sys.stderr,
+                )
+            for line in diff[:60]:
+                print(f"  {line.rstrip(chr(10))}", file=sys.stderr)
             return 1
         count = len(json.loads(have)["sections"])
         print(f"OK: sections.json matches the shipped skills ({count} sections).")

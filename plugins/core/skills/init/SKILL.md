@@ -49,6 +49,18 @@ The chosen profile is written out as an editable `[skills]` table, so the answer
 is a starting point rather than a one-time decision. `--sections workflow,python`
 names sections directly instead, for a user who would rather skip the profiles.
 
+**The capability map (read-only):**
+```bash
+python3 "${CLAUDE_SKILL_DIR}/scripts/init.py" --repo-path . --list-sections
+python3 "${CLAUDE_SKILL_DIR}/scripts/init.py" --repo-path . --section python
+```
+`--list-sections` names every section this bundle ships and whether it is
+installed here — including the skills of the ones that are not, which appear
+nowhere else in a repo that skipped them. `--section NAME` adds their full
+descriptions. The session-start protocol runs the first on every session, so a
+task that a skipped section would handle properly gets said out loud instead of
+being done the long way. Neither flag writes anything.
+
 **Auto-refresh (session start — silent):**
 ```bash
 python3 "${CLAUDE_SKILL_DIR}/scripts/init.py" --repo-path . --silent

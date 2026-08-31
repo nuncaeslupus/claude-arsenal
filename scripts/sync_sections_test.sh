@@ -86,3 +86,20 @@ echo "PASS: a shipped section with no blurb fails the generator"
 cleanup; trap - EXIT
 run_check --check >/dev/null 2>&1 || fail "cleanup left the manifest drifted"
 echo "PASS: sync_sections_test.sh"
+
+# --- a newline-only difference is still explained ---------------------------
+# `splitlines()` drops line endings, so two contents differing ONLY in the
+# trailing newline produce identical line lists, an empty diff, and a failure
+# with nothing in it — the exact unactionable message the diff replaced.
+backup="$(mktemp)"; cp "$manifest" "$backup"
+trap 'cp "$backup" "$manifest"; rm -f "$backup"' EXIT
+printf '%s' "$(cat "$manifest")" > "$manifest"   # strip the trailing newline
+
+out="$(run_check --check 2>&1)"; rc=$?
+[ "$rc" -eq 1 ] || fail "a missing trailing newline should be drift (exit $rc)"
+grep -q "trailing newline" <<<"$out" \
+    || fail "a newline-only difference produced a diff that does not say so: $out"
+echo "PASS: a newline-only difference is named, not shown as two identical lines"
+
+cp "$backup" "$manifest"; rm -f "$backup"; trap - EXIT
+run_check --check >/dev/null 2>&1 || fail "cleanup left the manifest drifted"

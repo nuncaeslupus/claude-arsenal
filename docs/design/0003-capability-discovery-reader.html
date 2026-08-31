@@ -425,25 +425,31 @@ it, and a decision not to install is not re-litigated later in the session.</p><
 <tbody>
 <tr>
 <td><code>AGENTS.md</code> step 0c + refs row</td>
-<td>~5 lines</td>
+<td><strong>+139 tokens</strong> measured (4370 → 4509 resident)</td>
 <td>every turn, every session</td>
 </tr>
 <tr>
 <td><code>--list-sections</code> stdout</td>
-<td>~60–120 tokens at 4 sections</td>
+<td><strong>496 bytes / ~125 tokens</strong> at 3 sections, measured</td>
 <td>once per session (and once per compaction restart)</td>
 </tr>
 <tr>
 <td><code>sections.json</code></td>
-<td>~2 KB on disk</td>
+<td>7.6 KB on disk</td>
 <td>never in context; <code>--section NAME</code> reads it</td>
+</tr>
+<tr>
+<td><code>references/capability-map.md</code></td>
+<td>~900 tokens</td>
+<td>only when opened</td>
 </tr>
 </tbody>
 </table>
-<p><code>make context-budget</code> gates the resident tier at 5000 tokens and <code>AGENTS.md</code>
-sits at ~2916 before this change, so headroom is not in question — but the
-number goes in the PR body either way, because "it is only a few lines" is a
-claim about the diff and not about the cost.</p>
+<p>Both resident numbers are <code>make context-budget</code> before and after, not estimates:
+the step and its references row cost <strong>139 tokens of the 5000-token resident
+budget</strong>, leaving 491 headroom. That is more than the "a few lines" reading of
+the diff suggests, which is exactly why the rule is to measure — five lines of
+prose in a file imported on every turn is not a five-line change.</p>
 <p>Set against: one session that reaches for a browser, or hand-writes something a
 shipped skill already does, because it did not know it had an alternative.</p></div>
 <div class="note" data-for="s-spec-7"><div class="note-head"><span class="note-ico">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC §7</span></div><textarea class="note-ta" data-key="s-spec-7" data-label="§7 What it costs" data-part="0003 Capability Discovery" rows="1" placeholder="Tap to add a note for this point…"></textarea></div>
