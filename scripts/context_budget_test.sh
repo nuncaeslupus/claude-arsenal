@@ -104,22 +104,39 @@ grep -q "not vendored by /init, so resident for nobody" <<<"${out}" \
 # default install ever costs the same as the maximal one, either a section was
 # switched on by default or the breakdown stopped distinguishing them — both are
 # the regression this row exists to catch.
-python3 - "${out}" <<'PY' || fail "default install is not cheaper than the maximal one:\n${out}"
+vendored_skills=$(ls -d "${REPO_ROOT}"/plugins/core/skills/*/SKILL.md 2>/dev/null | wc -l | tr -d ' ')
+python3 - "${out}" "${vendored_skills}" <<'PY' || fail "install rows are wrong:\n${out}"
 import re, sys
 
 rows = dict(
     (m[0], (int(m[1]), int(m[2])))
     for m in re.findall(r"^\s{4}(\w+)\s+.*?\s+(\d+)\s+(\d+)\s+\d+", sys.argv[1], re.M)
 )
-for needed in ("minimal", "general", "maximal"):
+for needed in ("minimal", "general", "all"):
     if needed not in rows:
         print(f"report has no {needed} row", file=sys.stderr)
         raise SystemExit(1)
-if not rows["minimal"][0] < rows["general"][0] < rows["maximal"][0]:
+
+# The widest install must reach every skill `/init` can vendor. `--profile all`
+# is resolved by `_resolve_sections` as *every known section*, which includes a
+# section that exists only as `section:` frontmatter — reading `_PROFILES["all"]`
+# instead silently drops those and understates the bill the cap is applied to.
+# This row is what makes that drift visible; without it the report was wrong by
+# a whole section and still looked orderly.
+widest = max(rows.values(), key=lambda row: row[0])[0]
+if widest != int(sys.argv[2]):
+    print(
+        f"widest install lists {widest} skills but /init can vendor {sys.argv[2]} — "
+        f"a section is missing from the capped row: {rows}",
+        file=sys.stderr,
+    )
+    raise SystemExit(1)
+
+if not rows["minimal"][0] < rows["general"][0] < rows["all"][0]:
     print(f"installs are not strictly nested: {rows}", file=sys.stderr)
     raise SystemExit(1)
-if rows["general"][1] >= rows["maximal"][1]:
-    print(f"default install costs as much as maximal: {rows}", file=sys.stderr)
+if rows["general"][1] >= rows["all"][1]:
+    print(f"default install costs as much as the widest one: {rows}", file=sys.stderr)
     raise SystemExit(1)
 PY
 

@@ -170,7 +170,7 @@ until its row is complete and the measured value meets the gate.
 | T7 | `adversarial_repro_shell_executions == 0` | **0** — the hostile header/body fixture executes nothing; asserted out-of-shell in `assert_repro_safe.py` | `make test` | `75cf5e7` | CI `ubuntu-22.04`, py3.12 |
 | T8 | `secrets_in_bounded_fields_of_output == 0` (SC5); `response_bodies_in_default_output == 0`; `derived_har_validates == true` | **0 / 0 / true** — `assert_no_bodies.py` checks the second directly | `make test`, `make test-units` | `75cf5e7` | CI `ubuntu-22.04`, py3.12 |
 | T9 | `invented_changes_on_repeat_url_fixture == 0` | **0** — three identical requests pair in capture order | `test_repeated_identical_requests_pair_in_capture_order` | `6a9ac80` | CI `ubuntu-22.04`, py3.12 |
-| T10 | `resident_listing_tokens_with_extract <= 130` (SC7) | **96** — the `maximal` listing is 1475 tokens against `python`'s 1379 | `make context-budget` | `6a9ac80` | CI `ubuntu-22.04`, py3.12 |
+| T10 | `resident_listing_tokens_with_extract <= 130` (SC7) | **96** — the `all` listing is 1475 tokens against `python`'s 1379 | `make context-budget` | `6a9ac80` | CI `ubuntu-22.04`, py3.12 |
 | T10 | `shared_flag_parity_failures == 0` | **0** — `query_har`, `create_har` and `compare_har` expose the same eight selection flags | `har_test.sh`, `har/test_parity.py` | `6a9ac80` | CI `ubuntu-22.04`, py3.12 |
 
 **SC2 and SC3 carry CI numbers, not local ones.** An earlier measurement in a
@@ -223,9 +223,10 @@ one.
       for `general` + `extract` (3846 of 8000 chars). Worth stating precisely,
       because the marketplace-wide `make audit` number is 25 % and that is a
       different question: it charges every repo for every shipped skill at once.
-      `extract` costs 386 chars. The install that is genuinely tight is
-      `python` — 31 % headroom before `extract` is added at all — so the next
-      listing-budget conversation is about the Python section, not this one.
+      `extract` costs 386 chars, and `--profile all` — which does install it —
+      sits at 26 %. The install that is genuinely tight is `python`: 31 %
+      headroom before `extract` is added at all, so the next listing-budget
+      conversation is about the Python section, not this one.
 - [ ] Annotations from the reader applied, or the reviewer's go-ahead recorded —
       implementation ran ahead on an explicit go-ahead, so this is outstanding
       as review of merged work rather than as a gate on it.

@@ -128,17 +128,23 @@ def load_installer(root: Path) -> Any | None:
 def installs(init: Any, sections: set[str]) -> list[tuple[str, str, set[str]]]:
     """`(label, what it means, enabled sections)` for every install a consumer reaches.
 
-    `maximal` is computed from what is actually shipped rather than taken from
-    `_PROFILES["all"]`, which is built from `_SECTION_DEFAULTS` and so does not
-    include a section that exists only as `section:` frontmatter. Printing both
-    keeps that gap visible instead of letting the widest row quietly understate
-    the widest install.
+    `all` is resolved the way `_resolve_sections` resolves it — every *known*
+    section — not by reading `_PROFILES["all"]`. Those two disagree, and only
+    the first one is what a consumer gets: `_PROFILES` is built from
+    `_SECTION_DEFAULTS`, which does not list a section that exists only as
+    `section:` frontmatter, so reading it makes `--profile all` look narrower
+    than it is and understates the bill the cap is applied to. A report that
+    gets the widest install wrong is worse than no report.
     """
     core = init._CORE_SECTION
-    rows = [(name, f"--profile {name}", {core} | set(profile))
-            for name, profile in init._PROFILES.items()]
-    rows.append(("maximal", "every shipped section", {core} | sections))
-    return rows
+    return [
+        (
+            name,
+            f"--profile {name}",
+            {core} | (sections if name == "all" else set(profile)),
+        )
+        for name, profile in init._PROFILES.items()
+    ]
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -210,7 +216,12 @@ def main(argv: list[str] | None = None) -> int:
         default_on = {name for name, on in init._SECTION_DEFAULTS.items() if on}
         default_install = {init._CORE_SECTION} | default_on
         rows = installs(init, shipped)
-        capped = rows[-1][2]
+        # Whichever row enables the most sections is the largest bill a consumer
+        # can choose, and so the one the cap applies to. Computed rather than
+        # assumed to be the last row: the cap must follow the widest install
+        # even if the profile table is reordered or another profile is added.
+        widest = max(rows, key=lambda row: len(row[2]))
+        capped = widest[2]
 
         print("\n  skill listing, by what the consumer installed")
         print(
@@ -225,7 +236,7 @@ def main(argv: list[str] | None = None) -> int:
             marks = []
             if enabled == default_install:
                 marks.append("<- /init default")
-            if label == "maximal":
+            if enabled == capped:
                 marks.append("<- capped")
             print(
                 f"    {label:<10} {meaning:<26} {len(picked):>6} {listing:>8}"
