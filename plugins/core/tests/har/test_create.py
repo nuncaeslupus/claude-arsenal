@@ -227,6 +227,7 @@ def test_fingerprints_do_not_carry_across_two_derivations(derive, tmp_path):
     import json as _json
 
     def authorizations(name: str) -> set[str]:
+        """Derive the fixture into `name` and return its distinct auth markers."""
         target = tmp_path / name
         code, _, err = derive("basic", "--type", "xhr", "--output", str(target))
         assert code == 0, err
