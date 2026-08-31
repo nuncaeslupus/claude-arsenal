@@ -5,9 +5,9 @@ name: benchmark
 # without saying where they ran — the plan requires this runner. Generating the
 # 200 MB capture takes ~50 s, which is why `har_test.sh` runs the same benchmark
 # at a tenth of the scale on every push and this carries the full one on demand
-# and once a week. Its own workflow rather than a guarded job in `ci.yml`, so
-# that dispatching it runs the benchmark and nothing else, and so the weekly
-# schedule does not re-run five unrelated jobs to reach it.
+# and once a week. It lives in its own workflow rather than as a guarded job in
+# `ci.yml`, so that dispatching it runs the benchmark and nothing else, and so
+# the weekly schedule does not re-run five unrelated jobs to reach it.
 on:
   workflow_dispatch:
   schedule:
