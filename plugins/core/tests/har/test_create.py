@@ -211,3 +211,36 @@ def test_identical_credentials_still_redact_identically(derive, tmp_path):
         if header["name"].lower() == "authorization"
     }
     assert len(markers) == 1, f"one credential produced several markers: {markers}"
+
+
+def test_fingerprints_do_not_carry_across_two_derivations(derive, tmp_path):
+    """The negative half of the salt contract, which nothing else pins.
+
+    The salt is per RUN and never stored, so the same credential derived twice
+    fingerprints differently. That is deliberate: comparability is scoped to one
+    artifact, and every consumer of it — `--headers`, `compare_har.py` — works
+    inside a single file. A future change that persisted the salt "so the
+    markers line up" would make the fingerprints a stable pseudonym for a live
+    credential across every artifact that ever carried it, which is the property
+    redaction exists to remove. This test goes red on that change.
+    """
+    import json as _json
+
+    def authorizations(name: str) -> set[str]:
+        target = tmp_path / name
+        code, _, err = derive("basic", "--type", "xhr", "--output", str(target))
+        assert code == 0, err
+        doc = _json.loads(target.read_text())
+        return {
+            header["value"]
+            for entry in doc["log"]["entries"]
+            for header in entry["request"]["headers"]
+            if header["name"].lower() == "authorization"
+        }
+
+    first, second = authorizations("one.har"), authorizations("two.har")
+    assert len(first) == len(second) == 1, "fixture must carry exactly one credential here"
+    assert first != second, (
+        "the same credential fingerprinted identically across two runs — the salt "
+        "is being persisted, making the marker a stable pseudonym for a live value"
+    )
