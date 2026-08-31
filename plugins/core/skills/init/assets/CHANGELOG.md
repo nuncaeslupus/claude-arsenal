@@ -18,6 +18,24 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [2.16.1] - 2026-08-31
+
+### Fixed
+- The skill validator no longer warns on the `har` and `init` skills' own
+  argument vocabulary. Twenty-eight domain flags — `--endpoints`, `--css`,
+  `--secrets`, `--sections` and the rest — join the argument canon, which is
+  what that canon is for: it exists to stop two skills spelling the same
+  concept differently, not to object to a skill having nouns of its own.
+- `session-end`'s example PR table used `#42`/`#43`/`#44`, which read as real
+  references. They are now `#NNN`, so nobody follows an example into a PR that
+  does not exist.
+
+Running the validator with `--severity warn` across the library now reports 4
+warnings rather than 38. The four left are real and known: `--silent`,
+`--repo-path` and `--max` duplicate canonical flags, and `new_task.py` uses a
+non-canonical verb. Fixing those changes a vendored interface, so they get a
+deliberate pass with aliases rather than a rename in passing.
+
 ## [2.16.0] - 2026-08-31
 
 - **`compare_har.py` completes the toolkit: what changed between two captures.**

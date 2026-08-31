@@ -101,7 +101,7 @@ grep -q "not vendored by /init, so resident for nobody" <<<"${out}" \
 
 # The gate the har plan calls `resident_token_delta_without_extract == 0`: a
 # default-off section is free for every consumer who did not ask for it. If the
-# default install ever costs the same as the maximal one, either a section was
+# default install ever costs the same as the capped one, either a section was
 # switched on by default or the breakdown stopped distinguishing them — both are
 # the regression this row exists to catch.
 vendored_skills=$(ls -d "${REPO_ROOT}"/plugins/core/skills/*/SKILL.md 2>/dev/null | wc -l | tr -d ' ')

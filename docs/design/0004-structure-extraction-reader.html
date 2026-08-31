@@ -161,7 +161,7 @@ h4.sec-h{font-size:16.5px;color:var(--fg)}
 <li><a href="#s-spec-5-4">§5.4 The descriptor format</a></li>
 <li><a href="#s-spec-6">§6 Options</a></li>
 <li><a href="#s-spec-7">§7 Recommendation</a></li>
-<li><a href="#s-spec-open-questions">Open questions</a></li>
+<li><a href="#s-spec-open-questions-resolved-on-revie">Open questions — resolved on review</a></li>
 <li><a href="#s-spec-8">§8 Risks</a></li>
 <li><a href="#s-spec-9">§9 Delivery</a></li>
 </ul></details>
@@ -171,7 +171,7 @@ h4.sec-h{font-size:16.5px;color:var(--fg)}
 <article class="sec" id="s-spec-intro">
 <h3 class="sec-h"><span class="chip">overview</span><span class="sec-title">Preamble &amp; scope</span></h3>
 <div class="sec-body"><p><strong>Date</strong>: 2026-08-31
-<strong>Status</strong>: draft — awaiting review
+<strong>Status</strong>: reviewed — open questions resolved; ready to plan
 <strong>Section</strong>: <code>extract</code> (default off)
 <strong>Related</strong>: <code>docs/design/0002-har-analysis-toolkit.md</code> (§ 6 decisions, § 7 out of scope)</p></div>
 <div class="note" data-for="s-spec-intro"><div class="note-head"><span class="note-ico">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC · intro</span></div><textarea class="note-ta" data-key="s-spec-intro" data-label="Preamble &amp; scope" data-part="0004 Structure Extraction" rows="1" placeholder="Tap to add a note for this point…"></textarea></div>
@@ -297,7 +297,7 @@ breakage § 2 exists to catch.</p></div>
 </thead>
 <tbody>
 <tr>
-<td><code>plugins/core/skills/&lt;new&gt;/</code></td>
+<td><code>plugins/core/skills/locate/</code></td>
 <td>The skill itself</td>
 <td>New</td>
 </tr>
@@ -457,29 +457,61 @@ test, and the direct analogue of <code>compare_har.py</code> one layer down: the
 </article>
 <article class="sec" id="s-spec-5-4">
 <h4 class="sec-h"><span class="chip">§5.4</span><span class="sec-title">The descriptor format</span></h4>
-<div class="sec-body"><p>Verification needs <em>something</em> on disk, and that is the one place this spec
-risks becoming somebody's schema. The mitigation is to make it the smallest
-thing that can be verified and nothing more:</p>
+<div class="sec-body"><p>Verification needs something on disk, and this is the one place the spec risks
+becoming somebody's schema. The rule that keeps it from doing so is not <em>be as
+small as possible</em> — an under-specified descriptor just pushes the missing parts
+into every consumer, which is the duplication this tool exists to remove. The
+rule is: <strong>carry what any extraction workflow would need, carry nothing that
+belongs to one.</strong></p>
 <pre><code class="language-json">{
   &quot;version&quot;: 1,
   &quot;kind&quot;: &quot;json&quot;,
+  &quot;source&quot;: {
+    &quot;tool&quot;: &quot;locate/1&quot;,
+    &quot;derived_from&quot;: [&quot;p1.json&quot;, &quot;p2.json&quot;, &quot;p3.json&quot;],
+    &quot;derived_at&quot;: &quot;2026-08-31T14:00:00Z&quot;
+  },
+  &quot;record&quot;: {&quot;expr&quot;: &quot;data.results[*]&quot;, &quot;arity&quot;: &quot;many&quot;},
   &quot;fields&quot;: {
     &quot;title&quot;: {
-      &quot;expr&quot;: &quot;data.results[*].title&quot;,
-      &quot;arity&quot;: &quot;many&quot;,
-      &quot;witness&quot;: {&quot;type&quot;: &quot;string&quot;, &quot;len_p50&quot;: 34, &quot;len_p90&quot;: 61, &quot;charset&quot;: &quot;latin-mixed-case&quot;}
+      &quot;expr&quot;: &quot;title&quot;,
+      &quot;type&quot;: &quot;string&quot;,
+      &quot;arity&quot;: &quot;one&quot;,
+      &quot;required&quot;: true,
+      &quot;witness&quot;: {&quot;len_p50&quot;: 34, &quot;len_p90&quot;: 61, &quot;charset&quot;: &quot;latin-mixed-case&quot;},
+      &quot;alternatives&quot;: [{&quot;expr&quot;: &quot;header.name&quot;, &quot;rank&quot;: &quot;varies&quot;}]
     }
   }
 }
 </code></pre>
-<p>A field name, an expression, an expected arity, and a <strong>witness</strong>. <strong>No types,
-no transforms, no pagination, no auth, no output mapping</strong> — every one of those
-is a connector concern, and the moment one is added here this file starts
-competing with the schema of whatever consumes it. It is an interchange format:
-the job-search repo reads it and maps it into its own descriptors in a few
-lines, and so can anyone else.</p>
+<p><strong><code>record</code> — the repeating element fields are relative to.</strong> A page yields
+<em>records</em>, and a descriptor of independent whole-document expressions cannot
+guarantee that the third title belongs to the third company. Any two <code>many</code>
+fields could resolve to lists of different lengths, or the same length in
+different orders, and nothing would notice. Anchoring every field to a record
+root makes alignment structural instead of hoped-for. This is the one addition
+that is a genuine correctness fix rather than a convenience.</p>
+<p><strong><code>alternatives</code> — what <code>locate</code> ranked and the operator did not pick.</strong> § 2's
+complaint is that the choice is an unrecorded judgement; recording only the
+winner fixes half of it. When the primary breaks, the runners-up and their ranks
+are already on disk, which is exactly what the next session needs and would
+otherwise re-derive from scratch.</p>
+<p><strong><code>source</code> — which samples this was derived from, and when.</strong> A descriptor
+ranked <code>stable</code> across three samples is a different claim from one derived from
+a single page, and SC3 is unfalsifiable after the fact unless the file says
+which it was.</p>
+<p><strong><code>type</code>, <code>required</code>, <code>witness</code></strong> — the value's type; whether absence is a
+failure or an ordinary optional field, so <code>verify</code> does not cry wolf on a job
+with no salary listed; and the shape signature below.</p>
+<p><strong>What stays out, and why the line still holds.</strong> No transforms, no pagination,
+no auth, no request construction, no rate limits, no output mapping. Every one
+of those is about <em>what a consumer does with a source</em>, and the moment one
+appears here this file starts competing with the schema of whatever reads it.
+Everything above is about <em>where the data is and whether it is still there</em> —
+verification metadata, not extraction policy. The test for any future key is
+that question, not its size.</p>
 <p><strong>Why the witness is not scope creep.</strong> <code>expr</code> and <code>arity</code> alone verify that an
-expression still <em>resolves to the right number of things</em> — and that is not the
+expression still resolves to the right number of things — and that is not the
 failure § 2 describes. When a site swaps two same-shaped fields, the expression
 resolves, the arity is unchanged, and a purely structural <code>verify</code> reports
 success while the scraper collects the wrong column. Shipping a tool whose
@@ -489,10 +521,7 @@ trusted.</p>
 <p>The witness is a bounded <em>shape signature</em> of what the expression yielded when
 the descriptor was written: type, length distribution, character-class profile.
 Deliberately not the values — those are content, they rot on every ordinary
-edit, and on a site behind a login they may be somebody's data. It is
-verification metadata about an expression, not a statement about what the field
-<em>means</em>, so the line against connector semantics still holds: nothing here tells
-a consumer what to do with the value.</p>
+edit, and on a site behind a login they may be somebody's data.</p>
 <p><strong>What it still cannot catch, stated plainly.</strong> Two fields of genuinely
 indistinguishable shape — two medium-length title-case strings — can swap and
 the witness will not notice. No structural check can, short of understanding the
@@ -576,8 +605,11 @@ expensive kind of shortcut.</p></div>
 <article class="sec" id="s-spec-7">
 <h3 class="sec-h"><span class="chip">§7</span><span class="sec-title">Recommendation</span></h3>
 <div class="sec-body"><p><strong>Option A.</strong> Stdlib only, both formats, three scripts, in the <code>extract</code> section.</p>
-<p><strong>First action</strong>: name the skill (see open questions), then a plan document with
-staged tasks and gates, in the same shape as <code>0002-...-plan.md</code>.</p>
+<p><strong>Name</strong>: <code>locate</code>. It names the capability that does not exist anywhere else,
+which is what a description has to trigger on; <code>describe</code> and <code>verify</code> are the
+supporting acts.</p>
+<p><strong>First action</strong>: a plan document with staged tasks and gates, in the same shape
+as <code>0002-...-plan.md</code>.</p>
 <p><strong>Budget check.</strong> <code>extract</code> costs 386 listing chars today; a second skill of
 similar size puts <code>--profile all</code> near 21 % headroom against the 8000-char cap,
 still inside the ≥ 50 % <em>default-install</em> target because neither skill is in
@@ -585,23 +617,22 @@ still inside the ≥ 50 % <em>default-install</em> target because neither skill 
 which this change does not touch.</p></div>
 <div class="note" data-for="s-spec-7"><div class="note-head"><span class="note-ico">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC §7</span></div><textarea class="note-ta" data-key="s-spec-7" data-label="§7 Recommendation" data-part="0004 Structure Extraction" rows="1" placeholder="Tap to add a note for this point…"></textarea></div>
 </article>
-<article class="sec" id="s-spec-open-questions">
-<h4 class="sec-h"><span class="chip">▸</span><span class="sec-title">Open questions</span></h4>
+<article class="sec" id="s-spec-open-questions-resolved-on-revie">
+<h4 class="sec-h"><span class="chip">▸</span><span class="sec-title">Open questions — resolved on review</span></h4>
 <div class="sec-body"><ol>
-<li><strong>The skill's name.</strong> It shapes triggering, which the rubric scores. <code>locate</code>
-   names the headline capability but undersells <code>verify</code>; <code>structure</code> is vague;
-   <code>selectors</code> is HTML-biased and the JSON half is the easier win. Leaning
-   <code>locate</code> — recommend deciding before the plan, since the name is in every
-   path afterwards.</li>
-<li><strong>Descriptor scope.</strong> § 5.4 proposes field/expr/arity and nothing else. Worth
-   confirming that is enough for the job-search connectors, because the pressure
-   to add "just one more key" will be constant and the first addition sets the
-   precedent.</li>
-<li><strong>XML/CSV.</strong> <code>describe</code> could cover both cheaply. Out of scope here unless
-   there is a real case; adding formats without one is how a focused tool stops
-   being one.</li>
+<li><strong>Name</strong> — <code>locate</code>. Settled; carried into § 3 and § 7.</li>
+<li><strong>Descriptor scope</strong> — widened. The brief was "everything that can be useful
+   in general", which § 5.4 now implements: <code>record</code>, <code>alternatives</code>, <code>source</code>,
+   <code>type</code> and <code>required</code> join <code>expr</code>, <code>arity</code> and <code>witness</code>. The generic/
+   connector line moved from <em>smallest possible</em> to <em>anything an extraction
+   workflow needs, nothing one workflow owns</em> — a better line, because the
+   minimal version pushed the missing parts into every consumer. <code>record</code> in
+   particular was a correctness gap, not a convenience.</li>
+<li><strong>XML/CSV</strong> — deferred, as asked. <code>describe</code> could cover both cheaply; adding
+   formats without a real case is how a focused tool stops being one, and the
+   decision costs nothing to revisit.</li>
 </ol></div>
-<div class="note" data-for="s-spec-open-questions"><div class="note-head"><span class="note-ico">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC › Open questions</span></div><textarea class="note-ta" data-key="s-spec-open-questions" data-label="Open questions" data-part="0004 Structure Extraction" rows="1" placeholder="Tap to add a note for this point…"></textarea></div>
+<div class="note" data-for="s-spec-open-questions-resolved-on-revie"><div class="note-head"><span class="note-ico">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC › Open questions — resolved on review</span></div><textarea class="note-ta" data-key="s-spec-open-questions-resolved-on-revie" data-label="Open questions — resolved on review" data-part="0004 Structure Extraction" rows="1" placeholder="Tap to add a note for this point…"></textarea></div>
 </article>
 <article class="sec" id="s-spec-8">
 <h3 class="sec-h"><span class="chip">§8</span><span class="sec-title">Risks</span></h3>

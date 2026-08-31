@@ -199,6 +199,40 @@ CANONICAL_ARGS = {
     "--body",
     # meta-skill self-flag
     "--listing-budget",
+    # init skill: which sections of the bundle a repo installs
+    "--section",
+    "--sections",
+    "--list-sections",
+    "--allow-downgrade",
+    # har skill — what a capture is read *for*. These are the nouns of a HAR
+    # (entries, headers, cookies, redirects, websockets) and the ways one is
+    # reduced to an answer; none has a canonical equivalent to defer to, and
+    # forcing them into `--filter`/`--query` would say less, not more.
+    "--index",
+    "--no-index",
+    "--verify-offsets",
+    "--stats",
+    "--errors",
+    "--endpoints",
+    "--headers",
+    "--cookies",
+    "--redirects",
+    "--slowest",
+    "--largest",
+    "--websockets",
+    "--show",
+    "--fields",
+    "--schema",
+    "--json-path",
+    "--css",
+    "--xpath",
+    "--extract-body",
+    "--max-body",
+    "--secrets",
+    "--keep-bodies",
+    "--drop-types",
+    "--against",
+    "--size-tolerance",
 }
 FORBIDDEN_ARG_SYNONYMS = {
     "--out": "--output",
