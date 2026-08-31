@@ -281,7 +281,9 @@ def _read_text(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
-FENCE_OPEN_REGEX = re.compile(r"^(\s*)(`{3,}|~{3,})(.*)$")
+# Up to three leading spaces still opens a fence; four or more makes it an
+# indented code block, where the backticks are literal content (CommonMark 4.5).
+FENCE_OPEN_REGEX = re.compile(r"^( {0,3})(`{3,}|~{3,})(.*)$")
 
 
 def untagged_fences(text: str) -> list[int]:
@@ -296,6 +298,12 @@ def untagged_fences(text: str) -> list[int]:
     Untagged is a `should`, not a `must`: markdown renders either way. It costs
     syntax highlighting where the block is code, and it is what `markdownlint`
     MD040 reports, so a reviewer sees it whether or not this does.
+
+    Takes the whole file rather than the post-frontmatter body on purpose. Line
+    numbers are the entire value of this warning — a reader opens the file at
+    the number it prints — and counting from the body reports every line short
+    by the height of the frontmatter, which is a wrong answer delivered
+    confidently.
     """
     stack: list[str] = []
     untagged: list[int] = []
@@ -314,6 +322,14 @@ def untagged_fences(text: str) -> list[int]:
 
 
 def _strip_fences(text: str) -> str:
+    """The text with fenced blocks removed, for checks that must ignore code.
+
+    Deliberately cruder than `untagged_fences`: it toggles on any line starting
+    with a fence marker, which is right for "is this prose or code" and wrong
+    for "where does this block open". A ```` wrapper around a ``` example
+    toggles this four times and still ends balanced, so the stripping is
+    correct even though the individual toggles are not.
+    """
     out, in_fence = [], False
     fence_re = re.compile(r"^(```|~~~)")
     for line in text.splitlines():
@@ -333,6 +349,7 @@ def _strip_inline_code(text: str) -> str:
 
 
 def _strip_all_code(text: str) -> str:
+    """The text with both fenced blocks and inline-code spans removed."""
     return _strip_inline_code(_strip_fences(text))
 
 
@@ -610,6 +627,13 @@ def check_file_layout(skill_dir: Path, fm: dict, result: Result) -> None:
 
 
 def check_body(skill_dir: Path, result: Result) -> tuple[str, str]:
+    """Check the SKILL.md body — length, fences, voice, forbidden content.
+
+    Returns `(text, body)`: the whole file and the part after the frontmatter.
+    Callers want both, and which one a check needs is not incidental — line
+    numbers reported to a reader must count from the file, while content checks
+    that would trip over frontmatter keys read the body.
+    """
     skill_md = skill_dir / "SKILL.md"
     if not skill_md.exists():
         return "", ""
@@ -623,7 +647,7 @@ def check_body(skill_dir: Path, result: Result) -> tuple[str, str]:
     fence_count = sum(1 for line in body.splitlines() if line.strip().startswith(("```", "~~~")))
     if fence_count % 2 != 0:
         result.fail("body.fences", "unbalanced fenced code blocks in SKILL.md body", skill_md)
-    for line_no in untagged_fences(body):
+    for line_no in untagged_fences(text):
         result.warn(
             "body.fence-language",
             f"line {line_no}: fenced block opened without a language tag (MD040)",
@@ -782,6 +806,11 @@ CROSS_SKILL_REF_CITE_REGEX = re.compile(r"`[^`\n]*§\s*(references/[\w./-]+\.md)
 
 
 def check_references(skill_dir: Path, body: str, result: Result) -> None:
+    """Check every `references/*.md`: linkage, one-hop reach, TOC, and fences.
+
+    `body` is the SKILL.md body, needed to tell a cited reference from an
+    orphaned one.
+    """
     skill_md = skill_dir / "SKILL.md"
     refs_dir = skill_dir / "references"
     cross_skill_ranges = [(m.start(1), m.end(1)) for m in CROSS_SKILL_REF_CITE_REGEX.finditer(body)]
@@ -836,7 +865,7 @@ def check_references(skill_dir: Path, body: str, result: Result) -> None:
         )
         if fence_count % 2 != 0:
             result.fail("references.fences", "unbalanced fenced code blocks", ref)
-        for line_no in untagged_fences(body_text):
+        for line_no in untagged_fences(text):
             result.warn(
                 "references.fence-language",
                 f"line {line_no}: fenced block opened without a language tag (MD040)",
