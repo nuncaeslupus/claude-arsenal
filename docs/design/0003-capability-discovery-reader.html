@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
-<title>claude-arsenal — Specification (annotatable)</title>
+<title>Claude Arsenal — Specification (annotatable)</title>
 <style>
 :root{
   --bg:#fbfaf7;--fg:#1d1c1a;--muted:#6b6862;--line:#e6e2da;
@@ -122,7 +122,7 @@ h4.sec-h{font-size:16.5px;color:var(--fg)}
 <body>
 <div class="topbar">
   <div class="wrap">
-    <div class="brand">claude-arsenal — Specification<small>annotatable reader · 2026-08-30</small></div>
+    <div class="brand">Claude Arsenal — Specification<small>annotatable reader · 2026-08-31</small></div>
     <span class="savestate ok" id="savestate">✓ Auto-saving</span>
     <button class="btn primary" id="btn-export">Save / Export</button>
   </div>
@@ -132,7 +132,7 @@ h4.sec-h{font-size:16.5px;color:var(--fg)}
 
 <div class="wrap">
   <div class="hero">
-    <h1>claude-arsenal specification</h1>
+    <h1>Claude Arsenal specification</h1>
     <p>Read at your own pace and leave a note on any point you want to discuss.</p>
   </div>
   <details class="help">
@@ -564,7 +564,7 @@ does not fit a stack whose every step is shippable.</p></div>
     try{
       if(t.value.trim()===''){localStorage.removeItem(k);}else{localStorage.setItem(k,t.value);}
       dirty=true;setState('✓ Saved '+nowStamp(),'ok');
-    }catch(e){lsOK=false;document.getElementById('warnbar').style.display='block';setState(WARN,'warn');}
+    }catch(e){dirty=true;lsOK=false;document.getElementById('warnbar').style.display='block';setState(WARN,'warn');}
   }
   var SEED=(typeof SPEC_SEED_NOTES!=='undefined')?SPEC_SEED_NOTES:{};
   tas.forEach(function(t){
@@ -629,8 +629,10 @@ does not fit a stack whose every step is shippable.</p></div>
     var r=buildExport();
     if(r.n===0){toast('No notes yet — add some first.');return;}
     var name='claude-arsenal-spec-notes-'+today()+'.md';
-    download(name,r.text);openModal(r.text);
+    var saved=download(name,r.text);openModal(r.text);
     if(navigator.clipboard){navigator.clipboard.writeText(r.text).then(function(){},function(){});}
+    if(!saved){setState('⚠ Download blocked — copy the notes from this box','warn');
+               toast('Download blocked — copy the notes before leaving');return;}
     dirty=false;setState('✓ Backup saved '+nowStamp(),'ok');
     toast('Exported '+r.n+' note'+(r.n===1?'':'s'));
   });

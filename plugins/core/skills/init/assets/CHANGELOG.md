@@ -18,6 +18,16 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [2.14.1] - 2026-08-31
+
+- **The annotatable reader no longer loses notes quietly.** Two failure paths
+  cleared the unsaved-work warning while the work was, in fact, unsaved: a
+  `localStorage` write that threw (a private window, blocked site data) marked
+  storage unusable but left the page thinking there was nothing to lose, and a
+  blocked download was reported as `Backup saved`. In the no-storage mode that
+  download is the *only* copy. Both now keep the warning armed and say what
+  happened. Re-generate any reader you handed out before this version.
+
 ## [2.14.0] - 2026-08-30
 
 - **`analyze_har.py` now reduces a capture to insight.** Nine modes, and the

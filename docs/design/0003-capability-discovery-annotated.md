@@ -1,6 +1,6 @@
-# claude-arsenal — Specification (annotated edition)
+# Claude Arsenal — Specification (annotated edition)
 
-> Generated 2026-08-30. This is the document with a **note slot** after every section. Read it in any Markdown app. To annotate, replace the `_(your notes…)_` placeholder under any section. When done, send the file back — notes are acted on.
+> Generated 2026-08-31. This is the document with a **note slot** after every section. Read it in any Markdown app. To annotate, replace the `_(your notes…)_` placeholder under any section. When done, send the file back — notes are acted on.
 
 ---
 

@@ -640,7 +640,7 @@ JS = r"""
     try{
       if(t.value.trim()===''){localStorage.removeItem(k);}else{localStorage.setItem(k,t.value);}
       dirty=true;setState('✓ Saved '+nowStamp(),'ok');
-    }catch(e){lsOK=false;document.getElementById('warnbar').style.display='block';setState(WARN,'warn');}
+    }catch(e){dirty=true;lsOK=false;document.getElementById('warnbar').style.display='block';setState(WARN,'warn');}
   }
   var SEED=(typeof SPEC_SEED_NOTES!=='undefined')?SPEC_SEED_NOTES:{};
   tas.forEach(function(t){
@@ -705,8 +705,10 @@ JS = r"""
     var r=buildExport();
     if(r.n===0){toast('No notes yet — add some first.');return;}
     var name='__DOC_SLUG__-notes-'+today()+'.md';
-    download(name,r.text);openModal(r.text);
+    var saved=download(name,r.text);openModal(r.text);
     if(navigator.clipboard){navigator.clipboard.writeText(r.text).then(function(){},function(){});}
+    if(!saved){setState('⚠ Download blocked — copy the notes from this box','warn');
+               toast('Download blocked — copy the notes before leaving');return;}
     dirty=false;setState('✓ Backup saved '+nowStamp(),'ok');
     toast('Exported '+r.n+' note'+(r.n===1?'':'s'));
   });
