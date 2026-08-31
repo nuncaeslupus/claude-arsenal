@@ -233,12 +233,21 @@ matter because they are paid on completely different schedules:
 
 | tier | what is in it | when it is paid |
 |---|---|---|
-| **Resident** | vendored `AGENTS.md` + every skill's `name`/`description` | every turn of every session, forever |
+| **Resident** | vendored `AGENTS.md` + the `name`/`description` of every **installed** skill | every turn of every session, forever |
 | **On invocation** | one `SKILL.md` body | once, when that skill triggers |
 | **On demand** | `references/`, agent definitions | only when something opens them |
 
+The listing is billed **per install**, not per repo: the report resolves each
+skill's `section:` through `init.py`'s own profiles and prints one row per
+install a consumer can reach — `minimal`, `general` (what `/init` gives you),
+`python`, `all`, and `maximal`. A default-off section costs nothing to anyone
+who did not enable it, and a plugin `/init` never vendors (`skill-workshop`)
+costs nothing to anybody. Read the `general` row to see what a change did to
+everyone, and the `maximal` row to see what it did to the person who opted in.
+
 The resident tier is capped (`RESIDENT_TOKEN_BUDGET` in the Makefile, currently
-5000 tokens) and CI fails over it. When a change pushes it over, move what grew
+5000 tokens) and CI fails over it — applied to `maximal`, the largest bill a
+consumer can choose. When a change pushes it over, move what grew
 behind a reference or into a script — **do not raise the cap.** The cap is the
 composite of two guards that already existed: `bundle_refs_test.sh` holds
 `AGENTS.md` to 250 lines, and `make audit` holds the skills index to 8000
