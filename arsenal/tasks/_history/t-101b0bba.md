@@ -4,6 +4,7 @@ title: "har stage 5: compare_har.py, skill docs, and the flag-parity check"
 deps: [t-7675f12c]
 priority: 5
 tags: [EXTRACT]
+status: merged
 ---
 
 Plan T9–T10. Spec §§ 4.5, 5.2.
@@ -18,7 +19,7 @@ Gates: `invented_changes_on_repeat_url_fixture == 0`, `resident_listing_tokens_w
 ## Acceptance gate
 
 ```bash
-bash plugins/core/tests/har_test.sh --stage 5
+bash plugins/core/tests/har_test.sh
 make audit
 make context-budget
 ```

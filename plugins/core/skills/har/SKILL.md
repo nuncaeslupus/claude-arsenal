@@ -65,13 +65,10 @@ is spent on endpoints or on rendered HTML.
 | `validate_har.py` | Is this capture usable, and what did its exporter leave out |
 | `create_repro.py` | One entry to a runnable `curl` or Python `requests` snippet |
 | `create_har.py` | A derived capture: filtered, redacted, bodies dropped — small enough to commit |
+| `compare_har.py` | What changed between two captures — the scraper's early-warning test |
 
-Every script takes `--input`, accepts `--json` for chaining, and caps its own
-output. Run `--help` for every flag.
-
-Comparison (`compare_har.py`) is the last stage of
-`docs/design/0002-har-analysis-toolkit-plan.md`. Nothing here promises a command
-it does not carry — check `--help`.
+Every script takes `--input`, accepts `--json` for chaining, shares one
+selection grammar, and caps its own output. Run `--help` for every flag.
 
 ## From endpoint to scraper
 
@@ -216,3 +213,10 @@ present, whether they are base64, whether `_resourceType` exists — which
 separates a bad capture from a bad query. Bodies are frequently base64-encoded,
 where a plain `grep` of the raw file silently misses every hit; every command
 here decodes first.
+
+## References
+
+| File | Read it when |
+|---|---|
+| `references/filters.md` | Selecting entries: every flag, how they compose, and the three that are not what they look like |
+| `references/recipes.md` | The whole path: a capture, to the endpoint, to a request that runs in a loop |

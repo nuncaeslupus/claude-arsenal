@@ -18,6 +18,23 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [2.16.0] - 2026-08-31
+
+- **`compare_har.py` completes the toolkit: what changed between two captures.**
+  The scraper's early-warning test — capture once, commit a derived fixture,
+  and later ask whether the site moved. Non-zero exit means it did.
+- Matching is one-to-one and deterministic, because a capture routinely repeats
+  the same method and URL. The identity key is `(method, scheme, host, port,
+  path, query pairs in captured order, request body)`; entries sharing a key
+  pair in capture order, and anything left over is reported as an addition or a
+  removal rather than paired with something that merely resembles it. A match
+  made on order alone says so, so a reader can tell it from a real one.
+- Two new references: `filters.md` (every selection flag, and the three that
+  are not what they look like) and `recipes.md` (the whole path — capture, to
+  the endpoint, to a request that runs in a loop).
+- A test now asserts the sibling commands expose the same selection flags.
+  Consistency across six scripts was a convention; it is now a contract.
+
 ## [2.15.0] - 2026-08-31
 
 - **`create_repro.py` turns a found endpoint into a working request.**
