@@ -91,15 +91,28 @@ def test_header_analysis_still_works_on_a_derived_file(derive, tmp_path):
     compare equal, so `--headers` on it would report every header constant — a
     file that looks analysable and is not.
     """
+    import importlib.util
+    import io
     import sys
+    from contextlib import redirect_stdout
+    from pathlib import Path
 
     target = tmp_path / "derived.har"
     code, _, _ = derive("basic", "--type", "xhr", "--output", str(target))
     assert code == 0
 
-    analyze = sys.modules["_har_analyze_cli"]
-    import io
-    from contextlib import redirect_stdout
+    # Loaded here rather than borrowed from `sys.modules`: relying on another
+    # test file having run first makes this pass in the full suite and fail on
+    # its own, which is the kind of green nobody should trust.
+    scripts = Path(__file__).resolve().parent.parent.parent / "skills" / "har" / "scripts"
+    key = "_har_analyze_cli"
+    if key in sys.modules:
+        analyze = sys.modules[key]
+    else:
+        spec = importlib.util.spec_from_file_location(key, scripts / "analyze_har.py")
+        analyze = importlib.util.module_from_spec(spec)
+        sys.modules[key] = analyze
+        spec.loader.exec_module(analyze)
 
     out = io.StringIO()
     with redirect_stdout(out):
@@ -150,3 +163,51 @@ def test_an_interrupted_write_leaves_no_partial_file(derive, tmp_path, monkeypat
 
     assert target.read_text() == good
     assert list(tmp_path.glob(".har-derive-*.tmp")) == [], "a temporary file was left behind"
+
+
+def test_two_different_credentials_do_not_redact_to_the_same_marker(derive, tmp_path):
+    """The bug a single-credential fixture cannot catch.
+
+    Deriving the marker from the salt alone — `<redacted:{salt[:8]}>` — is the
+    literal-marker failure wearing a fingerprint's clothes: it looks like a
+    fingerprint and makes every value compare equal, so `--headers` on the
+    derived file reports every header constant. With one distinct credential in
+    the fixture, every test still passes.
+    """
+    import json as _json
+
+    target = tmp_path / "derived.har"
+    code, _, err = derive("hostile", "--output", str(target))
+    assert code == 0, err
+
+    doc = _json.loads(target.read_text())
+    markers = [
+        header["value"]
+        for entry in doc["log"]["entries"]
+        for header in entry["request"]["headers"]
+        if header["name"].lower() == "authorization"
+    ]
+    assert len(markers) >= 3, "the fixture no longer carries several credentials"
+    assert all(m.startswith("<redacted:") for m in markers)
+    assert len(set(markers)) == len(markers), (
+        f"different credentials redacted to the same marker: {markers}"
+    )
+    assert not any("live-user" in _json.dumps(doc) for _ in [0])
+
+
+def test_identical_credentials_still_redact_identically(derive, tmp_path):
+    """The other half: equal values must stay equal, or header analysis dies."""
+    import json as _json
+
+    target = tmp_path / "derived.har"
+    code, _, _ = derive("basic", "--type", "xhr", "--output", str(target))
+    assert code == 0
+
+    doc = _json.loads(target.read_text())
+    markers = {
+        header["value"]
+        for entry in doc["log"]["entries"]
+        for header in entry["request"]["headers"]
+        if header["name"].lower() == "authorization"
+    }
+    assert len(markers) == 1, f"one credential produced several markers: {markers}"

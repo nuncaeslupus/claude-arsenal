@@ -35,6 +35,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _filters import FilterError, add_selection_args, selection_from_args
 from _harlib import (
     HarStructureError,
+    fingerprint,
     is_sensitive_header,
     is_sensitive_param,
     new_salt,
@@ -51,10 +52,18 @@ DEFAULT_DROP_TYPES = ("image", "font", "media", "stylesheet")
 def _redact_entry(entry: dict[str, Any], salt: str) -> dict[str, Any]:
     """Redact every bounded field of one entry, in place on a copy.
 
-    The SAME salted fingerprint the index uses, deliberately. A literal
-    `<redacted>` marker would make every `Authorization` in the derived file
-    compare equal, so `analyze_har.py --headers` run against it would report
-    every header constant — a file that looks analysable and is not.
+    Each value gets its OWN fingerprint under one per-run salt. Deriving the
+    marker from the salt alone — `<redacted:{salt[:8]}>` — is the literal-marker
+    bug wearing a fingerprint's clothes: every `Authorization` in the file
+    compares equal, so `analyze_har.py --headers` on it reports every header
+    constant. A file that looks analysable and is not.
+
+    The salt is per RUN, so fingerprints are comparable **within one artifact**
+    and never across two. That is the whole guarantee, and it is enough:
+    `--headers` builds its own index of whatever file it is given, and
+    `compare_har.py` keys on method, authority, path, query and body — never on
+    a header value. Nothing here compares a fingerprint from one file with one
+    from another, and nothing should start.
     """
     # Deep-copied through JSON rather than mutated: the caller's entry came from
     # the capture and is read again by later rows.
@@ -69,13 +78,13 @@ def _redact_entry(entry: dict[str, Any], salt: str) -> dict[str, Any]:
             if name.lower() in {"cookie", "set-cookie"}:
                 header["value"] = redact_cookie_header(str(header.get("value", "")), salt)
             elif is_sensitive_header(name):
-                header["value"] = f"<redacted:{salt[:8]}>"
+                header["value"] = fingerprint(str(header.get("value", "")), salt)
         for cookie in section.get("cookies") or []:
-            cookie["value"] = f"<redacted:{salt[:8]}>"
+            cookie["value"] = fingerprint(str(cookie.get("value", "")), salt)
     for pairs in (request.get("queryString"), (request.get("postData") or {}).get("params")):
         for pair in pairs or []:
             if is_sensitive_param(str(pair.get("name", ""))):
-                pair["value"] = f"<redacted:{salt[:8]}>"
+                pair["value"] = fingerprint(str(pair.get("value", "")), salt)
     return out
 
 

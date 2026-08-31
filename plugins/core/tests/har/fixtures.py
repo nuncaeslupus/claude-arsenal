@@ -366,6 +366,22 @@ def hostile() -> dict[str, Any]:
             text=json.dumps({"ok": 5}),
             resp_headers=[("content-type", "application/json")],
         ),
+        # TWO more requests to one host carrying DIFFERENT Authorization values.
+        # Without a second distinct value, a redactor that emits one constant
+        # marker for everything passes every test: there is nothing for the
+        # constant-versus-varying split to get wrong.
+        _entry(
+            url="https://api.example.com/api/multi?u=1",
+            text=json.dumps({"ok": 6}),
+            req_headers=[("authorization", "Bearer live-user-one")],
+            resp_headers=[("content-type", "application/json")],
+        ),
+        _entry(
+            url="https://api.example.com/api/multi?u=2",
+            text=json.dumps({"ok": 7}),
+            req_headers=[("authorization", "Bearer live-user-two")],
+            resp_headers=[("content-type", "application/json")],
+        ),
     ]
     return _log(entries)
 

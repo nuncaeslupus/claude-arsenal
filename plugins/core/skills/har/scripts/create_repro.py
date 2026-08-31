@@ -32,6 +32,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _harlib import (
     HarStructureError,
     decode_body,
+    fingerprint,
     is_sensitive_header,
     new_salt,
     read_entry,
@@ -71,7 +72,10 @@ def _headers(entry: dict[str, Any], salt: str, secrets: bool) -> list[tuple[str,
             if name.lower() == "cookie":
                 value = redact_cookie_header(value, salt)
             elif is_sensitive_header(name):
-                value = f"<redacted:{salt[:8]}>"
+                # Per value, not per run: a reproduction shows one entry, but a
+                # marker derived from the salt alone would make two different
+                # credentials on it look like the same one.
+                value = fingerprint(value, salt)
         out.append((name, value))
     return out
 
