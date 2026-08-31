@@ -78,6 +78,7 @@ def skill(tmp_path):
     )
 
     def write(block: str) -> Path:
+        """Render the fixture with `block` as its body and return the skill dir."""
         (root / "SKILL.md").write_text(SKILL_MD.format(block=block))
         return root
 
@@ -108,6 +109,7 @@ def test_untagged_fence_is_reported_at_its_line_in_the_file(skill):
 
 
 def test_a_tagged_fence_is_not_reported(skill):
+    """The check fires on the absence of a language, not on fences as such."""
     assert fence_findings(skill("```bash\necho hi\n```")) == []
 
 
@@ -127,6 +129,7 @@ def test_four_space_indent_is_content_not_a_fence(validate_module):
 
 @pytest.mark.parametrize("pad", ["", " ", "  ", "   "])
 def test_up_to_three_spaces_still_opens_a_fence(validate_module, pad):
+    """The indent rule has an upper bound, not a blanket exemption."""
     assert validate_module.untagged_fences(f"text\n\n{pad}```\n{pad}body\n{pad}```\n") == [3]
 
 
@@ -153,6 +156,7 @@ def test_an_indented_literal_marker_does_not_unbalance_the_document(validate_mod
 
 
 def test_a_genuinely_unclosed_fence_is_still_reported(validate_module):
+    """Loosening the balance check must not cost it the case it exists for."""
     assert validate_module.unbalanced_fence("text\n\n```bash\nno close\n") is True
 
 
