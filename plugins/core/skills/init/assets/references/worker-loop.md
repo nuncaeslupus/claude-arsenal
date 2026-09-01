@@ -114,10 +114,21 @@ dispatches that many workers at once. Run when the queue has open tasks:
    (see `agents/worker.md`) so they run concurrently:
    - `isolation: worktree`
    - Inject the relative-path directive and the task payload path.
+   - Say that the gates run in the **foreground** and that ending the turn ends
+     the task. You are the one who can set that expectation before the worker
+     chooses how to run a 10-minute gate; `agents/worker.md` says it too, but a
+     worker deciding under time pressure reads your prompt last.
 6. **Wait for all workers.** Then, for each returned outcome:
    - **Assert the tree invariant first** — pass the worker's reported root so
-     isolation is measured rather than inferred:
-     `ARSENAL_WORKER_TOPLEVEL=<worker's toplevel> claude-arsenal/bin/worker_postcheck.sh`.
+     isolation is measured rather than inferred, and its outcome and returned
+     text so a `done` is checked for the evidence a completion carries:
+     `ARSENAL_WORKER_OUTCOME=done ARSENAL_WORKER_RESULT="<the worker's result>" ARSENAL_WORKER_TOPLEVEL=<worker's toplevel> claude-arsenal/bin/worker_postcheck.sh`.
+     **Exit 4** → the worker reported `done` with no PR URL, no `branch:` and no
+     `toplevel:`. That is an abandoned task, not a completion — usually a
+     backgrounded gate whose turn ended, with its processes still alive. Nothing
+     was touched: resume that worker and let it finish in the foreground. Do not
+     record the task as done, and do not re-dispatch it as a fresh attempt; the
+     work is intact and only needs the turn it was cut off from.
      It guarantees HEAD is back on the session's own branch and the tree is clean.
      In a real worktree this is a no-op (`ok`);
      if it prints `restored`, the worker ran in-place — clamp

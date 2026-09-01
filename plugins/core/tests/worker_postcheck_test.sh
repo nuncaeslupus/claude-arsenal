@@ -173,6 +173,51 @@ out=$(bash "${POSTCHECK}" 2>/dev/null)
     || fail "an unmeasured restore must stay conservative, got '$(cat "${iso_file}" 2>/dev/null)'"
 echo "PASS: an unmeasured restore stays conservative"
 
+# --- #259: a `done` must carry its evidence, and refusing must not destroy ----
+# A host gate that runs 10-12 minutes invites a worker to background it, arm a
+# watcher and end its turn. Ending the turn is terminal: the orchestrator is
+# notified of a COMPLETED worker whose result is that sentence — no PR, no
+# `branch:`, no `toplevel:` — and the task looks finished while its processes are
+# still running. Three of nine workers did this in one fan-out, each after a
+# broader prohibition in the dispatch prompt, so prose is the mitigation that
+# already failed three times.
+rm -f "${iso_file}"
+echo "work the abandoned worker still has open" > in-flight.txt
+before_head="$(git rev-parse HEAD)"
+code=0
+out=$(ARSENAL_WORKER_OUTCOME=done \
+      ARSENAL_WORKER_RESULT="Still waiting on the background job; I'll pick back up when the monitor notifies me." \
+      bash "${POSTCHECK}" 2>&1) || code=$?
+[[ ${code} -eq 4 ]] || fail "a 'done' with no PR URL, branch: or toplevel: must be refused (exit 4), got ${code}: ${out}"
+grep -q "ABANDONED" <<<"${out}" || fail "the refusal must name what it is: ${out}"
+
+# The refusal runs BEFORE the restore. An abandoned worker's gate is often still
+# alive, and `reset --hard` + `clean -fd` would destroy the very work at stake.
+[[ -f in-flight.txt ]] \
+    || fail "THE REFUSAL DESTROYED THE IN-FLIGHT WORK — it must refuse before restoring"
+[[ "$(git rev-parse HEAD)" == "${before_head}" ]] || fail "the refusal moved HEAD"
+[[ -e "${iso_file}" ]] && fail "a refused report must record no isolation verdict"
+echo "PASS: a 'done' with no evidence is refused, and nothing is destroyed"
+
+# A real completion passes, by PR URL or by branch: — both are evidence.
+for evidence in "https://github.com/o/r/pull/42" "branch: arsenal/t-abc-do-thing"; do
+    rm -f "${iso_file}"
+    out=$(ARSENAL_WORKER_OUTCOME=done ARSENAL_WORKER_TOPLEVEL="/some/other/worktree" \
+          ARSENAL_WORKER_RESULT="${evidence}
+toplevel: /some/other/worktree" bash "${POSTCHECK}" 2>/dev/null) \
+        || fail "a completion carrying '${evidence}' must not be refused"
+done
+echo "PASS: a PR URL and a branch: line both count as evidence"
+
+# ...and an orchestrator that passes no outcome keeps exactly the old behaviour,
+# so this cannot break a caller that has not been updated.
+rm -f "${iso_file}"
+echo "scratch" > in-flight-2.txt
+out=$(ARSENAL_WORKER_TOPLEVEL="/some/other/worktree" bash "${POSTCHECK}" 2>/dev/null) \
+    || fail "without ARSENAL_WORKER_OUTCOME the check must not fire"
+[[ "${out}" == "restored" ]] || fail "expected the old restore path, got '${out}'"
+echo "PASS: the check is opt-in and leaves an un-updated caller unchanged"
+
 # --- #299: a snapshot that FAILED must not read as "nothing to save" --------
 # rescue_snapshot.sh used to report a failed snapshot exactly as it reported a
 # clean tree: no ref, exit 0. This script could not tell them apart, so a

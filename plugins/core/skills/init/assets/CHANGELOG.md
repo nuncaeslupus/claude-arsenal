@@ -18,6 +18,43 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [3.2.0] - 2026-09-01
+
+### Added
+
+- **`worker_postcheck.sh` refuses a `done` that carries no evidence.** Pass
+  `ARSENAL_WORKER_OUTCOME=done` and `ARSENAL_WORKER_RESULT="<the worker's
+  result>"` alongside the `ARSENAL_WORKER_TOPLEVEL` you already pass, and a
+  worker reporting completion with no PR URL, no `branch:` line and no
+  `toplevel:` exits **4** instead of being recorded as finished.
+
+  This catches the worker that runs a long host gate in the background, arms a
+  watcher, and ends its turn — "I'll pick back up when the monitor notifies me."
+  Ending the turn is terminal, so the orchestrator sees a completed worker with
+  no PR while the task's processes are still running. Three of nine workers did
+  this in a single fan-out, each after a broader prohibition in the dispatch
+  prompt.
+
+  **The refusal runs before anything destructive.** An abandoned worker's gate is
+  often still alive, and the restore is `reset --hard` + `clean -fd` — so the
+  check comes first and the tree is left untouched. Resume that worker rather
+  than re-dispatching it: the work is intact and only needs the turn it was cut
+  off from.
+
+  Opt-in. An orchestrator that passes no `ARSENAL_WORKER_OUTCOME` behaves exactly
+  as before.
+
+### Changed
+
+- `agents/worker.md` now states, before the step where a worker chooses how to
+  run a slow gate, that **ending your turn ends the task** — so the host gate,
+  `gate_run.sh` and `open_task_pr.sh` run in the foreground, in one call, with a
+  timeout sized for the host's real suite. A gate that genuinely exceeds one turn
+  is a `host-gate` sizing problem to report, not to route around.
+- `references/worker-loop.md` step 5 asks the orchestrator to set that
+  expectation in the dispatch prompt too, since a worker under time pressure
+  reads that prompt last.
+
 ## [3.1.16] - 2026-09-01
 
 ### Fixed
