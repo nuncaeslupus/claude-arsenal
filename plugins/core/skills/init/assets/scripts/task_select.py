@@ -184,7 +184,22 @@ HISTORY_DIRNAME = "_history"
 
 # Where worktree_probe.sh and worker_postcheck.sh record whether git worktrees
 # actually work on this surface.
-ISOLATION_SENTINEL = Path("arsenal/session/worktree_isolation")
+def _session_dir() -> Path:
+    """The session-state directory, resolved the way every writer resolves it.
+
+    `worktree_probe.sh` and `worker_postcheck.sh` honour ARSENAL_SESSION_DIR and
+    ARSENAL_HOME; this path was hardcoded. With a relocated host tree the probe
+    wrote `unavailable` to one file while the selector read a stale `available`
+    from another — and `available` is what permits ramping to N workers, so the
+    disagreement dispatched parallel workers into a single checkout.
+    """
+    session = os.environ.get("ARSENAL_SESSION_DIR", "").strip()
+    if session:
+        return Path(session)
+    return Path(os.environ.get("ARSENAL_HOME", "").strip() or "arsenal") / "session"
+
+
+ISOLATION_SENTINEL = _session_dir() / "worktree_isolation"
 
 
 def isolation_verdict(sentinel: Path) -> str:

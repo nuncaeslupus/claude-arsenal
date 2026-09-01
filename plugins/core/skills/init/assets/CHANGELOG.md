@@ -18,6 +18,35 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [3.1.12] - 2026-09-01
+
+### Fixed — state that went to two different places
+
+- **`ARSENAL_HOME` is honoured consistently.** `task_select.py` hardcoded
+  `arsenal/session/worktree_isolation` while `worktree_probe.sh` resolved it
+  through `ARSENAL_SESSION_DIR`/`ARSENAL_HOME`, so a relocated host tree had the
+  probe writing `unavailable` to one file and the selector reading a stale
+  `available` from another — and `available` is what permits ramping to N
+  workers, so the disagreement dispatched parallel workers into one checkout.
+  `budget_check.sh` hardcoded the same directory for its rate-limit and
+  round-counter state. Both follow the environment now.
+- **An exported-but-empty `ARSENAL_HOME` no longer resolves to the repo root.**
+  `os.environ.get("ARSENAL_HOME", "arsenal")` returns `""` for a variable that is
+  exported and unset, and `repo_path / ""` is the repo root — so `/init` would
+  have scaffolded every host-owned file into the top of the tree.
+- **The dispatch-round counter is keyed on a session id that exists.**
+  `budget_check.sh` read `CLAUDE_SESSION_ID`, which no current surface sets, so
+  every run keyed on the literal `default`: one shared counter across every
+  session on the machine. It now uses `CLAUDE_CODE_REMOTE_SESSION_ID` falling
+  back to `CLAUDE_CODE_SESSION_ID`, the pair the claiming protocol already
+  documents, and `references/quota-governance.md` says so too.
+- **`issue_import.py` cannot overwrite an existing task file.** The fallback id
+  generator was unchecked, so a collision replaced a task on `--apply`.
+- **`adversarial_review.sh` validates its diff cap.** A non-numeric or zero
+  `ARSENAL_REVIEW_MAX_DIFF_LINES` emptied the diff while the notice above it
+  still claimed one followed — and a reviewer handed an empty packet has nothing
+  to object to, so it returns CLEAR.
+
 ## [3.1.11] - 2026-09-01
 
 ### Fixed — checks that had quietly stopped checking

@@ -80,10 +80,17 @@ expect_rc 0 "unparseable file fails open"
 # No rate_limits.json at all, so the quota check fails open — only the cap can
 # stop the loop here. Cap of 3 with a fresh state file: rounds 1-3 pass, 4 stops.
 rm -f "${FILE}" "${ITER}"
+# The session key is CLAUDE_CODE_REMOTE_SESSION_ID, falling back to
+# CLAUDE_CODE_SESSION_ID — the pair claiming-internals.md names. The ambient
+# ones are cleared so this asserts the script's own resolution rather than
+# whatever the surface running the test happens to export; setting only the
+# legacy CLAUDE_SESSION_ID (as this test used to) is a no-op inside any real
+# Claude Code session, where the canonical ones are already set.
 cap_rc() {
     set +e
-    ARSENAL_RATE_LIMITS_FILE="${FILE}" ARSENAL_MAX_ITERATIONS=3 \
-        ARSENAL_ITER_STATE_FILE="${ITER}" CLAUDE_SESSION_ID="sess-cap" \
+    env -u CLAUDE_CODE_SESSION_ID -u CLAUDE_SESSION_ID \
+        ARSENAL_RATE_LIMITS_FILE="${FILE}" ARSENAL_MAX_ITERATIONS=3 \
+        ARSENAL_ITER_STATE_FILE="${ITER}" CLAUDE_CODE_REMOTE_SESSION_ID="sess-cap" \
         bash "${BUDGET}" >/dev/null 2>&1
     local got=$?
     set -e
@@ -102,13 +109,39 @@ fi
 echo "PASS: dispatch-round cap stops the loop past ARSENAL_MAX_ITERATIONS"
 
 # A different session resets the counter (fresh round 1 passes despite the file).
-got=$(set +e; ARSENAL_RATE_LIMITS_FILE="${FILE}" ARSENAL_MAX_ITERATIONS=3 \
-    ARSENAL_ITER_STATE_FILE="${ITER}" CLAUDE_SESSION_ID="sess-other" \
+got=$(set +e; env -u CLAUDE_CODE_SESSION_ID -u CLAUDE_SESSION_ID \
+    ARSENAL_RATE_LIMITS_FILE="${FILE}" ARSENAL_MAX_ITERATIONS=3 \
+    ARSENAL_ITER_STATE_FILE="${ITER}" CLAUDE_CODE_REMOTE_SESSION_ID="sess-other" \
     bash "${BUDGET}" >/dev/null 2>&1; echo $?)
 if [[ "${got}" -ne 0 ]]; then
     echo "FAIL: new session should reset the cap counter, got exit ${got}" >&2; exit 1
 fi
-echo "PASS: cap counter resets per CLAUDE_SESSION_ID"
+echo "PASS: cap counter resets per session id"
+
+# And the fallback still works where only the non-remote one is set.
+got=$(set +e; env -u CLAUDE_CODE_REMOTE_SESSION_ID -u CLAUDE_SESSION_ID \
+    ARSENAL_RATE_LIMITS_FILE="${FILE}" ARSENAL_MAX_ITERATIONS=3 \
+    ARSENAL_ITER_STATE_FILE="${ITER}" CLAUDE_CODE_SESSION_ID="sess-third" \
+    bash "${BUDGET}" >/dev/null 2>&1; echo $?)
+if [[ "${got}" -ne 0 ]]; then
+    echo "FAIL: CLAUDE_CODE_SESSION_ID should key the counter too, got exit ${got}" >&2; exit 1
+fi
+echo "PASS: the session key falls back from remote to local"
+
+# --- the state dir follows ARSENAL_HOME, like every other writer -------------
+HOME_DIR="${tmpdir}/relocated"
+mkdir -p "${HOME_DIR}/session"
+got=$(set +e; env -u CLAUDE_CODE_SESSION_ID -u CLAUDE_SESSION_ID \
+    ARSENAL_HOME="${HOME_DIR}" ARSENAL_MAX_ITERATIONS=3 \
+    CLAUDE_CODE_REMOTE_SESSION_ID="sess-relocated" \
+    bash "${BUDGET}" >/dev/null 2>&1; echo $?)
+if [[ "${got}" -ne 0 ]]; then
+    echo "FAIL: a relocated ARSENAL_HOME should still pass round 1, got ${got}" >&2; exit 1
+fi
+if [[ ! -f "${HOME_DIR}/session/budget_iterations.json" ]]; then
+    echo "FAIL: the round counter was not written under ARSENAL_HOME" >&2; exit 1
+fi
+echo "PASS: the round counter follows ARSENAL_HOME"
 
 echo "PASS: budget_check_test — all gates passed"
 exit 0

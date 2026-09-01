@@ -18,15 +18,24 @@
 # always fails open. The per-session dispatch-round cap is the ALWAYS-AVAILABLE
 # backstop: it does not depend on observable quota, so an auto-dispatching loop
 # can never run unbounded. Set ARSENAL_MAX_ITERATIONS=0 to disable it (quota-only
-# behaviour). The counter resets per CLAUDE_SESSION_ID.
+# behaviour). The counter resets per session, keyed on
+# CLAUDE_CODE_REMOTE_SESSION_ID falling back to CLAUDE_CODE_SESSION_ID — the
+# same pair claiming-internals.md names. The old CLAUDE_SESSION_ID is set on no
+# current surface, so every run keyed on the literal "default": one shared
+# counter across every session on the machine, which both over-counts a fresh
+# session and lets a long one reset by coincidence.
 
 set -uo pipefail
 
-FILE="${ARSENAL_RATE_LIMITS_FILE:-arsenal/session/rate_limits.json}"
+# The session dir, resolved the way every other writer resolves it. Hardcoding
+# `arsenal/` meant a relocated host tree kept its rate-limit and round-counter
+# state somewhere the rest of the toolkit does not look.
+_SESSION_DIR="${ARSENAL_SESSION_DIR:-${ARSENAL_HOME:-arsenal}/session}"
+FILE="${ARSENAL_RATE_LIMITS_FILE:-${_SESSION_DIR}/rate_limits.json}"
 STOP_PCT="${ARSENAL_QUOTA_STOP_PCT:-90}"
 MAX_ITER="${ARSENAL_MAX_ITERATIONS:-50}"
-ITER_FILE="${ARSENAL_ITER_STATE_FILE:-arsenal/session/budget_iterations.json}"
-SESSION_ID="${CLAUDE_SESSION_ID:-default}"
+ITER_FILE="${ARSENAL_ITER_STATE_FILE:-${_SESSION_DIR}/budget_iterations.json}"
+SESSION_ID="${CLAUDE_CODE_REMOTE_SESSION_ID:-${CLAUDE_CODE_SESSION_ID:-${CLAUDE_SESSION_ID:-default}}}"
 
 python3 - "${FILE}" "${STOP_PCT}" "${MAX_ITER}" "${ITER_FILE}" "${SESSION_ID}" <<'PY'
 import sys, json, pathlib
