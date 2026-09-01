@@ -181,8 +181,10 @@ python3 -c "print('x', file=open('$SKILL', 'w'))"
 perl -pi -e s/a/b/ $SKILL
 uv run python3 -c "import os; os.remove('$SKILL')"
 node -e require('fs').writeFileSync('$SKILL','x')
+perl -E unlink "$SKILL"
+echo "from pathlib import Path; Path('$SKILL').write_bytes(b'x')" | python3
 CMDS
-echo "PASS: 15 interpreter writes blocked — os, shell-out, exec, Path.open, uv run"
+echo "PASS: 17 interpreter writes blocked — os, shell-out, exec, Path.open, uv run, a pipe"
 
 # The heredoc route is the one the module docstring names as its reason to
 # exist, and it is the one the tokeniser makes hardest: an unquoted newline is a
@@ -196,7 +198,12 @@ heredoc_remove=$(printf 'python3 - <<%s\nimport os\nos.remove("%s")\nPYEOF' "'PY
     || fail "#337: a heredoc os.remove went through"
 echo "PASS: heredoc writelines and os.remove are blocked"
 
-# ...and inverting the polarity may not cost the reads. This is the whole reason
+# ...and inverting the polarity may not cost the reads. The last two lines are
+# the flag vocabulary, which is per-interpreter: perl's `-E` carries a program,
+# so `perl -E unlink …` above must block, but python's means "ignore the
+# environment" and a script file follows it, and `-m` names a module whose
+# arguments come after — both of those read a skill folder rather than writing
+# to it. This is the whole reason
 # the inversion is written as "strip the read-only uses, then look for a path
 # left standing" rather than "an interpreter naming a skill path is a write":
 # under-listing a read only ever blocks more, and over-blocking is how a gate
@@ -211,6 +218,8 @@ python3 -c "import json; print(json.load(open('$SKILL')))"
 python3 -c "from pathlib import Path; print(Path('$SKILL').exists())"
 uv run python3 scripts/audit_library.py plugins/core/skills/specify
 python3 plugins/core/skills/specify/scripts/helper.py --check
+python3 -m pytest plugins/core/skills/specify/tests
+python3 -E scripts/audit_library.py plugins/core/skills/specify
 CMDS
 heredoc_read=$(printf 'python3 - <<%s\nprint(open("%s").read())\nPYEOF' "'PYEOF'" "$SKILL")
 [ "$(probe "$heredoc_read")" = allowed ] || fail "blocked a heredoc READ of a skill file"

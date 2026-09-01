@@ -25,8 +25,8 @@ one that blocks reads gets routed around instead of through.
 Known limits: a path built from a shell variable (`cp "$SKILL" …`) is opaque
 here, and so is one assembled at runtime; a wrapper that takes an argument of
 its own (`timeout 30 python3 -c …`) hides the interpreter behind it; and a
-script file is trusted to be what it says it is, since its contents are not
-read. This raises the cost of an accidental bypass; it is not a sandbox.
+script file — or a module run with `-m` — is trusted to be what it says it is,
+since its contents are not read. This raises the cost of an accidental bypass; it is not a sandbox.
 """
 from __future__ import annotations
 
@@ -112,10 +112,17 @@ INTERPRETERS = re.compile(
     r"^(?:python[\d.]*|node|nodejs|deno|bun|perl|ruby|php|sh|bash|zsh|dash)$"
 )
 
-# Flags that mean "the source is right here, or on stdin", including perl and
-# ruby's bundled clusters (`-pi -e`, `-ne`). `-m` runs a module, which is source
-# this file cannot see either.
-INLINE_SOURCE_FLAGS = frozenset({"-c", "-e", "-E", "--eval", "--exec", "-m", "-"})
+# Flags that mean "the program is right here, or on stdin".
+#
+# `-E` and `-m` are deliberately absent. They read as inline source only for the
+# interpreter that spells them that way: perl's `-E` is `-e` with features on,
+# but python's `-E` means "ignore the environment" and is followed by a script
+# file — `python3 -E validate.py plugins/core/skills/har` is the validator run,
+# a read the docstring above names as one that must not be blocked. And `-m`
+# runs a module, which is the program with its own arguments after it, exactly
+# like a script file: `python3 -m pytest plugins/core/skills/x/tests` reads that
+# folder.
+INLINE_SOURCE_FLAGS = frozenset({"-c", "-e", "--eval", "--exec", "-"})
 
 # A quoted path with a skill folder in it, as it appears inside interpreter
 # source. Quoted, because an unquoted or interpolated path is one this file
@@ -164,11 +171,20 @@ WRAPPER_SUBCOMMANDS = {"uv": "run", "poetry": "run", "pipenv": "run",
                        "pdm": "run", "hatch": "run", "rye": "run"}
 
 
-def _runs_inline_source(rest: list[str]) -> bool:
-    """True when this interpreter's source is on the command line or on stdin."""
+# The interpreters for which an uppercase `-E` carries the program.
+DASH_E_IS_SOURCE = frozenset({"perl", "ruby"})
+
+
+def _runs_inline_source(util: str, rest: list[str]) -> bool:
+    """True when this interpreter's program is on the command line or on stdin."""
     for tok in rest:
         if tok in INLINE_SOURCE_FLAGS:
             return True
+        if tok == "-E" and util in DASH_E_IS_SOURCE:
+            return True
+        if tok == "-m":
+            # A module is the program, and what follows are its arguments.
+            return False
         # `-pi`, `-ne`: perl and ruby bundle their short flags, and the `e` in
         # the cluster is the one that carries the program.
         if len(tok) > 1 and tok[0] == "-" and not tok.startswith("--"):
@@ -181,7 +197,25 @@ def _runs_inline_source(rest: list[str]) -> bool:
             # plugins/core/skills/har` reads that folder, and a gate that
             # called it a write would block the validator.
             return False
-    return True  # nothing but flags: the source arrives on stdin
+    return True  # nothing but flags: the program arrives on stdin
+
+
+def _reads_stdin_source(util: str, rest: list[str]) -> bool:
+    """True when this interpreter's program is piped or heredoc'd into it.
+
+    The program is then in a *different* simple command — `echo "…" | python3`
+    splits on the pipe — so the interpreter's own tokens carry no path and
+    reading them alone says nothing. It is the whole command text that has to be
+    read, which is what the caller does with this.
+    """
+    if not INTERPRETERS.match(util):
+        return False
+    for tok in rest:
+        if tok == "-":
+            continue  # `python3 - <<EOF`: still stdin
+        if tok in INLINE_SOURCE_FLAGS or tok == "-m" or not tok.startswith("-"):
+            return False  # the program is named on the command line
+    return True
 
 
 def _inline_source_targets(text: str) -> list[str]:
@@ -288,8 +322,8 @@ def _git_destinations(rest: list[str]) -> list[str]:
     return [a for a in rest[i + 1:] if a != "--" and not a.startswith("-")]
 
 
-def _destinations(cmd: list[str]) -> list[str]:
-    """Paths this simple command writes to."""
+def _redirect_targets(cmd: list[str]) -> tuple[list[str], list[str]]:
+    """Split a simple command into (redirect destinations, remaining arguments)."""
     dests: list[str] = []
     args: list[str] = []
     i = 0
@@ -302,10 +336,11 @@ def _destinations(cmd: list[str]) -> list[str]:
             continue
         args.append(tok)
         i += 1
+    return dests, args
 
-    if not args:
-        return dests
-    # Skip leading VAR=value assignments and wrappers.
+
+def _command_head(args: list[str]) -> tuple[str, list[str]]:
+    """The utility a simple command runs and its arguments, past any wrapper."""
     pos = 0
     while pos < len(args):
         head = args[pos].rsplit("/", 1)[-1]
@@ -320,9 +355,18 @@ def _destinations(cmd: list[str]) -> list[str]:
         else:
             break
     if pos >= len(args):
+        return "", []
+    return args[pos].rsplit("/", 1)[-1], args[pos + 1:]
+
+
+def _destinations(cmd: list[str]) -> list[str]:
+    """Paths this simple command writes to."""
+    dests, args = _redirect_targets(cmd)
+    if not args:
         return dests
-    util = args[pos].rsplit("/", 1)[-1]
-    rest = args[pos + 1:]
+    util, rest = _command_head(args)
+    if not util:
+        return dests
     files = [a for a in rest if not a.startswith("-")]
 
     if util == "git":
@@ -339,7 +383,7 @@ def _destinations(cmd: list[str]) -> list[str]:
             dests.extend(files)
         elif files:
             dests.append(files[-1])
-    elif INTERPRETERS.match(util) and _runs_inline_source(rest):
+    elif INTERPRETERS.match(util) and _runs_inline_source(util, rest):
         dests.extend(_inline_source_targets(" ".join(cmd)))
     elif WRITERS.search(" ".join(cmd)):
         # An interpreter gets its script as one argument, so the path is inside
@@ -349,11 +393,20 @@ def _destinations(cmd: list[str]) -> list[str]:
 
 
 def bash_target(command: str) -> str:
-    if INTERPRETER_HEREDOC.search(command):
+    cmds = _simple_commands(_tokenise(command))
+    # An interpreter whose program arrives on stdin — a heredoc, or the right of
+    # a pipe — never has that program beside it: the tokeniser separates on both
+    # the newline and the `|`. So the whole command text is what is read. Without
+    # this, `echo "…Path('…/SKILL.md').write_bytes(b'x')" | python3` fell back on
+    # the WRITERS denylist and went through, while the identical source passed as
+    # `-c` was blocked — the same gap this file is being changed to close.
+    if INTERPRETER_HEREDOC.search(command) or any(
+        _reads_stdin_source(*_command_head(_redirect_targets(c)[1])) for c in cmds
+    ):
         for dest in _inline_source_targets(command):
             if SKILL_PATH.match(dest.strip("'\"")):
                 return dest
-    for cmd in _simple_commands(_tokenise(command)):
+    for cmd in cmds:
         for dest in _destinations(cmd):
             if SKILL_PATH.match(dest.strip("'\"")):
                 return dest
