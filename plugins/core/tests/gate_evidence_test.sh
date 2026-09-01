@@ -183,8 +183,7 @@ key: value
 ```
 MD
 echo '{"value": 1000}' > metrics.json
-python3 "${GE}" arsenal/tasks/lo-e.md >/dev/null 2>&1
-if [[ $? -ne 0 ]]; then
+if ! python3 "${GE}" arsenal/tasks/lo-e.md >/dev/null 2>&1; then
     echo "FAIL: a finite exponent threshold must still pass" >&2; exit 1
 fi
 echo "PASS: a non-finite threshold is refused; a finite exponent still works"
