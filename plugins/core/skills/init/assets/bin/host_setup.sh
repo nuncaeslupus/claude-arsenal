@@ -32,7 +32,8 @@
 #
 # Exit: 0 the command ran and succeeded, or no host-setup is declared
 #       1 the command failed — the tree is not set up, and a gate failure after
-#         this one may still be environmental
+#         this one may still be environmental. The revert below still runs: a
+#         half-finished install is exactly when the tree needs putting back.
 #       2 setup error: not a git repository, or config.toml could not be read
 #         (a malformed config must not read as "no setup declared")
 
@@ -101,10 +102,15 @@ ${_before}
 EOF
 
 echo "host_setup: running the host setup command in ${_repo_root}: ${host_setup}" >&2
-if ! (cd "${_repo_root}" && bash -c "${host_setup}") >&2; then
-    echo "host_setup: the host setup command failed (${host_setup}). Do not treat a later gate failure as a verdict on your change until this succeeds." >&2
-    exit 1
-fi
+# The status is recorded here and acted on at the very end, because both cleanup
+# blocks below have to run whether the install succeeded or not — and a failing
+# install is the case where they matter MOST. `npm ci` can rewrite the lockfile
+# and then die on a resolution error; a post-install script can exit non-zero
+# after writing. An early exit here took the snapshot above and never read it,
+# so the caller's overwritten edit survived only as an unreferenced blob in the
+# object database, on the one path where the install is least trustworthy.
+_setup_status=0
+(cd "${_repo_root}" && bash -c "${host_setup}") >&2 || _setup_status=$?
 
 _after="$(_dirty_tracked)"
 _churn="$(comm -13 <(printf '%s\n' "${_before}") <(printf '%s\n' "${_after}") | grep -v '^$' || true)"
@@ -152,6 +158,15 @@ EOF
 if [[ -n "${_restored}" ]]; then
     echo "host_setup: the install also rewrote files you had already edited; your versions are back:" >&2
     printf '%s' "${_restored}" | sed 's/^/  /' >&2
+fi
+
+if (( _setup_status != 0 )); then
+    # Exit 1 for any command failure, not the command's own status: the contract
+    # a worker is given separates "the install failed" (1) from "this script
+    # could not run at all" (2), and a `npm ci` that happens to exit 2 must not
+    # read as a missing config.toml. The real status is in the message instead.
+    echo "host_setup: the host setup command failed (exit ${_setup_status}: ${host_setup}). Do not treat a later gate failure as a verdict on your change until this succeeds." >&2
+    exit 1
 fi
 
 echo "host_setup: ok"

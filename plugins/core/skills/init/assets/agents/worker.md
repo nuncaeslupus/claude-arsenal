@@ -115,9 +115,20 @@ Verify `pwd` at the start of the task if unsure.
    sizing problem for the consumer to solve, not something to route around
    silently: say so in your failure notes and return `open`.
 
-5. **Run the gates.** `open_task_pr.sh` runs them itself before it touches git —
-   the repo's own `host-gate` from `arsenal/config.toml` if one is declared,
-   then `gate_run.sh <task_id>` — and refuses to open a PR if either fails.
+5. **Run the gates.** `open_task_pr.sh` runs them itself and refuses to open a
+   PR if either fails — but not at the same point, and not in the order you
+   would guess. `gate_run.sh <task_id>`, the task's own gate, runs first, before
+   anything in git moves. The repo's `host-gate` from `arsenal/config.toml` runs
+   **after** the task file is archived into `tasks/_history/`: the archived tree
+   is the one the PR ships, so it is the only tree whose measurement means
+   anything.
+
+   So a failing host gate is a slower failure than it looks — by then the branch
+   is cut and the archive has happened. Both are undone: the task file is put
+   back and no commit is made, so the cost is time, not a tree left moved. The
+   script's own message says which of the two happened, including the case where
+   the rollback itself failed and the tree needs a hand before a re-run.
+
    Running them here first is still worth it: it surfaces the failure before the
    PR attempt rather than during it.
    - **Gate fails** (host gate or `gate_run.sh` exit non-zero) → **open no PR.**

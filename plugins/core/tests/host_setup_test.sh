@@ -151,6 +151,29 @@ if [[ "$(cat "${tmpdir}/err")" != *"host setup command failed"* ]]; then
 fi
 echo "PASS: a failing host-setup exits 1 rather than letting the next gate look like a verdict"
 
+# 5b. A FAILING install still gets cleaned up after. This is the path where the
+#     install is least trustworthy — a lockfile rewritten and then a resolution
+#     error, a post-install script that exits non-zero, an interrupted network
+#     install — and it was the one path that skipped both cleanup halves,
+#     because the early `exit 1` sat lexically above them. The snapshot was
+#     taken and never read, so the caller's overwritten edit survived only as an
+#     unreferenced blob in the object database.
+printf 'worker edit\n' > "${repo}/app.txt"
+write_config 'host-setup = "printf INSTALLED > app.txt; printf LOCK > package-lock.json; exit 7"'
+run_setup
+code=$?
+if [[ ${code} -ne 1 ]]; then
+    echo "FAIL: a failing host-setup must still exit 1, got ${code}" >&2; exit 1
+fi
+if [[ "$(cat "${repo}/app.txt")" != "worker edit" ]]; then
+    echo "FAIL: a failing install destroyed an edit already in the tree: '$(cat "${repo}/app.txt")'" >&2; exit 1
+fi
+if [[ "$(cat "${repo}/package-lock.json")" != "v1" ]]; then
+    echo "FAIL: a failing install left its churn behind: '$(cat "${repo}/package-lock.json")'" >&2; exit 1
+fi
+git -C "${repo}" checkout -- app.txt package-lock.json
+echo "PASS: a failing install is cleaned up after — the caller's edit survives and the churn does not"
+
 # 6. A malformed config is exit 2, NOT "nothing declared".
 write_config 'host-setup = '
 run_setup
