@@ -221,7 +221,11 @@ def load(repo_root: Path | None = None) -> tuple[dict[str, Any], dict[str, str]]
             raise ConfigError(
                 f"{key} must be true or false, got {values[key]!r} (from {sources[key]})"
             )
-    if not isinstance(values["listing-budget"], int) or values["listing-budget"] <= 0:
+    # `type(...) is int`, not `isinstance`: `bool` subclasses `int` in Python, so
+    # `listing-budget = true` passed validation and produced `True` — which then
+    # behaves as the number 1 everywhere downstream, capping the skills listing
+    # at one character rather than being refused as the wrong type.
+    if type(values["listing-budget"]) is not int or values["listing-budget"] <= 0:
         raise ConfigError(
             f"listing-budget must be a positive integer, got {values['listing-budget']!r}"
         )

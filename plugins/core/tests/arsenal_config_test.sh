@@ -88,5 +88,28 @@ PY
     echo "PASS: queue-automation upsert lands above [models], not inside it"
 fi
 
+# --- a boolean is not a positive integer (#265) -----------------------------
+# `bool` subclasses `int` in Python, so `isinstance(True, int)` is True and
+# `listing-budget = true` sailed through validation as the value `True` — which
+# behaves as the number 1 downstream, capping the skills listing at one
+# character instead of being refused as the wrong type.
+cat > arsenal/config.toml <<'TOML'
+merge-policy = "after-ci"
+listing-budget = true
+TOML
+[[ "$(get_rc listing-budget)" == "2" ]] \
+    || fail "listing-budget = true must be refused, not read as the number 1"
+out=$(python3 "${CFG}" --repo-root . --get listing-budget 2>&1 || true)
+grep -qi "positive integer" <<<"${out}" || fail "the refusal must say what is wrong: ${out}"
+
+# ...and a real integer still works, so this is a type check and not a blanket
+# refusal of the key.
+cat > arsenal/config.toml <<'TOML'
+merge-policy = "after-ci"
+listing-budget = 12000
+TOML
+[[ "$(get listing-budget)" == "12000" ]] || fail "a positive integer budget must still be read"
+echo "PASS: listing-budget rejects a boolean and still accepts an integer"
+
 echo "PASS: arsenal_config_test — model settings and table handling"
 exit 0

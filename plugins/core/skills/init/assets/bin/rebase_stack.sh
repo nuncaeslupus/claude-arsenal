@@ -48,7 +48,15 @@ BUNDLE_SCRIPTS="${SCRIPT_DIR}/../scripts"
 # Run from the repo root so `git diff --name-only` and the declared evidence
 # paths are in the same frame of reference (both repo-root-relative), and so
 # ARSENAL_HOME resolves the way every other script resolves it.
-cd "$(git rev-parse --show-toplevel)"
+# Checked, not assumed: outside a repository `git rev-parse` fails and prints
+# nothing, `cd ""` succeeds by staying put, and everything below would then run
+# against whatever directory the caller happened to be in.
+_toplevel="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+if [[ -z "${_toplevel}" ]]; then
+    echo "rebase_stack: not inside a git repository — refusing to run" >&2
+    exit 2
+fi
+cd "${_toplevel}"
 
 ARSENAL_HOME="${ARSENAL_HOME:-arsenal}"
 
@@ -62,8 +70,17 @@ REMOTE="${ARSENAL_QUEUE_REMOTE:-origin}"
 # the auto-resolve.
 host_gate=""
 if [[ -f "${BUNDLE_SCRIPTS}/arsenal_config.py" ]]; then
-    host_gate="$(python3 "${BUNDLE_SCRIPTS}/arsenal_config.py" \
-        --repo-root "$(pwd)" --get host-gate 2>/dev/null || true)"
+    # Errors are NOT swallowed into the empty default — the same policy
+    # open_task_pr.sh states for this identical call. `2>/dev/null || true`
+    # turned a malformed config.toml, or a missing python3, into
+    # `host_gate=""`, and an empty host gate is a no-op: the pre-push check
+    # silently stopped running, which reads as protection while granting none.
+    if ! host_gate="$(python3 "${BUNDLE_SCRIPTS}/arsenal_config.py" \
+            --repo-root "$(pwd)" --get host-gate 2>&1)"; then
+        echo "rebase_stack: could not read host-gate from ${ARSENAL_HOME}/config.toml: ${host_gate}" >&2
+        echo "rebase_stack: refusing rather than treating an unreadable config as 'no gate declared'." >&2
+        exit 2
+    fi
 fi
 
 # SECURITY: host-gate runs verbatim, like a payload's gate block. It comes from

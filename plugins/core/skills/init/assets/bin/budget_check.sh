@@ -58,8 +58,19 @@ if max_iter > 0:
         iter_file.write_text(
             json.dumps({"session": session_id, "count": count}), encoding="utf-8"
         )
-    except Exception:
-        pass
+    except Exception as exc:
+        # Said out loud rather than swallowed. The count lives only in this
+        # file, so a write that fails means every later call recomputes `count`
+        # as 1 and the dispatch-round cap — documented as the backstop that does
+        # NOT depend on observable state — silently stops capping anything. The
+        # run is not failed over it (this is a backstop, not a gate), but an
+        # operator who is relying on the cap has to be able to find out that it
+        # is not running.
+        print(
+            f"budget_check: could not persist the round counter to {iter_file} ({exc}) — "
+            "the per-session dispatch cap is NOT in effect for this run",
+            file=sys.stderr,
+        )
     if count > max_iter:
         print(
             f"budget_check: dispatch round {count} exceeds "

@@ -18,6 +18,28 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [3.1.11] - 2026-09-01
+
+### Fixed — checks that had quietly stopped checking
+
+- **`rebase_stack.sh` no longer treats an unreadable config as "no gate".** It
+  read `host-gate` with `2>/dev/null || true`, so a malformed `config.toml` — or
+  a missing `python3` — produced an empty gate, and an empty host gate is a
+  no-op: the pre-push check silently stopped running. It now refuses, which is
+  the policy `open_task_pr.sh` already states for the identical call. It also
+  refuses outside a git repository instead of running against the caller's
+  current directory.
+- **`listing-budget = true` is refused.** `bool` subclasses `int` in Python, so
+  the type check passed and the value became `True` — which behaves as the
+  number 1, capping the skills listing at one character.
+- **A denied write on the `gh` channel falls back to `manual`, not `error`.**
+  The `rest` channel already did this; the `gh` one returned the code
+  `claim_task.sh` maps to `error`, which stops the whole session, so the
+  documented manual fallback was unreachable there.
+- **`budget_check.sh` says when its round cap is not in effect.** A failed state
+  write was swallowed, so the count recomputed as 1 on every call and the
+  per-session dispatch cap silently never fired.
+
 ## [3.1.10] - 2026-09-01
 
 ### Fixed — data integrity
