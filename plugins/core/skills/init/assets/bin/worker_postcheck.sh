@@ -129,6 +129,7 @@ recorded_branch=""
 if [[ -f "${session_dir}/host_branch" ]]; then
     recorded_branch="$(cat "${session_dir}/host_branch" 2>/dev/null || true)"
 fi
+_entry_branch="${current}"
 host_branch="${ARSENAL_DEFAULT_BRANCH:-${recorded_branch}}"
 if [[ -z "${host_branch}" ]]; then
     # First run of the session: whatever we are on now IS the host branch.
@@ -201,6 +202,30 @@ if [[ "${current}" != "${host_branch}" || -n "${dirty}" ]]; then
 fi
 
 _record_rescue_ref
-_record_isolation unavailable
+
+# The isolation verdict is a measurement, not a side effect of how much this
+# script had to clean up. `restored` used to record `unavailable` outright, so a
+# tree that was merely DIRTY — session scratch, an untracked artifact — outranked
+# the worker's own reported root and clamped every later batch to one task. The
+# measured case: worker root `.claude/worktrees/agent-…`, orchestrator root the
+# repo, HEAD never off `main` (the rescue commit said `restoring 'main' to
+# 'main'`), and the verdict came back `unavailable` anyway.
+#
+# HEAD having MOVED is different: that is real evidence something ran in this
+# tree, and it still outranks the worker's claim. Only the dirty-tree-alone case
+# defers to the measurement.
+if [[ "${_entry_branch}" != "${host_branch}" ]]; then
+    _record_isolation unavailable
+else
+    case "$(_isolation_from_worker_root)" in
+        available)
+            _record_isolation available
+            echo "worker_postcheck: the tree was dirty and has been restored, but the worker ran in ${ARSENAL_WORKER_TOPLEVEL} and HEAD never left '${host_branch}' — isolation holds, so the batch is not clamped" >&2
+            ;;
+        # No report, or the worker names this very tree. Both stay conservative:
+        # the restore happened for a reason and nothing measured says otherwise.
+        *) _record_isolation unavailable ;;
+    esac
+fi
 echo "restored"
 exit 0

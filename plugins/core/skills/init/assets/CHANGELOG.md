@@ -18,6 +18,25 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [3.1.15] - 2026-09-01
+
+### Fixed
+
+- **A dirty orchestrator tree silently serialised the whole fleet.**
+  `worker_postcheck.sh` recorded worktree isolation as `unavailable` whenever it
+  had to restore the tree — so untracked session scratch, which has nothing to
+  do with where the worker ran, outranked the worker's own reported root and
+  clamped every later batch to one task for the rest of the session. Measured
+  with the worker in `.claude/worktrees/agent-…`, the orchestrator at the repo
+  root, and HEAD never off its branch: isolation held, and the verdict said
+  otherwise.
+
+  The verdict is now the measurement it was made into. A restore caused only by
+  a dirty tree defers to `ARSENAL_WORKER_TOPLEVEL`, and says on stderr that the
+  batch is not clamped. **A moved HEAD still records `unavailable`** — that is
+  real evidence something ran in the orchestrator's tree — and a restore with no
+  worker root reported stays conservative, exactly as before.
+
 ## [3.1.14] - 2026-09-01
 
 ### Fixed
