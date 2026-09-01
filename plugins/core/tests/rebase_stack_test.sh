@@ -174,4 +174,37 @@ grep -q "cannot take the branch's side" <<<"${out}" || fail "expected the unreso
 [[ "$(git rev-parse origin/featH)" == "${H_PUSHED}" ]] || fail "nothing should have been pushed"
 git rebase --abort
 
+# --- an unreadable config must not read as "no gate declared" (#265) --------
+# The host-gate read was `2>/dev/null || true`, so a malformed config.toml gave
+# `host_gate=""` — and an empty host gate is a no-op. The pre-push check
+# silently stopped running, which reads as protection while granting none.
+# `open_task_pr.sh` states exactly this policy for the identical call.
+git checkout -q main 2>/dev/null || git checkout -q featH
+cp arsenal/config.toml "${tmpdir}/config.toml.bak"
+printf 'host-gate = "bash regen.sh\nthis is not toml [[[\n' > arsenal/config.toml
+set +e
+out="$(bash "${REBASE_SH}" featH "${BASE}" 2>&1)"
+rc=$?
+set -e
+cp "${tmpdir}/config.toml.bak" arsenal/config.toml
+(( rc != 0 )) || fail "a malformed config.toml must not read as 'no gate declared': ${out}"
+grep -qi "could not read host-gate\|refusing" <<<"${out}" \
+    || fail "the refusal must say the config could not be read: ${out}"
+echo "PASS: an unreadable config.toml refuses rather than disabling the host gate"
+
+# --- outside a repository, refuse instead of running in the caller's cwd -----
+# `cd "$(git rev-parse --show-toplevel)"` was unchecked: outside a repo the
+# command prints nothing, `cd ""` succeeds by staying put, and every path below
+# would resolve against whatever directory the caller happened to be in.
+outside="${tmpdir}/not-a-repo"
+mkdir -p "${outside}"
+set +e
+out="$(cd "${outside}" && bash "${REBASE_SH}" featH main 2>&1)"
+rc=$?
+set -e
+(( rc != 0 )) || fail "outside a git repository rebase_stack must refuse: ${out}"
+grep -qi "not inside a git repository" <<<"${out}" \
+    || fail "the refusal must name the reason: ${out}"
+echo "PASS: outside a git repository the helper refuses"
+
 echo "PASS: rebase_stack_test.sh"
