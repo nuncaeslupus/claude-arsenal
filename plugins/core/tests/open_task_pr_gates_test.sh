@@ -241,6 +241,56 @@ after:  ${after_status}"
 git checkout -q main 2>/dev/null || true
 echo "PASS: an archive that cannot be completed is undone, not left half-done"
 
+# --- 12: a commit that FAILS must not leave the task archived (#302) ---------
+#     The rescue backup was deleted before `git commit` ran, so a commit that
+#     failed — a hook, a git-config problem, an unresolvable identity — exited 1
+#     with the task file sitting in `_history/` stamped `status: merged`, which
+#     `task_select.py` reads as finished work, and with nothing left to restore
+#     it from. The message named the one cause that cannot apply: `git add -A`
+#     had just staged the archive move, so the diff is never empty here.
+git checkout -q main 2>/dev/null || true
+cat > arsenal/tasks/t-commit-fails.md <<'MD'
+---
+id: t-commit-fails
+title: "Commit fixture"
+priority: 1
+---
+
+## Acceptance gate
+```bash
+true
+```
+MD
+git add arsenal/tasks/t-commit-fails.md && git commit -q -m "file the task"
+git update-ref refs/remotes/origin/main HEAD
+before_blob="$(git hash-object arsenal/tasks/t-commit-fails.md)"
+before_status="$(git status --porcelain)"
+
+# The realistic mechanism the issue names: a hook that refuses the commit.
+mkdir -p .git/hooks
+printf '#!/bin/sh
+exit 1
+' > .git/hooks/pre-commit
+chmod +x .git/hooks/pre-commit
+
+out=$(ARSENAL_TASK_ISSUE=43 ARSENAL_ALLOW_SHARED_ADD=1 ARSENAL_COAUTHOR="" \
+    bash "${HELPER}" t-commit-fails "Commit fixture" 2>&1); rc=$?
+rm -f .git/hooks/pre-commit
+
+[[ ${rc} -ne 0 ]] || fail "a refused commit must not report success"
+[[ -f "arsenal/tasks/t-commit-fails.md" ]] \
+    || fail "A FAILED COMMIT LEFT THE TASK ARCHIVED — the selector reads that as done"
+[[ -e "arsenal/tasks/_history/t-commit-fails.md" ]] \
+    && fail "the archived copy survived a failed commit"
+[[ "$(git hash-object arsenal/tasks/t-commit-fails.md)" == "${before_blob}" ]] \
+    || fail "the restored task file is not byte-identical to the one that went in"
+grep -qi "could not commit" <<<"${out}" || fail "the failure must say what happened: ${out}"
+grep -qi "empty diff" <<<"${out}" \
+    && fail "the message still blames an empty diff, which cannot be the cause here: ${out}"
+git checkout -q main 2>/dev/null || true
+git status --porcelain >/dev/null
+echo "PASS: a commit that fails restores the task file instead of stranding it"
+
 # --- 9: outside a git repository the helper refuses, and runs no gate --------
 #     Every path this script handles is repo-root-relative, so it anchored the
 #     run at `git rev-parse --show-toplevel || pwd`. The fallback made "there is
