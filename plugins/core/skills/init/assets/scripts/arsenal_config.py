@@ -52,6 +52,13 @@ DEFAULTS: dict[str, Any] = {
     # named `make lint` as its example, so a repo whose real gate is five
     # commands had four of them enforced by nobody.
     "host-gate": "",
+    # Shell command run by bin/host_setup.sh in a fresh worktree, before the
+    # first gate. Empty by default. A worktree carries tracked files and nothing
+    # an install produces, so the first gate in one fails on a missing tool
+    # rather than on the change under test — and every worker rediscovers that
+    # separately. Naming the command here is what turns it from a diagnosis
+    # into a step.
+    "host-setup": "",
     # How hard the pre-PR adversarial review binds ON THE TASK-PR PATH. Read by
     # open_task_pr.sh and nowhere else, via bin/adversarial_review.sh, whose
     # `check` asks whether a reviewer that never saw this work cleared THIS

@@ -77,6 +77,14 @@ merge-policy = "after-ci"
 #   host-gate = "make lint test evidence"
 host-gate = ""
 
+# Shell command that installs this repo's dependencies, run once in a fresh
+# worktree before the first gate (claude-arsenal/bin/host_setup.sh). Empty = no
+# setup step. A worktree is a checkout: it carries tracked files and none of
+# what an install produces, so without this the first gate a worker runs fails
+# on a missing tool and every worker works that out for itself.
+#   host-setup = "npm ci && uv sync"
+host-setup = ""
+
 # How hard the pre-PR adversarial review binds when a TASK PR is opened — a
 # reviewer with no history of the change reads it first
 # (claude-arsenal/bin/adversarial_review.sh). The gates above prove the repo

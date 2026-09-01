@@ -53,12 +53,37 @@ Verify `pwd` at the start of the task if unsure.
    on the default branch, so it is present in any worktree cut from there. If it
    contains `## Attempt N failure` sections, read them first: they record what
    previous attempts tried and why they failed.
-   - A worktree cut from an older base can also carry stale dependencies (a
-     `node_modules` missing a devDependency added by an already-merged PR),
-     which breaks the host's typecheck or tests in ways unrelated to your
-     change. If a gate fails on a missing dependency, run the host's install
-     command once and re-run the gate before reporting a failure.
-2. **Write tests first (RED).** From the `## Tests` section of the payload,
+2. **Set the worktree up before you run anything in it.** A worktree is a
+   checkout: it carries tracked files and none of what an install produces —
+   there is no `node_modules/`, no `.venv/`, no build output, and none of it
+   arrives on its own. So this is a first step, not a failure mode. Run it once,
+   before the first test:
+
+   ```bash
+   bash claude-arsenal/bin/host_setup.sh
+   ```
+
+   It runs the repo's `host-setup` from `arsenal/config.toml` and undoes what
+   the install writes into tracked files (`package-lock.json`, `uv.lock`) so the
+   task diff stays the task's. Your own edits survive it, including when the
+   install rewrites a file you had already touched: it is the install's writes
+   that are undone, not a list of paths.
+
+   **Any non-zero exit means the tree is not set up**, and a gate failure after
+   one is not a verdict on your change. Return `open` with a failure note rather
+   than working around it: exit 1 is the setup command failing, exit 2 is
+   `arsenal/config.toml` being unreadable or this not being a git repository at
+   all — a repo-level problem a worker cannot fix from inside a task.
+
+   Exit 0 is the only clear result, and it covers two cases: the setup ran, or
+   the repo declares no `host-setup`. In the second the script says so. Then
+   the responsibility is yours for this task: run the install this repo uses
+   before the first gate, and when a gate fails on a missing tool or a missing
+   directory — not only on a *stale* dependency — treat it as environmental,
+   install, and re-run before reporting a failure. Say in your outcome report
+   that the repo has no `host-setup` declared, so it stops being rediscovered
+   one worker at a time.
+3. **Write tests first (RED).** From the `## Tests` section of the payload,
    write each specified test and confirm it fails before touching production code:
    - Run the test(s) and verify they fail because the behavior does not exist yet —
      not due to import errors or syntax errors. A failing import or bad fixture is
@@ -69,8 +94,8 @@ Verify `pwd` at the start of the task if unsure.
    - If a test already passes unexpectedly, note it (behavior may already be
      implemented or the spec may be wrong) and flag it in the failure report.
 
-3. **Implement to green (GREEN).** Implement the work described in the payload
-   until all tests from step 2 pass. Leave the changes **uncommitted** — do not
+4. **Implement to green (GREEN).** Implement the work described in the payload
+   until all tests from step 3 pass. Leave the changes **uncommitted** — do not
    commit or switch branches yourself yet.
    - When the task says to follow an existing module, read its *shape* first —
      `bash claude-arsenal/bin/outline.sh <file>` prints the declarations and
@@ -90,7 +115,7 @@ Verify `pwd` at the start of the task if unsure.
    sizing problem for the consumer to solve, not something to route around
    silently: say so in your failure notes and return `open`.
 
-4. **Run the gates.** `open_task_pr.sh` runs them itself before it touches git —
+5. **Run the gates.** `open_task_pr.sh` runs them itself before it touches git —
    the repo's own `host-gate` from `arsenal/config.toml` if one is declared,
    then `gate_run.sh <task_id>` — and refuses to open a PR if either fails.
    Running them here first is still worth it: it surfaces the failure before the
@@ -111,7 +136,7 @@ Verify `pwd` at the start of the task if unsure.
      ```
 
      Exit.
-5. **Gate passes** → get an independent read before opening anything. The gates
+6. **Gate passes** → get an independent read before opening anything. The gates
    prove the repo is not broken. They cannot tell whether you built what the
    task asked for, and neither can you: you have been reasoning about this
    change for the whole task, and that is exactly the context that makes a
@@ -139,7 +164,7 @@ Verify `pwd` at the start of the task if unsure.
    back (no reply file, or a reply with no `VERDICT:` line), which is not a pass
    — ask again. Exit 3 means the tree changed while the review ran, so the
    answer describes code that no longer exists: re-emit and review the tree you
-   actually have. Only exit 0 lets you continue to step 6.
+   actually have. Only exit 0 lets you continue to step 7.
 
    **If this surface cannot spawn a subagent at all**, do not stand in for one.
    A review you run on your own work, recorded as an independent review, is
@@ -147,7 +172,7 @@ Verify `pwd` at the start of the task if unsure.
    claims someone checked. Skip it, say so in your outcome report, and let
    `open_task_pr.sh` record that no independent review ran.
 
-6. **Review is clear** → open the PR with the thin helper. Export the dynamic
+7. **Review is clear** → open the PR with the thin helper. Export the dynamic
    Co-Authored-By identity supplied by the harness first (never hardcode a
    model name):
    ```bash
@@ -164,8 +189,8 @@ Verify `pwd` at the start of the task if unsure.
    `ARSENAL_ALLOW_UNLINKED_PR=1`: that opens a PR whose merge closes nothing.
    Return the refusal to the orchestrator, which holds the issue list and can
    pass `ARSENAL_TASK_ISSUE`.
-7. **Return the outcome to the orchestrator** — status `done`, the PR URL
-   or `branch:<name>` line from step 6, and **`toplevel: <git rev-parse --show-toplevel>`**.
+8. **Return the outcome to the orchestrator** — status `done`, the PR URL
+   or `branch:<name>` line from step 7, and **`toplevel: <git rev-parse --show-toplevel>`**.
 
    That last line is how the orchestrator learns whether isolation was real.
    Some surfaces silently ignore `isolation: worktree` and run you in the
@@ -181,7 +206,7 @@ Verify `pwd` at the start of the task if unsure.
 ## On failure
 
 If implementation cannot be completed for any other reason, return outcome
-`open` to the orchestrator with a structured failure note (see step 4 format)
+`open` to the orchestrator with a structured failure note (see step 5 format)
 for the `## Failure notes` section. Do not open a PR.
 
 ## Never `git stash`
@@ -215,7 +240,7 @@ and report it — do not commit through it.
   only the task's code.
 - Do not access files outside the worktree root using absolute paths.
 - Do not spawn additional subagents beyond the single pre-PR reviewer in
-  step 5 (one worker per task). That one is exempt because it is the whole
+  step 6 (one worker per task). That one is exempt because it is the whole
   point of the step: it claims nothing, opens nothing, and its lack of your
   context is the thing being bought. Anything that would claim a task or
   open a PR is not it.
