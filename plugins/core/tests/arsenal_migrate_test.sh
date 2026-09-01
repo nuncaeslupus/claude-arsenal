@@ -70,8 +70,34 @@ id=$(python3 -c 'import sys,json;print(json.loads(sys.stdin.readline())["id"])' 
 [[ -f "${REPO}/arsenal/project/overview.md" ]] || fail "project/ was not moved"
 [[ -d "${REPO}/claude-arsenal/session" ]] && fail "session/ should no longer be inside the vendored prefix"
 
-# --- 7: a config file is seeded ---
+# --- 7: a config file is seeded, and it is init.py's template (#264) ---
+# `init.py` will not rewrite a config.toml that already exists, so a partial one
+# written here is permanent. This script used to carry its own copy of the
+# template; it drifted, and every repo migrated before `/init` lost `host-gate`
+# and `[models]` with no ordering of the two that recovered them.
 grep -q 'merge-policy = "after-ci"' "${REPO}/arsenal/config.toml" || fail "config.toml not seeded"
+INIT_PY="${SCRIPT_DIR}/../skills/init/scripts/init.py"
+python3 - "${INIT_PY}" "${REPO}/arsenal/config.toml" <<'PY' || fail "see above"
+import importlib.util, re, sys
+
+spec = importlib.util.spec_from_file_location("_init_for_keys", sys.argv[1])
+module = importlib.util.module_from_spec(spec)
+sys.modules["_init_for_keys"] = module
+spec.loader.exec_module(module)
+
+def keys(text):
+    return {m.group(1) for m in re.finditer(r"^([a-z-]+|\[[a-z]+\]) *=?", text, re.M)
+            if not m.group(1).startswith("#")}
+
+want = keys(module._CONFIG_TEMPLATE)
+got = keys(open(sys.argv[2]).read())
+missing = sorted(want - got)
+if missing:
+    print(f"the migrated config.toml is missing {missing} that init.py's template has",
+          file=sys.stderr)
+    raise SystemExit(1)
+PY
+echo "PASS: the migrated config.toml carries every key init.py's template does"
 
 # --- 8: re-running is safe and does not duplicate or clobber ---
 echo "EDITED BY HAND" >> "${REPO}/arsenal/tasks/lo-a3f8.md"

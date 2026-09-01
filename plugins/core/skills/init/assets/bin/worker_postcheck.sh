@@ -40,25 +40,39 @@
 #         Without it isolation cannot be proven and nothing is recorded.
 # Stderr: `worker_postcheck: rescued uncommitted changes to <ref> …` when a
 #         restore had work to save.
-# Exit:   0 invariant holds (possibly after restore); 2 could not restore.
+# Exit:   0 invariant holds (possibly after restore); 2 could not restore;
+#         3 the tree was dirty and could not be snapshotted, so NOTHING was
+#           discarded and the restore did not run.
 
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd 2>/dev/null || echo .)"
 
 # Snapshot the working tree to a rescue ref before a destructive restore, and
-# tell the operator where it went. Never fails the caller: a missing or
-# unrunnable rescue_snapshot.sh degrades to the old behaviour, and a clean tree
-# produces no ref (and no noise). The ref lands in RESCUED_REF for
+# tell the operator where it went. The ref lands in RESCUED_REF for
 # _record_rescue_ref to persist AFTER the restore.
+#
+# Returns non-zero when the tree had work and it could NOT be put on a ref —
+# and the caller must then not run the destructive step. Previously
+# rescue_snapshot.sh reported a failed snapshot exactly as it reported a clean
+# tree (no ref, exit 0), so a disk-full or a permissions error read as "nothing
+# to save" and the reset went ahead anyway: the work destroyed, and no ref to
+# get it back from. A missing rescue_snapshot.sh is the one case that still
+# degrades to the old behaviour, because a bundle that does not ship it cannot
+# be made safer by refusing to run.
 RESCUED_REF=""
 _rescue_before_restore() {
-    local reason="$1"
+    local reason="$1" status
     RESCUED_REF=""
     [[ -f "${SCRIPT_DIR}/rescue_snapshot.sh" ]] || return 0
-    RESCUED_REF="$(bash "${SCRIPT_DIR}/rescue_snapshot.sh" "${reason}" 2>/dev/null || true)"
-    [[ -n "${RESCUED_REF}" ]] || return 0
+    RESCUED_REF="$(bash "${SCRIPT_DIR}/rescue_snapshot.sh" "${reason}" 2>/dev/null)"
+    status=$?
+    if [[ ${status} -ne 0 || -z "${RESCUED_REF}" ]]; then
+        RESCUED_REF=""
+        return 1
+    fi
     echo "worker_postcheck: rescued uncommitted changes to ${RESCUED_REF} before restoring — recover with 'git checkout ${RESCUED_REF} -- .' (or 'git diff HEAD ${RESCUED_REF} | git apply')" >&2
+    return 0
 }
 
 # Persist the rescue ref for the orchestrator. Must run AFTER the restore: the
@@ -164,7 +178,14 @@ fi
 # assumption can be wrong. Snapshot first, so a wrong assumption costs a ref
 # lookup rather than the work.
 if [[ -n "${dirty}" ]]; then
-    _rescue_before_restore "worker_postcheck: restoring '${current:-unknown}' to '${host_branch}'"
+    if ! _rescue_before_restore "worker_postcheck: restoring '${current:-unknown}' to '${host_branch}'"; then
+        # Refusing is the whole point. This runs in the host's MAIN tree, and
+        # `reset --hard` on uncommitted work leaves nothing to recover from —
+        # no reflog, no stash, no dangling object. A dirty tree the orchestrator
+        # cannot restore is a stall; one it destroyed is not recoverable at all.
+        echo "worker_postcheck: the working tree is dirty and could NOT be snapshotted to a rescue ref — refusing to reset. Nothing was discarded. Commit or stash the tree by hand, then re-run; check disk space and repository permissions first." >&2
+        exit 3
+    fi
 fi
 git reset -q --hard >/dev/null 2>&1 || true
 git clean -fdq >/dev/null 2>&1 || true

@@ -29,6 +29,7 @@ Exit: 0 on success, 1 if nothing to migrate, 2 on error.
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import re
 import secrets
@@ -41,34 +42,46 @@ TERMINAL = {"done", "merged"}
 HISTORY_DIRNAME = "_history"
 DEFAULT_QUEUE = Path("claude-arsenal/queue/tasks.jsonl")
 
-CONFIG_TEMPLATE = """\
-# claude-arsenal host configuration.
-#
-# This file is yours. Upstream never rewrites it, so anything set here survives
-# a bundle upgrade — which is the point: a preference stored in a vendored
-# skill disappears the next time that skill is refreshed.
+# `init.py` owns the config template; this script reads it rather than keeping a
+# copy. The copy that used to live here drifted, and because `init.py` will not
+# rewrite a `config.toml` that already exists, every repo migrated before
+# running `/init` was left permanently without `host-gate` and `[models]` — with
+# no ordering of the two scripts that produced a complete file.
+_MERGE_POLICY_LINE = re.compile(r'^merge-policy = ".*"$', re.MULTILINE)
 
-# How far must a task PR get before it may be merged?
-#   always              merge as soon as it is open
-#   after-review        merge once a review approves — for a repo with no CI, or
-#                       whose CI is unavailable rather than merely red
-#   after-ci            merge once CI is green
-#   after-ci-and-review require both
-#   never               never merge automatically; you review every PR
-merge-policy = "{merge_policy}"
 
-# test-first writes a failing test before the change; test-after writes tests
-# alongside it.
-test-discipline = "test-first"
+def config_template(repo_root: Path) -> str | None:
+    """`init.py`'s `_CONFIG_TEMPLATE`, or None when no `init.py` can be found.
 
-# What /session-end leaves behind: handoff | ticket | none
-session-end = "handoff"
-
-# The skills-listing character budget the auditor enforces. The default is
-# 8000; raise it if your surface's real budget differs, rather than deleting
-# skills to fit a number that is not yours.
-listing-budget = 8000
-"""
+    None means this script writes no config at all, which is the honest answer:
+    a partial one is worse than none, because its existence is exactly what
+    stops `init.py` writing the complete one.
+    """
+    here = Path(__file__).resolve()
+    candidates = [
+        # Inside the plugin tree: assets/scripts/ → ../../scripts/init.py
+        *here.parents[2].glob("scripts/init.py"),
+        # Vendored into a consumer: .claude/skills/init/scripts/init.py
+        *sorted(repo_root.glob(".claude/skills/*/scripts/init.py")),
+    ]
+    for candidate in candidates:
+        if candidate.name != "init.py":
+            continue
+        spec = importlib.util.spec_from_file_location("_arsenal_init_template", candidate)
+        if spec is None or spec.loader is None:
+            continue
+        module = importlib.util.module_from_spec(spec)
+        sys.modules["_arsenal_init_template"] = module
+        try:
+            spec.loader.exec_module(module)
+            template = getattr(module, "_CONFIG_TEMPLATE", None)
+        except Exception:  # a bundle we cannot read is not a reason to crash
+            continue
+        finally:
+            sys.modules.pop("_arsenal_init_template", None)
+        if isinstance(template, str) and "merge-policy" in template:
+            return template
+    return None
 
 
 def new_task_id() -> str:
@@ -249,10 +262,19 @@ def migrate(
 
     config = home / "config.toml"
     if not config.exists():
-        if apply:
-            home.mkdir(parents=True, exist_ok=True)
-            config.write_text(CONFIG_TEMPLATE.format(merge_policy=merge_policy), encoding="utf-8")
-        report.append(f"config: create {config} (merge-policy = {merge_policy})")
+        template = config_template(repo_root)
+        if template is None:
+            report.append(
+                f"config: {config} NOT created — init.py was not found, and it owns the "
+                "template. Run /init; then set merge-policy = "
+                f'"{merge_policy}" to keep the policy this queue was using.'
+            )
+        else:
+            body = _MERGE_POLICY_LINE.sub(f'merge-policy = "{merge_policy}"', template, count=1)
+            if apply:
+                home.mkdir(parents=True, exist_ok=True)
+                config.write_text(body, encoding="utf-8")
+            report.append(f"config: create {config} (merge-policy = {merge_policy})")
     else:
         report.append(f"config: {config} already exists — left alone")
 
