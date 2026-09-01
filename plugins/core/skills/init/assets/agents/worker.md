@@ -108,14 +108,15 @@ Verify `pwd` at the start of the task if unsure.
    **Ending your turn ends the task.** There is no picking this back up later:
    the orchestrator is notified that you COMPLETED and moves on, so a gate you
    backgrounded and a watcher you armed deliver their result to nobody, and the
-   task is recorded as done with no PR. Run `gate_run.sh` and `open_task_pr.sh` in
-   the **foreground**, in one call, with a timeout generous enough for this
-   host's real suite — wait for the output rather than returning to it. The
-   timeout has to cover the host gate too: `open_task_pr.sh` runs that one
-   itself, after the archive (step 5). If the host gate genuinely exceeds one
-   turn, that is a `host-gate` sizing problem for the consumer to solve, not
-   something to route around silently: say so in your failure notes and return
-   `open`.
+   task is recorded as done with no PR. So run each command in the **foreground**
+   at its own step — `gate_run.sh` at step 5, `open_task_pr.sh` at step 7 — and
+   wait for its output rather than returning to it. Do not chain the two into
+   one command: the independent review at step 6 goes between them, and a
+   `gate_run.sh && open_task_pr.sh` skips it. Give `open_task_pr.sh` a timeout
+   generous enough for this host's real suite, because it runs the host gate
+   itself after the archive. If the host gate genuinely exceeds one turn, that
+   is a `host-gate` sizing problem for the consumer to solve, not something to
+   route around silently: say so in your failure notes and return `open`.
 
 5. **Run the gates.** `open_task_pr.sh` runs them itself and refuses to open a
    PR if either fails — but not at the same point, and not in the order you
