@@ -367,5 +367,31 @@ middle_at=$(grep -n "Middle entry" <<<"${out}" | cut -d: -f1)
     || fail "changelog entries must print newest first: ${out}"
 echo "PASS: check_update.sh prints CHANGELOG entries strictly between installed and latest"
 
+# --- Gate: "Exit: 0 always" holds when the remote is unreachable (#301) -----
+# This script's own header promises it never aborts a session, because
+# session-start step 0(a) runs it as a *report*. Under `set -euo pipefail` the
+# unguarded `git ls-remote` in _report_untagged_upstream made a credential-less
+# or unreachable remote exit 128 instead — taking with it the rest of the
+# report, so the session carried on knowing nothing about a stale bundle.
+offline="${tmp}/offline"
+mkdir -p "${offline}/claude-arsenal"
+git init -q -b main "${offline}"
+git -C "${offline}" config user.email "test@arsenal.example"
+git -C "${offline}" config user.name "Arsenal Test"
+echo "0.20.5" > "${offline}/claude-arsenal/.bundle-version"
+git -C "${offline}" add -A
+git -C "${offline}" commit -q -m "chore: vendor bundle"
+git -C "${offline}" remote add arsenal "${tmp}/no-such-repository"
+
+set +e
+(cd "${offline}" && bash "${CHECK}" >"${tmp}/offline.out" 2>"${tmp}/offline.err")
+offline_code=$?
+set -e
+[[ ${offline_code} -eq 0 ]] \
+    || fail "an unreachable remote aborted the report with exit ${offline_code}; the header promises 0 always"
+[[ -s "${tmp}/offline.err" ]] \
+    || fail "the unreachable-remote case said nothing at all"
+echo "PASS: an unreachable remote is a warning, not an abort"
+
 echo "PASS: check_update_test — all gates passed"
 exit 0

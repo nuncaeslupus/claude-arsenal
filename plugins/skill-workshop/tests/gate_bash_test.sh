@@ -80,6 +80,41 @@ echo "PASS: reads of a skill file stay allowed, including redirect-to-elsewhere"
     || fail "blocked notplugins/… inside an interpreter argument"
 echo "PASS: non-skill paths are untouched, including notplugins/ near-misses"
 
+# --- the two escapes that made this gate skippable (#300, #263) ------------
+# Both were total misses rather than partial ones: `bash_target` returned "" and
+# the hook allowed the call outright.
+#
+#   #300 — a newline is a command separator in bash, and the tokeniser dropped
+#          it. `echo starting` then became the only simple command the gate
+#          looked at, and the `rm` on the next line was never examined.
+#   #263 — `(` was an unconditional separator, so the paren of a call split
+#          `write_text` away from the `(` that `WRITERS` needs beside it, and
+#          the path into a fragment carrying no write signal. Every
+#          `obj.method(...)` write inside a heredoc went through, which is the
+#          exact route the module docstring names as its reason to exist.
+newline_rm=$(printf 'echo starting\nrm -rf plugins/core/skills/specify')
+[ "$(probe "$newline_rm")" = blocked ] \
+    || fail "#300: a command after a newline was never examined"
+
+heredoc_write=$(printf 'python3 - <<%s\nimport pathlib\np = pathlib.Path("%s")\np.write_text("x", encoding="utf-8")\nPYEOF' "'PYEOF'" "$SKILL")
+[ "$(probe "$heredoc_write")" = blocked ] \
+    || fail "#263: a heredoc write through obj.method(...) went through"
+
+heredoc_rmtree=$(printf 'python3 - <<%s\nimport shutil\nshutil.rmtree("plugins/core/skills/specify")\nPYEOF' "'PYEOF'")
+[ "$(probe "$heredoc_rmtree")" = blocked ] \
+    || fail "#263: a heredoc rmtree of a skill folder went through"
+echo "PASS: a newline-separated write and a heredoc obj.method(...) write are blocked"
+
+# ...and neither fix may cost a read. A line continuation is removed by bash, so
+# splitting on it would report `cp SKILL` — a read — as a write.
+continuation=$(printf 'cp %s \\\n    /tmp/backup' "$SKILL")
+[ "$(probe "$continuation")" = allowed ] \
+    || fail "a line-continued cp OUT of a skill was reported as a write"
+[ "$(probe "( cd /tmp && ls )")" = allowed ] || fail "blocked a harmless subshell"
+[ "$(probe "python3 -c \"print(open('$SKILL').read())\"")" = allowed ] \
+    || fail "blocked an interpreter READ of a skill file"
+echo "PASS: line continuations, subshells and interpreter reads stay allowed"
+
 # --- with the marker present, writes are allowed ---------------------------
 mkdir -p "$CLAUDE_PLUGIN_DATA" && touch "${CLAUDE_PLUGIN_DATA}/loaded-${SESSION}"
 [ "$(probe "sed -i 's/a/b/' $SKILL")" = allowed ] || fail "still blocked after the skill loaded"

@@ -149,7 +149,11 @@ for _, ver, body in entries:
 # no untagged release to find.
 _report_untagged_upstream() {
     local installed="$1" latest="$2" head_sha tag_sha branch_version
-    head_sha="$(git ls-remote "${REMOTE}" HEAD 2>/dev/null | awk 'NR==1{print $1}')"
+    # `|| true` on the pipeline: this file promises "Exit: 0 always" because
+    # session-start step 0(a) runs it as a *report*, and an unreachable or
+    # credential-less remote aborting under `set -e` removes the very report it
+    # exists to produce — leaving the session unaware the bundle is stale.
+    head_sha="$(git ls-remote "${REMOTE}" HEAD 2>/dev/null | awk 'NR==1{print $1}' || true)"
     [[ -n "${head_sha}" ]] || return 0
     if [[ -n "${latest}" ]]; then
         tag_sha="$(git ls-remote "${REMOTE}" "refs/tags/v${latest}^{}" 2>/dev/null | awk 'NR==1{print $1}')"
@@ -332,7 +336,11 @@ fi
 # Re-run init.py --silent so any new bundle scripts are propagated
 init_py="$(find .claude/skills -name 'init.py' -path '*/init/scripts/init.py' 2>/dev/null | head -1 || true)"
 if [[ -n "${init_py}" ]]; then
-    python3 "${init_py}" --repo-path . --silent
+    # A refusal from init.py (a downgrade guard, a malformed config) is a
+    # warning here, not an abort: aborting skips the version verification just
+    # below, which is the check that separates "updated" from "half-updated".
+    python3 "${init_py}" --repo-path . --silent \
+        || _warn "init.py refused to re-run after the update; new bundle scripts may not be in place"
 fi
 
 # Only now is "updated" a claim worth making. A success message that can print
