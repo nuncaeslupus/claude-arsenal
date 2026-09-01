@@ -108,12 +108,14 @@ Verify `pwd` at the start of the task if unsure.
    **Ending your turn ends the task.** There is no picking this back up later:
    the orchestrator is notified that you COMPLETED and moves on, so a gate you
    backgrounded and a watcher you armed deliver their result to nobody, and the
-   task is recorded as done with no PR. Run the host gate, `gate_run.sh` and
-   `open_task_pr.sh` in the **foreground**, in one call, with a timeout generous
-   enough for this host's real suite — wait for the output rather than returning
-   to it. If the host gate genuinely exceeds one turn, that is a `host-gate`
-   sizing problem for the consumer to solve, not something to route around
-   silently: say so in your failure notes and return `open`.
+   task is recorded as done with no PR. Run `gate_run.sh` and `open_task_pr.sh` in
+   the **foreground**, in one call, with a timeout generous enough for this
+   host's real suite — wait for the output rather than returning to it. The
+   timeout has to cover the host gate too: `open_task_pr.sh` runs that one
+   itself, after the archive (step 5). If the host gate genuinely exceeds one
+   turn, that is a `host-gate` sizing problem for the consumer to solve, not
+   something to route around silently: say so in your failure notes and return
+   `open`.
 
 5. **Run the gates.** `open_task_pr.sh` runs them itself and refuses to open a
    PR if either fails — but not at the same point, and not in the order you
@@ -129,12 +131,13 @@ Verify `pwd` at the start of the task if unsure.
    script's own message says which of the two happened, including the case where
    the rollback itself failed and the tree needs a hand before a re-run.
 
-   Running them here first is still worth it, with one caveat that follows from
-   that order: `gate_run.sh` gives the same answer here as it will inside the
-   script, but a host gate run here measures a tree with no archive in it. Treat
-   that one as a smoke check — it catches an obvious failure before the PR
-   attempt rather than during it, and the run that counts is the one over the
-   archived tree.
+   Running `gate_run.sh` here first is still worth it — it gives the same answer
+   here as it will inside the script, so a failure surfaces before the PR
+   attempt rather than during it. **Do not run the host gate yourself.** Run
+   early it measures a tree with no archive in it, so its answer is not the one
+   that decides anything; and when it passes you have paid for the repo's whole
+   suite twice, on the step most likely to be the expensive one. Let the script
+   run it, once, over the tree being committed.
    - **Gate fails** (host gate or `gate_run.sh` exit non-zero) → **open no PR.**
      Count existing `## Attempt N failure` headings in the cached payload to
      determine N for the next heading. Return outcome `open` to the orchestrator
