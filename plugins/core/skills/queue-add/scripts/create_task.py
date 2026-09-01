@@ -202,7 +202,7 @@ def main(argv: list[str] | None = None) -> int:
             body=args.body,
         )
     except ValueError as exc:
-        print(f"new_task: {exc}", file=sys.stderr)
+        print(f"create_task: {exc}", file=sys.stderr)
         return 2
 
     args.tasks_dir.mkdir(parents=True, exist_ok=True)
