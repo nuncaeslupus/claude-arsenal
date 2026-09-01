@@ -120,5 +120,37 @@ bash "${GR}" lo-u >/dev/null 2>&1
 [[ $? -eq 3 ]] || { echo "FAIL: gate_run should propagate exit 3 for an unmeasured gate" >&2; exit 1; }
 echo "PASS: gate_run propagates unmeasured as 3"
 
+# --- a gate that cannot be failed is not a gate (#302) ----------------------
+# `json.loads` accepts the JavaScript spellings, and both are `float`, so they
+# cleared the numeric type check and reached the comparison: NaN compares
+# unequal to everything (itself included) so it passes every `!=` gate, and
+# Infinity passes every directional one.
+cat > arsenal/tasks/lo-ne.md <<'MD'
+# NE
+## Acceptance gate
+```gate
+drift != 0
+evidence: metrics.json
+key: value
+```
+MD
+printf '{"value": NaN}\n' > metrics.json
+python3 "${GE}" arsenal/tasks/lo-ne.md >/dev/null 2>&1
+[[ $? -eq 2 ]] || { echo "FAIL: a NaN measurement must be refused, not pass a != gate" >&2; exit 1; }
+
+printf '{"value": Infinity}\n' > metrics.json
+python3 "${GE}" arsenal/tasks/lo-p.md >/dev/null 2>&1 || true
+printf '{"totals":{"percent_covered": Infinity}}\n' > coverage.json
+out=$(python3 "${GE}" arsenal/tasks/lo-p.md 2>&1); code=$?
+[[ ${code} -eq 2 ]] \
+    || { echo "FAIL: an Infinity measurement must be refused, got ${code}: ${out}" >&2; exit 1; }
+grep -q "finite" <<<"${out}" || { echo "FAIL: the refusal must say why: ${out}" >&2; exit 1; }
+
+# ...and a normal finite measurement still works, so this is a guard and not a
+# blanket refusal.
+echo '{"totals":{"percent_covered":0.93}}' > coverage.json
+[[ "$(run)" == "0" ]] || { echo "FAIL: a finite measurement must still pass" >&2; exit 1; }
+echo "PASS: NaN and Infinity are refused; a finite measurement still passes"
+
 echo "PASS: gate_evidence_test — all gates passed"
 exit 0
