@@ -33,8 +33,9 @@ Four things this deliberately does NOT do:
   with itself.
 * **It does not touch the network.** Task files are local and written here;
   every remote change is printed for the caller to apply over whatever channel
-  the surface has. With no issues to read it does nothing, which is how it
-  degrades when GitHub is unreachable.
+  the surface has — the `arsenal-task:` marker to append, and the label swap
+  that moves the issue onto the board. With no issues to read it does nothing,
+  which is how it degrades when GitHub is unreachable.
 
 Exit: 0 (an empty import is an answer), 2 on unreadable input.
 """
@@ -50,6 +51,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from queue_hooks import TASK_LABEL
 from task_select import load_tasks, task_id_from_issue
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "queue-add" / "scripts"))
@@ -114,7 +116,11 @@ def importable(issues: list[dict[str, Any]], *, label: str) -> list[dict[str, An
 
 
 def render(issue: dict[str, Any], task_id: str) -> str:
-    body = (issue.get("body") or "").strip() or "_(no issue body)_"
+    # `html.unescape` on the body for the same reason it is on the title below:
+    # both fields arrive through the same MCP tool, escaped the same way, and a
+    # task file is data other tools compare against. Left alone, the prose a
+    # human reads to write the real gate spells every apostrophe `&#39;`.
+    body = html.unescape((issue.get("body") or "").strip()) or "_(no issue body)_"
     return TEMPLATE.format(
         task_id=task_id,
         # Two spellings to undo before this lands in the repo, because a task
@@ -126,7 +132,15 @@ def render(issue: dict[str, Any], task_id: str) -> str:
         # is worse for no gain. The file is written UTF-8 either way.
         title=json.dumps(html.unescape(str(issue.get("title", task_id))), ensure_ascii=False),
         capability=GATE_CAPABILITY,
-        url=issue.get("html_url") or f"issue #{issue.get('number')}",
+        # An autolink, not a bare URL: a task file lands in the consumer's repo
+        # and `markdownlint` flags MD034 on every imported one, forever, since
+        # the template never changes. The `issue #N` fallback stays unwrapped —
+        # angle brackets around non-URL text read as a stray HTML tag.
+        url=(
+            f"<{html_url}>"
+            if (html_url := issue.get("html_url"))
+            else f"issue #{issue.get('number')}"
+        ),
         body=body,
     )
 
@@ -187,6 +201,15 @@ def main(argv: list[str] | None = None) -> int:
                     # issue into the task's handle. Without it the import is only
                     # half done: the task file exists and nothing can claim it.
                     "add_to_issue_body": f"`arsenal-task: {task_id}`",
+                    # And the labels, for the same reason. Session-start step 2
+                    # fetches the board by `arsenal:task` specifically, so an
+                    # imported issue left carrying only the import label is
+                    # invisible to it — `handle_sync.py` then reports the task
+                    # as having no handle and proposes a *second* issue, which
+                    # already carries the marker below. Two issues for one task,
+                    # and a board that disagrees with itself.
+                    "add_label": TASK_LABEL,
+                    "remove_label": args.label,
                 },
                 separators=(",", ":"),
             )

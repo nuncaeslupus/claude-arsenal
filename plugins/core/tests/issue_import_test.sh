@@ -133,4 +133,61 @@ grep -q 'title: "T42: annotations/<offer_id>.json & €/month"' <<<"${written}" 
     || fail "the imported title must hold the real characters: ${written}"
 echo "PASS: an imported title is stored as written, not as the transport spelled it"
 
+# Gate 6 (#268): the body arrives through the same MCP tool as the title and is
+# escaped the same way. It is the prose a human reads to write the task's real
+# gate, so storing `&#39;` for every apostrophe degrades exactly the field the
+# import exists to carry across.
+fresh="${tmp}/tasks3"
+mkdir -p "${fresh}"
+cat > "${tmp}/issues-body.json" <<'JSON'
+[{"number": 61, "state": "open", "labels": [{"name": "arsenal:queue"}],
+  "html_url": "https://example/61", "title": "plain",
+  "body": "The flag is &quot;after-review&quot; and it doesn&#39;t fire when a &lt;br&gt; is present."}]
+JSON
+python3 "${IMPORT}" --issues "${tmp}/issues-body.json" --tasks-dir "${fresh}" --apply >/dev/null
+written=$(cat "${fresh}"/*.md)
+grep -q 'The flag is "after-review" and it doesn'"'"'t fire when a <br> is present.' \
+    <<<"${written}" || fail "the imported body kept the transport's escaping: ${written}"
+echo "PASS: an imported body is stored as written, not as the transport spelled it"
+
+# Gate 7 (#270): a bare URL in the template means an MD034 hit in every imported
+# task file, in every consumer that lints its markdown, forever.
+grep -q 'Imported from <https://example/61>' <<<"${written}" \
+    || fail "the Imported-from line must be an autolink, not a bare URL: ${written}"
+
+fresh="${tmp}/tasks4"
+mkdir -p "${fresh}"
+cat > "${tmp}/issues-nourl.json" <<'JSON'
+[{"number": 62, "state": "open", "labels": [{"name": "arsenal:queue"}],
+  "title": "no url", "body": "x"}]
+JSON
+python3 "${IMPORT}" --issues "${tmp}/issues-nourl.json" --tasks-dir "${fresh}" --apply >/dev/null
+grep -q 'Imported from issue #62' "${fresh}"/*.md \
+    || fail "the no-URL fallback must stay unwrapped — <issue #62> reads as an HTML tag"
+echo "PASS: the Imported-from line is an autolink, and the fallback is left alone"
+
+# Gate 8 (#269): the import must hand back the label swap, not only the marker.
+# Step 2 fetches the board by `arsenal:task`; an issue left on the import label
+# is invisible to it, and handle_sync.py then proposes a SECOND issue for a task
+# whose first issue already carries the marker.
+fresh="${tmp}/tasks5"
+mkdir -p "${fresh}"
+row=$(python3 "${IMPORT}" --issues "${tmp}/issues-body.json" --tasks-dir "${fresh}" --apply \
+    | head -1)
+python3 - "${row}" <<'PY' || fail "the import row does not carry the label swap: see above"
+import json, sys
+row = json.loads(sys.argv[1])
+missing = [k for k in ("add_to_issue_body", "add_label", "remove_label") if k not in row]
+if missing:
+    print(f"row is missing {missing}: {row}", file=sys.stderr)
+    raise SystemExit(1)
+if row["add_label"] != "arsenal:task":
+    print(f"add_label must be the board label, got {row['add_label']!r}", file=sys.stderr)
+    raise SystemExit(1)
+if row["remove_label"] != "arsenal:queue":
+    print(f"remove_label must be the import label, got {row['remove_label']!r}", file=sys.stderr)
+    raise SystemExit(1)
+PY
+echo "PASS: the import hands back the board label, not only the handle marker"
+
 echo "PASS: issue_import_test — all gates passed"

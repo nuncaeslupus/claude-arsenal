@@ -18,6 +18,28 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [3.1.2] - 2026-09-01
+
+### Changed
+
+- **`issue_import.py` now tells you to move the label, not just the marker.**
+  Each imported row carries `add_label` (`arsenal:task`) and `remove_label` (the
+  import label) alongside `add_to_issue_body`. Apply all three. Session-start
+  step 2 fetches the board by `arsenal:task`, so an imported issue left on
+  `arsenal:queue` was invisible to it — and `handle_sync.py` then proposed a
+  *second* issue for a task whose first issue already carried the handle marker.
+  If you have imported issues before, check for duplicate pairs.
+
+### Fixed
+
+- **An imported issue body is stored as written.** `html.unescape` was applied
+  to the title and not the body, so every apostrophe in the prose a human reads
+  to write the task's real gate was stored as `&#39;`.
+- **The `Imported from` line is a Markdown autolink.** It was a bare URL, which
+  is an MD034 hit in every imported task file of every consumer who lints their
+  Markdown — permanently, since the template never changes. The `issue #N`
+  fallback is left unwrapped.
+
 ## [3.1.1] - 2026-09-01
 
 ### Fixed
