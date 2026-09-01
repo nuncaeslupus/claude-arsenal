@@ -18,6 +18,20 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [3.1.7] - 2026-09-01
+
+### Fixed
+
+- **Two more ways past the skill-edit gate are closed.** `gate_target.py` had no
+  `git` handling at all, so `git restore SKILL.md` and `git checkout -- SKILL.md`
+  — the two commands a session reaches for to undo an edit — overwrote a skill
+  file with no target detected. And the interpreter-write pattern keyed on the
+  write *call*, so `open(path, "w").close()`, which truncates a file to nothing
+  without ever writing a byte, was invisible. Write detection now reads the
+  `open()` mode (`w`/`a`/`x`/`+`), and `git restore`, `checkout`, `rm`, `clean`,
+  `mv` and `stash` name their paths. `git diff`/`log`/`show`/`status`/`add` and
+  read-mode `open()` stay allowed.
+
 ## [3.1.6] - 2026-09-01
 
 ### Fixed

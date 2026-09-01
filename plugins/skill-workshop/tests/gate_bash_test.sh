@@ -115,6 +115,47 @@ continuation=$(printf 'cp %s \\\n    /tmp/backup' "$SKILL")
     || fail "blocked an interpreter READ of a skill file"
 echo "PASS: line continuations, subshells and interpreter reads stay allowed"
 
+# --- git, and open() by its mode (#265) ------------------------------------
+# `git` was absent from the utility table entirely, so the two commands a
+# session reaches for to undo an edit went straight through. And WRITERS keyed
+# on the write call, so `open(path, "w").close()` — which truncates the file to
+# nothing without ever writing a byte — was invisible.
+while IFS= read -r cmd; do
+    [ -z "$cmd" ] && continue
+    [ "$(probe "$cmd")" = blocked ] || fail "should have blocked: $cmd"
+done <<CMDS
+git restore $SKILL
+git checkout -- $SKILL
+git checkout HEAD~1 -- $SKILL
+git rm $SKILL
+git clean -fd plugins/core/skills/specify
+git -C /somewhere/repo restore $SKILL
+python3 -c "open('$SKILL', 'w').close()"
+python3 -c "open('$SKILL', mode='a').close()"
+python3 -c "open('$SKILL', 'r+b').close()"
+git restore $ABS
+CMDS
+echo "PASS: git writes and open() write-modes are blocked"
+
+# The other half: git's read plumbing and a read-mode open must stay allowed.
+# A gate that blocks reads gets routed around instead of through.
+while IFS= read -r cmd; do
+    [ -z "$cmd" ] && continue
+    [ "$(probe "$cmd")" = allowed ] || fail "should have allowed: $cmd"
+done <<CMDS
+git diff $SKILL
+git log -- $SKILL
+git show HEAD:$SKILL
+git status --short
+git add $SKILL
+python3 -c "print(open('$SKILL').read())"
+python3 -c "open('$SKILL', 'r').read()"
+python3 -c "open('$SKILL', 'rb').read()"
+python3 -c "open('$SKILL', encoding='utf-8').read()"
+git checkout some-branch
+CMDS
+echo "PASS: git reads and open() read-modes stay allowed"
+
 # --- with the marker present, writes are allowed ---------------------------
 mkdir -p "$CLAUDE_PLUGIN_DATA" && touch "${CLAUDE_PLUGIN_DATA}/loaded-${SESSION}"
 [ "$(probe "sed -i 's/a/b/' $SKILL")" = allowed ] || fail "still blocked after the skill loaded"
