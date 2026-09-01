@@ -18,6 +18,29 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [3.1.1] - 2026-09-01
+
+### Fixed
+
+- **Upgrading from a bundle older than skill sections no longer deletes your
+  skills.** `/init` inferred which sections a repo had from the `section:` line
+  in each installed `SKILL.md`. A bundle predating that line carries it nowhere,
+  so every skill classified as `core`, the inferred set came out empty, and the
+  prune step removed the workflow and Python skills — on the routine
+  `init.py --silent` the session-start protocol runs unattended. Sections are
+  now inferred from skill *names*, which every version that ever shipped has in
+  common. If this bit you, re-run `/init` with `--profile` or `--sections` to
+  put the sections back.
+- **`--sections` and `--profile` now take effect under `--workspace`.** Both
+  were accepted, exited 0, and installed the defaults, so a workspace
+  registered with `--sections extract` silently had no `extract` skills.
+- **`/init`'s "sections off" line names opt-in sections.** A section that ships
+  without a default — `extract`, today — could never appear there, so the one
+  place that tells you what you are missing omitted exactly the sections you
+  were most likely to be missing.
+- `create_task.py` reports its errors under its own name; it still said
+  `new_task:`, a script that no longer exists on disk.
+
 ## [3.1.0] - 2026-09-01
 
 ### Added

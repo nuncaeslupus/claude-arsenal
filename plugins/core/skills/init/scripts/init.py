@@ -777,11 +777,25 @@ def _resolve_sections(
                 for name in known
                 if recorded.get(name, _SECTION_DEFAULTS.get(name, False))
             }
-        vendored = {
-            _skill_section(d)
+        # Asked of the *bundle*, by name, not of the installed files by their
+        # metadata. `_skill_section` falls back to `core` for a SKILL.md it
+        # cannot classify — right for its own case, inverted here: a bundle
+        # installed before `section:` existed carries the line in no skill at
+        # all, so every directory classified as `core`, `vendored` came out as
+        # `{"core"}`, and the subtraction below emptied it *after* the truth
+        # test that was supposed to catch "we found nothing". The recorded
+        # answer was then no sections, and the prune loop rmtree-d the
+        # consumer's workflow and python skills on a run they invoked to
+        # upgrade them. Names are stable across every version that ever
+        # shipped, and `by_section` is keyed on them.
+        vendored_names = {
+            d.name
             for d in dest.iterdir()
             if d.is_dir() and (d / _VENDOR_MARKER).is_file()
         } if dest.is_dir() else set()
+        vendored = {
+            section for section, names in by_section.items() if names & vendored_names
+        }
         chosen = (
             vendored - {_CORE_SECTION}
             if vendored
@@ -847,7 +861,11 @@ def _vendor_skills(
             removed.append(d.name)
 
     if not silent or removed:
-        off = sorted(set(_SECTION_DEFAULTS) - enabled)
+        # Every shipped section, not only the ones with a `_SECTION_DEFAULTS`
+        # entry. A section that ships without one is off by default — opt-in —
+        # and opt-in is what "new" looks like, so those are exactly the ones a
+        # consumer is most likely to be missing and least likely to know about.
+        off = sorted((set(_SECTION_DEFAULTS) | set(by_section)) - enabled - {_CORE_SECTION})
         suffix = f" (sections off: {', '.join(off)})" if off else ""
         print(f"  skills: vendored {len(available)} into .claude/skills/{suffix}")
     for name in removed:
@@ -1347,6 +1365,8 @@ def init_workspace(
     plan: str,
     bundle_override: Path | None = None,
     allow_downgrade: bool = False,
+    skills_profile: str | None = None,
+    sections: list[str] | None = None,
 ) -> None:
     # The workspace name becomes a directory under arsenal/project/ — host-owned,
     # so a bundle upgrade never touches a workspace's spec, plan, or context.
@@ -1363,8 +1383,21 @@ def init_workspace(
 
     # Ensure base exists first. A refusal there wrote nothing, so registering a
     # workspace on top would report one ready over an uninitialized bundle.
-    if not (arsenal / "bin").is_dir() and not init_base(
-        repo_path, bundle_override, allow_downgrade=allow_downgrade
+    #
+    # Also run it — on an install that already exists — when the caller named a
+    # profile or a section list, because that is the only place either takes
+    # effect. Accepting `--sections extract` and installing the defaults is the
+    # expensive direction of silent: the caller believes the section is on, and
+    # finds out when a skill they asked for is not there. `init_base` is
+    # idempotent by construction (the session-start protocol runs it every
+    # session), so the extra call on an existing install is a refresh.
+    wants_sections = skills_profile is not None or sections is not None
+    if (not (arsenal / "bin").is_dir() or wants_sections) and not init_base(
+        repo_path,
+        bundle_override,
+        allow_downgrade=allow_downgrade,
+        skills_profile=skills_profile,
+        sections=sections,
     ):
         sys.exit("init: workspace not registered — the bundle refused to install (see above)")
 
@@ -1477,7 +1510,9 @@ def main() -> None:
         spec = args.spec or f"{ws_rel}/spec.md"
         plan = args.plan or f"{ws_rel}/plan.md"
         init_workspace(repo_path, name, root, spec, plan, bundle_override,
-                       allow_downgrade=args.allow_downgrade)
+                       allow_downgrade=args.allow_downgrade,
+                       skills_profile=args.profile,
+                       sections=_parse_sections(args.sections))
     else:
         init_base(repo_path, bundle_override, silent=args.silent,
                   allow_downgrade=args.allow_downgrade, skills_profile=args.profile,

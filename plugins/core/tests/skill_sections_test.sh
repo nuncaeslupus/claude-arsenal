@@ -144,3 +144,65 @@ echo "x" > "$repo/.claude/skills/mine/SKILL.md"
 python3 "$init_py" --repo-path "$repo" --profile minimal >/dev/null 2>&1 || fail "init exited non-zero"
 have "$repo" mine || fail "pruning removed a skill the consumer authored"
 echo "PASS: consumer-authored skills survive section pruning"
+
+# --- upgrade from a bundle that predates `section:` altogether ---------------
+# The case above strips the [skills] table but leaves the metadata in the
+# installed SKILL.md files, so section inference still has something to read. A
+# bundle old enough to predate sections has no `section:` line anywhere: every
+# directory then classified as `core`, the inferred set emptied, and the prune
+# loop rmtree-d the consumer's workflow and python skills on the `--silent`
+# upgrade the session protocol runs unattended.
+repo="$tmp/presection"; mkdir -p "$repo"
+python3 "$init_py" --repo-path "$repo" --profile python >/dev/null 2>&1 \
+    || fail "pre-section fixture init failed"
+python3 - "$repo/arsenal/config.toml" <<'PY'
+import re, sys
+p = sys.argv[1]
+text = open(p).read()
+open(p, "w").write(re.sub(r"^\[skills\]\n(?:[a-z-]+ = \w+\n)*", "", text, flags=re.M))
+PY
+# and rewind the skills themselves to a world with no section metadata
+find "$repo/.claude/skills" -name SKILL.md -exec sed -i.bak '/^ *section: /d' {} \; \
+    || fail "could not strip section metadata from the fixture"
+find "$repo/.claude/skills" -name '*.bak' -delete
+grep -rq '^ *section: ' "$repo/.claude/skills" && fail "fixture still carries section metadata"
+
+python3 "$init_py" --repo-path "$repo" --silent >/dev/null 2>&1 \
+    || fail "pre-section upgrade exited non-zero"
+have "$repo" dep-upgrade || fail "PRE-SECTION UPGRADE DELETED the python skills"
+have "$repo" specify     || fail "PRE-SECTION UPGRADE DELETED the workflow skills"
+grep -q '^python = true' "$repo/arsenal/config.toml" \
+    || fail "pre-section upgrade recorded no sections"
+echo "PASS: an upgrade from a pre-section bundle keeps its skills"
+
+# --- 'sections off' names the opt-in sections too ---------------------------
+# A section that ships with no _SECTION_DEFAULTS entry is off by default —
+# opt-in — and opt-in is what "new" looks like, so it is exactly what a
+# consumer is most likely to be missing and least likely to know about.
+repo="$tmp/offline"; mkdir -p "$repo"
+out="$(python3 "$init_py" --repo-path "$repo" 2>&1)" || fail "init exited non-zero"
+echo "$out" | grep -q 'sections off:.*extract' \
+    || fail "the sections-off line omits the opt-in section 'extract': $out"
+echo "$out" | grep -q 'sections off:.*python' || fail "the sections-off line lost 'python'"
+echo "$out" | grep -q 'sections off:.*core' && fail "core is not an optional section"
+echo "PASS: 'sections off' reports opt-in sections, not only default-off ones"
+
+# --- --sections is honoured under --workspace -------------------------------
+# Accepted-and-ignored is the expensive direction of silent: the caller believes
+# the section is on and finds out when a skill they asked for is not there.
+repo="$tmp/ws"; mkdir -p "$repo"
+python3 "$init_py" --repo-path "$repo" --workspace demo --sections extract >/dev/null 2>&1 \
+    || fail "--workspace with --sections exited non-zero"
+have "$repo" har || fail "--sections extract was ignored under --workspace"
+grep -q '^extract = true' "$repo/arsenal/config.toml" \
+    || fail "--workspace did not record the sections it was given"
+
+# and again on a repo that already has a bundle, where the base install is not
+# re-run for its own sake
+repo="$tmp/ws2"; mkdir -p "$repo"
+python3 "$init_py" --repo-path "$repo" >/dev/null 2>&1 || fail "base init failed"
+have "$repo" har && fail "fixture should not start with the extract section"
+python3 "$init_py" --repo-path "$repo" --workspace demo --profile all >/dev/null 2>&1 \
+    || fail "--workspace with --profile exited non-zero"
+have "$repo" har || fail "--profile all was ignored under --workspace on an existing install"
+echo "PASS: --sections and --profile take effect under --workspace"
