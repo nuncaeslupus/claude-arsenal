@@ -223,6 +223,101 @@ python3 -c 'import json,sys; r=json.loads(sys.argv[1]); sys.exit(0 if r["index_o
 rss="$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["index_only_query_peak_rss_mb"])' "$bench")"
 echo "PASS: SC3 at reduced scale — index-only query stays flat (${rss} MB peak)"
 
+# --- capture_har.py: the caller's robots identity, not ours -----------------
+# playwright is not installed in either CI job, and this assertion is not about
+# playwright — it is about which string reaches `new_context(user_agent=…)`.
+# A stub module on PYTHONPATH gets at exactly that seam and nothing else, so
+# the check runs under the same bare interpreter as everything above.
+mkdir -p "$tmp/stub/playwright"
+: > "$tmp/stub/playwright/__init__.py"
+cat > "$tmp/stub/playwright/sync_api.py" <<'STUB'
+"""The smallest playwright that capture_har.py can drive, recording the UA."""
+import contextlib
+import json
+import os
+
+REAL_UA = "StubBrowser/1.0"
+
+
+class _Page:
+    def evaluate(self, expr):
+        return REAL_UA
+
+    def goto(self, url, **kw):
+        pass
+
+    def wait_for_timeout(self, ms):
+        pass
+
+
+class _Context:
+    def __init__(self, **kw):
+        self._kw = kw
+
+    def new_page(self):
+        return _Page()
+
+    def close(self):
+        # Only the recording context has a path — the UA probe context does not,
+        # which is the real script's shape too.
+        path = self._kw.get("record_har_path")
+        if not path:
+            return
+        with open(os.environ["CAPTURE_HAR_STUB_RECORD"], "w") as fh:
+            json.dump({"user_agent": self._kw.get("user_agent")}, fh)
+        with open(path, "w") as fh:
+            fh.write('{"log": {"version": "1.2", "creator": {}, "entries": []}}')
+
+
+class _Browser:
+    def new_context(self, **kw):
+        return _Context(**kw)
+
+    def close(self):
+        pass
+
+
+class _Chromium:
+    def launch(self, **kw):
+        return _Browser()
+
+
+class _Play:
+    chromium = _Chromium()
+
+
+@contextlib.contextmanager
+def sync_playwright():
+    yield _Play()
+STUB
+
+capture() {
+    # $1 = label for the recorded UA, remaining args passed through.
+    local label="$1"; shift
+    CAPTURE_HAR_STUB_RECORD="$tmp/ua-$label.json" \
+    PYTHONPATH="$tmp/stub" python3 "$scripts/capture_har.py" \
+        --url https://example.com --output "$tmp/cap-$label.har" "$@" >/dev/null \
+        || fail "capture_har.py exited non-zero for $label"
+    python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["user_agent"])' \
+        "$tmp/ua-$label.json"
+}
+
+ua="$(capture default)"
+[ "$ua" = "StubBrowser/1.0 claude-arsenal-har/1.0" ] \
+    || fail "the default suffix is no longer appended to the real UA: '$ua'"
+
+ua="$(capture mine --ua-suffix " integral-job-search/0.1")"
+[ "$ua" = "StubBrowser/1.0 integral-job-search/0.1" ] \
+    || fail "--ua-suffix did not reach the recording context: '$ua'"
+
+# An empty suffix is an answer, not a missing one. `default=` plus a falsy
+# check would silently substitute ours here, which is the one case a consumer
+# capturing a token-sensitive page cannot work around.
+ua="$(capture empty --ua-suffix "")"
+[ "$ua" = "StubBrowser/1.0" ] \
+    || fail "--ua-suffix '' appended something anyway: '$ua'"
+echo "PASS: capture_har.py announces the caller's identity, including none"
+
 # --- --help on every shipped script -----------------------------------------
 for script in "$scripts"/*.py; do
     case "$(basename "$script")" in _*) continue ;; esac

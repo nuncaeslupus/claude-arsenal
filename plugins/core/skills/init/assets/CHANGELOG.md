@@ -18,6 +18,37 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [3.4.0] - 2026-09-01
+
+### Added
+
+- `capture_har.py --ua-suffix` — the token appended to the browser's real user
+  agent when recording a HAR is now the caller's to choose, defaulting to
+  today's `claude-arsenal-har/1.0`. If your repo already declares a robots
+  identity, capture under **that** one: a `robots.txt` group naming a token is
+  answering a question about that token, so a capture taken as
+  `claude-arsenal-har/1.0` cannot settle whether a fetch you would actually
+  make is permitted. `--ua-suffix ""` appends nothing and is honoured as
+  given, for a page whose rendering branches on a token it does not recognise.
+
+### Fixed
+
+- **The skill-write gate (`bin/gate_target.py`) was fail-open on most ways to
+  write a file from an interpreter.** It matched a list of write *method names*,
+  and that list cannot be finished: `os.remove`, `os.truncate`, `writelines`,
+  `json.dump`, `print(file=…)`, `fileinput(inplace=True)`, `os.system("rm …")`,
+  `subprocess.run`, `exec` of a string built at runtime and `Path(p).open("w")`
+  all reached a SKILL.md without matching any name in it — as did anything run
+  through `uv run python3 -c`, which the gate read as the utility `uv`. The
+  `Path.open` miss got worse over time: ruff's PTH123 pushes code from the form
+  the gate caught toward the form it did not.
+
+  Interpreter source is now judged the other way round: a skill path in it is a
+  write **unless** every mention sits inside a construct that can only read.
+  Reads still go through — `python3 -c "print(open(SKILL).read())"`, a
+  `read_text()`, a script file given to an interpreter — because a gate that
+  blocks reads gets routed around instead of through.
+
 ## [3.3.0] - 2026-09-01
 
 ### Added

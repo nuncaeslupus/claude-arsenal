@@ -64,6 +64,24 @@ fabricated string. Consent walls, bot checks and server-side rendering all
 branch on the UA, so a capture taken under a fake one is a capture of a
 different site — which defeats the point of capturing.
 
+Which token gets appended is the caller's, not this toolkit's: `--ua-suffix`
+sets it, and it defaults to `claude-arsenal-har/1.0`. That matters most in the
+case the capture is usually *for*. A repo that already declares a robots
+identity has to capture under that identity, because a `robots.txt` group
+naming a token is answering a question about **that** token — a group that
+binds eleven named AI crawlers and not `*` says nothing about a fetch made as
+something else. So a capture taken under the default is not evidence about a
+fetch the caller would actually make.
+
+```bash
+uv run --with playwright python3 capture_har.py --url URL --output capture.har \
+    --ua-suffix " integral-job-search/0.1 (+https://example.com/bot)"
+```
+
+`--ua-suffix ""` appends nothing, for a page whose rendering branches on a
+token it does not recognise. It is honoured as given rather than falling back
+to the default — an empty suffix is an answer, not a missing one.
+
 ### `record_har_content="embed"` stores bodies already decoded
 
 And keeps the original `content-encoding` response header. So a brotli-served

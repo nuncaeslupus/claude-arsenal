@@ -156,6 +156,85 @@ git checkout some-branch
 CMDS
 echo "PASS: git reads and open() read-modes stay allowed"
 
+# --- interpreter source: the polarity is inverted (#337) -------------------
+# WRITERS is a list of ways to write a file, and that list cannot be finished.
+# Each line below reaches the SKILL.md without matching any name in it — through
+# `os`, through a shell-out, through a string built at runtime, or through
+# `Path.open`, which takes its mode FIRST and so never has the comma the
+# `open(path, "w")` pattern needs. Every one of them returned "" before.
+while IFS= read -r cmd; do
+    [ -z "$cmd" ] && continue
+    [ "$(probe "$cmd")" = blocked ] || fail "should have blocked: $cmd"
+done <<CMDS
+python3 -c "from pathlib import Path; Path('$SKILL').open('w').writelines(['x'])"
+python3 -c "import json; from pathlib import Path; json.dump({}, Path('$SKILL').open('w'))"
+python3 -c "import os; os.remove('$SKILL')"
+python3 -c "import os; os.truncate('$SKILL', 0)"
+python3 -c "import fileinput; fileinput.input('$SKILL', inplace=True)"
+python3 -c "import os; os.system('rm $SKILL')"
+python3 -c "import subprocess; subprocess.run(['rm', '$SKILL'])"
+python3 -c "from pathlib import Path; Path('/tmp/x').replace('$SKILL')"
+python3 -c "exec('import os; os.remove(' + repr('$SKILL') + ')')"
+python3 -c "open('$SKILL', 'w').writelines(['x'])"
+python3 -c "import json; json.dump({}, open('$SKILL', 'w'))"
+python3 -c "print('x', file=open('$SKILL', 'w'))"
+perl -pi -e s/a/b/ $SKILL
+uv run python3 -c "import os; os.remove('$SKILL')"
+node -e require('fs').writeFileSync('$SKILL','x')
+perl -E unlink "$SKILL"
+echo "from pathlib import Path; Path('$SKILL').write_bytes(b'x')" | python3
+echo "from pathlib import Path; Path('$SKILL').write_bytes(b'x')" | python3 -W ignore
+echo "rm $SKILL" | sh -s name
+python3 -W ignore -c "from pathlib import Path; Path('$SKILL').write_bytes(b'x')"
+ruby -E utf-8 -e File.write("$SKILL","x")
+CMDS
+echo "PASS: 21 interpreter writes blocked — os, shell-out, exec, Path.open, uv run, pipes"
+
+# The heredoc route is the one the module docstring names as its reason to
+# exist, and it is the one the tokeniser makes hardest: an unquoted newline is a
+# command separator, so each body line ends up standing alone, nowhere near the
+# `python3` that gives it meaning.
+heredoc_writelines=$(printf 'python3 - <<%s\nopen("%s", "w").writelines(["x"])\nPYEOF' "'PYEOF'" "$SKILL")
+[ "$(probe "$heredoc_writelines")" = blocked ] \
+    || fail "#337: a heredoc writelines went through"
+heredoc_remove=$(printf 'python3 - <<%s\nimport os\nos.remove("%s")\nPYEOF' "'PYEOF'" "$SKILL")
+[ "$(probe "$heredoc_remove")" = blocked ] \
+    || fail "#337: a heredoc os.remove went through"
+echo "PASS: heredoc writelines and os.remove are blocked"
+
+# ...and inverting the polarity may not cost the reads. The last two lines are
+# the flag vocabulary, which is per-interpreter: perl's `-E` carries a program,
+# so `perl -E unlink …` above must block, but python's means "ignore the
+# environment" and a script file follows it, and `-m` names a module whose
+# arguments come after — both of those read a skill folder rather than writing
+# to it. Same for an option's OPERAND: `-W ignore` and `-E utf-8` are a value
+# each, not a program named `ignore` or a file called `utf-8`. Reading them as
+# the program is what let the piped writes above through, because the classifier
+# concluded the program was named on the command line and stopped considering
+# stdin — so the blocked and allowed lists here are two halves of one decision. This is the whole reason
+# the inversion is written as "strip the read-only uses, then look for a path
+# left standing" rather than "an interpreter naming a skill path is a write":
+# under-listing a read only ever blocks more, and over-blocking is how a gate
+# gets routed around instead of through.
+while IFS= read -r cmd; do
+    [ -z "$cmd" ] && continue
+    [ "$(probe "$cmd")" = allowed ] || fail "should have allowed: $cmd"
+done <<CMDS
+python3 -c "from pathlib import Path; print(Path('$SKILL').read_text())"
+python3 -c "from pathlib import Path; print(Path('$SKILL').open('r').read())"
+python3 -c "import json; print(json.load(open('$SKILL')))"
+python3 -c "from pathlib import Path; print(Path('$SKILL').exists())"
+uv run python3 scripts/audit_library.py plugins/core/skills/specify
+python3 plugins/core/skills/specify/scripts/helper.py --check
+python3 -m pytest plugins/core/skills/specify/tests
+python3 -E scripts/audit_library.py plugins/core/skills/specify
+python3 -W ignore scripts/audit_library.py plugins/core/skills/specify
+ruby -E utf-8 tools/lint.rb plugins/core/skills/specify
+CMDS
+heredoc_read=$(printf 'python3 - <<%s\nprint(open("%s").read())\nPYEOF' "'PYEOF'" "$SKILL")
+[ "$(probe "$heredoc_read")" = allowed ] || fail "blocked a heredoc READ of a skill file"
+echo "PASS: interpreter reads, a script file argument and a heredoc read stay allowed"
+
 # --- with the marker present, writes are allowed ---------------------------
 mkdir -p "$CLAUDE_PLUGIN_DATA" && touch "${CLAUDE_PLUGIN_DATA}/loaded-${SESSION}"
 [ "$(probe "sed -i 's/a/b/' $SKILL")" = allowed ] || fail "still blocked after the skill loaded"
