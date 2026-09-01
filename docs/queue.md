@@ -288,9 +288,20 @@ the habit they keep on the day it starts meaning something again.
 
 ### The host gate
 
-`open_task_pr.sh` runs `host-gate` before it touches git, and refuses to open the
-PR if it exits non-zero — the same refusal a failing payload gate gets. Empty by
-default, so a repo without one is unaffected.
+`open_task_pr.sh` runs `host-gate` over the tree it is about to commit — after
+the task file has been archived into `tasks/_history/`, not before — and refuses
+to open the PR if it exits non-zero, the same refusal a failing payload gate
+gets. Empty by default, so a repo without one is unaffected.
+
+The position is deliberate and it is the answer to a real failure. The archive
+moves a tracked file, so a gate run before it certifies a tree the commit does
+not carry: any measurement over the repo's own files is then stale by exactly
+that file, and the next run fails on a branch whose gate had just passed.
+Running on both sides is not available either — the two runs demand two
+different committed values for the same measurement. The cost is a slower
+failure, since a red repo is found after the branch is cut; the archive is
+undone on refusal and nothing is committed, so it is time rather than a tree
+left moved.
 
 Point it at everything the repo actually checks. The instruction it replaces
 named `make lint` as its example, so a repo whose real gate was five commands

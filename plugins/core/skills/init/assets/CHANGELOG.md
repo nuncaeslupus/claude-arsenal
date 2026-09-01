@@ -18,6 +18,27 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [3.4.1] - 2026-09-01
+
+### Fixed
+
+- **`bin/host_setup.sh` lost your work when the install failed.** The revert
+  and the restore both sat after an early exit, so a `host-setup` that rewrote
+  a tracked file and *then* failed — a lockfile written before a resolution
+  error, a post-install script exiting non-zero, an interrupted network install
+  — skipped both. The churn stayed in the tree, and an edit you already had
+  there was left overwritten, with your version surviving only as an
+  unreferenced blob in the object database. Cleanup now runs whether the
+  install succeeded or not, which is the case it was written for. A failed
+  install still exits 1.
+- **`agents/worker.md` and `docs/queue.md` described the wrong gate order.**
+  Both said `open_task_pr.sh` runs the gates "before it touches git". Since
+  3.3.0 only `gate_run.sh` does: the repo's `host-gate` runs *after* the task
+  file is archived into `tasks/_history/`, because the archived tree is the one
+  the PR ships. A worker whose host gate failed was told nothing had moved. The
+  archive is undone on refusal and no commit is made, so the real cost is a
+  slower failure, not a tree left moved.
+
 ## [3.4.0] - 2026-09-01
 
 ### Added

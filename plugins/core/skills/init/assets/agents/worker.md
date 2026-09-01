@@ -108,18 +108,37 @@ Verify `pwd` at the start of the task if unsure.
    **Ending your turn ends the task.** There is no picking this back up later:
    the orchestrator is notified that you COMPLETED and moves on, so a gate you
    backgrounded and a watcher you armed deliver their result to nobody, and the
-   task is recorded as done with no PR. Run the host gate, `gate_run.sh` and
-   `open_task_pr.sh` in the **foreground**, in one call, with a timeout generous
-   enough for this host's real suite — wait for the output rather than returning
-   to it. If the host gate genuinely exceeds one turn, that is a `host-gate`
-   sizing problem for the consumer to solve, not something to route around
-   silently: say so in your failure notes and return `open`.
+   task is recorded as done with no PR. So run each command in the **foreground**
+   at its own step — `gate_run.sh` at step 5, `open_task_pr.sh` at step 7 — and
+   wait for its output rather than returning to it. Do not chain the two into
+   one command: the independent review at step 6 goes between them, and a
+   `gate_run.sh && open_task_pr.sh` skips it. Give `open_task_pr.sh` a timeout
+   generous enough for this host's real suite, because it runs the host gate
+   itself after the archive. If the host gate genuinely exceeds one turn, that
+   is a `host-gate` sizing problem for the consumer to solve, not something to
+   route around silently: say so in your failure notes and return `open`.
 
-5. **Run the gates.** `open_task_pr.sh` runs them itself before it touches git —
-   the repo's own `host-gate` from `arsenal/config.toml` if one is declared,
-   then `gate_run.sh <task_id>` — and refuses to open a PR if either fails.
-   Running them here first is still worth it: it surfaces the failure before the
-   PR attempt rather than during it.
+5. **Run the gates.** `open_task_pr.sh` runs them itself and refuses to open a
+   PR if either fails — but not at the same point, and not in the order you
+   would guess. `gate_run.sh <task_id>`, the task's own gate, runs first, before
+   anything in git moves. The repo's `host-gate` from `arsenal/config.toml` runs
+   **after** the task file is archived into `tasks/_history/`: the archived tree
+   is the one the PR ships, so it is the only tree whose measurement means
+   anything.
+
+   So a failing host gate is a slower failure than it looks — by then the branch
+   is cut and the archive has happened. Both are undone: the task file is put
+   back and no commit is made, so the cost is time, not a tree left moved. The
+   script's own message says which of the two happened, including the case where
+   the rollback itself failed and the tree needs a hand before a re-run.
+
+   Running `gate_run.sh` here first is still worth it — it gives the same answer
+   here as it will inside the script, so a failure surfaces before the PR
+   attempt rather than during it. **Do not run the host gate yourself.** Run
+   early it measures a tree with no archive in it, so its answer is not the one
+   that decides anything; and when it passes you have paid for the repo's whole
+   suite twice, on the step most likely to be the expensive one. Let the script
+   run it, once, over the tree being committed.
    - **Gate fails** (host gate or `gate_run.sh` exit non-zero) → **open no PR.**
      Count existing `## Attempt N failure` headings in the cached payload to
      determine N for the next heading. Return outcome `open` to the orchestrator
