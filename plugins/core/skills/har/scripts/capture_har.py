@@ -48,6 +48,13 @@ from pathlib import Path
 # bot checks and server-side rendering all branch on it. Saying who is asking
 # is a courtesy that costs nothing; pretending to be someone else costs the
 # fidelity the capture exists for.
+#
+# This is the default only. Which token to say is the *caller's* to decide:
+# a repo that already declares a robots identity has to capture under that one,
+# because a `User-agent:` group naming a token is answering a question about
+# that token — a capture taken as something else was taken under a rule the
+# caller never read, and cannot settle whether their own fetch is permitted.
+# `--ua-suffix` overrides it, and `--ua-suffix ""` appends nothing.
 UA_SUFFIX = " claude-arsenal-har/1.0"
 
 
@@ -71,6 +78,11 @@ def main(argv: list[str] | None = None) -> int:
         "--executable", type=Path, metavar="PATH",
         help="launch this browser binary directly — for an environment that provisions "
         "one whose build number playwright does not recognise",
+    )
+    parser.add_argument(
+        "--ua-suffix", default=UA_SUFFIX, metavar="TOKEN",
+        help="appended to the browser's real user agent, so the site is told who is "
+        "asking (default: %(default)r). Pass an empty string to append nothing",
     )
     parser.add_argument("--headed", action="store_true", help="show the browser window")
     args = parser.parse_args(argv)
@@ -97,7 +109,12 @@ def main(argv: list[str] | None = None) -> int:
         try:
             probe = browser.new_context()
             try:
-                user_agent = probe.new_page().evaluate("navigator.userAgent") + UA_SUFFIX
+                # `args.ua_suffix`, never the constant: an empty string is a
+                # real answer ("append nothing"), so this must not fall back to
+                # the default on a falsy value.
+                user_agent = (
+                    probe.new_page().evaluate("navigator.userAgent") + args.ua_suffix
+                )
             finally:
                 probe.close()
             context = browser.new_context(

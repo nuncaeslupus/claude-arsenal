@@ -121,6 +121,10 @@ CANONICAL_ARGS = {
     "--browser",
     "--executable",
     "--headed",
+    # Who the request says it is. Canonical because the answer belongs to the
+    # caller's repo, not to the script: a capture taken under someone else's
+    # token is not evidence about a fetch this caller would make.
+    "--ua-suffix",
     "--timeout",
     "--wait",
     # Generic identifiers

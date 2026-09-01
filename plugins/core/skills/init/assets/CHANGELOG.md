@@ -18,6 +18,19 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [3.4.0] - 2026-09-01
+
+### Added
+
+- `capture_har.py --ua-suffix` — the token appended to the browser's real user
+  agent when recording a HAR is now the caller's to choose, defaulting to
+  today's `claude-arsenal-har/1.0`. If your repo already declares a robots
+  identity, capture under **that** one: a `robots.txt` group naming a token is
+  answering a question about that token, so a capture taken as
+  `claude-arsenal-har/1.0` cannot settle whether a fetch you would actually
+  make is permitted. `--ua-suffix ""` appends nothing and is honoured as
+  given, for a page whose rendering branches on a token it does not recognise.
+
 ## [3.3.0] - 2026-09-01
 
 ### Added
