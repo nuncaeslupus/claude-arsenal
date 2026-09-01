@@ -18,6 +18,29 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [3.1.4] - 2026-09-01
+
+### Fixed
+
+- **A rescue snapshot that fails no longer looks like a clean tree.**
+  `rescue_snapshot.sh` reported both the same way — no ref, exit 0 — so
+  `worker_postcheck.sh` could not tell them apart and went on to
+  `git reset --hard` + `git clean -fdq` in the host's working tree. A disk-full
+  or permissions error during the snapshot therefore destroyed uncommitted work
+  with no ref to recover it from, silently, on the one occasion the safety net
+  mattered. The snapshot now exits 1 when it had work it could not save, and
+  `worker_postcheck.sh` refuses the restore and exits **3** rather than
+  discarding anything. A clean tree still restores exactly as before.
+- **A migrated repo gets the complete `config.toml`.** `arsenal_migrate.py`
+  carried its own copy of the template, which had drifted from `init.py`'s: any
+  repo migrated before running `/init` was left permanently without `host-gate`
+  and `[models]`, because `init.py` will not rewrite a config that exists — and
+  no ordering of the two scripts produced a complete file. `arsenal_migrate.py`
+  now reads `init.py`'s template instead of keeping a copy, and writes nothing
+  at all if it cannot find one, rather than seeding a partial config that blocks
+  the real one. If you migrated earlier, compare your `arsenal/config.toml`
+  against a fresh `/init` and add what is missing.
+
 ## [3.1.3] - 2026-09-01
 
 ### Fixed

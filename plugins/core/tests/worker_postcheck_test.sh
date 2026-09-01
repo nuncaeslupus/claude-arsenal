@@ -135,4 +135,50 @@ echo "${sel}" | grep -q "batch capped at 1 task" \
     || fail "unknown isolation must clamp the batch, stderr was: ${sel}"
 echo "PASS: unknown isolation clamps the batch to one worker"
 
+# --- #299: a snapshot that FAILED must not read as "nothing to save" --------
+# rescue_snapshot.sh used to report a failed snapshot exactly as it reported a
+# clean tree: no ref, exit 0. This script could not tell them apart, so a
+# disk-full or a permissions error during the snapshot ended with `reset --hard`
+# + `clean -fdq` run over the host's dirty tree and NO ref to recover it from.
+# Silent, and only on the one occasion the safety net was needed.
+failbin="${tmp}/failbin"
+cp -R "${BIN}" "${failbin}"
+cat > "${failbin}/rescue_snapshot.sh" <<'STUB'
+#!/usr/bin/env bash
+# Stands in for a snapshot that could not be written (disk full, permissions,
+# a git object error): no ref on stdout, non-zero exit.
+exit 1
+STUB
+
+git checkout -q claude/web-session-xyz
+rm -f "${iso_file}"
+git checkout -q -b arsenal/t-rescue-fails
+echo "PRECIOUS UNCOMMITTED WORK" > irreplaceable.txt
+before_head=$(git rev-parse HEAD)
+set +e
+bash "${failbin}/worker_postcheck.sh" >/dev/null 2>"${tmp}/rescue.err"
+code=$?
+set -e
+
+[[ ${code} -eq 3 ]] \
+    || fail "a failed snapshot on a dirty tree must exit 3, got ${code}"
+[[ -f irreplaceable.txt ]] \
+    || fail "THE WORK WAS DESTROYED after the snapshot failed — the whole point of #299"
+grep -q "Nothing was discarded" "${tmp}/rescue.err" \
+    || fail "the refusal must say plainly that nothing was lost: $(cat "${tmp}/rescue.err")"
+[[ "$(git rev-parse HEAD)" == "${before_head}" ]] \
+    || fail "the refusal must not move HEAD either"
+[[ "$(git rev-parse --abbrev-ref HEAD)" == "arsenal/t-rescue-fails" ]] \
+    || fail "the refusal must leave the branch alone"
+echo "PASS: a dirty tree whose snapshot failed is refused, not reset"
+
+# ...and the other half of the distinction: a CLEAN tree still has nothing to
+# save and must go through, or every restore would now stall.
+git checkout -q -- . 2>/dev/null || true
+rm -f irreplaceable.txt
+out=$(bash "${failbin}/worker_postcheck.sh" 2>/dev/null)
+[[ "${out}" == "restored" || "${out}" == "ok" ]] \
+    || fail "a clean tree must still restore even with an unusable rescue script, got '${out}'"
+echo "PASS: a clean tree still restores — 'nothing to save' and 'could not save' stay distinct"
+
 echo "PASS: worker_postcheck_test — all gates passed"
