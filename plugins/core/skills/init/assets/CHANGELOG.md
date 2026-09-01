@@ -18,6 +18,25 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [3.1.16] - 2026-09-01
+
+### Fixed
+
+- **The vendored-skill skew check answered confidently about a skill it could
+  not identify.** When a repo has no `.claude/skills/init/assets/.bundle-version`
+  and two or more vendored skills carry a nested `init/assets/.bundle-version`,
+  the fallback picked the lexicographically first — which has nothing to do with
+  which skill owns the bundle — and compared the installed version against it.
+  Sorting made that deterministic without making it right. Getting it wrong is
+  silent: the probe stays quiet and session-start step 0(b) then runs a skill
+  that rewrites your bundle backwards, the exact fail-open the check exists to
+  prevent.
+
+  It now declines: an ambiguous layout prints `AMBIGUOUS VENDORED SKILL`, names
+  the candidates, and says the guard is inert so you can check step 0(b)
+  yourself. A single candidate is still resolved and reported as before, so an
+  unusual-but-unambiguous layout keeps its guard.
+
 ## [3.1.15] - 2026-09-01
 
 ### Fixed

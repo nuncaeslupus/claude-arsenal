@@ -287,29 +287,53 @@ grep -q "9\.9\.9" "${tmp}/skew-decoy.log" \
     && fail "the report named the decoy skill's version"
 echo "PASS: the skew probe reads .claude/skills/init, not whatever find hits first"
 
-# ...and with no canonical copy the fallback is what answers. It must sort, or
-# the same tree hands different machines different verdicts — the hardest kind
-# of report to act on. The stub hands it `zzz-other` (current) ahead of
-# `aaa-decoy` (stale): unsorted, `head -1` takes the current one and the probe
-# says nothing; sorted, the stale copy is found and reported.
-rm -rf "${skew}/.claude/skills/init"
-printf '2.4.0\n' > "${skew}/.claude/skills/aaa-decoy/init/assets/.bundle-version"
-mkdir -p "${skew}/.claude/skills/zzz-other/init/assets"
-printf '9.9.9\n' > "${skew}/.claude/skills/zzz-other/init/assets/.bundle-version"
-(cd "${skew}" && PATH="${stub_bin}:${PATH}" ARSENAL_REMOTE=nope bash "${CHECK}" --check-only \
-    2>"${tmp}/skew-fb1.log" >/dev/null) \
-    || fail "check_update.sh exited non-zero on the fallback case"
-grep -q "VENDORED SKILL BEHIND BUNDLE" "${tmp}/skew-fb1.log" \
-    || fail "the fallback did not report a skewed skill: $(cat "${tmp}/skew-fb1.log")"
-grep -q "aaa-decoy" "${tmp}/skew-fb1.log" \
-    || fail "the fallback did not resolve to the sorted-first copy"
-(cd "${skew}" && PATH="${stub_bin}:${PATH}" ARSENAL_REMOTE=nope bash "${CHECK}" --check-only \
-    2>"${tmp}/skew-fb2.log" >/dev/null)
-diff -q "${tmp}/skew-fb1.log" "${tmp}/skew-fb2.log" >/dev/null \
-    || fail "the fallback lookup is not deterministic across runs"
-echo "PASS: the fallback lookup is sorted, so it answers the same way twice"
+# --- 10c: with no canonical copy and several candidates, DECLINE (#253) -------
+#     v2.4.22 sorted the fallback, which made it deterministic. Determinism is
+#     not correctness: with two or more candidates it still picked one — the
+#     lexicographically first, which has nothing to do with which skill owns the
+#     bundle — and reported a confident verdict about it. `sort` converted
+#     "wrong on some machines" into "wrong on every machine, reproducibly".
+#
+#     `aaa-first` is CURRENT and sorts first; `zzz-second` is the stale one. The
+#     sorted fallback reads aaa-first, `_semver_gt` returns false, the probe
+#     stays SILENT — and step 0(b) then runs a skill that rewrites the bundle
+#     backwards. That is the exact fail-open #244 exists to prevent, surviving in
+#     the narrower case. A probe that cannot identify its own subject must say so
+#     rather than answer anyway.
+rm -rf "${skew}/.claude/skills/init" "${skew}/.claude/skills/aaa-decoy"
+mkdir -p "${skew}/.claude/skills/aaa-first/init/assets" \
+         "${skew}/.claude/skills/zzz-second/init/assets"
+printf '9.9.9\n' > "${skew}/.claude/skills/aaa-first/init/assets/.bundle-version"
+printf '2.4.0\n' > "${skew}/.claude/skills/zzz-second/init/assets/.bundle-version"
+(cd "${skew}" && ARSENAL_REMOTE=nope bash "${CHECK}" --check-only \
+    2>"${tmp}/skew-amb.log" >/dev/null) \
+    || fail "check_update.sh exited non-zero on the ambiguous case"
+grep -q "AMBIGUOUS VENDORED SKILL" "${tmp}/skew-amb.log" \
+    || fail "TWO CANDIDATES AND NO CANONICAL FILE WERE ANSWERED ANYWAY: $(cat "${tmp}/skew-amb.log")"
+grep -q "VENDORED SKILL BEHIND BUNDLE" "${tmp}/skew-amb.log" \
+    && fail "a verdict was reported about a skill the probe cannot identify"
+grep -q "aaa-first" "${tmp}/skew-amb.log" \
+    || fail "the refusal should name the candidates it found: $(cat "${tmp}/skew-amb.log")"
+grep -q "0(b)" "${tmp}/skew-amb.log" \
+    || fail "the refusal should say the guard is inert for step 0(b): $(cat "${tmp}/skew-amb.log")"
+echo "PASS: an ambiguous vendored layout is declined, not guessed at"
 
-rm -rf "${skew}/.claude/skills/aaa-decoy" "${skew}/.claude/skills/zzz-other" "${stub_bin}"
+# ...and ONE candidate with no canonical copy is still answered — declining
+# there would disable the guard for every host with an unusual but unambiguous
+# layout, which is the fallback's whole reason to exist.
+rm -rf "${skew}/.claude/skills/aaa-first"
+(cd "${skew}" && ARSENAL_REMOTE=nope bash "${CHECK}" --check-only \
+    2>"${tmp}/skew-one.log" >/dev/null) \
+    || fail "check_update.sh exited non-zero on the single-candidate case"
+grep -q "VENDORED SKILL BEHIND BUNDLE" "${tmp}/skew-one.log" \
+    || fail "a single unambiguous candidate must still be reported: $(cat "${tmp}/skew-one.log")"
+grep -q "AMBIGUOUS" "${tmp}/skew-one.log" \
+    && fail "one candidate is not ambiguous"
+echo "PASS: a single fallback candidate is still resolved and reported"
+
+rm -rf "${skew}/.claude/skills/zzz-second"
+
+rm -rf "${stub_bin}"
 mkdir -p "${skew}/.claude/skills/init/assets"
 printf '2.4.9\n' > "${skew}/.claude/skills/init/assets/.bundle-version"
 
