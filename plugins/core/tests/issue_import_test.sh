@@ -190,4 +190,33 @@ if row["remove_label"] != "arsenal:queue":
 PY
 echo "PASS: the import hands back the board label, not only the handle marker"
 
+# Gate 9: an encoded blank body still gets the "nothing here" fallback.
+# `html.unescape(body.strip())` decoded AFTER stripping, so `&nbsp;` survived
+# the strip as text, became a non-breaking space, and landed as a body that is
+# blank on screen and truthy in code — the one case the fallback exists for.
+fresh="${tmp}/tasks6"
+mkdir -p "${fresh}"
+cat > "${tmp}/issues-blank.json" <<'JSON'
+[{"number": 63, "state": "open", "labels": [{"name": "arsenal:queue"}],
+  "html_url": "https://example/63", "title": "blank", "body": "&nbsp;&#32;"}]
+JSON
+python3 "${IMPORT}" --issues "${tmp}/issues-blank.json" --tasks-dir "${fresh}" --apply >/dev/null
+grep -q '_(no issue body)_' "${fresh}"/*.md \
+    || fail "an encoded whitespace-only body was stored instead of the fallback: $(cat "${fresh}"/*.md)"
+echo "PASS: a body that decodes to whitespace gets the no-body fallback"
+
+# Gate 10: the import label may not BE the board label. The row's add_label and
+# remove_label would then be the same string, and a caller applying it
+# faithfully strips the label session-start step 2 uses to find the board —
+# undoing the very fix the labels were added for.
+set +e
+out=$(python3 "${IMPORT}" --issues "${tmp}/issues-body.json" --tasks-dir "${tmp}/tasks7" \
+    --label arsenal:task --apply 2>&1)
+code=$?
+set -e
+[[ ${code} -eq 2 ]] || fail "--label arsenal:task must be refused with exit 2, got ${code}"
+grep -q "board label" <<<"${out}" || fail "the refusal does not say why: ${out}"
+[[ ! -d "${tmp}/tasks7" ]] || fail "the refusal must happen before anything is written"
+echo "PASS: the import label cannot be the board label"
+
 echo "PASS: issue_import_test — all gates passed"

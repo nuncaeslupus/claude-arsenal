@@ -18,6 +18,18 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [3.1.6] - 2026-09-01
+
+### Fixed
+
+- Two edge cases in v3.1.2's issue-import changes, found in review.
+  `issue_import.py` decoded an imported body *after* stripping it, so `&nbsp;`
+  and `&#32;` became a body that is blank on screen and truthy in code — the
+  `_(no issue body)_` fallback never fired. And `--label arsenal:task` made the
+  row's `add_label` and `remove_label` identical, so a caller applying it
+  faithfully stripped the label session-start step 2 uses to find the board;
+  that argument is now refused before anything is written.
+
 ## [3.1.5] - 2026-09-01
 
 ### Fixed
