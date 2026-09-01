@@ -63,13 +63,20 @@ Verify `pwd` at the start of the task if unsure.
    bash claude-arsenal/bin/host_setup.sh
    ```
 
-   It runs the repo's `host-setup` from `arsenal/config.toml` and reverts what
-   the install rewrites in tracked files (`package-lock.json`, `uv.lock`), so
-   the task diff stays the task's. Exit 1 means the setup command itself failed:
-   the tree is not ready, and a gate failure after that is not a verdict on your
-   change — report it as a failure note rather than working around it.
+   It runs the repo's `host-setup` from `arsenal/config.toml` and undoes what
+   the install writes into tracked files (`package-lock.json`, `uv.lock`) so the
+   task diff stays the task's. Your own edits survive it, including when the
+   install rewrites a file you had already touched: it is the install's writes
+   that are undone, not a list of paths.
 
-   If the repo declares no `host-setup`, the script says so and exits 0. Then
+   **Any non-zero exit means the tree is not set up**, and a gate failure after
+   one is not a verdict on your change. Return `open` with a failure note rather
+   than working around it: exit 1 is the setup command failing, exit 2 is
+   `arsenal/config.toml` being unreadable or this not being a git repository at
+   all — a repo-level problem a worker cannot fix from inside a task.
+
+   Exit 0 is the only clear result, and it covers two cases: the setup ran, or
+   the repo declares no `host-setup`. In the second the script says so. Then
    the responsibility is yours for this task: run the install this repo uses
    before the first gate, and when a gate fails on a missing tool or a missing
    directory — not only on a *stale* dependency — treat it as environmental,

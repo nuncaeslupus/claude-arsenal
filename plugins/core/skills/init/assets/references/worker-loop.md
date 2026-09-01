@@ -124,7 +124,10 @@ dispatches that many workers at once. Run when the queue has open tasks:
      in the fan-out diagnoses the same environmental fact separately — five of
      nine, in the session that prompted this. The script is a no-op unless the
      repo declares `host-setup` in `arsenal/config.toml`; if the worker reports
-     that it does not, declare it once rather than paying for it per worker.
+     that it does not, declare it once rather than paying for it per worker. Any
+     non-zero exit — 1 the command failed, 2 the config is unreadable or this is
+     not a git repository — means the tree is not set up and the worker returns
+     `open`; only exit 0 continues, whether or not a command was declared.
 6. **Wait for all workers.** Then, for each returned outcome:
    - **Assert the tree invariant first** — pass the worker's reported root so
      isolation is measured rather than inferred, and its outcome and returned

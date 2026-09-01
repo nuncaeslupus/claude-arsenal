@@ -312,12 +312,15 @@ independently: measured at five of nine in one fan-out, at 10–12 minutes a gat
 run.
 
 `claude-arsenal/bin/host_setup.sh` runs whatever this key names, once, before
-the first gate, and reverts what the install rewrites in **tracked** files —
-the `package-lock.json` churn `npm install` produces, a re-pinned lockfile —
-so the task PR carries the task's diff and nothing else. Files that were
-already modified when it started are left alone. Empty by default, and then the
-script says so and exits 0: the install is still needed, it is just being
-rediscovered one worker at a time instead of declared once here.
+the first gate, and undoes what the install writes into **tracked** files — the
+`package-lock.json` churn `npm install` produces, a re-pinned lockfile — so the
+task PR carries the task's diff and nothing else. The contract is on the
+install's writes, not on a set of paths: work already in the tree survives,
+including when the install rewrites the very file the task was editing, which
+is the case where getting it wrong loses the work *and* keeps the churn. Empty
+by default, and then the script says so and exits 0: the install is still
+needed, it is just being rediscovered one worker at a time instead of declared
+once here.
 
 ### Saying "closed, but not done"
 

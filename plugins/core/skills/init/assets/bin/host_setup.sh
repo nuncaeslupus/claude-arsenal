@@ -19,9 +19,12 @@
 # `package-lock.json` churn an `npm install` produces, a re-pinned `uv.lock`.
 # Two of those nine workers committed that churn into their task PR, because
 # nothing told them not to. The diff has to stay the task's, and asking every
-# worker to remember an extra `git checkout --` is how it stops happening. Only
-# files this run dirtied are reverted: a file that was already modified when
-# the script started is left exactly as it was found.
+# worker to remember an extra `git checkout --` is how it stops happening.
+#
+# The contract is on the install's writes, not on a set of paths: whatever the
+# install wrote into a tracked file is undone, and whatever the caller had
+# already written is still there afterwards — including in the case where those
+# are the same file, which is the one where getting it wrong loses work.
 #
 # SECURITY: host-setup runs verbatim, like host-gate and like a payload's gate
 # block. It comes from arsenal/config.toml, which is host-owned and reviewed
@@ -74,6 +77,29 @@ _dirty_tracked() {
 
 _before="$(_dirty_tracked)"
 
+# The path set is not enough on its own. A file that was ALREADY dirty and that
+# the install then rewrites is in both the before and the after set, so it falls
+# out of the churn diff below — and what survives into the commit is the
+# install's version, with the worker's edit gone. That is both failures at once:
+# the churn the script exists to strip, and the work it exists to protect. So
+# the content of every already-dirty file is snapshotted here, into the object
+# database (no temp dir, no path quoting, and `git gc` cleans up after us), and
+# put back afterwards if the install moved it.
+_snapshot=""
+while IFS= read -r _path; do
+    [[ -n "${_path}" ]] || continue
+    if [[ -e "${_repo_root}/${_path}" ]]; then
+        _blob="$(cd "${_repo_root}" && git hash-object -w -- "${_path}" 2>/dev/null || true)"
+        [[ -n "${_blob}" ]] || continue
+    else
+        # Dirty because the worker DELETED it. Absent is the state to restore.
+        _blob="ABSENT"
+    fi
+    _snapshot="${_snapshot}${_blob} ${_path}"$'\n'
+done <<EOF
+${_before}
+EOF
+
 echo "host_setup: running the host setup command in ${_repo_root}: ${host_setup}" >&2
 if ! (cd "${_repo_root}" && bash -c "${host_setup}") >&2; then
     echo "host_setup: the host setup command failed (${host_setup}). Do not treat a later gate failure as a verdict on your change until this succeeds." >&2
@@ -93,6 +119,39 @@ if [[ -n "${_churn}" ]]; then
     done
     echo "host_setup: reverted the tracked files the install rewrote, so the task diff stays the task's:" >&2
     printf '%s\n' "${_churn}" | sed 's/^/  /' >&2
+fi
+
+# The other half: files that were already dirty and that the install rewrote
+# anyway. `git checkout --` is wrong for these — it would restore the index and
+# throw the worker's edit away, which is the thing being protected — so they are
+# restored from the snapshot taken above.
+_restored=""
+while IFS= read -r _line; do
+    [[ -n "${_line}" ]] || continue
+    _blob="${_line%% *}"
+    _path="${_line#* }"
+    if [[ "${_blob}" == "ABSENT" ]]; then
+        if [[ -e "${_repo_root}/${_path}" ]]; then
+            rm -f "${_repo_root}/${_path}" \
+                && _restored="${_restored}${_path}"$'\n'
+        fi
+        continue
+    fi
+    _now="$(cd "${_repo_root}" && git hash-object -- "${_path}" 2>/dev/null || true)"
+    [[ "${_now}" == "${_blob}" ]] && continue
+    mkdir -p "$(dirname "${_repo_root}/${_path}")"
+    if (cd "${_repo_root}" && git cat-file -p "${_blob}" > "${_path}"); then
+        _restored="${_restored}${_path}"$'\n'
+    else
+        echo "host_setup: the install rewrote ${_path}, which you had already edited, and it could NOT be put back (blob ${_blob}) — check that file before committing" >&2
+    fi
+done <<EOF
+${_snapshot}
+EOF
+
+if [[ -n "${_restored}" ]]; then
+    echo "host_setup: the install also rewrote files you had already edited; your versions are back:" >&2
+    printf '%s' "${_restored}" | sed 's/^/  /' >&2
 fi
 
 echo "host_setup: ok"

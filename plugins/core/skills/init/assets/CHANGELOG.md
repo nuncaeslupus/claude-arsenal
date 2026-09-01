@@ -34,9 +34,10 @@ Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 - **The install's lockfile churn no longer lands in task PRs.**
   `host_setup.sh` reverts what the install rewrites in *tracked* files
   (`package-lock.json`, a re-pinned lockfile) so the task PR carries the task's
-  diff and nothing else. Files that were already modified when it ran are left
-  untouched, and untracked install output — `node_modules/`, `.venv/` — is kept,
-  since that is what the install is for.
+  diff and nothing else. What it undoes is the install's writes, not a list of
+  paths: edits already in the tree survive, including when the install rewrites
+  the very file the task was editing. Untracked install output —
+  `node_modules/`, `.venv/` — is kept, since that is what the install is for.
 
 ### Changed
 
