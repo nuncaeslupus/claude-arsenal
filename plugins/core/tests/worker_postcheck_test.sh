@@ -135,6 +135,44 @@ echo "${sel}" | grep -q "batch capped at 1 task" \
     || fail "unknown isolation must clamp the batch, stderr was: ${sel}"
 echo "PASS: unknown isolation clamps the batch to one worker"
 
+# --- #258: a dirty tree must not outrank the measurement --------------------
+# #147 replaced inference with a measurement, but the restore path still wrote
+# `unavailable` outright — so session scratch in the orchestrator's tree became
+# an architecture verdict, and a fleet that could fan out serialised to one
+# worker per round for the rest of the session. Measured with the worker's root
+# at `.claude/worktrees/agent-…`, the orchestrator's at the repo, and a rescue
+# commit that said `restoring 'main' to 'main'`: HEAD never moved, isolation was
+# honoured, and the verdict came back `unavailable`.
+rm -f "${iso_file}"
+echo "session scratch" > untracked-scratch.txt
+out=$(ARSENAL_WORKER_TOPLEVEL="/some/other/worktree" bash "${POSTCHECK}" 2>/dev/null)
+[[ "${out}" == "restored" ]] || fail "a dirty tree should still restore, got '${out}'"
+[[ "$(cat "${iso_file}" 2>/dev/null)" == "available" ]] \
+    || fail "A DIRTY TREE OVERRODE THE MEASUREMENT — the worker ran elsewhere and HEAD never moved, got '$(cat "${iso_file}" 2>/dev/null)'"
+[[ -e untracked-scratch.txt ]] && fail "the restore should have cleaned the untracked file"
+echo "PASS: a dirty tree alone does not overrule the isolation measurement"
+
+# ...but a MOVED HEAD still does. That is real evidence something ran in this
+# tree, and flattening it would license the fan-out-into-one-tree the clamp
+# exists to prevent — the opposite failure to the one above.
+rm -f "${iso_file}"
+git checkout -q -b a-branch-the-worker-left-behind
+out=$(ARSENAL_WORKER_TOPLEVEL="/some/other/worktree" bash "${POSTCHECK}" 2>/dev/null)
+[[ "${out}" == "restored" ]] || fail "a moved HEAD should restore, got '${out}'"
+[[ "$(cat "${iso_file}" 2>/dev/null)" == "unavailable" ]] \
+    || fail "a moved HEAD is evidence of in-place execution and must still clamp, got '$(cat "${iso_file}" 2>/dev/null)'"
+echo "PASS: a moved HEAD still records unavailable"
+
+# And with no worker root reported at all, a restore stays conservative: the
+# restore happened for a reason and nothing measured says otherwise.
+rm -f "${iso_file}"
+echo "more scratch" > untracked-scratch-2.txt
+out=$(bash "${POSTCHECK}" 2>/dev/null)
+[[ "${out}" == "restored" ]] || fail "expected restored, got '${out}'"
+[[ "$(cat "${iso_file}" 2>/dev/null)" == "unavailable" ]] \
+    || fail "an unmeasured restore must stay conservative, got '$(cat "${iso_file}" 2>/dev/null)'"
+echo "PASS: an unmeasured restore stays conservative"
+
 # --- #299: a snapshot that FAILED must not read as "nothing to save" --------
 # rescue_snapshot.sh used to report a failed snapshot exactly as it reported a
 # clean tree: no ref, exit 0. This script could not tell them apart, so a
