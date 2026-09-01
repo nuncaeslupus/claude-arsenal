@@ -18,6 +18,31 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [3.1.3] - 2026-09-01
+
+### Fixed
+
+- **Two ways past the skill-edit gate are closed.** `gate_target.py` dropped
+  newlines when tokenising a Bash command, so in
+  `echo hi` / `rm -rf .claude/skills/specify` it only ever examined `echo` and
+  allowed the `rm`. And it treated every `(` as a command separator, which split
+  a call's method name away from the paren the write-detector needs beside it —
+  so any `pathlib.Path(...).write_text(...)` inside a heredoc went through
+  undetected, which is the exact route the gate exists to catch. Both are
+  complete bypasses, not partial ones. Reads, subshells and line continuations
+  are unaffected.
+- **A failing evidence gate is reported instead of vanishing.** Under `set -e`
+  the non-zero exit from `gate_evidence.py` ended `gate_run.sh` before the
+  branch written to handle it ran, so the `gate: unmeasured` verdict, both
+  warnings, and the exit-code mapping were unreachable for exactly the runs they
+  describe. A failing evidence gate now exits 1 and says so; an unmeasured one
+  prints `gate: unmeasured` and exits 3.
+- **`check_update.sh` keeps its "never aborts a session" promise.** An
+  unreachable or credential-less `arsenal` remote exited 128 under `set -e`
+  rather than warning, and a refusal from `init.py` skipped the check that tells
+  a real update from a half-finished one. Session-start runs this as a report,
+  so an abort removed the report.
+
 ## [3.1.2] - 2026-09-01
 
 ### Changed

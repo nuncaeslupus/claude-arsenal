@@ -53,7 +53,9 @@ EMBEDDED_PATH = re.compile(
 )
 
 REDIRECTS = {">", ">>", ">|", "&>", "&>>", "1>", "2>", "1>>", "2>>"}
-SEPARATORS = {";", "&&", "||", "|", "&", "(", ")", "\n"}
+# `(` and `)` are deliberately absent — they are handled in `_simple_commands`,
+# where the difference between a subshell and a function call can be told.
+SEPARATORS = {";", "&&", "||", "|", "&", "\n"}
 
 # Where each utility writes, given its file arguments.
 #   "all"  — every path argument is a destination
@@ -74,9 +76,29 @@ WRITERS = re.compile(
 )
 
 
+# A backslash-newline is a line continuation: bash removes it and the command
+# carries on. Removed here too, before the lexer is told to treat a newline as a
+# separator, or `cp SKILL \<newline> /tmp/bak` would split into `cp SKILL` and
+# report a *read* of the skill as a write. Inside a quoted heredoc body bash
+# would keep the backslash; joining two lines of an interpreter script costs
+# nothing, because that text is scanned by regex for paths and write calls
+# rather than parsed.
+_LINE_CONTINUATION = re.compile(r"\\\n")
+
+
 def _tokenise(command: str) -> list[str]:
-    lexer = shlex.shlex(command, posix=True, punctuation_chars=True)
+    # `\n` is punctuation rather than whitespace: bash separates commands on an
+    # unquoted newline, and dropping it merged
+    #     echo starting
+    #     rm -rf .claude/skills/specify
+    # into one token stream whose first word is `echo` — so the gate looked at
+    # `echo`, found no destination, and let the `rm` through. A newline inside
+    # quotes still belongs to its token, which is what keeps a heredoc whole.
+    lexer = shlex.shlex(
+        _LINE_CONTINUATION.sub("", command), posix=True, punctuation_chars="();<>|&\n"
+    )
     lexer.whitespace_split = True
+    lexer.whitespace = " \t\r"
     try:
         return list(lexer)
     except ValueError:
@@ -86,11 +108,32 @@ def _tokenise(command: str) -> list[str]:
 
 
 def _simple_commands(tokens: list[str]) -> list[list[str]]:
+    """Split on what bash treats as a command boundary — and only on that.
+
+    `(` opens a subshell only in **command position**; anywhere else it is the
+    paren of a call. Splitting on every one of them tore
+    `p.write_text(".claude/skills/x/SKILL.md")` into a fragment ending in
+    `p.write_text` — which `WRITERS` cannot match, because the regex needs the
+    paren adjacent — and a fragment holding only the path, with no write signal
+    beside it. The result was not a partial miss: the whole heredoc-into-python
+    route, the one the module docstring names as the reason this file exists,
+    returned nothing at all.
+    """
     out: list[list[str]] = [[]]
+    depth = 0
     for tok in tokens:
-        if tok in SEPARATORS:
+        if tok == "(" and not out[-1]:
+            # Command position: a real subshell.
+            depth += 1
+            out.append([])
+        elif tok == ")" and depth:
+            depth -= 1
+            out.append([])
+        elif tok in SEPARATORS:
             out.append([])
         else:
+            # Including a `(` mid-command and its `)`, so the joined text still
+            # reads as `write_text ( … )` for the regexes below.
             out[-1].append(tok)
     return [c for c in out if c]
 

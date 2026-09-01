@@ -484,5 +484,68 @@ if (cd "${refrepo}" && ARSENAL_DEFAULT_BRANCH=main ARSENAL_GATE_FROM_DEFAULT=1 \
 fi
 echo "PASS: a placeholder gate command on the default branch defers to the working copy"
 
+# --- the evidence branch's failure paths are reachable at all (#301) --------
+# `set -e` is on, so a bare `python3 gate_evidence.py …` followed by `_ev=$?`
+# ended the script the moment the evidence gate failed. Everything written to
+# handle that failure — the `gate: unmeasured` verdict, both stderr messages,
+# the exit mapping — was unreachable for exactly the runs it describes: a
+# caller parsing the `gate:` line got nothing, and gate_evidence.py's exit 2
+# surfaced as this script's "usage error" rather than as a gate failure.
+
+mkdir -p "${tmpdir}/evidence"
+cat > "${tmpdir}/evidence/failing.json" <<'EOF'
+{"metrics": {"sharpe": 0.2, "state": "measured"}}
+EOF
+cat > "${tmpdir}/evidence/unmeasured.json" <<'EOF'
+{"metrics": {"sharpe": null, "state": "unmeasured"}}
+EOF
+
+cat > "${tmpdir}/arsenal/tasks/lo-ev-fail.md" <<'EOF'
+# T: an evidence gate whose measurement misses the threshold
+
+## Acceptance gate
+
+```gate
+sharpe >= 1.0
+evidence: evidence/failing.json
+key: metrics.sharpe
+```
+EOF
+set +e
+out="$(cd "${tmpdir}" && bash "${GATE_RUN}" "lo-ev-fail" 2>"${tmpdir}/ev.log")"
+code=$?
+set -e
+if [[ ${code} -ne 1 ]]; then
+    echo "FAIL: a failing evidence gate should exit 1, got ${code} (out='${out}')" >&2; exit 1
+fi
+if ! grep -q "evidence gate failed" "${tmpdir}/ev.log"; then
+    echo "FAIL: the evidence-gate failure message never ran: $(cat "${tmpdir}/ev.log")" >&2; exit 1
+fi
+echo "PASS: a failing evidence gate exits 1 and says so, instead of dying at set -e"
+
+cat > "${tmpdir}/arsenal/tasks/lo-ev-unmeasured.md" <<'EOF'
+# T: an evidence gate whose metric cannot be scored yet
+
+## Acceptance gate
+
+```gate
+sharpe >= 1.0
+evidence: evidence/unmeasured.json
+key: metrics.sharpe
+status-key: metrics.state
+```
+EOF
+set +e
+out="$(cd "${tmpdir}" && bash "${GATE_RUN}" "lo-ev-unmeasured" 2>"${tmpdir}/ev2.log")"
+code=$?
+set -e
+if [[ ${code} -ne 3 ]]; then
+    echo "FAIL: an unmeasured evidence gate should exit 3, got ${code}" >&2; exit 1
+fi
+if [[ "${out}" != *"gate: unmeasured"* ]]; then
+    echo "FAIL: the 'gate: unmeasured' verdict never reached stdout, got '${out}'" >&2; exit 1
+fi
+echo "PASS: an unmeasured evidence gate reports 'gate: unmeasured' and exits 3"
+
 echo "PASS: gate_run_test — all gates passed"
 exit 0

@@ -138,8 +138,15 @@ WORKING_PAYLOAD=""
 # before the prose/bash-block path can let it through.
 GATE_EVIDENCE_PY="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../scripts/gate_evidence.py"
 if [[ -f "${GATE_EVIDENCE_PY}" ]]; then
-    python3 "${GATE_EVIDENCE_PY}" "${PAYLOAD}"
-    _ev=$?
+    # `|| _ev=$?`, not a bare call followed by `$?`: under `set -e` a non-zero
+    # exit from a simple command ends the script right there, so every line
+    # below — the `gate: unmeasured` verdict, both stderr messages, the exit
+    # mapping — was unreachable for exactly the runs they exist to describe. A
+    # caller parsing the `gate:` line saw nothing, and an exit 2 from
+    # gate_evidence.py surfaced as this script's "usage error" rather than as a
+    # gate failure.
+    _ev=0
+    python3 "${GATE_EVIDENCE_PY}" "${PAYLOAD}" || _ev=$?
     # 3 means the evidence file positively declares the metric unmeasured: the
     # check ran and found that this cannot be scored yet. That is not a verdict,
     # and collapsing it into 1 would make the one honest answer a hard failure —
