@@ -45,6 +45,7 @@ repo, which only these declarations know.
 from __future__ import annotations
 
 import json
+import math
 import re
 import sys
 from pathlib import Path
@@ -193,6 +194,19 @@ def main() -> None:
     if isinstance(raw_measured, bool) or not isinstance(raw_measured, int | float):
         _fail(f"evidence value at {key!r} is not numeric: {raw_measured!r}", 2)
     measured = float(raw_measured)
+    # `json.loads` accepts the JavaScript spellings `NaN`, `Infinity` and
+    # `-Infinity`, and both are `float` — so they cleared the type check above
+    # and reached the comparison, where they are the wrong kind of wrong: `NaN`
+    # passes every `!=` gate (it compares unequal to everything, itself
+    # included) and `Infinity` passes every directional one. A gate that cannot
+    # be failed is not a gate. The threshold side of the grammar already admits
+    # only finite decimals; the measurement now matches it.
+    if not math.isfinite(measured):
+        _fail(
+            f"evidence value at {key!r} is {raw_measured!r}, which is not a finite number — "
+            "a gate cannot be scored against it",
+            2,
+        )
 
     if OPS[op](measured, threshold):
         print(f"gate_evidence: PASS — {key}={measured} {op} {threshold} ({ev_path})")

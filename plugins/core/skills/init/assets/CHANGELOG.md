@@ -18,6 +18,27 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [3.1.9] - 2026-09-01
+
+### Fixed — a gate that could not be failed
+
+- **`gate_evidence.py` accepted `NaN` and `Infinity` as measurements.**
+  `json.loads` parses the JavaScript spellings and both are `float`, so they
+  cleared the numeric type check and reached the comparison — where `NaN` passes
+  every `!=` gate (it compares unequal to everything, itself included) and
+  `Infinity` passes every directional one. A measurement that is not a finite
+  number is now refused with exit 2, matching the threshold side of the grammar,
+  which already admitted only finite decimals.
+- **`gate-check`'s audit exited 0 for a gate nobody verified.** A non-numeric
+  gate reports `MANUAL` and never `PASS` — the documented rule — but the process
+  exit code was 0, which to CI or a calling script is the same thing as a clean
+  audit. A prose gate now requires its Evidence-log row like any other: no
+  recorded measurement, command, SHA or env means **incomplete** and exit 1. A
+  manual gate whose evidence *is* recorded still passes, and is still never
+  counted as PASS. If a plan of yours has prose gates with empty evidence rows,
+  `run_gate.py` will start failing on them — that is the point; fill the row in
+  with what you actually checked.
+
 ## [3.1.8] - 2026-09-01
 
 ### Fixed — action required for existing installs
