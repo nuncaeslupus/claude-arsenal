@@ -33,11 +33,18 @@
 # rescue_snapshot.sh, prints that ref on stderr, and appends it to
 # `${ARSENAL_SESSION_DIR}/rescue_refs`.
 #
+# Exit 4: the worker reported `done` without the evidence a completion carries
+#         (a PR URL or `branch:` line, and `toplevel:`). Checked before anything
+#         destructive runs, because an abandoned worker's gate may still be
+#         alive. Only checked when ARSENAL_WORKER_OUTCOME is passed.
 # Stdout: `ok` | `restored`. NOTE: `ok` means the tree invariant holds, NOT
 #         that worktree isolation is in effect — that verdict is the
 #         `worktree_isolation` sentinel, which the selector reads directly.
 # Env:    ARSENAL_WORKER_TOPLEVEL — the worker's `git rev-parse --show-toplevel`.
 #         Without it isolation cannot be proven and nothing is recorded.
+#         ARSENAL_WORKER_OUTCOME / ARSENAL_WORKER_RESULT — the outcome the worker
+#         reported and its returned text, so a `done` that carries no PR URL,
+#         no `branch:` and no `toplevel:` is refused (exit 4) instead of recorded.
 # Stderr: `worker_postcheck: rescued uncommitted changes to <ref> …` when a
 #         restore had work to save.
 # Exit:   0 invariant holds (possibly after restore); 2 could not restore;
@@ -121,6 +128,38 @@ _record_isolation() {
 # resetting to `main` would throw away the session's own work (#128). It is
 # recorded on first run and reused from then on; an explicit
 # ARSENAL_DEFAULT_BRANCH always wins.
+# A `done` has to carry its evidence, and this runs BEFORE the restore below.
+#
+# The failure: a host gate that takes 10-12 minutes invites a worker to run it as
+# a background job, arm a watcher, and end its turn — "I'll pick back up when the
+# monitor notifies me." Ending the turn is terminal. The orchestrator is notified
+# of a COMPLETED worker whose result is that sentence: no PR, no `branch:`, no
+# `toplevel:`. The task looks finished and is not, and the notification is
+# indistinguishable from a real completion unless somebody reads the prose and
+# asks where the PR URL went. Measured three times in one fan-out of nine, each
+# time after a broader prohibition in the dispatch prompt — so this is a protocol
+# gap, not a worker defect, and prose is the mitigation that already failed.
+#
+# It runs first for a reason. An abandoned worker's gate is often STILL RUNNING;
+# the restore below is `reset --hard` + `clean -fd`, which would destroy the very
+# work this is meant to rescue. Refuse before touching the tree.
+#
+# Opt-in by passing ARSENAL_WORKER_OUTCOME: an orchestrator that does not pass it
+# gets exactly the old behaviour.
+if [[ "${ARSENAL_WORKER_OUTCOME:-}" == "done" ]]; then
+    _missing=""
+    [[ -n "${ARSENAL_WORKER_TOPLEVEL:-}" ]] || _missing="toplevel:"
+    if ! printf '%s' "${ARSENAL_WORKER_RESULT:-}" \
+        | grep -qE '(https?://[^[:space:]]+/pull/[0-9]+|^[[:space:]]*branch:[[:space:]]*[^[:space:]]+)'; then
+        _missing="${_missing:+${_missing} and }a PR URL or branch: line"
+    fi
+    if [[ -n "${_missing}" ]]; then
+        echo "worker_postcheck: a worker reported 'done' without ${_missing} — that is an ABANDONED task, not a completion, and the tree has NOT been touched." >&2
+        echo "worker_postcheck: the usual cause is a worker that backgrounded the host gate or open_task_pr.sh and ended its turn; its processes may still be running. Resume that worker and let it finish in the foreground, rather than recording the task as done." >&2
+        exit 4
+    fi
+fi
+
 session_dir="${ARSENAL_SESSION_DIR:-${ARSENAL_HOME:-arsenal}/session}"
 current="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
 dirty="$(git status --porcelain 2>/dev/null)"

@@ -80,6 +80,16 @@ Verify `pwd` at the start of the task if unsure.
      right, not for someone copying a signature, and reading one in full to
      copy its shape costs 25–33× what the shape costs.
 
+   **Ending your turn ends the task.** There is no picking this back up later:
+   the orchestrator is notified that you COMPLETED and moves on, so a gate you
+   backgrounded and a watcher you armed deliver their result to nobody, and the
+   task is recorded as done with no PR. Run the host gate, `gate_run.sh` and
+   `open_task_pr.sh` in the **foreground**, in one call, with a timeout generous
+   enough for this host's real suite — wait for the output rather than returning
+   to it. If the host gate genuinely exceeds one turn, that is a `host-gate`
+   sizing problem for the consumer to solve, not something to route around
+   silently: say so in your failure notes and return `open`.
+
 4. **Run the gates.** `open_task_pr.sh` runs them itself before it touches git —
    the repo's own `host-gate` from `arsenal/config.toml` if one is declared,
    then `gate_run.sh <task_id>` — and refuses to open a PR if either fails.
