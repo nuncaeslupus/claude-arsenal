@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # open_task_pr_gates_test.sh — the PR helper refuses over a red repo.
 #
-# worker.md step 4 asked a worker to run the host lint gate and the payload gate
+# worker.md step 5 asked a worker to run the host lint gate and the payload gate
 # and to open no PR if either failed, and AGENTS.md stated the payload gate was
 # "a hard precondition" because this script re-runs it. Neither ran anything:
 # both were instructions with no data path behind them, which this project

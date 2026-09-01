@@ -262,6 +262,7 @@ disappears the next time that skill is refreshed.
 ```toml
 merge-policy    = "after-ci"   # always | after-review | after-ci | after-ci-and-review | never
 host-gate       = ""           # shell command; non-zero means no task PR is opened
+host-setup      = ""           # shell command; installs deps in a fresh worktree
 pre-pr-review   = "warn"       # warn | required | off — the pre-PR adversarial review
 test-discipline = "test-first" # or test-after
 session-end     = "handoff"    # handoff | ticket | none
@@ -299,6 +300,24 @@ failures invisible in a diff.
 
 There is no way to skip it. An escape hatch would be reached for precisely the
 situation the refusal exists for — a red repo with a PR to open.
+
+### The setup step
+
+`host-setup` is the other half of the same idea, one step earlier.
+`isolation: worktree` gives every worker a clean checkout, and a checkout
+carries tracked files and nothing an install produces — no `node_modules/`, no
+`.venv/`, no build output. So the first gate a worker runs fails on a missing
+tool that has nothing to do with the change, and each worker diagnoses that
+independently: measured at five of nine in one fan-out, at 10–12 minutes a gate
+run.
+
+`claude-arsenal/bin/host_setup.sh` runs whatever this key names, once, before
+the first gate, and reverts what the install rewrites in **tracked** files —
+the `package-lock.json` churn `npm install` produces, a re-pinned lockfile —
+so the task PR carries the task's diff and nothing else. Files that were
+already modified when it started are left alone. Empty by default, and then the
+script says so and exits 0: the install is still needed, it is just being
+rediscovered one worker at a time instead of declared once here.
 
 ### Saying "closed, but not done"
 

@@ -50,6 +50,7 @@ claude-arsenal/        ← upstream. /init owns it and may overwrite it freely
     worktree_probe.sh  ← probes whether git worktrees work here (fan-out safety)
     worker_postcheck.sh ← restores a clean tree after each worker
     rescue_snapshot.sh ← snapshots a dirty tree before any forced restore
+    host_setup.sh      ← runs the host's install command in a fresh worktree
     open_task_pr.sh    ← worker-side; branch → commit → push → PR
     adversarial_review.sh ← pre-PR review packet, verdict, and freshness receipt
     gate_run.sh        ← runs the task's fenced gate block

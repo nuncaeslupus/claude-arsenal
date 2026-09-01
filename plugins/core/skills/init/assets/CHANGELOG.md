@@ -18,6 +18,35 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [3.3.0] - 2026-09-01
+
+### Added
+
+- **`host-setup` in `arsenal/config.toml`, and `bin/host_setup.sh` that runs
+  it.** Name your repo's install command once — `host-setup = "npm ci && uv
+  sync"` — and every worker runs it in its fresh worktree before the first
+  gate. A worktree is a checkout: it carries tracked files and none of what an
+  install produces, so until now the first gate in each one failed on a missing
+  tool, and every worker in a fan-out diagnosed that separately (five of nine,
+  in the session this came from, at 10-12 minutes a gate run). Empty by
+  default; a repo that declares nothing is unaffected and the script exits 0
+  saying so.
+- **The install's lockfile churn no longer lands in task PRs.**
+  `host_setup.sh` reverts what the install rewrites in *tracked* files
+  (`package-lock.json`, a re-pinned lockfile) so the task PR carries the task's
+  diff and nothing else. Files that were already modified when it ran are left
+  untouched, and untracked install output — `node_modules/`, `.venv/` — is kept,
+  since that is what the install is for.
+
+### Changed
+
+- **`agents/worker.md` makes the install a step, not a recovery note.** Setting
+  the worktree up is now step 2, before the tests; the old text lived in the
+  read-the-task step, spoke of *stale* dependencies rather than absent ones, and
+  only applied once a gate had already been spent failing. Where no `host-setup`
+  is declared, the worker is told to say so in its outcome report, so the gap
+  gets closed once instead of rediscovered per worker.
+
 ## [3.2.0] - 2026-09-01
 
 ### Added

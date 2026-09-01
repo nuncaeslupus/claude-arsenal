@@ -91,12 +91,12 @@ cd "${_repo_root}" || {
 # ---------------------------------------------------------------------------
 # Gates, before anything touches git.
 #
-# worker.md step 4 asks a worker to run the host lint gate and then gate_run.sh,
+# worker.md step 5 asks a worker to run the host lint gate and then gate_run.sh,
 # and to open no PR if either fails. AGENTS.md goes further and states the
 # payload gate "is a hard precondition" because this script re-runs it. Neither
 # was true: nothing here ran either gate, so both were instructions with no data
 # path behind them — which this project already names as the thing that makes a
-# step not happen. A worker that forgot step 4, or ran only the `make lint` the
+# step not happen. A worker that forgot step 5, or ran only the `make lint` the
 # prose gives as its example, opened a perfectly valid PR over a red repo.
 #
 # The refusal is the load-bearing half. A worker that *cannot* open a PR over a

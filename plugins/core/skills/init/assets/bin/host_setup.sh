@@ -1,0 +1,99 @@
+#!/usr/bin/env bash
+# host_setup.sh — run the host repo's install/bootstrap command in this tree.
+#
+# `isolation: worktree` gives every worker a clean checkout, and a checkout
+# carries tracked files only: no `node_modules/`, no `.venv/`, nothing an
+# install step produces. So the first gate a worker runs dies on a missing tool
+# that has nothing to do with the change under test, and the worker spends a
+# full gate run — 10-12 minutes in the fan-out that prompted this — diagnosing a
+# fact that is invariant for the repo. Measured once at nine workers: five of
+# them rediscovered it independently.
+#
+# The command comes from `host-setup` in arsenal/config.toml, the sibling of
+# `host-gate`, so the repo says `npm ci && uv sync` once in the place the rest
+# of its gate configuration already lives instead of every worker inferring it.
+# Empty by default: a repo that declares nothing is unaffected and this is a
+# no-op.
+#
+# It also reverts what the install writes into TRACKED files — the
+# `package-lock.json` churn an `npm install` produces, a re-pinned `uv.lock`.
+# Two of those nine workers committed that churn into their task PR, because
+# nothing told them not to. The diff has to stay the task's, and asking every
+# worker to remember an extra `git checkout --` is how it stops happening. Only
+# files this run dirtied are reverted: a file that was already modified when
+# the script started is left exactly as it was found.
+#
+# SECURITY: host-setup runs verbatim, like host-gate and like a payload's gate
+# block. It comes from arsenal/config.toml, which is host-owned and reviewed
+# like any other file in the repo — but it is code, not data.
+#
+# Exit: 0 the command ran and succeeded, or no host-setup is declared
+#       1 the command failed — the tree is not set up, and a gate failure after
+#         this one may still be environmental
+#       2 setup error: not a git repository, or config.toml could not be read
+#         (a malformed config must not read as "no setup declared")
+
+set -uo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BUNDLE_SCRIPTS="${SCRIPT_DIR}/../scripts"
+ARSENAL_HOME="${ARSENAL_HOME:-arsenal}"
+
+_repo_root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+if [[ -z "${_repo_root}" ]]; then
+    echo "host_setup: not inside a git repository — cannot resolve the tree to set up" >&2
+    exit 2
+fi
+
+if [[ ! -f "${BUNDLE_SCRIPTS}/arsenal_config.py" ]]; then
+    echo "host_setup: ${BUNDLE_SCRIPTS}/arsenal_config.py is missing — cannot read host-setup" >&2
+    exit 2
+fi
+
+# Anchored to the git root, the way open_task_pr.sh anchors the host gate: this
+# is routinely invoked from a subdirectory, and a command written as `make
+# bootstrap` has to run where the Makefile is.
+if ! host_setup="$(python3 "${BUNDLE_SCRIPTS}/arsenal_config.py" \
+        --repo-root "${_repo_root}" --get host-setup 2>&1)"; then
+    echo "host_setup: could not read host-setup from ${_repo_root}/${ARSENAL_HOME}/config.toml: ${host_setup}" >&2
+    exit 2
+fi
+
+if [[ -z "${host_setup}" ]]; then
+    echo "host_setup: no host-setup declared in ${ARSENAL_HOME}/config.toml — nothing to install."
+    echo "host_setup: if a gate then fails on a missing tool or a missing directory, that is this repo's install step going unnamed; declare it there rather than running it by hand each time." >&2
+    exit 0
+fi
+
+_dirty_tracked() {
+    # Unstaged modifications to tracked files, sorted for `comm`. Untracked
+    # output (node_modules/, .venv/) is deliberately out of scope: it is what
+    # the install is FOR, and .gitignore is the host's business.
+    (cd "${_repo_root}" && git diff --name-only 2>/dev/null | LC_ALL=C sort)
+}
+
+_before="$(_dirty_tracked)"
+
+echo "host_setup: running the host setup command in ${_repo_root}: ${host_setup}" >&2
+if ! (cd "${_repo_root}" && bash -c "${host_setup}") >&2; then
+    echo "host_setup: the host setup command failed (${host_setup}). Do not treat a later gate failure as a verdict on your change until this succeeds." >&2
+    exit 1
+fi
+
+_after="$(_dirty_tracked)"
+_churn="$(comm -13 <(printf '%s\n' "${_before}") <(printf '%s\n' "${_after}") | grep -v '^$' || true)"
+
+if [[ -n "${_churn}" ]]; then
+    # `--` and one path per call: a lockfile named `-foo` or containing a space
+    # is still a path, and this runs unattended.
+    printf '%s\n' "${_churn}" | while IFS= read -r path; do
+        [[ -n "${path}" ]] || continue
+        (cd "${_repo_root}" && git checkout -- "${path}") \
+            || echo "host_setup: could not revert ${path} — remove it from your commit by hand" >&2
+    done
+    echo "host_setup: reverted the tracked files the install rewrote, so the task diff stays the task's:" >&2
+    printf '%s\n' "${_churn}" | sed 's/^/  /' >&2
+fi
+
+echo "host_setup: ok"
+exit 0

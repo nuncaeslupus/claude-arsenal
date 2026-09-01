@@ -118,6 +118,13 @@ dispatches that many workers at once. Run when the queue has open tasks:
      the task. You are the one who can set that expectation before the worker
      chooses how to run a 10-minute gate; `agents/worker.md` says it too, but a
      worker deciding under time pressure reads your prompt last.
+   - Say to run `claude-arsenal/bin/host_setup.sh` first, before any test. A
+     worktree carries tracked files and nothing an install produces, so without
+     it the first gate in each worktree fails on a missing tool and every worker
+     in the fan-out diagnoses the same environmental fact separately — five of
+     nine, in the session that prompted this. The script is a no-op unless the
+     repo declares `host-setup` in `arsenal/config.toml`; if the worker reports
+     that it does not, declare it once rather than paying for it per worker.
 6. **Wait for all workers.** Then, for each returned outcome:
    - **Assert the tree invariant first** — pass the worker's reported root so
      isolation is measured rather than inferred, and its outcome and returned
