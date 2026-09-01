@@ -29,6 +29,10 @@ git init -q -b main .
 git config user.email t@e.x; git config user.name T; git config commit.gpgsign false
 git commit -q --allow-empty -m init
 git remote add origin https://github.com/o/r.git
+# A default ref to branch off. Needed by every case that now runs far enough to
+# cut a branch — which, since #256 moved the host gate after the archive, is
+# every case whose subject is the host gate.
+git update-ref refs/remotes/origin/main HEAD
 
 write_task() {  # $1 = id, $2 = gate command
     cat > "arsenal/tasks/$1.md" <<EOF
@@ -60,12 +64,21 @@ git rev-parse --verify --quiet "arsenal/t-gate-red" >/dev/null 2>&1 \
 #     This is the half that was prose only. The consumer whose real gate is
 #     `make lint test evidence verify-subtree verify-gates` had four of five
 #     enforced by nobody.
+#     The host gate runs after the archive as of #256, which puts it after the
+#     shared-checkout guard too — so this must clear that guard to reach it.
 write_task t-gate-host "true"
 mkdir -p arsenal
 printf 'host-gate = "exit 3"\n' > arsenal/config.toml
-out=$(ARSENAL_COAUTHOR="" bash "${HELPER}" t-gate-host "Host gate" 2>&1); rc=$?
+out=$(ARSENAL_TASK_ISSUE=51 ARSENAL_ALLOW_SHARED_ADD=1 ARSENAL_COAUTHOR="" \
+    bash "${HELPER}" t-gate-host "Host gate" 2>&1); rc=$?
 [[ ${rc} -ne 0 ]] || fail "a failing host gate must stop the PR"
 grep -q "host gate failed" <<<"${out}" || fail "the refusal should name the host gate: ${out}"
+#     ...and it puts the caller back. The gate runs after the branch is cut now,
+#     so a refusal that did nothing about it would leave the worker on a branch
+#     they never asked for — the stray side effect this script refuses to leave.
+[[ "$(git rev-parse --abbrev-ref HEAD)" == "main" ]] \
+    || fail "a host-gate refusal left the caller on $(git rev-parse --abbrev-ref HEAD), not main"
+grep -q "back on main" <<<"${out}" || fail "the refusal should say it switched back: ${out}"
 
 # --- 3: no host-gate configured is not a failure ---
 #     A repo that declares none must be unaffected; the default is empty.
@@ -129,7 +142,8 @@ printf 'merge-policy = "after-ci"\n' > arsenal/config.toml
 #     to the cwd; this script is routinely run from a worktree or subdirectory.
 mkdir -p sub/dir
 printf 'host-gate = "exit 4"\n' > arsenal/config.toml
-out=$(cd sub/dir && ARSENAL_COAUTHOR="" bash "${HELPER}" t-gate-cfg "From subdir" 2>&1); rc=$?
+out=$(cd sub/dir && ARSENAL_TASK_ISSUE=52 ARSENAL_ALLOW_SHARED_ADD=1 ARSENAL_COAUTHOR="" \
+    bash "${HELPER}" t-gate-cfg "From subdir" 2>&1); rc=$?
 grep -q "host gate failed" <<<"${out}" \
     || fail "the host gate must be found when run from a subdirectory: ${out}"
 printf 'merge-policy = "after-ci"\n' > arsenal/config.toml
@@ -180,8 +194,8 @@ printf 'host-gate = "test ! -e arsenal/tasks/_history"\n' > arsenal/config.toml
 before_status="$(git status --porcelain)"
 out=$(ARSENAL_TASK_ISSUE=42 ARSENAL_ALLOW_SHARED_ADD=1 ARSENAL_COAUTHOR="" bash "${HELPER}" t-gate-archive "Archived tree" 2>&1); rc=$?
 [[ ${rc} -ne 0 ]] || fail "a host gate that fails over the archived tree must stop the PR"
-grep -q "re-running host gate" <<<"${out}" \
-    || fail "the host gate should re-run once the archive is in the tree: ${out}"
+grep -q "running host gate over the tree being committed" <<<"${out}" \
+    || fail "the host gate should run over the tree carrying the archive: ${out}"
 [[ -f "arsenal/tasks/t-gate-archive.md" ]] \
     || fail "the refused run left the task file archived: it must be restored"
 [[ -e "arsenal/tasks/_history/t-gate-archive.md" ]] \
@@ -290,6 +304,54 @@ grep -qi "empty diff" <<<"${out}" \
 git checkout -q main 2>/dev/null || true
 git status --porcelain >/dev/null
 echo "PASS: a commit that fails restores the task file instead of stranding it"
+
+# --- 13: a tree-dependent host gate must be satisfiable (#256) ---------------
+#     The gate used to run on BOTH sides of the archive. A host measurement over
+#     the repo's own files under arsenal/tasks/ changes when the archive moves
+#     one, so the two runs demanded two different committed values and no single
+#     value satisfied both: stage the pre-archive number and the second run
+#     fails, stage the post-archive number and the first run fails and it never
+#     reaches the archive. The PR became unopenable by the script at all.
+#
+#     The gate below is that shape reduced to one line: it holds only once the
+#     task file has left arsenal/tasks/. Under the old two-run order it could
+#     never pass. The archived tree is the one the PR ships, so it is the only
+#     tree whose measurement means anything.
+git checkout -q main 2>/dev/null || true
+cat > arsenal/tasks/t-drift.md <<'MD'
+---
+id: t-drift
+title: "Drift fixture"
+priority: 1
+---
+
+## Acceptance gate
+```bash
+true
+```
+MD
+git add arsenal/tasks/t-drift.md && git commit -q -m "file the drifting task"
+git update-ref refs/remotes/origin/main HEAD
+printf 'host-gate = "test ! -e arsenal/tasks/t-drift.md"
+' > arsenal/config.toml
+
+# Stopped at the commit so the run ends deterministically without a remote —
+# reaching the commit at all is the proof that the gate passed.
+mkdir -p .git/hooks
+printf '#!/bin/sh\nexit 1\n' > .git/hooks/pre-commit
+chmod +x .git/hooks/pre-commit
+out=$(ARSENAL_TASK_ISSUE=44 ARSENAL_ALLOW_SHARED_ADD=1 ARSENAL_COAUTHOR="" \
+    bash "${HELPER}" t-drift "Drift fixture" 2>&1); rc=$?
+rm -f .git/hooks/pre-commit
+
+grep -q "host gate failed" <<<"${out}" \
+    && fail "A GATE MEASURED OVER THE ARCHIVED TREE CANNOT PASS — it ran before the archive too: ${out}"
+grep -qi "could not commit" <<<"${out}" \
+    || fail "the run should have reached the commit, which is past the gate: ${out}"
+[[ -f "arsenal/tasks/t-drift.md" ]] \
+    || fail "the refused commit left the task file archived: it must be restored"
+git checkout -q main 2>/dev/null || true
+echo "PASS: a gate whose measurement the archive changes is satisfiable"
 
 # --- 9: outside a git repository the helper refuses, and runs no gate --------
 #     Every path this script handles is repo-root-relative, so it anchored the

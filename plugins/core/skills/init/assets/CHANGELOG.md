@@ -18,6 +18,31 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [3.1.14] - 2026-09-01
+
+### Fixed
+
+- **`open_task_pr.sh` could not open a PR at all in a repo whose host gate
+  measures its own files.** The gate ran on both sides of the task-file archive,
+  so any measurement counting files under `arsenal/tasks/` demanded two
+  different committed values and no single value satisfied both: stage the
+  pre-archive number and the second run fails, stage the post-archive number and
+  the first run fails and the archive is never reached. The gate now runs once,
+  over the archived tree — the tree the PR actually ships, and so the only one
+  whose measurement means anything. The old failure message advised making the
+  measurement account for `_history/`; that advice is gone, because an
+  append-only ledger is a legitimate thing to exclude.
+
+### Changed
+
+- **A host-gate failure is now reported after the branch is cut, not before.**
+  That is the cost of running the gate over the final tree: a red repo is
+  discovered one step later. Nothing is committed or pushed, the task-file
+  archive is undone, and the run now also **switches you back to the branch you
+  started on** — so a refusal still leaves the tree as it was found. If the
+  switch back fails, the message says so and names the branch you are on.
+- Repos with no `host-gate` declared are unaffected.
+
 ## [3.1.13] - 2026-09-01
 
 ### Fixed

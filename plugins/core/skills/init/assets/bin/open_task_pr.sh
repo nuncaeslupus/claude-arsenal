@@ -222,12 +222,20 @@ if [[ -f "${BUNDLE_SCRIPTS}/arsenal_config.py" ]]; then
         _gate_fail "could not read host-gate from ${_repo_root}/${ARSENAL_HOME}/config.toml: ${host_gate}"
     fi
 fi
-if [[ -n "${host_gate}" ]]; then
-    echo "open_task_pr: running host gate: ${host_gate}" >&2
-    if ! bash -c "${host_gate}" >&2; then
-        _gate_fail "host gate failed (${host_gate})"
-    fi
-fi
+# The host gate is READ here and RUN after the archive, not here. It used to run
+# on both sides of the archive, and a host measurement over the repo's own files
+# under `${ARSENAL_HOME}/tasks/` cannot satisfy both: the archive moves a tracked
+# file, so the two runs demand two different committed values. Staging the
+# pre-archive number failed the second run; staging the post-archive number
+# failed the first and never reached the archive. The script could not open the
+# PR at all, and its own advice — make the measurement account for `_history/` —
+# asked hosts to count rows in a ledger that is append-only by design.
+#
+# The archived tree is the one the PR ships, so it is the only tree whose
+# measurement means anything. Running once, there, costs a slower failure: a red
+# repo is now discovered after the branch is cut rather than before. The archive
+# is undone on refusal (below) and the branch carries no commit, so the cost is
+# time, not a tree left moved.
 
 # 3. The task's own mechanical gate — the precondition AGENTS.md already claims
 #    this script enforces.
@@ -465,7 +473,13 @@ EOF
     fi
 fi
 
-current="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+# Where the caller started. The host gate now runs after this checkout (#256),
+# so a refusal there has a branch switch to undo — and this script's own promise
+# on a refusal is that nothing was committed and the tree is as it was. Leaving
+# the caller on a branch they did not ask to be on is the same class of stray
+# side effect the archive rollback exists to prevent.
+_ENTRY_BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+current="${_ENTRY_BRANCH}"
 if [[ "${current}" != "${BRANCH}" ]]; then
     if git rev-parse --verify --quiet "${BRANCH}" >/dev/null 2>&1; then
         git checkout "${BRANCH}" >/dev/null 2>&1 || { echo "open_task_pr: cannot switch to ${BRANCH}" >&2; exit 1; }
@@ -622,8 +636,12 @@ fi
 # just passed (#220). Re-run it here, where the tree is final: a gate that
 # regenerates its evidence writes the right numbers into this commit, and one
 # that only checks confirms the tree being committed is the certified one.
-if [[ -n "${host_gate}" && -n "${_ARCHIVED_DEST}" ]]; then
-    echo "open_task_pr: re-running host gate over the archived tree: ${host_gate}" >&2
+# Not conditional on the archive: `_ARCHIVED_DEST` is empty for an unlinked PR
+# and for a task worked from a payload elsewhere, and gating on it would leave
+# those two cases running no host gate at all — a skip, in the one check the
+# script says has deliberately no way to skip it.
+if [[ -n "${host_gate}" ]]; then
+    echo "open_task_pr: running host gate over the tree being committed: ${host_gate}" >&2
     if ! bash -c "${host_gate}" >&2; then
         # Say which of the two happened. Claiming the restoration unconditionally
         # told a reader the tree was back the way it started in exactly the case
@@ -633,7 +651,19 @@ if [[ -n "${host_gate}" && -n "${_ARCHIVED_DEST}" ]]; then
         else
             restored="THE ROLLBACK ALSO FAILED — see above; the tree needs a hand before re-running. Nothing was committed."
         fi
-        echo "open_task_pr: host gate failed after the task file was archived (${host_gate}) — no PR opened. ${restored} A gate that passes before the archive and fails after it is measuring the repo's own files; re-run once the measurement accounts for ${ARSENAL_HOME}/tasks/_history/." >&2
+        # Uncommitted work follows a plain checkout, so this returns the caller
+        # to the branch they ran from with their edits intact. Reported, not
+        # silent: a switch that fails leaves them somewhere they did not choose,
+        # and that is the case where they have to act.
+        if [[ -n "${_ENTRY_BRANCH}" && "${_ENTRY_BRANCH}" != "HEAD" \
+              && "$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)" != "${_ENTRY_BRANCH}" ]]; then
+            if git checkout "${_ENTRY_BRANCH}" >/dev/null 2>&1; then
+                restored="${restored} You are back on ${_ENTRY_BRANCH}."
+            else
+                restored="${restored} NOTE: could not switch back to ${_ENTRY_BRANCH} — you are on ${BRANCH}."
+            fi
+        fi
+        echo "open_task_pr: host gate failed (${host_gate}) — no PR opened. ${restored} The gate ran over the tree this PR would commit, with the task file already in ${ARSENAL_HOME}/tasks/_history/; if it passes over your working tree but fails here, it is measuring the repo's own files and the archive is the difference." >&2
         exit 1
     fi
 fi
