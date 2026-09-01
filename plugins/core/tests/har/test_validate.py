@@ -71,3 +71,39 @@ def test_validate_flags_a_capture_whose_offsets_cannot_be_trusted(validate_mod, 
     truncated.write_text('{"log": {"version": "1.2", "entries": [{"request": ')
     errors, _, _ = validate_mod.validate(truncated)
     assert errors, "a truncated capture must not validate"
+
+
+def test_a_null_response_is_a_finding_not_a_traceback(validate_mod, tmp_path):
+    """`"response": null` is what a proxy writes when the response never arrived.
+
+    `get("response", {})` supplies its default only when the key is *absent*, so
+    the chained `.get` raised `AttributeError` on exactly the capture this
+    script exists to be pointed at. A traceback reads as "the validator is
+    broken" rather than as "the capture is", which is the one failure mode it
+    does not get to have.
+    """
+    bad = tmp_path / "nullresponse.har"
+    bad.write_text(
+        json.dumps(
+            {
+                "log": {
+                    "version": "1.2",
+                    "creator": {"name": "proxy", "version": "1"},
+                    "entries": [
+                        {"request": {"method": "GET", "url": "https://x.invalid/"},
+                         "response": None},
+                        "not even an object",
+                        {"request": {"method": "GET", "url": "https://x.invalid/b"},
+                         "response": {"status": 200, "content": {"text": "hi"}}},
+                    ],
+                }
+            }
+        )
+    )
+
+    errors, _, report = validate_mod.validate(bad)
+    # Two, not three: the capability report counts the entries it could read,
+    # and the bare string is reported as an error rather than counted as one.
+    assert report["entries"] == 2
+    assert any("response" in e for e in errors), "the null response must be reported"
+    assert any("not an object" in e for e in errors), "the bare string must be reported"

@@ -245,3 +245,40 @@ def test_fingerprints_do_not_carry_across_two_derivations(derive, tmp_path):
         "the same credential fingerprinted identically across two runs — the salt "
         "is being persisted, making the marker a stable pseudonym for a live value"
     )
+
+
+def test_a_body_predicate_actually_narrows_the_fixture(derive, scratch, tmp_path):
+    """`--response-match` is the natural way to say "keep the entry that carried this".
+
+    The loop used to evaluate only the index phase, so the three body flags were
+    accepted, documented in `--help`, and ignored: the fixture came out as the
+    whole capture, every other host the page talked to included. The mistake
+    announced itself as a large file rather than as an error, which is the one
+    way it would not get noticed.
+    """
+    source = json.loads((scratch / "basic.har").read_text())
+    total = len(source["log"]["entries"])
+    assert total > 1, "the fixture must have something to narrow away"
+
+    target = tmp_path / "fixture.har"
+    code, _, err = derive(
+        "basic", "--response-match", "Senior Rust Engineer 2", "--keep-bodies",
+        "--output", str(target),
+    )
+    assert code == 0, err
+
+    kept = json.loads(target.read_text())["log"]["entries"]
+    assert 0 < len(kept) < total, f"kept {len(kept)} of {total} — the body phase did not run"
+    assert all(
+        "Senior Rust Engineer 2" in (e["response"]["content"].get("text") or "") for e in kept
+    )
+
+
+def test_the_derived_capture_may_not_be_written_over_its_source(derive, scratch):
+    """A capture records one moment on a live site; re-recording will not reproduce it."""
+    source = scratch / "basic.har"
+    before = source.read_bytes()
+    code, _, err = derive("basic", "--output", str(source))
+    assert code == 2, "writing the input capture must be refused"
+    assert "--output is the capture" in err
+    assert source.read_bytes() == before

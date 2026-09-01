@@ -1,6 +1,6 @@
 ---
 name: har
-description: Use whenever a HAR capture has to be read, searched, filtered or turned into a scraper — which request returned a string seen on the page, which parameter pages the results, what to send to reproduce it. Triggers — "I have a HAR", "which request returns this". Do NOT use to capture a HAR (the browser's job) or to parse a JSON/HTML file with no capture around it.
+description: Use whenever a HAR capture has to be recorded, read, searched, filtered or turned into a scraper — which request returned a string seen on the page, which parameter pages the results, what to send to reproduce it. Triggers — "I have a HAR", "which request returns this", "capture what this page loads". Do NOT use to parse a JSON/HTML file with no capture around it.
 argument-hint: "--input capture.har"
 user-invocable: true
 metadata:
@@ -28,9 +28,29 @@ Load this skill when:
 - A scraper is being built from a captured session, and what is needed is the
   endpoint, its parameters, and a working request.
 - A capture has to be made small or safe enough to commit or hand over.
+- There is no capture yet and nobody at a browser to take one.
 
-Do not load it to capture a HAR, or to parse a JSON/HTML file that did not come
-out of one.
+Do not load it to parse a JSON/HTML file that did not come out of a capture.
+
+## When there is no capture yet
+
+A person at a browser saves one from devtools. A session has nobody there, so:
+
+```bash
+uv run --with playwright python3 "${CLAUDE_SKILL_DIR}/scripts/capture_har.py" \
+    --url https://jobs.example.com/search --output capture.har
+```
+
+`uv run --with` keeps playwright out of the install — nothing else here needs
+it. The script uses the browser already on the machine, records into a **fresh
+context** so no cookie or login of the operator's ends up in a file that gets
+attached to a bug report, and writes the HAR even when navigation times out,
+which is when a capture is most worth having. `--headed` to watch it,
+`--wait S` for XHR that fires late.
+
+Read `references/capturing.md` before changing any of that: each of its four
+rules is there because the obvious alternative silently produces no file, a
+partial one, or one carrying the operator's session.
 
 ## The two-command answer
 
@@ -66,9 +86,12 @@ is spent on endpoints or on rendered HTML.
 | `create_repro.py` | One entry to a runnable `curl` or Python `requests` snippet |
 | `create_har.py` | A derived capture: filtered, redacted, bodies dropped — small enough to commit |
 | `compare_har.py` | What changed between two captures — the scraper's early-warning test |
+| `capture_har.py` | Record a capture in the first place, when nobody is at the browser |
 
-Every script takes `--input`, accepts `--json` for chaining, shares one
-selection grammar, and caps its own output. Run `--help` for every flag.
+Every script that reads a capture takes `--input`, accepts `--json` for
+chaining, shares one selection grammar, and caps its own output. Run `--help`
+for every flag. (`capture_har.py` is the one that writes a capture rather than
+reading one, so only `--output` is shared with it.)
 
 ## From endpoint to scraper
 
@@ -97,8 +120,10 @@ Bodies are **dropped by default**: redaction covers named fields, and a response
 body is unbounded text that may carry a credential anywhere in it, so a derived
 HAR that kept them would look sanitised without being it. `--keep-bodies` opts
 back in and says in its own output that the result is as sensitive as the
-capture. An `--output` that resolves to the input is refused before anything is
-opened.
+capture. An `--output` that names a capture the command is reading is refused
+before anything is opened — in every script, not just this one. A HAR records
+one moment on a live site and re-recording will not reproduce it, so it is not
+a file to overwrite with a report on a mistyped extension.
 
 ## Reading the capture as a whole
 
@@ -220,3 +245,4 @@ here decodes first.
 |---|---|
 | `references/filters.md` | Selecting entries: every flag, how they compose, and the three that are not what they look like |
 | `references/recipes.md` | The whole path: a capture, to the endpoint, to a request that runs in a loop |
+| `references/capturing.md` | Recording a capture without a person at the browser: what writes the file, what leaks into it, what an exporter does to bodies |

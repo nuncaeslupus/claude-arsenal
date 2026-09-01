@@ -39,6 +39,7 @@ from _harlib import (
     is_sensitive_header,
     is_sensitive_param,
     new_salt,
+    output_collision,
     read_entry,
     redact_cookie_header,
     redact_url,
@@ -134,12 +135,9 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     # Refused before anything is opened: a direct writer would truncate the
     # source while still reading it, and there is no recovering the capture.
-    if args.output.resolve() == args.input.resolve():
-        print(
-            "create_har: --output is the input capture. Refusing: writing it would "
-            "truncate the file being read. Choose another destination.",
-            file=sys.stderr,
-        )
+    collision = output_collision(args, inputs=("input",))
+    if collision:
+        print(f"create_har: {collision}", file=sys.stderr)
         return 2
 
     try:
@@ -165,9 +163,21 @@ def main(argv: list[str] | None = None) -> int:
     for row in rows:
         if row.get("type") in dropped_types:
             continue
-        if selection.matches_index(row) == selection.invert:
+        # Both phases, spelled as `query_har.py` spells them. Evaluating only
+        # the index phase here — which is what this loop used to do — accepted
+        # `--body-match`, `--response-match` and `--has-header`, documented them
+        # in `--help`, and ignored them: the "minimal" fixture came out as the
+        # whole capture, every other host the page talked to included, and the
+        # mistake announced itself as a large file rather than as an error.
+        entry: dict[str, Any] | None = None
+        hit = selection.matches_index(row)
+        if hit and selection.needs_body():
+            entry = read_entry(data, spans[row["i"]])
+            hit = selection.matches_body(entry)
+        if hit == selection.invert:
             continue
-        entry = read_entry(data, spans[row["i"]])
+        if entry is None:
+            entry = read_entry(data, spans[row["i"]])
         if not args.secrets:
             entry = _redact_entry(entry, salt)
         if not args.keep_bodies:

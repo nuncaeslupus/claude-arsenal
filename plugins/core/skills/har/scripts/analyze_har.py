@@ -20,6 +20,7 @@ Exit: 0 on success, 1 when the capture cannot be read, 2 on a usage error.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -42,13 +43,14 @@ from _harlib import (
     is_sensitive_header,
     is_textual,
     new_salt,
+    output_collision,
     read_entry,
     redact_pairs,
     redact_url,
     scan_entries,
 )
 
-INDEX_VERSION = 1
+INDEX_VERSION = 2
 
 
 def index_path(har: Path) -> Path:
@@ -147,6 +149,17 @@ def build_row(entry: dict[str, Any], span: EntrySpan, salt: str) -> dict[str, An
         "reqHeaders": redact_pairs(_pairs(request.get("headers")), salt, headers=True),
         "respHeaders": redact_pairs(_pairs(response.get("headers")), salt, headers=True),
         "hasReqBody": bool(post.get("text")),
+        # Unsalted on purpose, unlike every other derived value in the row:
+        # `compare_har` pairs rows across two independently indexed captures,
+        # and a per-run salt would make the same body hash differently on each
+        # side — which is the one thing this field exists to prevent. A SHA-256
+        # of the bytes is not reversible, and the body itself never enters the
+        # sidecar.
+        "reqBodyHash": (
+            hashlib.sha256(str(post.get("text")).encode("utf-8", "surrogatepass")).hexdigest()[:16]
+            if post.get("text")
+            else None
+        ),
         "reqMime": post.get("mimeType"),
         "hasRespBody": content.get("text") is not None,
         "bodyEncoding": content.get("encoding"),
@@ -712,6 +725,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if not args.input.is_file():
         print(f"analyze_har: no such file: {args.input}", file=sys.stderr)
+        return 2
+    collision = output_collision(args, inputs=("input",))
+    if collision:
+        print(f"analyze_har: {collision}", file=sys.stderr)
         return 2
 
     try:

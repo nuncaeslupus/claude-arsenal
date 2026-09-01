@@ -354,6 +354,33 @@ _BOMS: tuple[tuple[bytes, str], ...] = (
 )
 
 
+# Every exception a codec in `_decompress` can raise. `gzip.BadGzipFile` is an
+# `OSError` and `zlib.error` is named, but `brotli.error` subclasses `Exception`
+# directly — outside a tuple of the other three it escapes the handler, out of
+# `matches_body`, and out of a loop over every entry, so one mislabelled body
+# ends the whole query with a traceback. Built at import time because `brotli`
+# is optional and `except ()` is not valid.
+_CODEC_ERRORS: tuple[type[BaseException], ...] = (OSError, zlib.error, ValueError) + (
+    (brotli.error,) if brotli is not None else ()
+)
+
+# Control characters that no textual body contains outside of whitespace. Enough
+# on its own: compressed bytes essentially never decode as valid UTF-8, so this
+# only has to reject the ones that do by accident.
+_CONTROL_CHARS = frozenset(chr(c) for c in range(0x20) if chr(c) not in "\t\n\r\f\v") | {"\x7f"}
+
+
+def _already_decoded(raw: bytes) -> bool:
+    """Whether bytes that failed their declared codec are simply not compressed."""
+    if not raw:
+        return False
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return False
+    return not any(ch in _CONTROL_CHARS for ch in text)
+
+
 def _decompress(raw: bytes, encoding: str | None) -> tuple[bytes, str | None, str | None]:
     """Apply a content-encoding when one is declared or its magic bytes are present."""
     name = (encoding or "").strip().lower()
@@ -377,9 +404,25 @@ def _decompress(raw: bytes, encoding: str | None) -> tuple[bytes, str | None, st
                 return zlib.decompress(raw, -zlib.MAX_WBITS), name, None
         if name == "br":
             if brotli is None:
+                # Checked before reporting the dependency: these scripts are
+                # stdlib-only on purpose, so "no brotli" is the *normal* state
+                # in a vendored consumer repo — and a body an exporter stored
+                # already decoded needs no brotli at all. Asking for an install
+                # that would not change the answer is the wrong instruction.
+                if _already_decoded(raw):
+                    return raw, None, None
                 return raw, "br", "brotli unavailable — install brotli to read this body"
             return brotli.decompress(raw), "br", None
-    except (OSError, zlib.error, ValueError) as exc:
+    except _CODEC_ERRORS as exc:
+        # An exporter that stored the body already decoded while keeping the
+        # original `content-encoding` header is the common case, not the
+        # corrupt one: playwright's `record_har_content="embed"` does exactly
+        # that, so every brotli-served response in such a capture arrives here
+        # with readable bytes. Reporting those as a decode failure loses a body
+        # that is sitting right there. No encoding was applied, so `None` is the
+        # honest answer for which one was.
+        if _already_decoded(raw):
+            return raw, None, None
         return raw, name, f"{name} decompression failed: {exc}"
     return raw, name or None, None
 
@@ -578,3 +621,45 @@ def elide(text: str, width: int) -> str:
     head = (width - 1) // 2
     tail = width - 1 - head
     return text[:head] + "…" + text[len(text) - tail :]
+
+
+# --------------------------------------------------------------------------
+# Destination safety
+# --------------------------------------------------------------------------
+
+
+def output_collision(args: Any, *, inputs: tuple[str, ...] = ("input",)) -> str | None:
+    """The reason `--output` must be refused, or None when the destination is safe.
+
+    A HAR is not a regenerable build artifact. It is a recording of one moment
+    on a live site — the board has rotated its adverts, the build id in the
+    asset URLs has moved, the session is gone — so re-recording gets you *a*
+    capture, never *that* one. And the slip is an easy one to make, because the
+    natural loop is to up-arrow the last command and edit the tail of the line:
+    `--output tmp/site.har` is one mistyped word from `--output tmp/site.txt`.
+
+    Lives here, taking the attribute names, rather than in the five commands
+    that have an `--output`: the sixth one to grow one inherits the guard
+    instead of re-deriving it.
+    """
+    destination = getattr(args, "output", None)
+    if destination is None:
+        return None
+    try:
+        target = Path(destination).resolve()
+    except OSError:  # pragma: no cover - resolve() is strict=False, so rare
+        return None
+    for name in inputs:
+        source = getattr(args, name, None)
+        if source is None:
+            continue
+        try:
+            if Path(source).resolve() == target:
+                return (
+                    f"--output is the capture named by --{name.replace('_', '-')}. "
+                    "Refusing: a capture records one moment on a live site and "
+                    "re-recording will not reproduce it. Choose another destination."
+                )
+        except OSError:  # pragma: no cover
+            continue
+    return None

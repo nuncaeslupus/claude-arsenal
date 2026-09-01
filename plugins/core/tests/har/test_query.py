@@ -180,3 +180,36 @@ def test_no_match_exits_non_zero_and_says_so(query):
     assert code == 1
     assert "no entries matched" in err
     assert out == ""
+
+
+def test_an_extractor_pointed_at_the_wrong_body_type_reports_the_row(query):
+    """One malformed body must never end a walk over every entry.
+
+    `ET.fromstring` raises `ParseError`, which subclasses `SyntaxError`, not
+    `ValueError` — so `--xpath` against anything that is not well-formed XML
+    escaped the handler written directly beneath it and took the whole command
+    down with a traceback. Reaching that is ordinary rather than adversarial: a
+    `text/html` body, a truncated one, or an XML endpoint that answered with an
+    error page.
+    """
+    # Entry 2 is a JSON body; entry 0 is HTML that happens to be well-formed XML,
+    # so it is the JSON one that reaches `ET.fromstring` with nothing to parse.
+    code, out, err = query("basic", "--show", "2", "--xpath", ".//title")
+    assert code == 0, f"one unreadable body ended the run: {err}"
+    assert "cannot extract" in out, out
+
+
+def test_a_json_extractor_on_a_body_that_is_not_json_reports_the_row(query):
+    """The companion direction: the HTML body, through the JSON extractor."""
+    code, out, err = query("basic", "--show", "0", "--json-path", "$.results")
+    assert code == 0, err
+    assert "cannot extract" in out, out
+
+
+def test_query_refuses_to_write_its_report_over_the_capture(query, scratch):
+    source = scratch / "basic.har"
+    before = source.read_bytes()
+    code, _, err = query("basic", "--output", str(source))
+    assert code == 2
+    assert "--output is the capture" in err
+    assert source.read_bytes() == before

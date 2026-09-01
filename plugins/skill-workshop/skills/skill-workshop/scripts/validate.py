@@ -116,6 +116,13 @@ CANONICAL_ARGS = {
     "--output-dir",
     "--input",
     "--input-dir",
+    "--url",
+    # Driving a browser or a subprocess
+    "--browser",
+    "--executable",
+    "--headed",
+    "--timeout",
+    "--wait",
     # Generic identifiers
     "--name",
     "--id",
@@ -250,6 +257,7 @@ FORBIDDEN_ARG_SYNONYMS = {
     "--input-folder": "--input-dir",
 }
 ALLOWED_SCRIPT_VERBS = {
+    "capture",
     "fetch",
     "query",
     "analyze",

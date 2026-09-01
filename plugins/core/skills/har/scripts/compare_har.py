@@ -33,7 +33,6 @@ Exit: 0 when the captures match, 1 when they differ, 2 on a usage error.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import sys
 from collections import defaultdict
@@ -43,7 +42,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from _filters import FilterError, add_selection_args, selection_from_args
-from _harlib import HarStructureError, apply_budget, elide
+from _harlib import HarStructureError, apply_budget, elide, output_collision
 from analyze_har import ensure_index
 
 Key = tuple[str, str, str, str, str, tuple[tuple[str, str], ...], str]
@@ -51,12 +50,17 @@ Key = tuple[str, str, str, str, str, tuple[tuple[str, str], ...], str]
 
 def identity(row: dict[str, Any]) -> Key:
     """The pairing key. `pageref` is deliberately absent — see the module docstring."""
-    body = row.get("reqBodyHash") or ""
+    body = str(row.get("reqBodyHash") or "")
     if not body and row.get("hasReqBody"):
-        # The index does not carry request bodies; their presence plus mime is
-        # the most identity available without reading the capture, and it is
-        # enough to keep two different POSTs to one URL apart in practice.
-        body = hashlib.sha256(str(row.get("reqMime") or "").encode()).hexdigest()[:12]
+        # A body the index could not identify. Hashing the *mime type* here
+        # instead — which is what this fallback used to do — made every
+        # `application/json` POST to one URL hash alike, so a capture of one
+        # search and a capture of another compared equal. That is the fail-open
+        # direction, and on a board whose list endpoint is a POST to a URL that
+        # never varies it is also the common one. Unknown is not equivalent, so
+        # the row is given an identity nothing else can share and is reported as
+        # unpaired rather than as unchanged.
+        body = f"unidentified-body:{row.get('i')}"
     return (
         str(row.get("method") or ""),
         str(row.get("scheme") or ""),
@@ -176,6 +180,10 @@ def main(argv: list[str] | None = None) -> int:
         if not path.is_file():
             print(f"compare_har: no such file: {path}", file=sys.stderr)
             return 2
+    collision = output_collision(args, inputs=("input", "against"))
+    if collision:
+        print(f"compare_har: {collision}", file=sys.stderr)
+        return 2
 
     try:
         selection = selection_from_args(args)
@@ -207,6 +215,20 @@ def main(argv: list[str] | None = None) -> int:
         f"{len(left)} vs {len(right)} entries — {len(pairs)} paired, "
         f"{len(only_left)} only in {args.input.name}, {len(only_right)} only in {args.against.name}"
     ]
+    # Said out loud rather than left to be inferred from an unpaired row: an
+    # index written before request bodies were hashed cannot identify them, and
+    # the reader should re-run `analyze_har.py --index` rather than read the
+    # additions and removals below as a change on the site.
+    unidentified = sum(
+        1
+        for row in (*only_left, *only_right)
+        if row.get("hasReqBody") and not row.get("reqBodyHash")
+    )
+    if unidentified:
+        lines.append(
+            f"! {unidentified} request(s) carry a body this index cannot identify — "
+            "listed as unpaired, not as unchanged; rebuild with analyze_har.py --index"
+        )
     lines += changed
     lines += params
     lines += [f"- {elide(row.get('url') or '', 68)}" for row in only_left]
