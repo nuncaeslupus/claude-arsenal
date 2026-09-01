@@ -120,7 +120,12 @@ def render(issue: dict[str, Any], task_id: str) -> str:
     # both fields arrive through the same MCP tool, escaped the same way, and a
     # task file is data other tools compare against. Left alone, the prose a
     # human reads to write the real gate spells every apostrophe `&#39;`.
-    body = html.unescape((issue.get("body") or "").strip()) or "_(no issue body)_"
+    #
+    # Decode first, THEN strip: `&nbsp;` and `&#32;` survive a strip as text,
+    # decode to whitespace afterwards, and land in the file as a body that is
+    # blank but truthy — so the `_(no issue body)_` fallback, which exists to
+    # tell a reader there is nothing here, never fires.
+    body = html.unescape(issue.get("body") or "").strip() or "_(no issue body)_"
     return TEMPLATE.format(
         task_id=task_id,
         # Two spellings to undo before this lands in the repo, because a task
@@ -152,6 +157,19 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--label", default=DEFAULT_IMPORT_LABEL)
     parser.add_argument("--apply", action="store_true", help="write the task files")
     args = parser.parse_args(argv)
+
+    if args.label == TASK_LABEL:
+        # Otherwise `add_label` and `remove_label` below are the same string,
+        # and a caller applying the row faithfully strips the very label
+        # session-start step 2 uses to find the board — leaving the task
+        # invisible again, which is the failure the labels were added to fix.
+        print(
+            f"issue_import: --label {args.label!r} is the board label. An issue already "
+            "carrying it is already a handle; pick the label you file NEW work under "
+            f"(default {DEFAULT_IMPORT_LABEL!r}).",
+            file=sys.stderr,
+        )
+        return 2
 
     try:
         payload = json.loads(args.issues.read_text(encoding="utf-8"))
