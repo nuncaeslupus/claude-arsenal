@@ -185,6 +185,26 @@ if [[ -e "${TRAV2}/../pwned.md" || -e "${tmpdir}/pwned.md" ]]; then
 fi
 echo "PASS: a legacy task id that is not a filename is refused"
 
+# A task id starting with `.` or `_` is a legal filename and clears every check
+# above, but `create_task.py` and `task_select.py` both skip those names when
+# they collect the task set. Migrating one reports success and produces a task
+# that can never be selected and never satisfies a dependency — the worst of the
+# two outcomes, because the queue looks migrated.
+for hidden in ".hidden" "_history"; do
+    HID="${tmpdir}/hidden-$(printf '%s' "${hidden}" | tr -d '._')"
+    mkdir -p "${HID}/claude-arsenal/queue"
+    printf '{"id": "%s", "title": "invisible", "status": "open"}\n' "${hidden}" \
+        > "${HID}/claude-arsenal/queue/tasks.jsonl"
+    code=0
+    out=$(python3 "${MIGRATE_PY}" --repo-root "${HID}" --apply 2>&1) || code=$?
+    [[ ${code} -eq 2 ]] \
+        || fail "task id '${hidden}' must be refused, got ${code}: ${out}"
+    if [[ -e "${HID}/arsenal/tasks/${hidden}.md" ]]; then
+        fail "a task file '${hidden}.md' the queue cannot see was written"
+    fi
+done
+echo "PASS: a task id the queue would skip as hidden is refused"
+
 # --- a row that cannot be read stops the migration (#265) -------------------
 # Skipping it and reporting success is how the only record of a task gets
 # deleted along with the old queue the user was told they could remove.

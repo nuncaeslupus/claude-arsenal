@@ -131,13 +131,20 @@ def plan_pr_closed(
         or (event.get("repository") or {}).get("full_name")
         or ""
     )
-    if head_repo and base_repo and head_repo != base_repo:
+    # Keyed on the BASE repo, not on the head repo being present. GitHub sends
+    # `head.repo: null` once the fork is deleted or made private, which is the
+    # same fork with its provenance missing — and a payload an attacker can
+    # produce on demand by deleting the fork after opening the PR. Once the base
+    # repo is known, anything that does not match it is outside. A payload
+    # carrying no repository information at all stays lenient: that is a caller
+    # constructing an event by hand, not a fork.
+    if base_repo and head_repo != base_repo:
         return [
             {
                 "kind": "note",
                 "message": (
-                    f"PR {url}: opened from fork '{head_repo}' — ignored. A pull request "
-                    "from outside this repository cannot close or release a task."
+                    f"PR {url}: opened from fork '{head_repo or '?'}' — ignored. A pull "
+                    "request from outside this repository cannot close or release a task."
                 ),
             }
         ]

@@ -163,6 +163,15 @@ def main() -> None:
     if not m:
         _fail("gate block present but has no '<metric> <op> <threshold>' line", 2)
     op, threshold = m.group(1), float(m.group(2))
+    # `GATE_RE` accepts an exponent, so `<= 1e999` overflows to inf here and
+    # every finite measurement satisfies it. Unfailable from the threshold side
+    # is the same hole as unfailable from the measurement side, checked below.
+    if not math.isfinite(threshold):
+        _fail(
+            f"gate threshold {m.group(2)!r} is not a finite number — "
+            "a gate written against it cannot be failed",
+            2,
+        )
 
     evidence = fields.get("evidence")
     key = fields.get("key")
@@ -199,8 +208,7 @@ def main() -> None:
     # and reached the comparison, where they are the wrong kind of wrong: `NaN`
     # passes every `!=` gate (it compares unequal to everything, itself
     # included) and `Infinity` passes every directional one. A gate that cannot
-    # be failed is not a gate. The threshold side of the grammar already admits
-    # only finite decimals; the measurement now matches it.
+    # be failed is not a gate. The threshold side is guarded where it is parsed.
     if not math.isfinite(measured):
         _fail(
             f"evidence value at {key!r} is {raw_measured!r}, which is not a finite number — "

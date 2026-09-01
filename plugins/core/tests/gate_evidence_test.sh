@@ -152,5 +152,42 @@ echo '{"totals":{"percent_covered":0.93}}' > coverage.json
 [[ "$(run)" == "0" ]] || { echo "FAIL: a finite measurement must still pass" >&2; exit 1; }
 echo "PASS: NaN and Infinity are refused; a finite measurement still passes"
 
+# --- an unfailable THRESHOLD is the same hole from the other side ------------
+# The measurement side was closed above, but `GATE_RE` accepts an exponent, so
+# `1e999` overflows to inf when the threshold is parsed. Every finite
+# measurement then satisfies a `<=` gate no matter how bad it is.
+cat > arsenal/tasks/lo-inf.md <<'MD'
+# INF
+## Acceptance gate
+```gate
+p95_latency_ms <= 1e999
+evidence: metrics.json
+key: value
+```
+MD
+echo '{"value": 999999}' > metrics.json
+out=$(python3 "${GE}" arsenal/tasks/lo-inf.md 2>&1); code=$?
+if [[ ${code} -ne 2 ]]; then
+    echo "FAIL: a non-finite threshold must be refused, got ${code}: ${out}" >&2; exit 1
+fi
+grep -q "finite" <<<"${out}" || { echo "FAIL: the refusal must say why: ${out}" >&2; exit 1; }
+
+# A large-but-finite exponent threshold is still a legitimate gate.
+cat > arsenal/tasks/lo-e.md <<'MD'
+# E
+## Acceptance gate
+```gate
+bytes <= 1e6
+evidence: metrics.json
+key: value
+```
+MD
+echo '{"value": 1000}' > metrics.json
+python3 "${GE}" arsenal/tasks/lo-e.md >/dev/null 2>&1
+if [[ $? -ne 0 ]]; then
+    echo "FAIL: a finite exponent threshold must still pass" >&2; exit 1
+fi
+echo "PASS: a non-finite threshold is refused; a finite exponent still works"
+
 echo "PASS: gate_evidence_test — all gates passed"
 exit 0

@@ -116,6 +116,11 @@ def _safe_id(raw: object, *, where: str) -> str:
         or "/" in task_id
         or "\\" in task_id
         or task_id in {".", ""}
+        # `create_task.py` and `task_select.py` both skip `.`/`_` names when
+        # they collect the task set, so migrating one writes a file the queue
+        # can never select and no dependency can ever be satisfied by — while
+        # reporting success.
+        or task_id.startswith((".", "_"))
     ):
         raise MigrateError(f"{where}: task id {task_id!r} is not a usable filename")
     return task_id
