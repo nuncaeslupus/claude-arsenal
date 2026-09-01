@@ -637,10 +637,14 @@ if [[ -n "${host_gate}" && -n "${_ARCHIVED_DEST}" ]]; then
         exit 1
     fi
 fi
-[[ -n "${_ARCHIVED_BACKUP}" ]] && rm -f "${_ARCHIVED_BACKUP}"
-
 # Stage and commit — the shared-checkout guard above already cleared `git add
 # -A`, and a dynamic Co-Authored-By is added only when supplied.
+#
+# The rescue backup is deliberately NOT deleted yet. It used to be dropped
+# right here, before the commit, so a `git commit` that failed left the task
+# file moved into `tasks/_history/` with `status: merged` — which the selector
+# reads as finished work — and `_unarchive_task_file` had nothing to restore
+# from. That is exactly what the rollback above exists to prevent.
 git add -A
 
 # `Closes #<issue>` goes in the commit message as well as the PR body. The body
@@ -654,10 +658,27 @@ fi
 if [[ -n "${ARSENAL_COAUTHOR:-}" ]]; then
     commit_args+=(-m "Co-Authored-By: ${ARSENAL_COAUTHOR}")
 fi
-if ! git commit "${commit_args[@]}" >/dev/null 2>&1; then
-    echo "open_task_pr: nothing to commit for ${TASK_ID} (empty diff); return outcome 'open' with failure notes" >&2
+if ! commit_err="$(git commit "${commit_args[@]}" 2>&1 >/dev/null)"; then
+    # Not "empty diff": `_archive_task_file` moved a tracked file and `git add
+    # -A` staged it, so there IS something to commit whenever the archive ran.
+    # Reaching here then means a hook, a git-config problem, or an identity that
+    # cannot be resolved — and the message used to name the one cause that
+    # cannot apply, sending the reader to look in the wrong place.
+    if [[ -n "${_ARCHIVED_DEST}" ]]; then
+        if _unarchive_task_file; then
+            restored="The task file has been restored to ${ARSENAL_HOME}/tasks/."
+        else
+            restored="THE ROLLBACK ALSO FAILED — see above; the tree needs a hand before re-running."
+        fi
+    else
+        restored="Nothing had been archived, so the tree is unchanged."
+    fi
+    echo "open_task_pr: could not commit ${TASK_ID} — no PR opened. ${restored} git said: ${commit_err:-<no output>}" >&2
+    [[ -n "${_ARCHIVED_BACKUP}" ]] && rm -f "${_ARCHIVED_BACKUP}"
     exit 1
 fi
+# The commit holds the archive now, so the backup has nothing left to protect.
+[[ -n "${_ARCHIVED_BACKUP}" ]] && rm -f "${_ARCHIVED_BACKUP}"
 
 # Push with exponential backoff (network-transient retry only).
 delay=1

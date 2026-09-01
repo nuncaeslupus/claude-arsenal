@@ -18,6 +18,33 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [3.1.10] - 2026-09-01
+
+### Fixed — data integrity
+
+- **A failed commit no longer strands your task file in `_history/`.**
+  `open_task_pr.sh` deleted its rescue backup *before* `git commit`, so a commit
+  refused by a hook or a git-config problem exited 1 with the task file already
+  archived and stamped `status: merged` — which the selector reads as finished
+  work — and nothing left to restore it from. The backup now survives until the
+  commit succeeds, and a refused commit rolls the archive back. The message no
+  longer blames an "empty diff", which cannot be the cause there: `git add -A`
+  has just staged the archive move.
+- **`arsenal_migrate.py` contains the paths it is handed.** A legacy queue row's
+  `payload` and `id` were joined straight onto a path, so with `--apply` one row
+  could read a file outside the queue directory and write it inside
+  `arsenal/tasks/`. Both are resolved and checked now, and a task id that is not
+  a usable filename is refused.
+- **A queue row that cannot be read stops the migration.** Malformed JSON lines
+  and rows with no `id` were skipped silently and the run still reported
+  success — so a user who trusted that report and deleted the old queue lost the
+  only record of those tasks. It now exits 2 naming the file and line, having
+  written nothing.
+- **Migrated `tags`, `requires` and `workspace` survive being read back.** The
+  values were concatenated rather than serialised, so the single tag
+  `needs, review` became two items and `type: bug` became a YAML mapping nested
+  inside the list.
+
 ## [3.1.9] - 2026-09-01
 
 ### Fixed — a gate that could not be failed

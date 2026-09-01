@@ -155,4 +155,78 @@ grep -q "^status: merged" "${REPO2}/arsenal/tasks/_history/lo-done1.md" || fail 
 out=$(echo '{}' | python3 "${SELECT_PY}" --tasks-dir "${REPO2}/arsenal/tasks" --max 9 2>/dev/null)
 grep -q '"id":"lo-done1"' <<<"${out}" && fail "finished work must never be selected again"
 
+# --- a legacy row cannot read or write outside the queue (#302) -------------
+# `payload` and `id` come out of a file this script is pointed at, and both were
+# joined straight onto a path. With --apply, one row could read a file outside
+# the queue directory and write its contents outside arsenal/tasks/.
+TRAV="${tmpdir}/traversal"
+mkdir -p "${TRAV}/claude-arsenal/queue"
+printf 'SECRET-CONTENTS\n' > "${TRAV}/outside.md"
+cat > "${TRAV}/claude-arsenal/queue/tasks.jsonl" <<'JSON'
+{"id": "lo-esc", "title": "reads outside", "status": "open", "payload": "../../outside.md"}
+JSON
+out=$(python3 "${MIGRATE_PY}" --repo-root "${TRAV}" --apply 2>&1)
+if grep -rq "SECRET-CONTENTS" "${TRAV}/arsenal" 2>/dev/null; then
+    fail "a ../ payload was read into a task file: ${out}"
+fi
+grep -q "resolves outside" <<<"${out}" || fail "the containment refusal was not reported: ${out}"
+echo "PASS: a legacy payload path cannot escape the queue directory"
+
+TRAV2="${tmpdir}/traversal-id"
+mkdir -p "${TRAV2}/claude-arsenal/queue"
+cat > "${TRAV2}/claude-arsenal/queue/tasks.jsonl" <<'JSON'
+{"id": "../../../pwned", "title": "writes outside", "status": "open"}
+JSON
+code=0
+python3 "${MIGRATE_PY}" --repo-root "${TRAV2}" --apply >/dev/null 2>&1 || code=$?
+[[ ${code} -eq 2 ]] || fail "a traversing task id must exit 2, got ${code}"
+if [[ -e "${TRAV2}/../pwned.md" || -e "${tmpdir}/pwned.md" ]]; then
+    fail "a task file was written outside the tree"
+fi
+echo "PASS: a legacy task id that is not a filename is refused"
+
+# --- a row that cannot be read stops the migration (#265) -------------------
+# Skipping it and reporting success is how the only record of a task gets
+# deleted along with the old queue the user was told they could remove.
+BAD="${tmpdir}/badline"
+mkdir -p "${BAD}/claude-arsenal/queue"
+cat > "${BAD}/claude-arsenal/queue/tasks.jsonl" <<'JSON'
+{"id": "lo-ok", "title": "fine", "status": "open"}
+{"id": "lo-broken", "title": "truncated"
+{"title": "no id at all", "status": "open"}
+JSON
+code=0
+out=$(python3 "${MIGRATE_PY}" --repo-root "${BAD}" --apply 2>&1) || code=$?
+[[ ${code} -eq 2 ]] || fail "a malformed queue line must exit 2, got ${code}: ${out}"
+grep -q "tasks.jsonl:2" <<<"${out}" || fail "the refusal must name the line number: ${out}"
+if [[ -d "${BAD}/arsenal/tasks" ]]; then
+    fail "a refused migration must write nothing"
+fi
+echo "PASS: a malformed queue row stops the migration and names its line"
+
+# --- list values survive being read back ------------------------------------
+# `tags` and `requires` arrive as arbitrary JSON strings; joining them raw turned
+# one tag into two, and a value with a colon into a mapping nested in the list.
+YM="${tmpdir}/yamlsafe"
+mkdir -p "${YM}/claude-arsenal/queue"
+cat > "${YM}/claude-arsenal/queue/tasks.jsonl" <<'JSON'
+{"id": "lo-yaml", "title": "list quoting", "status": "open", "tags": ["needs, review", "type: bug"], "workspace": "a: b"}
+JSON
+python3 "${MIGRATE_PY}" --repo-root "${YM}" --apply >/dev/null 2>&1 \
+    || fail "the yaml fixture should migrate cleanly"
+python3 - "${YM}/arsenal/tasks/lo-yaml.md" <<'PY' || fail "see above"
+import re, sys
+text = open(sys.argv[1]).read()
+tags = re.search(r"^tags: (.+)$", text, re.M)
+ws = re.search(r"^workspace: (.+)$", text, re.M)
+if not tags or tags.group(1) != '["needs, review", "type: bug"]':
+    print(f"tags were not serialised as two quoted items: {tags and tags.group(1)!r}",
+          file=sys.stderr)
+    raise SystemExit(1)
+if not ws or ws.group(1) != '"a: b"':
+    print(f"workspace with a colon was not quoted: {ws and ws.group(1)!r}", file=sys.stderr)
+    raise SystemExit(1)
+PY
+echo "PASS: list and scalar values are serialised, not concatenated"
+
 echo "PASS: arsenal_migrate_test — all gates passed"
