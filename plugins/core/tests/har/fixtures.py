@@ -410,8 +410,68 @@ def compare_pair() -> tuple[dict[str, Any], dict[str, Any]]:
     return side(200, False), side(500, True)
 
 
+def search_post_pair() -> tuple[dict[str, Any], dict[str, Any]]:
+    """Two captures of one search endpoint whose query lives entirely in the body.
+
+    The URL never varies — which is how a modern job board's list endpoint is
+    usually built — so every difference between these two captures is inside the
+    POST body. A comparison that cannot see a request body reports them as
+    identical, which is a confident wrong answer to the only question a diff of
+    two captures is asked.
+    """
+
+    def side(keyword: str) -> dict[str, Any]:
+        body = json.dumps({"keyword": keyword, "page": 1})
+        return _log(
+            [
+                _entry(
+                    url="https://api.example.com/Search/ExecuteSearch",
+                    method="POST",
+                    text=json.dumps({"results": [], "keyword": keyword}),
+                    resp_headers=[("content-type", "application/json")],
+                    post={"mimeType": "application/json", "text": body},
+                )
+            ]
+        )
+
+    return side("python"), side("welder")
+
+
+def playwright_embed() -> dict[str, Any]:
+    """A capture in the shape `record_har_content="embed"` writes.
+
+    The body is stored already decoded and base64-wrapped, while the original
+    `content-encoding: br` response header is kept. Every brotli-served response
+    in a scripted capture arrives like this, so a reader that trusts the header
+    and gives up when the codec fails loses a body that is sitting right there.
+    """
+    return _log(
+        [
+            _entry(
+                url="https://api.example.com/api/jobs?page=1",
+                text=base64.b64encode(
+                    json.dumps({"title": "Senior Rust Engineer"}).encode()
+                ).decode(),
+                encoding="base64",
+                resp_headers=[
+                    ("content-type", "application/json"),
+                    ("content-encoding", "br"),
+                ],
+            ),
+            _entry(
+                url="https://api.example.com/api/blob",
+                mime="application/octet-stream",
+                text=base64.b64encode(b"\x1f\x8b\x08 not really gzip \xff\xfe").decode(),
+                encoding="base64",
+                resp_headers=[("content-encoding", "gzip")],
+            ),
+        ]
+    )
+
+
 FIXTURES = {
     "basic.har": basic,
+    "playwright_embed.har": playwright_embed,
     "traps.har": traps,
     "encodings.har": encodings,
     "hostile.har": hostile,
@@ -436,10 +496,13 @@ def write_all(output_dir: Path) -> list[Path]:
     output_dir.mkdir(parents=True, exist_ok=True)
     written = []
     a, b = compare_pair()
+    post_a, post_b = search_post_pair()
     builders: list[tuple[str, dict[str, Any]]] = [
         *((name, build()) for name, build in FIXTURES.items()),
         ("compare_a.har", a),
         ("compare_b.har", b),
+        ("search_post_a.har", post_a),
+        ("search_post_b.har", post_b),
     ]
     for name, doc in builders:
         path = output_dir / name

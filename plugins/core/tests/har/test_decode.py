@@ -9,6 +9,7 @@ right one, which is worse than no answer at all.
 
 from __future__ import annotations
 
+import base64
 import json
 
 import pytest
@@ -107,3 +108,60 @@ def test_base64_body_is_decoded_before_it_is_searched(harlib, fixtures_dir):
     assert "Principal Ocaml Developer" not in raw, "fixture no longer exercises the trap"
     decoded = harlib.decode_body(content)
     assert decoded.ok and "Principal Ocaml Developer" in decoded.text
+
+
+def test_a_body_that_fails_its_declared_codec_does_not_raise(harlib):
+    """One mislabelled body must never end a walk over every entry.
+
+    `_decompress` used to catch `(OSError, zlib.error, ValueError)`.
+    `brotli.error` is none of the three — it subclasses `Exception` directly —
+    so a body labelled `br` that did not decode raised out of `matches_body`
+    and out of the command, and the other four hundred entries went unreported.
+    The exit read as a broken tool rather than as one bad response.
+    """
+    source = b"\x00\x01\x02 not brotli \xff"
+    raw, applied, problem = harlib._decompress(source, "br")
+    assert raw == source, "the undecoded bytes must come back for the caller to report"
+    assert applied == "br"
+    assert problem, "bytes that are neither brotli nor text must be reported, not raised"
+
+    # Asserted on the tuple as well as through the call: `brotli` is optional
+    # and absent from the stdlib-only install these scripts are written for, so
+    # on this interpreter the call above never reaches the handler. Without this
+    # line the regression would be untested exactly where it was found.
+    if harlib.brotli is not None:  # pragma: no cover - depends on the interpreter
+        assert harlib.brotli.error in harlib._CODEC_ERRORS
+
+
+def test_a_body_stored_decoded_under_its_original_encoding_header_still_reads(harlib):
+    """The `record_har_content="embed"` shape: decoded bytes, `content-encoding` kept.
+
+    This is what an agent's own capture looks like, so treating the declared
+    codec as the last word would make the toolkit unusable on the captures the
+    skill tells a session to take.
+    """
+    body = b'{"title":"Senior Engineer"}'
+    decoded = harlib.decode_body(
+        {
+            "text": base64.b64encode(body).decode(),
+            "encoding": "base64",
+            "mimeType": "application/json",
+        },
+        content_encoding="br",
+    )
+    assert decoded.ok, decoded.reason
+    assert "Senior Engineer" in (decoded.text or "")
+
+
+def test_bytes_that_are_neither_compressed_nor_text_are_still_reported(harlib):
+    """The guard above must not swallow a genuinely broken body."""
+    decoded = harlib.decode_body(
+        {
+            "text": base64.b64encode(b"\x1f\x8b\x08 not really gzip \xff\xfe").decode(),
+            "encoding": "base64",
+            "mimeType": "application/octet-stream",
+        },
+        content_encoding="gzip",
+    )
+    assert not decoded.ok
+    assert "decompression failed" in (decoded.reason or "")

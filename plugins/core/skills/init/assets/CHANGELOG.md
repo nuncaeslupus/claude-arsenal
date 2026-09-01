@@ -18,6 +18,47 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [3.1.0] - 2026-09-01
+
+### Added
+
+- **`har` can now take a capture, not only read one.**
+  `scripts/capture_har.py` records a HAR from a URL through playwright, for a
+  session with nobody sitting at a browser — which was the skill's first step
+  and the one step it could not take. Run it as
+  `uv run --with playwright python3 …/capture_har.py --url URL --output capture.har`;
+  playwright stays out of the install, and every other script here is still
+  stdlib-only. It uses the browser already on the machine, records into a fresh
+  context so no login of yours reaches a file you are about to attach to a bug
+  report, and writes the HAR even when navigation times out. New
+  `references/capturing.md` explains the four rules that make that work.
+
+### Fixed
+
+- **One unreadable body no longer ends a whole query.** A response labelled
+  `content-encoding: br` that did not decode raised `brotli.error` out of the
+  filter and killed the command with a traceback, reporting nothing about the
+  other 400 entries. Bodies an exporter stored *already decoded* while keeping
+  the original encoding header — what playwright's `record_har_content="embed"`
+  produces, so essentially every scripted capture — now read correctly, with or
+  without the optional `brotli` module. `--xpath` against a body that is not
+  well-formed XML likewise reports the row instead of taking the command down.
+- **`create_har.py` no longer ignores `--body-match`, `--response-match` and
+  `--has-header`.** They were accepted, documented in `--help`, and never
+  evaluated, so a "minimal" fixture carved out with `--response-match` came out
+  as the entire source capture — every other host the page talked to included.
+- **`compare_har.py` can see a changed POST body.** Request identity hashed the
+  *mime type*, so every `application/json` POST to one URL compared equal and
+  two captures of different searches against a body-carrying endpoint reported
+  "no differences". Request bodies are now hashed properly; existing index
+  sidecars rebuild themselves on first use.
+- **`--output` can no longer overwrite the capture being read.** Every script
+  with an `--output` refuses a destination that resolves to one of its inputs.
+  A HAR records one moment on a live site; re-recording will not reproduce it.
+- **`validate_har.py` survives the captures it exists to diagnose.** A HAR
+  carrying `"response": null` — what a proxy writes for a request whose response
+  never arrived — raised `AttributeError` instead of reporting the finding.
+
 ## [3.0.0] - 2026-08-31
 
 ### Changed — action required

@@ -35,6 +35,7 @@ from _harlib import (
     fingerprint,
     is_sensitive_header,
     new_salt,
+    output_collision,
     read_entry,
     redact_cookie_header,
     redact_url,
@@ -151,6 +152,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if not args.input.is_file():
         print(f"create_repro: no such file: {args.input}", file=sys.stderr)
+        return 2
+    collision = output_collision(args, inputs=("input",))
+    if collision:
+        print(f"create_repro: {collision}", file=sys.stderr)
         return 2
 
     try:

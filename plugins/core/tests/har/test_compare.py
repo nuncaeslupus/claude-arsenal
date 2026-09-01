@@ -133,3 +133,24 @@ def test_selection_narrows_the_comparison(compare):
     assert "entries —" in out
     header = out.splitlines()[0]
     assert header.startswith("0 vs 1 entries"), header
+
+
+def test_two_searches_that_differ_only_in_the_post_body_are_not_equal(compare):
+    """The one question a diff of two captures is asked, on the shape that hides it.
+
+    A modern board's list endpoint is very often a POST whose URL never varies
+    and whose body carries the entire query. The pairing key used to fall back
+    to hashing the request's *mime type*, so every `application/json` POST to
+    one URL hashed alike and a capture of one search compared equal to a capture
+    of another — a confident "no change" on the only difference there was.
+    """
+    code, out, _ = compare("search_post_a", "search_post_b")
+    assert code == 1, f"two different searches compared equal:\n{out}"
+    assert "1 only in" in out, out
+
+
+def test_a_capture_compared_with_itself_still_pairs_on_the_body_hash(compare):
+    """The fix must not make every POST unpairable, which would invent changes."""
+    code, out, _ = compare("search_post_a", "search_post_a")
+    assert code == 0, out
+    assert "no differences" in out

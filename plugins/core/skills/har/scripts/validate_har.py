@@ -45,7 +45,16 @@ def _capabilities(entries: list[dict[str, Any]]) -> dict[str, Any]:
     cache = Counter({"true": 0, "false": 0, "unknown": 0})
     websockets = post_bodies = 0
     for entry in entries:
-        content = entry.get("response", {}).get("content") or {}
+        # `get(key, {})` supplies the default only when the key is *absent*, so
+        # a capture carrying `"response": null` — what a proxy writes for a
+        # request whose response never arrived — returned None and raised on the
+        # chained `get`. This is the script whose whole job is to be pointed at
+        # a HAR of unknown provenance, and "the exporter wrote a null response"
+        # is a finding, not a traceback.
+        if not isinstance(entry, dict):
+            continue
+        response = entry.get("response")
+        content = (response.get("content") if isinstance(response, dict) else None) or {}
         decoded = decode_body(content)
         if decoded.present:
             bodies += 1

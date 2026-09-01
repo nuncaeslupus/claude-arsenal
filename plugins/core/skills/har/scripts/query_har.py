@@ -38,6 +38,7 @@ from _harlib import (
     decode_body,
     elide,
     is_textual,
+    output_collision,
     read_entry,
     scan_entries,
 )
@@ -281,6 +282,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.extract_body and not args.output_dir:
         print("query_har: --extract-body needs --output-dir", file=sys.stderr)
         return 2
+    collision = output_collision(args, inputs=("input",))
+    if collision:
+        print(f"query_har: {collision}", file=sys.stderr)
+        return 2
 
     try:
         selection = selection_from_args(args)
@@ -399,7 +404,14 @@ def _extracted_lines(entry: dict[str, Any], args: argparse.Namespace) -> list[st
             return [
                 (node.text or "").strip() for node in root.findall(args.xpath) if node.text
             ] or ["<no match>"]
-    except (ValueError, FilterError) as exc:
+    # Deliberately broad. This runs once per entry in a loop over the whole
+    # capture, and every extractor here raises something outside a tuple an
+    # author would think to write: `ET.fromstring` raises `ParseError`, which
+    # subclasses `SyntaxError`, not `ValueError`. A handler that is too broad
+    # costs one misleading `cannot extract:` line on one row; one that is too
+    # narrow costs the entire query, and reads as a broken tool rather than as
+    # one unreadable body.
+    except Exception as exc:
         return [f"cannot extract: {exc}"]
     return []
 
