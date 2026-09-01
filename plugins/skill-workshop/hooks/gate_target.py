@@ -23,8 +23,10 @@ wrong is costly in both directions — a gate that misses a write is no gate, an
 one that blocks reads gets routed around instead of through.
 
 Known limits: a path built from a shell variable (`cp "$SKILL" …`) is opaque
-here, and so is one assembled at runtime. This raises the cost of an accidental
-bypass; it is not a sandbox.
+here, and so is one assembled at runtime; a wrapper that takes an argument of
+its own (`timeout 30 python3 -c …`) hides the interpreter behind it; and a
+script file is trusted to be what it says it is, since its contents are not
+read. This raises the cost of an accidental bypass; it is not a sandbox.
 """
 from __future__ import annotations
 
@@ -82,7 +84,110 @@ WRITERS = re.compile(
     r"write_text\s*\(|\.write\s*\(|writeFileSync|shutil\.(?:copy|move)"
     r"|os\.replace|\.unlink\s*\(|\.rename\s*\(|rmtree\s*\(|makedirs\s*\("
     r"""|open\s*\([^)]*?,\s*(?:mode\s*=\s*)?['"][rwaxbt+]*[wax+][rwaxbt+]*['"]"""
+    # `.write(` does not match `.writelines(` — the paren must follow `write`.
+    # `os.remove` is the third spelling of the operation whose other two
+    # (`.unlink(`, `rmtree(`) were already here. The rest write through a
+    # function whose own name is the only thing visible.
+    r"|\.writelines\s*\(|json\.dump\s*\(|print\s*\([^)]*\bfile\s*="
+    r"|os\.(?:remove|truncate)\s*\(|fileinput\.\w+\s*\([^)]*\binplace\s*="
 )
+
+# --- interpreter source, where the denylist above runs out -------------------
+#
+# WRITERS is a list of ways to write a file, and that list cannot be finished:
+# `os.system("rm …")`, `subprocess.run`, `fileinput(inplace=True)`, `exec` of a
+# string built at runtime, and the next spelling nobody has thought of yet all
+# reach a SKILL.md without matching any name in it. Worse, the list decays as
+# code gets tidier — ruff's PTH123 pushes `open(p, "w")`, which WRITERS catches
+# on its mode, toward `Path(p).open("w")`, which it cannot, because builtin
+# `open` takes the path first and `Path.open` takes the mode first. Every miss
+# is fail-open on a gate whose job is to refuse.
+#
+# So for an interpreter running source on the command line or on stdin, the
+# polarity is inverted: a skill path in that source is a write **unless** every
+# mention of it sits inside a construct that can only read. The ways to write a
+# file are unbounded; the ways to read one that are worth allowing are not, and
+# under-listing a read only ever blocks more, never less.
+INTERPRETERS = re.compile(
+    r"^(?:python[\d.]*|node|nodejs|deno|bun|perl|ruby|php|sh|bash|zsh|dash)$"
+)
+
+# Flags that mean "the source is right here, or on stdin", including perl and
+# ruby's bundled clusters (`-pi -e`, `-ne`). `-m` runs a module, which is source
+# this file cannot see either.
+INLINE_SOURCE_FLAGS = frozenset({"-c", "-e", "-E", "--eval", "--exec", "-m", "-"})
+
+# A quoted path with a skill folder in it, as it appears inside interpreter
+# source. Quoted, because an unquoted or interpolated path is one this file
+# cannot resolve — and an unresolvable path must not qualify as a read.
+_QUOTED_SKILL_PATH = (
+    r"""['"][^'"]*(?:\.claude/skills|plugins/[^/'"]+/skills)/[^'"]*['"]"""
+)
+
+# The closed set of read-only uses. Each is removed from the source before it is
+# searched for skill paths; whatever path is still standing afterwards is a
+# write. A read mode is `r`, `b`, `t`, `U` and nothing else — `r+` reopens the
+# file for writing, which is why `+` is absent here and present in WRITERS.
+READ_ONLY_USES = re.compile(
+    rf"""(?:
+        open \s* \( \s* {_QUOTED_SKILL_PATH} \s*
+            (?: , \s* (?: mode \s* = \s* )? ['"][rbtU]+['"] \s* )?
+            # `(?!mode\b)`: without it this generic-keyword arm swallows
+            # `mode='a'`, and an append reads as a read.
+            (?: , \s* (?!mode\b) [A-Za-z_]\w* \s* = \s* [^,)]* )* \s* \)
+      | Path \s* \( \s* {_QUOTED_SKILL_PATH} \s* \) \s* \. \s*
+            (?: read_text | read_bytes | exists | is_file | is_dir | stat
+              | resolve | glob | rglob | iterdir )  \s* \(
+      | Path \s* \( \s* {_QUOTED_SKILL_PATH} \s* \) \s* \. \s*
+            open \s* \( \s* (?: ['"][rbtU]+['"] \s* )? \)
+    )""",
+    re.VERBOSE,
+)
+
+# An interpreter handed a heredoc. Its body is the source, but the tokeniser
+# treats an unquoted newline as a command separator — deliberately, so that a
+# second line's `rm` is seen — which leaves each body line standing alone, far
+# from the `python3` that gives it meaning. So the heredoc is recognised in the
+# raw command text, before any of that.
+INTERPRETER_HEREDOC = re.compile(
+    r"(?:^|[\s;&|(])(?:[\w./-]*/)?"
+    r"(?:python[\d.]*|node|nodejs|deno|bun|perl|ruby|php|sh|bash|zsh|dash)"
+    r"(?:\s+-[^\s<]*)*\s*<<"
+)
+
+# Prefixes that stand in front of the real command. The `run` pair matters here:
+# this repo's own scripts are launched as `uv run python3 …`, which read as the
+# utility `uv` and went to the fallback branch instead of being seen as python.
+WRAPPERS = frozenset({"sudo", "command", "env", "time", "nice", "stdbuf",
+                      "npx", "uvx", "bunx"})
+WRAPPER_SUBCOMMANDS = {"uv": "run", "poetry": "run", "pipenv": "run",
+                       "pdm": "run", "hatch": "run", "rye": "run"}
+
+
+def _runs_inline_source(rest: list[str]) -> bool:
+    """True when this interpreter's source is on the command line or on stdin."""
+    for tok in rest:
+        if tok in INLINE_SOURCE_FLAGS:
+            return True
+        # `-pi`, `-ne`: perl and ruby bundle their short flags, and the `e` in
+        # the cluster is the one that carries the program.
+        if len(tok) > 1 and tok[0] == "-" and not tok.startswith("--"):
+            if "e" in tok[1:] or "c" in tok[1:]:
+                return True
+            continue
+        if not tok.startswith("-"):
+            # A script file. Its own path is executed, not written, and the
+            # arguments after it belong to it — `uv run python3 validate.py
+            # plugins/core/skills/har` reads that folder, and a gate that
+            # called it a write would block the validator.
+            return False
+    return True  # nothing but flags: the source arrives on stdin
+
+
+def _inline_source_targets(text: str) -> list[str]:
+    """Skill paths this interpreter source touches other than by reading."""
+    return EMBEDDED_PATH.findall(READ_ONLY_USES.sub("", text))
+
 
 # `git` subcommands that overwrite or delete a path they are given. `git` was
 # absent from UTILITIES entirely, so `git restore SKILL.md` and
@@ -200,11 +305,20 @@ def _destinations(cmd: list[str]) -> list[str]:
 
     if not args:
         return dests
-    # Skip leading VAR=value assignments and `sudo`/`command` wrappers.
+    # Skip leading VAR=value assignments and wrappers.
     pos = 0
-    wrappers = ("sudo", "command", "env")
-    while pos < len(args) and (re.match(r"^\w+=", args[pos]) or args[pos] in wrappers):
-        pos += 1
+    while pos < len(args):
+        head = args[pos].rsplit("/", 1)[-1]
+        if re.match(r"^\w+=", args[pos]) or head in WRAPPERS:
+            pos += 1
+        elif (
+            WRAPPER_SUBCOMMANDS.get(head)
+            and pos + 1 < len(args)
+            and args[pos + 1] == WRAPPER_SUBCOMMANDS[head]
+        ):
+            pos += 2
+        else:
+            break
     if pos >= len(args):
         return dests
     util = args[pos].rsplit("/", 1)[-1]
@@ -225,6 +339,8 @@ def _destinations(cmd: list[str]) -> list[str]:
             dests.extend(files)
         elif files:
             dests.append(files[-1])
+    elif INTERPRETERS.match(util) and _runs_inline_source(rest):
+        dests.extend(_inline_source_targets(" ".join(cmd)))
     elif WRITERS.search(" ".join(cmd)):
         # An interpreter gets its script as one argument, so the path is inside
         # a token rather than being one. Scan the text for skill-shaped paths.
@@ -233,6 +349,10 @@ def _destinations(cmd: list[str]) -> list[str]:
 
 
 def bash_target(command: str) -> str:
+    if INTERPRETER_HEREDOC.search(command):
+        for dest in _inline_source_targets(command):
+            if SKILL_PATH.match(dest.strip("'\"")):
+                return dest
     for cmd in _simple_commands(_tokenise(command)):
         for dest in _destinations(cmd):
             if SKILL_PATH.match(dest.strip("'\"")):
