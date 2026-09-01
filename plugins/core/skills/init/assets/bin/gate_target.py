@@ -171,8 +171,27 @@ WRAPPER_SUBCOMMANDS = {"uv": "run", "poetry": "run", "pipenv": "run",
                        "pdm": "run", "hatch": "run", "rye": "run"}
 
 
-# The interpreters for which an uppercase `-E` carries the program.
-DASH_E_IS_SOURCE = frozenset({"perl", "ruby"})
+# The interpreters for which an uppercase `-E` carries the program. Perl only:
+# ruby's `-E` is the *encoding* option and takes a value, so `ruby -E utf-8
+# lint.rb plugins/core/skills/x` runs a script and reads that folder.
+DASH_E_IS_SOURCE = frozenset({"perl"})
+
+# What a program named on the command line looks like: a path, or a file with a
+# script's extension. Anything else after a flag — `python3 -W ignore`, `sh -s
+# name` — is that flag's OPERAND, and reading it as the program is what let
+# `echo "…write_bytes(…)" | python3 -W ignore` through: the classifier decided
+# the program was a file called `ignore` and stopped looking at stdin.
+#
+# Erring here is one-directional on purpose. A bare word is assumed to be an
+# operand, so the search continues and the command is more likely to be judged
+# stdin-fed — which means the whole command text gets read. The cost is an
+# interpreter run on an extensionless script in the working directory, in the
+# rare case a skill path is also on the line.
+SCRIPT_FILE = re.compile(r"/|\.(?:py|pyw|js|mjs|cjs|ts|pl|pm|rb|php|sh|bash|zsh)$")
+
+# `-s` tells a shell to read commands from stdin and hand what follows to them
+# as positional parameters. It is stdin source however many operands follow.
+SHELLS = frozenset({"sh", "bash", "zsh", "dash"})
 
 
 def _runs_inline_source(util: str, rest: list[str]) -> bool:
@@ -192,6 +211,8 @@ def _runs_inline_source(util: str, rest: list[str]) -> bool:
                 return True
             continue
         if not tok.startswith("-"):
+            if not SCRIPT_FILE.search(tok):
+                continue  # an option's operand, not the program
             # A script file. Its own path is executed, not written, and the
             # arguments after it belong to it — `uv run python3 validate.py
             # plugins/core/skills/har` reads that folder, and a gate that
@@ -213,8 +234,14 @@ def _reads_stdin_source(util: str, rest: list[str]) -> bool:
     for tok in rest:
         if tok == "-":
             continue  # `python3 - <<EOF`: still stdin
-        if tok in INLINE_SOURCE_FLAGS or tok == "-m" or not tok.startswith("-"):
+        if tok == "-s" and util in SHELLS:
+            return True  # read stdin; the operands after it are $1, $2, …
+        if tok in INLINE_SOURCE_FLAGS or tok == "-m":
             return False  # the program is named on the command line
+        if tok == "-E" and util in DASH_E_IS_SOURCE:
+            return False  # perl's `-E` carries the program
+        if not tok.startswith("-") and SCRIPT_FILE.search(tok):
+            return False
     return True
 
 
