@@ -358,6 +358,23 @@ plan=$(python3 "${HOOKS}" pr-closed --tasks-dir "${tasks}" --issues "${tmp}/issu
         --event "${tmp}/same-event.json" --dry-run)
 echo "${plan}" | grep -q '"kind":"release-claim"' \
     || fail "a same-repo PR must still release its claim: ${plan}"
+# A deleted or newly-private fork is sent as `head.repo: null`, which is not
+# proof of a same-repo PR — it is the same fork with its provenance missing. A
+# check keyed on the head repo being *present* fails open on exactly the payload
+# an attacker can produce on demand by deleting their fork after opening the PR.
+cat > "${tmp}/gone-fork-event.json" <<'JSON'
+{"repository": {"default_branch": "main", "full_name": "owner/repo"},
+ "pull_request": {"number": 9, "html_url": "https://example/pull/9", "merged": false,
+   "body": "`arsenal-task: t-aaaa1111`",
+   "head": {"ref": "arsenal/t-aaaa1111-do-the-thing", "repo": null},
+   "base": {"ref": "main", "repo": {"full_name": "owner/repo"}}}}
+JSON
+plan=$(python3 "${HOOKS}" pr-closed --tasks-dir "${tasks}" --issues "${tmp}/issues.json" \
+        --event "${tmp}/gone-fork-event.json" --dry-run)
+if echo "${plan}" | grep -qE '"kind":"(release-claim|close-issue|archive-task)"'; then
+    fail "a fork PR with a deleted head repo reached a queue mutation: ${plan}"
+fi
+
 echo "PASS: a fork PR cannot close or release a task; a same-repo PR still can"
 
 # --- the closing keyword must name THIS task's issue (#302, #265) -----------

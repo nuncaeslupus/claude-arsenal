@@ -18,6 +18,28 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [3.1.13] - 2026-09-01
+
+### Fixed
+
+- **A pull request from a deleted or private fork could still release another
+  session's task claim.** The fork check only refused a PR when GitHub told it
+  which repository the branch came from — but GitHub sends `head.repo: null`
+  once the fork is deleted or made private, which an attacker can arrange after
+  opening the PR. The check now keys on the base repository: anything that does
+  not match it is outside. A `pull_request_target` workflow with `issues: write`
+  no longer takes a fork's word for it.
+- **A `<=` gate written against `1e999` passed every measurement.** The gate
+  grammar accepts an exponent, so an overflowing threshold became infinity and
+  nothing could ever violate it. `gate_evidence.py` now refuses a non-finite
+  threshold (exit 2), the same way it already refused a non-finite measurement.
+  Finite exponents such as `<= 1e6` keep working.
+- **Migrating a task whose id began with `.` or `_` produced an invisible
+  task.** Both `create_task.py` and `task_select.py` skip those filenames when
+  they collect the task set, so the migration reported success while writing a
+  task that could never be selected and never satisfied a dependency. Such an id
+  is now refused (exit 2) instead of migrated.
+
 ## [3.1.12] - 2026-09-01
 
 ### Fixed — state that went to two different places
