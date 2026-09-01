@@ -23,7 +23,9 @@ API/metered usage the quota check always fails open. So `budget_check.sh` also
 enforces an **always-available** per-session dispatch-round cap
 (`ARSENAL_MAX_ITERATIONS`, default 50; `0` disables) that does not depend on
 observable quota — the real ceiling for an auto-dispatching loop on metered
-billing. The counter resets per `CLAUDE_SESSION_ID` and lives in the gitignored
+billing. The counter resets per session — `CLAUDE_CODE_REMOTE_SESSION_ID`, falling
+back to `CLAUDE_CODE_SESSION_ID`, the same pair `references/claiming-internals.md`
+names; `CLAUDE_SESSION_ID` is set on no current surface — and lives in the gitignored
 `arsenal/session/budget_iterations.json`.
 
 ---

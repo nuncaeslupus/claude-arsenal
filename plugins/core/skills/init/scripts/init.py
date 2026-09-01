@@ -1048,7 +1048,11 @@ def _home(repo_path: Path) -> Path:
     The consumer edits a file nothing reads and every setting silently stays at
     its default.
     """
-    home = repo_path / os.environ.get("ARSENAL_HOME", "arsenal")
+    # `.strip() or "arsenal"`, not a bare default: `os.environ.get` returns the
+    # empty string for a variable that is exported and unset, and `repo_path /
+    # ""` is the repo root — so every host-owned file would be scaffolded
+    # straight into the top of the consumer's tree.
+    home = repo_path / (os.environ.get("ARSENAL_HOME", "").strip() or "arsenal")
     # It has to land inside the repo. A task is a file in the repository —
     # versioned, and committed by the PR that opens it — so a tree outside it
     # can never reach the board, and `${ARSENAL_HOME}/tasks` as an absolute

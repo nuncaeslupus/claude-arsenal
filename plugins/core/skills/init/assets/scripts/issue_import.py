@@ -202,8 +202,31 @@ def main(argv: list[str] | None = None) -> int:
         def new_task_id() -> str:
             return f"t-{secrets.token_hex(4)}"
 
+    # Minted ids are checked against what is already on disk AND against what
+    # this run has already handed out. `new_task_id()` is four random bytes, so
+    # a collision is unlikely rather than impossible — and the consequence is
+    # that `--apply` overwrites an existing task file, which is the one outcome
+    # an importer must never produce. `create_task.py` already resolves this
+    # the same way; when it is not importable the fallback needs the check too.
+    taken = {p.stem for p in args.tasks_dir.rglob("*.md")} if args.tasks_dir.is_dir() else set()
+
+    def mint() -> str | None:
+        for _ in range(64):
+            candidate = new_task_id()
+            if candidate not in taken:
+                taken.add(candidate)
+                return candidate
+        return None
+
     for issue in rows:
-        task_id = new_task_id()
+        task_id = mint()
+        if task_id is None:
+            print(
+                "issue_import: could not mint an unused task id after 64 attempts — "
+                f"stopping before issue #{issue.get('number')} rather than overwriting a task file",
+                file=sys.stderr,
+            )
+            return 1
         path = args.tasks_dir / f"{task_id}.md"
         if args.apply:
             args.tasks_dir.mkdir(parents=True, exist_ok=True)

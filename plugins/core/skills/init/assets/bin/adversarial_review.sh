@@ -69,6 +69,15 @@ set -uo pipefail
 ARSENAL_HOME="${ARSENAL_HOME:-arsenal}"
 REMOTE="${ARSENAL_QUEUE_REMOTE:-origin}"
 MAX_DIFF_LINES="${ARSENAL_REVIEW_MAX_DIFF_LINES:-4000}"
+# Validated, because the failure is silent and inverts the check: a non-numeric
+# or zero value makes `head -n` emit nothing while the notice above the fence
+# still says a diff follows, and a reviewer handed an empty packet has nothing
+# to object to — so it comes back CLEAR. A review that cannot see the change is
+# worse than no review, because it produces a verdict.
+if ! [[ "${MAX_DIFF_LINES}" =~ ^[0-9]+$ ]] || (( MAX_DIFF_LINES < 1 )); then
+    echo "adversarial_review: ARSENAL_REVIEW_MAX_DIFF_LINES must be a positive integer, got '${MAX_DIFF_LINES}'" >&2
+    exit 2
+fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd 2>/dev/null || echo .)"
 RUBRIC_FILE="${SCRIPT_DIR}/../agents/reviewer.md"
 
