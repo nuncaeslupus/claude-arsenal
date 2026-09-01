@@ -324,4 +324,84 @@ echo "${plan}" | grep -q '"kind":"note"' \
 echo "${plan}" | grep -q '#70' || fail "the note must name the issue to fix: ${plan}"
 echo "PASS: a suppressed handle is reported by the unattended planner"
 
+# --- a fork PR decides nothing about this queue (#265, #302) ----------------
+# The workflow calling this runs on `pull_request_target` with `issues: write`,
+# and task identity comes from `head.ref` and the PR body — both of which a fork
+# author writes. Without a head-repo check, a fork PR closed without merging
+# reaches `release-claim` and strips a claim another session legitimately holds.
+# An `arsenal/*` head ref proves nothing: fork authors name their own branches.
+cat > "${tmp}/fork-event.json" <<'JSON'
+{"repository": {"default_branch": "main", "full_name": "owner/repo"},
+ "pull_request": {"number": 7, "html_url": "https://example/pull/7", "merged": false,
+   "body": "`arsenal-task: t-aaaa1111`",
+   "head": {"ref": "arsenal/t-aaaa1111-do-the-thing",
+            "repo": {"full_name": "attacker/repo"}},
+   "base": {"ref": "main", "repo": {"full_name": "owner/repo"}}}}
+JSON
+plan=$(python3 "${HOOKS}" pr-closed --tasks-dir "${tasks}" --issues "${tmp}/issues.json" \
+        --event "${tmp}/fork-event.json" --dry-run)
+if echo "${plan}" | grep -qE '"kind":"(release-claim|close-issue|archive-task)"'; then
+    fail "a FORK PR reached a queue mutation: ${plan}"
+fi
+echo "${plan}" | grep -q 'opened from fork' || fail "the fork refusal does not say why: ${plan}"
+
+# ...and the same PR from the repo itself still works, so the check is a fork
+# check and not a blanket refusal.
+cat > "${tmp}/same-event.json" <<'JSON'
+{"repository": {"default_branch": "main", "full_name": "owner/repo"},
+ "pull_request": {"number": 8, "html_url": "https://example/pull/8", "merged": false,
+   "body": "", "head": {"ref": "arsenal/t-aaaa1111-do-the-thing",
+            "repo": {"full_name": "owner/repo"}},
+   "base": {"ref": "main", "repo": {"full_name": "owner/repo"}}}}
+JSON
+plan=$(python3 "${HOOKS}" pr-closed --tasks-dir "${tasks}" --issues "${tmp}/issues.json" \
+        --event "${tmp}/same-event.json" --dry-run)
+echo "${plan}" | grep -q '"kind":"release-claim"' \
+    || fail "a same-repo PR must still release its claim: ${plan}"
+echo "PASS: a fork PR cannot close or release a task; a same-repo PR still can"
+
+# --- the closing keyword must name THIS task's issue (#302, #265) -----------
+# Accepting any `Closes #N` let a task PR pass the guard while pointing at an
+# unrelated issue: that issue closed on merge and the task's own one stayed open
+# and claimed — the drift the guard exists to prevent, with a green check on it.
+guard() {  # guard <body> <commits-json> -> prints verdict, returns exit code
+    cat > "${tmp}/guard-event.json" <<JSON
+{"repository": {"default_branch": "main", "full_name": "owner/repo"},
+ "pull_request": {"number": 9, "html_url": "https://example/pull/9",
+   "body": $(python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$1"),
+   "head": {"ref": "arsenal/t-aaaa1111-do-the-thing",
+            "repo": {"full_name": "owner/repo"}},
+   "base": {"ref": "main", "repo": {"full_name": "owner/repo"}}}}
+JSON
+    printf '%s' "$2" > "${tmp}/guard-commits.json"
+    python3 "${HOOKS}" keyword-guard --tasks-dir "${tasks}" \
+        --issues "${tmp}/issues.json" --event "${tmp}/guard-event.json" \
+        --commits "${tmp}/guard-commits.json" 2>&1
+}
+
+guard "Closes #10" '[]' >/dev/null || fail "a PR closing its own issue (#10) must pass"
+out=$(guard "Closes #99" '[]') && fail "a PR closing an UNRELATED issue must not pass: ${out}"
+grep -q '#10' <<<"${out}" || fail "the refusal must name the right issue: ${out}"
+grep -q '#99' <<<"${out}" || fail "the refusal must name what was referenced instead: ${out}"
+
+out=$(guard "no keyword here" '[]') && fail "a PR with no closing keyword must not pass"
+grep -q 'Closes #10' <<<"${out}" || fail "the refusal must say what to add: ${out}"
+
+# A stacked PR carries its keyword in a commit message rather than the body.
+guard "" '["chore: wip", "feat: the thing\n\nCloses #10"]' >/dev/null \
+    || fail "a keyword in a commit message must satisfy the guard"
+
+# A branch that is not a known task is not this guard's business.
+cat > "${tmp}/guard-event.json" <<'JSON'
+{"repository": {"default_branch": "main", "full_name": "owner/repo"},
+ "pull_request": {"number": 9, "html_url": "https://example/pull/9", "body": "",
+   "head": {"ref": "arsenal/not-a-task", "repo": {"full_name": "owner/repo"}},
+   "base": {"ref": "main", "repo": {"full_name": "owner/repo"}}}}
+JSON
+echo '[]' > "${tmp}/guard-commits.json"
+python3 "${HOOKS}" keyword-guard --tasks-dir "${tasks}" --issues "${tmp}/issues.json" \
+    --event "${tmp}/guard-event.json" --commits "${tmp}/guard-commits.json" >/dev/null 2>&1 \
+    || fail "an unknown branch must pass the guard, not fail it"
+echo "PASS: the closing keyword must name the task's own issue"
+
 echo "PASS: queue_hooks_test — all gates passed"

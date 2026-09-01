@@ -40,6 +40,7 @@ import argparse
 import contextlib
 import json
 import os
+import re
 import subprocess
 import sys
 import urllib.error
@@ -112,6 +113,35 @@ def plan_pr_closed(
     number = pull.get("number")
     url = pull.get("html_url") or f"#{number}"
     merged = bool(pull.get("merged"))
+
+    # A PR from a fork decides nothing about this queue. Task identity is read
+    # from `head.ref` and, failing that, from the PR body — and a fork author
+    # controls both. The workflow that calls this runs on `pull_request_target`
+    # with `issues: write`, so a fork PR closed without merging could reach
+    # `release-claim` and strip a claim another session legitimately holds. An
+    # `arsenal/*` head ref is not proof of anything: fork authors name their own
+    # branches.
+    #
+    # Checked here as well as in the workflow's `if:` condition, because the
+    # workflow is installed into a consumer repo by `/init` and may be an older
+    # copy than this script.
+    head_repo = str(((pull.get("head") or {}).get("repo") or {}).get("full_name") or "")
+    base_repo = str(
+        ((pull.get("base") or {}).get("repo") or {}).get("full_name")
+        or (event.get("repository") or {}).get("full_name")
+        or ""
+    )
+    if head_repo and base_repo and head_repo != base_repo:
+        return [
+            {
+                "kind": "note",
+                "message": (
+                    f"PR {url}: opened from fork '{head_repo}' — ignored. A pull request "
+                    "from outside this repository cannot close or release a task."
+                ),
+            }
+        ]
+
     head_ref = str((pull.get("head") or {}).get("ref") or "")
     base_ref = str((pull.get("base") or {}).get("ref") or "")
     default_branch = str(
@@ -203,6 +233,71 @@ def plan_pr_closed(
             "message": f"PR {url}: issue #{issue_number} holds no claim — nothing to release",
         }
     ]
+
+
+# `Closes #12`, `Fixes #12`, `Resolved #12` — GitHub's own closing vocabulary,
+# with the number captured so it can be checked against the task's own issue.
+CLOSING_REFERENCE = re.compile(
+    r"\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#(\d+)\b", re.IGNORECASE
+)
+
+
+def check_keyword(
+    event: dict[str, Any],
+    tasks: list[dict[str, Any]],
+    issues: list[dict[str, Any]],
+    commit_messages: list[str],
+) -> tuple[bool, str]:
+    """Whether this task PR closes ITS OWN issue. Returns (ok, message).
+
+    Accepting any `Closes #N` was the hole: a task PR could satisfy the guard
+    while pointing at an unrelated issue, so the merge closed that issue and
+    left the task's own one open and claimed — the exact drift the guard exists
+    to prevent, now with a green check beside it.
+    """
+    pull = event.get("pull_request") or {}
+    url = pull.get("html_url") or f"#{pull.get('number')}"
+    head_ref = str((pull.get("head") or {}).get("ref") or "")
+
+    known = {t["id"] for t in tasks}
+    task_id = task_id_from_branch(head_ref, known)
+    if task_id is None:
+        return True, f"PR {url}: '{head_ref}' is not a known task branch — guard does not apply"
+
+    issue_number = issue_number_for(task_id, issues)
+    if issue_number is None:
+        # No handle to point at yet. Failing here would block the PR on
+        # something the author cannot fix from the PR, so it is a pass with a
+        # note; `sync-handles` opens the issue and `plan_pr_closed` still
+        # reconciles on merge.
+        return True, (
+            f"PR {url}: task {task_id} has no issue handle yet — nothing to reference. "
+            "sync-handles will open one."
+        )
+
+    referenced = {
+        int(m)
+        for text in [str(pull.get("body") or ""), *commit_messages]
+        for m in CLOSING_REFERENCE.findall(text)
+    }
+    if issue_number in referenced:
+        return True, f"PR {url}: closes #{issue_number}, the issue for task {task_id}."
+
+    if referenced:
+        return False, (
+            f"PR {url} closes {', '.join('#' + str(n) for n in sorted(referenced))}, but task "
+            f"{task_id}'s own issue is #{issue_number}. Merging this would close an unrelated "
+            f"issue and leave #{issue_number} open and claimed. Point the keyword at "
+            f"#{issue_number}."
+        )
+    return False, (
+        f"PR {url} is on task branch '{head_ref}' but neither its body nor any of its commits "
+        f"closes #{issue_number}, the issue for task {task_id}. Merging it would land the work "
+        "and leave the task claimed forever, which is the drift the queue exists to prevent.\n"
+        f"Add `Closes #{issue_number}` to the PR body, or to a commit message if this PR is "
+        "stacked on another branch. `claude-arsenal/bin/open_task_pr.sh` writes both "
+        "automatically — a PR missing them was opened by hand."
+    )
 
 
 def plan_sync_handles(
@@ -346,6 +441,13 @@ class Api:
 
     def open_prs(self) -> list[dict[str, Any]]:
         return self.paginate(f"/repos/{self.repo}/pulls?state=open")
+
+    def pr_commit_messages(self, number: int) -> list[str]:
+        """Commit messages on one PR — where a stacked PR carries its keyword."""
+        return [
+            str((c.get("commit") or {}).get("message") or "")
+            for c in self.paginate(f"/repos/{self.repo}/pulls/{number}/commits")
+        ]
 
 
 def apply_action(action: dict[str, Any], api: Api | None, *, tasks_dir: Path) -> bool:
@@ -498,7 +600,13 @@ def _load_json(path: Path) -> Any:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=["pr-closed", "sync-handles", "sweep-claims"])
+    parser.add_argument(
+        "command", choices=["pr-closed", "sync-handles", "sweep-claims", "keyword-guard"]
+    )
+    parser.add_argument(
+        "--commits", type=Path, default=None,
+        help="JSON array of commit messages, for keyword-guard instead of fetching",
+    )
     parser.add_argument("--tasks-dir", type=Path, default=Path("arsenal/tasks"))
     parser.add_argument("--repo", default=os.environ.get("GITHUB_REPOSITORY", ""))
     parser.add_argument(
@@ -526,6 +634,25 @@ def main(argv: list[str] | None = None) -> int:
         else:
             print("queue_hooks: no --issues and no usable token", file=sys.stderr)
             return 2
+
+        if args.command == "keyword-guard":
+            # Returns straight from here: this command reports a verdict on
+            # stdout and exits, rather than producing queue actions to apply.
+            event_path = args.event or Path(os.environ.get("GITHUB_EVENT_PATH", ""))
+            if not event_path or not event_path.is_file():
+                print("queue_hooks: no event payload to read", file=sys.stderr)
+                return 2
+            event = _load_json(event_path)
+            if args.commits is not None:
+                commits = [str(m) for m in _load_json(args.commits)]
+            elif api is not None:
+                number = (event.get("pull_request") or {}).get("number")
+                commits = api.pr_commit_messages(int(number)) if number else []
+            else:
+                commits = []
+            ok, message = check_keyword(event, tasks, issues, commits)
+            print(message, file=sys.stdout if ok else sys.stderr)
+            return 0 if ok else 1
 
         if args.command == "pr-closed":
             event_path = args.event or Path(os.environ.get("GITHUB_EVENT_PATH", ""))

@@ -18,6 +18,28 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [3.1.8] - 2026-09-01
+
+### Fixed — action required for existing installs
+
+- **A pull request from a fork could release another session's task claim.**
+  The `pr-closed` job runs on `pull_request_target` with `issues: write`, and it
+  read task identity from the PR's head ref and body — both of which a fork
+  author writes. A fork PR closed without merging reached `release-claim` and
+  stripped a live claim. Both the workflow condition and `queue_hooks.py` now
+  require `head.repo` to be this repository. **Re-run `/init`** to pick up the
+  new `.github/workflows/arsenal-queue.yml`; the script-side check protects you
+  in the meantime, but the workflow condition is what stops the job running at
+  all.
+- **The `Closes` guard now requires the task's OWN issue.** It accepted any
+  `Closes #N`, so a task PR could pass while pointing at an unrelated issue —
+  that issue closed on merge and the task's own one stayed open and claimed,
+  which is the drift the guard exists to prevent, with a green check beside it.
+  It is now `queue_hooks.py keyword-guard`, which resolves the task's issue and
+  checks the body and the commit messages against that number. A stacked PR
+  carrying its keyword in a commit still passes; a task with no handle yet still
+  passes, because that is not something the PR author can fix.
+
 ## [3.1.7] - 2026-09-01
 
 ### Fixed
