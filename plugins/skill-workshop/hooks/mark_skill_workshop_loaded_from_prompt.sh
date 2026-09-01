@@ -27,7 +27,10 @@ session_id="$(printf '%s' "$payload" | python3 -c 'import json,sys; print(json.l
 
 # Match /skill-workshop at the start of the prompt: bare, with args, or
 # explicitly namespaced (e.g. /skill-workshop:skill-workshop some text).
-if printf '%s' "$prompt" | grep -qE '^/([a-z0-9_-]+:)?skill-workshop($|[[:space:]])'; then
+# `skill-creator` is the same skill's former name; see the companion hook for
+# why a bundle that only exposes it must still be able to satisfy the gate.
+if printf '%s' "$prompt" \
+    | grep -qE '^/([a-z0-9_-]+:)?(skill-workshop|skill-creator)($|[[:space:]])'; then
   if [[ -n "$session_id" ]]; then
     marker_dir="${CLAUDE_PLUGIN_DATA:-${HOME}/.cache/claude-arsenal/skill-workshop}"
     mkdir -p "$marker_dir" 2>/dev/null || true

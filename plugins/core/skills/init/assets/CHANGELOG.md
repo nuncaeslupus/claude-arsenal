@@ -18,6 +18,19 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [3.1.5] - 2026-09-01
+
+### Fixed
+
+- **The skill-edit gate is satisfiable on a bundle that predates the rename.**
+  These hooks ship in the core bundle, so they reach a repo whose vendored
+  skills still expose only `skill-creator` — and they demanded `skill-workshop`,
+  a name that is not in such a session's listing at all. From the main session
+  nothing could satisfy it, so every edit under `.claude/skills/**` was blocked
+  unconditionally for the life of that bundle. Loading `skill-creator` — the
+  same skill under its former name — now satisfies the gate, and the block
+  message says so.
+
 ## [3.1.4] - 2026-09-01
 
 ### Fixed

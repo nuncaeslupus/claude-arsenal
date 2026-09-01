@@ -26,7 +26,18 @@ session_id="$(printf '%s' "$payload" | python3 -c 'import json,sys; print(json.l
 # Strip any plugin-namespace prefix: the harness invokes skills as
 # "<plugin>:skill-workshop" via the Skill tool, not the bare name.
 skill_name="${skill_name##*:}"
-[[ "$skill_name" == "skill-workshop" ]] || exit 0
+# `skill-creator` is this skill's own former name, and it is accepted because
+# the gate must be satisfiable on every bundle a consumer might have installed.
+# These hooks ship in the core bundle and reach a repo whose vendored skills
+# still expose only `skill-creator`; demanding a name that is not in the
+# session's listing at all made the skill-folder gate unbreakable from the main
+# session, for the life of that bundle version. Loading it means the rubric is
+# loaded, which is the whole condition — and it cannot be loaded unless it is
+# installed.
+case "$skill_name" in
+  skill-workshop | skill-creator) ;;
+  *) exit 0 ;;
+esac
 [[ -n "$session_id" ]] || exit 0
 
 marker_dir="${CLAUDE_PLUGIN_DATA:-${HOME}/.cache/claude-arsenal/skill-workshop}"

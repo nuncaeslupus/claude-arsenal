@@ -68,5 +68,43 @@ printf '%s' "{\"session_id\":\"${SESSION3}\",\"tool_input\":{\"skill\":\"core:sp
     || fail "an unrelated skill ('core:specify') unlocked the skill-workshop gate"
 echo "PASS: an unrelated skill does not unlock the gate"
 
+# Gate 6 (#262): the skill's FORMER name satisfies the gate too.
+# These hooks ship in the core bundle, so they reach a consumer whose vendored
+# skills still expose only `skill-creator`. Demanding a name that is not in that
+# session's listing at all made the skill-folder gate unbreakable from the main
+# session — worse than the subagent limitation, because no session state could
+# satisfy it. Measured on a repo pinned to v2.4.21.
+SESSION4="sess-legacy-$$"
+printf '%s' "{\"session_id\":\"${SESSION4}\",\"tool_input\":{\"skill\":\"skill-creator:skill-creator\"}}" \
+    | bash "${MARK}" >/dev/null 2>&1 || fail "mark hook exited non-zero for the former name"
+[[ -f "${CLAUDE_PLUGIN_DATA}/loaded-${SESSION4}" ]] \
+    || fail "the skill's former name 'skill-creator' left the gate unsatisfiable"
+LEGACY_PAYLOAD="{\"session_id\":\"${SESSION4}\",\"tool_input\":{\"file_path\":\"/repo/plugins/demo/skills/thing/SKILL.md\"}}"
+printf '%s' "${LEGACY_PAYLOAD}" | bash "${CHECK}" >/dev/null 2>&1 \
+    || fail "the gate still blocked after the former name was loaded"
+echo "PASS: the skill's former name 'skill-creator' also satisfies the gate"
+
+# Gate 7 (#262): every `entry:` path in .pre-commit-config.yaml exists.
+# Two of them pointed at `plugins/skill-creator/…`, deleted by the rename, so
+# `pre-commit run` failed with "No such file or directory" for any skill change
+# — repo-wide, and through at least one tagged release, because nothing ran it.
+# A path check rather than a `pre-commit run` CI job: it catches the reported
+# failure directly, and needs neither the tool installed nor a hook environment.
+CONFIG="${SCRIPT_DIR}/../../../.pre-commit-config.yaml"
+if [[ -f "${CONFIG}" ]]; then
+    missing=0
+    while IFS= read -r path; do
+        [[ -e "${SCRIPT_DIR}/../../../${path}" ]] || {
+            echo "  .pre-commit-config.yaml entry points at a path that does not exist: ${path}" >&2
+            missing=1
+        }
+    done < <(grep -E '^ *entry:' "${CONFIG}" \
+        | grep -oE '(plugins|scripts|bin)/[A-Za-z0-9._/-]+' | sort -u)
+    [[ ${missing} -eq 0 ]] || fail "a pre-commit hook entry names a path that is not on disk"
+    echo "PASS: every path named in .pre-commit-config.yaml exists"
+else
+    echo "SKIP: no .pre-commit-config.yaml (vendored copy)" >&2
+fi
+
 echo "PASS: skill_gate_namespace_test — all gates passed"
 exit 0
