@@ -129,8 +129,12 @@ Verify `pwd` at the start of the task if unsure.
    script's own message says which of the two happened, including the case where
    the rollback itself failed and the tree needs a hand before a re-run.
 
-   Running them here first is still worth it: it surfaces the failure before the
-   PR attempt rather than during it.
+   Running them here first is still worth it, with one caveat that follows from
+   that order: `gate_run.sh` gives the same answer here as it will inside the
+   script, but a host gate run here measures a tree with no archive in it. Treat
+   that one as a smoke check — it catches an obvious failure before the PR
+   attempt rather than during it, and the run that counts is the one over the
+   archived tree.
    - **Gate fails** (host gate or `gate_run.sh` exit non-zero) → **open no PR.**
      Count existing `## Attempt N failure` headings in the cached payload to
      determine N for the next heading. Return outcome `open` to the orchestrator
