@@ -2,9 +2,9 @@ repos:
   - repo: local
     hooks:
       - id: skill-validate
-        name: skill-validate (skill-creator)
+        name: skill-validate (skill-workshop)
         description: Validate every skill root touched in the commit
-        entry: bash plugins/skill-creator/skills/skill-creator/tests/precommit_validate.sh
+        entry: bash plugins/skill-workshop/skills/skill-workshop/tests/precommit_validate.sh
         language: system
         pass_filenames: true
         files: ^plugins/[^/]+/skills/[^/]+/.*$
@@ -13,7 +13,7 @@ repos:
       - id: sync-duplicates-check
         name: sync-duplicates --check
         description: Fail if any duplicate-script group has drifted
-        entry: uv run python plugins/skill-creator/skills/skill-creator/scripts/sync_duplicates.py --check
+        entry: uv run python plugins/skill-workshop/skills/skill-workshop/scripts/sync_duplicates.py --check
         language: system
         pass_filenames: false
         files: ^plugins/[^/]+/scripts/_shared/.*$

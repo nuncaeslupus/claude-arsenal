@@ -61,5 +61,9 @@ skill-workshop owns the gate ruleset every skill change must pass
 Invoke the skill-workshop skill first, then re-run the edit. The skill
 folder layout, naming canon, and pre-commit checks all live in its body
 and references.
+
+If your available-skills listing has no skill-workshop, this bundle predates
+the rename: load skill-creator instead — it is the same skill and satisfies
+this gate.
 EOF
 exit 2
