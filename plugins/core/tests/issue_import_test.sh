@@ -219,4 +219,51 @@ grep -q "board label" <<<"${out}" || fail "the refusal does not say why: ${out}"
 [[ ! -d "${tmp}/tasks7" ]] || fail "the refusal must happen before anything is written"
 echo "PASS: the import label cannot be the board label"
 
+# Gate 11: a malformed body in a LATER row must not take the batch down. A body
+# that is not a string reached `pattern.search()` in task_id_from_issue and
+# raised a TypeError, which for --apply meant a traceback mid-batch with the
+# earlier task files already written and their issues not yet relabelled. The
+# batch position matters: a single-row payload fails before anything is
+# written, so the one-issue body gates above never covered this.
+fresh="${tmp}/tasks8"
+mkdir -p "${fresh}"
+cat > "${tmp}/issues-malformed.json" <<'JSON'
+[{"number": 70, "state": "open", "labels": [{"name": "arsenal:queue"}],
+  "html_url": "https://example/70", "title": "first", "body": "a real body"},
+ {"number": 71, "state": "open", "labels": [{"name": "arsenal:queue"}],
+  "html_url": "https://example/71", "title": "second", "body": []}]
+JSON
+set +e
+out=$(python3 "${IMPORT}" --issues "${tmp}/issues-malformed.json" --tasks-dir "${fresh}" --apply 2>&1)
+code=$?
+set -e
+[[ ${code} -eq 0 ]] || fail "a non-string body must import as an empty body, got exit ${code}: ${out}"
+rows=$(grep -c '"add_to_issue_body"' <<<"${out}")
+[[ ${rows} -eq 2 ]] || fail "both issues must be emitted, got ${rows} row(s): ${out}"
+files=$(find "${fresh}" -name '*.md' | wc -l)
+[[ ${files} -eq 2 ]] || fail "both task files must land, found ${files}"
+grep -lq '_(no issue body)_' "${fresh}"/*.md \
+    || fail "the malformed body must render as the fallback: $(cat "${fresh}"/*.md)"
+echo "PASS: a non-string body later in a batch imports as an empty body"
+
+# Gate 12: a body that only fails on the UTF-8 encode still rolls the batch
+# back. A lone surrogate survives JSON decoding and raises UnicodeEncodeError —
+# a ValueError, so an `except OSError` handler let it past the rollback with the
+# file already created. Nothing may be emitted either: a row is the caller's
+# instruction to relabel an issue whose task file no longer exists.
+fresh="${tmp}/tasks9"
+mkdir -p "${fresh}"
+python3 -c 'import json,sys; json.dump([{"number":72,"state":"open","labels":[{"name":"arsenal:queue"}],"html_url":"https://example/72","title":"fine","body":"ordinary"},{"number":73,"state":"open","labels":[{"name":"arsenal:queue"}],"html_url":"https://example/73","title":"surrogate","body":"bad \ud800 body"}], open(sys.argv[1],"w"))' "${tmp}/issues-surrogate.json"
+set +e
+out=$(python3 "${IMPORT}" --issues "${tmp}/issues-surrogate.json" --tasks-dir "${fresh}" --apply 2>&1)
+code=$?
+set -e
+[[ ${code} -eq 1 ]] || fail "an unencodable body must fail cleanly, got exit ${code}: ${out}"
+grep -q "Rolled back" <<<"${out}" || fail "the failure must report the rollback: ${out}"
+! grep -q '"add_to_issue_body"' <<<"${out}" \
+    || fail "no row may be emitted for a batch that rolled back: ${out}"
+files=$(find "${fresh}" -name '*.md' | wc -l)
+[[ ${files} -eq 0 ]] || fail "the rollback left ${files} task file(s) behind"
+echo "PASS: an unencodable body rolls the batch back and emits nothing"
+
 echo "PASS: issue_import_test — all gates passed"
