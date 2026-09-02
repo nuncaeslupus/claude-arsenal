@@ -239,12 +239,20 @@ import os
 REAL_UA = "StubBrowser/1.0"
 
 
+class TimeoutError(Exception):
+    """playwright ships its own, distinct from the builtin of the same name."""
+
+
 class _Page:
     def evaluate(self, expr):
         return REAL_UA
 
     def goto(self, url, **kw):
-        pass
+        mode = os.environ.get("CAPTURE_HAR_STUB_GOTO", "")
+        if mode == "timeout":
+            raise TimeoutError("Timeout 30000ms exceeded.")
+        if mode == "error":
+            raise RuntimeError("net::ERR_NAME_NOT_RESOLVED")
 
     def wait_for_timeout(self, ms):
         pass
@@ -317,6 +325,23 @@ ua="$(capture empty --ua-suffix "")"
 [ "$ua" = "StubBrowser/1.0" ] \
     || fail "--ua-suffix '' appended something anyway: '$ua'"
 echo "PASS: capture_har.py announces the caller's identity, including none"
+
+# A navigation that never settles is the partial capture this script exists for,
+# so it stays a success. Anything else -- DNS failure, refused connection -- is a
+# real error, and reporting 0 for it made a capture of nothing indistinguishable
+# from a good one to every caller that checks the exit status.
+CAPTURE_HAR_STUB_RECORD="$tmp/ua-timeout.json" CAPTURE_HAR_STUB_GOTO=timeout \
+    PYTHONPATH="$tmp/stub" python3 "$scripts/capture_har.py" \
+    --url https://example.com --output "$tmp/cap-timeout.har" >/dev/null 2>&1 \
+    || fail "a navigation timeout should still be a successful partial capture"
+
+CAPTURE_HAR_STUB_RECORD="$tmp/ua-error.json" CAPTURE_HAR_STUB_GOTO=error \
+    PYTHONPATH="$tmp/stub" python3 "$scripts/capture_har.py" \
+    --url https://example.com --output "$tmp/cap-error.har" >/dev/null 2>&1 \
+    && fail "a failed navigation reported success"
+[ -f "$tmp/cap-error.har" ] \
+    || fail "the HAR was not written on the failure path — the partial capture is lost"
+echo "PASS: capture_har.py separates a timeout from a failed navigation"
 
 # --- --help on every shipped script -----------------------------------------
 for script in "$scripts"/*.py; do

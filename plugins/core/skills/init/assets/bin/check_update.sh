@@ -345,6 +345,12 @@ fi
 if ! git fetch "${REMOTE}" "refs/tags/v${latest}:refs/tags/v${latest}" 2>&1 \
     || ! git subtree merge --prefix="${PREFIX}" "v${latest}^{commit}" --squash \
         -m "chore: update claude-arsenal to v${latest}" 2>&1; then
+    # A conflicting subtree merge leaves MERGE_HEAD, a populated index and
+    # conflict markers behind. This branch then warns and exits 0, so the
+    # session reports no failure and the worker loop runs against a tree it
+    # requires to be clean -- the same tree the check above just confirmed was
+    # clean. Put it back before saying anything.
+    git merge --abort >/dev/null 2>&1 || true
     _warn "subtree update failed — run manually: ${_manual_hint}"
     exit 0
 fi

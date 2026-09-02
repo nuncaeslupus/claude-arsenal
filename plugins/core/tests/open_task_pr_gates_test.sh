@@ -237,7 +237,8 @@ before_blob="$(git hash-object arsenal/tasks/t-no-front.md)"
 before_index="$(git ls-files -s -- arsenal/tasks/t-no-front.md)"
 out=$(ARSENAL_TASK_ISSUE=42 ARSENAL_ALLOW_SHARED_ADD=1 ARSENAL_COAUTHOR="" bash "${HELPER}" t-no-front "Unstampable" 2>&1); rc=$?
 [[ ${rc} -ne 0 ]] || fail "an archive that cannot be stamped must stop the PR"
-grep -q "not a complete archive" <<<"${out}" || fail "the refusal should name what it could not verify: ${out}"
+grep -q "has no front matter" <<<"${out}" \
+    || fail "the refusal should name the actual cause, not just the failed check: ${out}"
 [[ -f "arsenal/tasks/t-no-front.md" ]] \
     || fail "the refused run left the task file archived: it must be restored"
 [[ -e "arsenal/tasks/_history/t-no-front.md" ]] \
