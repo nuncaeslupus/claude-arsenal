@@ -18,6 +18,17 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [3.4.4] - 2026-09-02
+
+- The queue workflow's merge guard no longer fails on the pull request that
+  installs the bundle. It reads the queue's task files from the **base** ref,
+  and on a bootstrap PR those arrive with the pull request itself, so the step
+  died with "can't open file" — a red check that reads as a broken PR rather
+  than as a queue that does not exist yet. It now skips when arsenal is not on
+  the base ref, where there are no task files and so no task issue a `Closes`
+  line could name wrongly. 3.4.3 widened that guard to also match a task id in
+  the PR body, which is what began routing bootstrap PRs into it.
+
 ## [3.4.3] - 2026-09-02
 
 ### Fixed
