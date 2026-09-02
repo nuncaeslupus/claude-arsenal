@@ -43,7 +43,6 @@ Exit: 0 (an empty import is an answer), 2 on unreadable input.
 from __future__ import annotations
 
 import argparse
-import contextlib
 import html
 import json
 import sys
@@ -151,6 +150,38 @@ def render(issue: dict[str, Any], task_id: str) -> str:
     )
 
 
+def _rollback(written: list[Path], reason: str) -> int:
+    """Undo a partial `--apply` and say honestly how far the undo got.
+
+    A half-applied import is worse than none: the files that landed carry no
+    `arsenal-task:` marker on their issues yet, so the next handle sync proposes
+    a second issue for each. Cleanup failures are reported rather than
+    suppressed — telling the caller re-running is safe when a file is still
+    there is the one message that turns a recoverable state into duplicates.
+    """
+    stranded: list[Path] = []
+    for created in written:
+        try:
+            created.unlink(missing_ok=True)
+        except OSError:
+            stranded.append(created)
+    if stranded:
+        listed = ", ".join(str(s) for s in stranded)
+        print(
+            f"issue_import: {reason}. The rollback was INCOMPLETE — remove these by "
+            f"hand before re-running, or the next handle sync will open duplicate "
+            f"issues for them: {listed}",
+            file=sys.stderr,
+        )
+        return 1
+    print(
+        f"issue_import: {reason}. Rolled back {len(written)} task file(s) written by "
+        "this run; no issue was relabelled, so re-running is safe.",
+        file=sys.stderr,
+    )
+    return 1
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--tasks-dir", type=Path, default=Path("arsenal/tasks"))
@@ -223,12 +254,11 @@ def main(argv: list[str] | None = None) -> int:
     for issue in rows:
         task_id = mint()
         if task_id is None:
-            print(
-                "issue_import: could not mint an unused task id after 64 attempts — "
-                f"stopping before issue #{issue.get('number')} rather than overwriting a task file",
-                file=sys.stderr,
+            return _rollback(
+                written_paths,
+                "could not mint an unused task id after 64 attempts — stopping before "
+                f"issue #{issue.get('number')} rather than overwriting a task file",
             )
-            return 1
         path = args.tasks_dir / f"{task_id}.md"
         if args.apply:
             # A half-applied import is worse than none: the files that did land
@@ -237,21 +267,16 @@ def main(argv: list[str] | None = None) -> int:
             # handle_sync proposes a second issue for each of them. Anything
             # this invocation created is therefore removed if a later write
             # fails, and the failure is reported rather than raised.
+            # Recorded BEFORE the write, because write_text creates and truncates
+            # before it can fail: a path that raised halfway is a file this run
+            # made, and leaving it out of the rollback list is what leaves the
+            # partial behind.
+            written_paths.append(path)
             try:
                 args.tasks_dir.mkdir(parents=True, exist_ok=True)
                 path.write_text(render(issue, task_id), encoding="utf-8")
             except OSError as exc:
-                for created in written_paths:
-                    with contextlib.suppress(OSError):
-                        created.unlink()
-                print(
-                    f"issue_import: could not write {path} — {exc}. Rolled back "
-                    f"{len(written_paths)} task file(s) written by this run; no issue "
-                    "was relabelled, so re-running is safe.",
-                    file=sys.stderr,
-                )
-                return 1
-            written_paths.append(path)
+                return _rollback(written_paths, f"could not write {path} — {exc}")
         print(
             json.dumps(
                 {

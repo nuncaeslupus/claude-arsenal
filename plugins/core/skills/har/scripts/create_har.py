@@ -25,6 +25,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import tempfile
 from pathlib import Path
@@ -50,6 +51,12 @@ from analyze_har import ensure_index, verify_for_seek
 DEFAULT_DROP_TYPES = ("image", "font", "media", "stylesheet")
 
 
+# A "://" test only catches authority-form URLs. `myapp:/callback#access_token=…`
+# and `about:blank#access_token=…` are valid URI references that carry a fragment
+# just the same, and both kept it in the output.
+_URI_SCHEME_RE = re.compile(r"[A-Za-z][A-Za-z0-9+.-]*:")
+
+
 def _redact_pages(pages: Any, salt: str) -> list[dict[str, Any]]:
     """`log.pages` was copied through verbatim while every entry was redacted.
 
@@ -64,7 +71,7 @@ def _redact_pages(pages: Any, salt: str) -> list[dict[str, Any]]:
             continue
         copied = dict(page)
         title = copied.get("title")
-        if isinstance(title, str) and "://" in title:
+        if isinstance(title, str) and _URI_SCHEME_RE.match(title):
             copied["title"] = redact_url(title, salt)
         out.append(copied)
     return out

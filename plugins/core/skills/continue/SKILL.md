@@ -164,8 +164,10 @@ a typo would quietly promote a session past a limit that exists for a reason.
 - **Blocked workspace**: if a scoped selection is empty but the global queue has tasks,
   report what is blocking and offer to fall back to the global queue.
 - **Retries claim a new ref.** A crashed session blocks nothing: attempt 2 claims
-  `<id>.a2` — but only once the first attempt is *known* stale (its claim swept, or its PR
-  closed), and `claim_task.sh` requires `ARSENAL_CLAIM_STALE_OK=1` to acknowledge that.
+  `<id>.a2` — but only once the first attempt is *known* stale, and `claim_task.sh`
+  requires `ARSENAL_CLAIM_STALE_OK=1` to acknowledge that. Stale means the sweep released
+  the claim, or the owning session is known to have stopped. A closed PR is not proof: a
+  session whose PR was closed may still be running, and joining it is the double-claim.
   Bumping the attempt number to get past a claim never established as stale recreates the
   double-claim this whole mechanism exists to prevent. Past `max-attempts` the task stops being offered and needs a human — read the
   `## Failure notes` in the task file before re-dispatching.

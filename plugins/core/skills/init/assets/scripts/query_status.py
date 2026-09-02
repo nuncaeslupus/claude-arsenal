@@ -74,7 +74,11 @@ def main(argv: list[str] | None = None) -> int:
     # its dogfood into a build that could not go green. The check is skipped,
     # visibly, when there is nothing to check it against.
     issues: list[dict[str, Any]] = []
-    handles_known = bool(args.issues and args.issues.is_file())
+    # `args.issues` being SET is what says the caller has a channel — not the file
+    # happening to exist. Gating on is_file() meant a typo'd or half-written path
+    # degraded into "no issue data supplied", and every task then read `no issue
+    # handle` as if that were a finding about the board.
+    handles_known = bool(args.issues)
     if handles_known:
         # Session-start step 3 runs this straight after the board fetch, so a
         # truncated or unreadable fetch file is a realistic input. The sibling
@@ -82,11 +86,22 @@ def main(argv: list[str] | None = None) -> int:
         # rather than letting a traceback escape a documented exit contract.
         try:
             payload = json.loads(args.issues.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as exc:
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
             print(f"query_status: cannot read --issues — {exc}", file=sys.stderr)
             return 2
         if isinstance(payload, dict):
-            payload = payload.get("issues", [])
+            payload = payload.get("issues")
+        # The shape is checked before it is iterated: `null`, a bare scalar, and
+        # `{"issues": null}` are all valid JSON that a truncated or wrong-shaped
+        # fetch produces, and each raised a TypeError out of the comprehension
+        # below rather than saying what was wrong with the file.
+        if not isinstance(payload, list):
+            print(
+                f"query_status: --issues {args.issues} is not an issue list — expected a "
+                'JSON array, or an object with an "issues" array',
+                file=sys.stderr,
+            )
+            return 2
         issues = [i for i in payload if isinstance(i, dict)]
 
     tasks, warnings = load_tasks(args.tasks_dir)

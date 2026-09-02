@@ -519,7 +519,11 @@ _unarchive_task_file() {
         echo "open_task_pr: could not restore ${_ARCHIVED_LIVE} from ${_ARCHIVED_BACKUP} — the archived copy at ${_ARCHIVED_DEST} is being left in place. Move it back by hand; the backup is at ${_ARCHIVED_BACKUP}." >&2
         return 1
     fi
-    rm -f "${_ARCHIVED_DEST}" "${_ARCHIVED_BACKUP}"
+    # The archive goes now; the BACKUP waits until the assertion below proves the
+    # tree is actually back. Deleting it here made every later failure path — a
+    # failed rm, a broken index restore — report "the backup has been kept" over
+    # a backup that was already gone.
+    rm -f "${_ARCHIVED_DEST}"
     # Put the INDEX back where it was, rather than staging the rollback: the
     # task file may have been untracked (a task added by this very PR) or
     # carrying unstaged edits, and `git add -A` would turn either into a staged
@@ -538,6 +542,7 @@ _unarchive_task_file() {
         echo "open_task_pr: the rollback did not complete — ${_ARCHIVED_LIVE} should be present and ${_ARCHIVED_DEST} should be gone; check both, and the index, by hand." >&2
         return 1
     fi
+    rm -f "${_ARCHIVED_BACKUP}"
     echo "open_task_pr: restored ${_ARCHIVED_LIVE} — the archive was undone" >&2
 }
 

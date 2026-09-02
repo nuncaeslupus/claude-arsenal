@@ -168,6 +168,24 @@ def read_rows(queue_path: Path) -> list[dict[str, Any]]:
 
 
 _PLAIN_SCALAR_RE = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_./-]*")
+# Strings a YAML reader resolves to something that is not a string. `true`,
+# `null`, `123` and `2026-09-02` all satisfy _PLAIN_SCALAR_RE, so matching that
+# pattern is necessary but not sufficient: emitted bare, each would come back as
+# a bool, None, an int or a date and silently change the field's type.
+_YAML_RESOLVES_NONSTRING_RE = re.compile(
+    r"""(?xi)
+    ^(?:
+        y|n|yes|no|true|false|on|off        # booleans, in every YAML 1.1 spelling
+      | null|~|                             # nulls, the empty scalar included
+      | [-+]?0b[01_]+                       # binary
+      | [-+]?0o?[0-7_]+                     # octal, both spellings
+      | [-+]?(?:[0-9][0-9_]*)               # decimal int
+      | [-+]?0x[0-9a-f_]+                   # hex
+      | [-+]?(?:[0-9][0-9_]*)?\.[0-9_]*     # float
+      | [-+]?\.(?:inf|nan)                  # specials
+      | [0-9]{4}-[0-9]{1,2}-[0-9]{1,2}.*    # date / timestamp
+    )$"""
+)
 
 
 def _yaml_scalar(value: Any) -> str:
@@ -175,15 +193,18 @@ def _yaml_scalar(value: Any) -> str:
 
     `open_task_pr.sh` stamps `status: merged` bare, and these files are read back
     by both producers — emitting `status: "merged"` here would put the two out of
-    step for no gain. A value that is not a plain scalar (it carries ": ", opens
-    with "#" or "-", or is empty) is the one that can rewrite the meaning of the
-    front matter, and only that one is quoted.
+    step for no gain. Two kinds of value are quoted: one that is not a plain
+    scalar at all (it carries ": ", opens with "#" or "-", or is empty), and one
+    that *looks* plain but that a YAML reader resolves to something other than a
+    string — `true`, `null`, `123`, `2026-09-02`. Both rewrite the meaning of the
+    front matter; the second does it silently, by changing the field's type.
     """
     if isinstance(value, bool) or not isinstance(value, (str, int)):
         return json.dumps(value, ensure_ascii=False)
     if isinstance(value, int):
         return str(value)
-    return value if _PLAIN_SCALAR_RE.fullmatch(value) else json.dumps(value, ensure_ascii=False)
+    plain = _PLAIN_SCALAR_RE.fullmatch(value) and not _YAML_RESOLVES_NONSTRING_RE.match(value)
+    return value if plain else json.dumps(value, ensure_ascii=False)
 
 
 def _yaml_list(values: list[str]) -> str:

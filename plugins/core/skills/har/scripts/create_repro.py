@@ -83,7 +83,10 @@ def _headers(entry: dict[str, Any], salt: str, secrets: bool) -> list[tuple[str,
 
 def _body(entry: dict[str, Any]) -> str | None:
     post = (entry.get("request") or {}).get("postData") or {}
-    if not post.get("text"):
+    # `is None`, not falsiness: a capture whose body is `0`, `false`, `[]` or `""`
+    # has a body, and treating it as absent quietly dropped it from the
+    # reproduction instead of reaching the validation below.
+    if post.get("text") is None:
         return None
     decoded = decode_body(post)
     if decoded.ok:

@@ -15,7 +15,7 @@ in this repo, and — for the ones that are **not** — the skills it would brin
 listing below is an example of the shape, not a report about any repo: run the
 command for the real one, which is generated from `sections.json`.
 
-```
+```text
 skill sections — 2 of 4 installed here
   core      on   the bundle itself — installer, queue engine, and the skills the protocol names
   extract   off  capture and parsing — the har skill

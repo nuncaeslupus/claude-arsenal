@@ -165,6 +165,14 @@ def parameter_changes(only_left: Rows, only_right: Rows) -> list[str]:
     by_path: dict[tuple[str, str, str, str, str], list[set[str]]] = defaultdict(
         lambda: [set(), set()]
     )
+    # Presence is tracked separately from names, because a key can be on a side
+    # with no query parameters at all. Now that scheme and port are in the key, a
+    # plain http->https move produces one left-only key and one right-only key,
+    # and reporting "removed a=1 / added a=1" for those describes a parameter
+    # change that never happened.
+    present: dict[tuple[str, str, str, str, str], list[bool]] = defaultdict(
+        lambda: [False, False]
+    )
     for side, rows in ((0, only_left), (1, only_right)):
         for row in rows:
             key = (
@@ -174,12 +182,14 @@ def parameter_changes(only_left: Rows, only_right: Rows) -> list[str]:
                 str(row.get("port")),
                 str(row.get("path")),
             )
+            present[key][side] = True
             by_path[key][side].update(name for name, _ in row.get("query") or [])
 
     lines: list[str] = []
-    for (method, _scheme, host, _port, path), (left_names, right_names) in sorted(
-        by_path.items()
-    ):
+    for key, (left_names, right_names) in sorted(by_path.items()):
+        method, _scheme, host, _port, path = key
+        if not all(present[key]):
+            continue
         if not left_names and not right_names:
             continue
         added = sorted(right_names - left_names)

@@ -317,6 +317,26 @@ def check_keyword(
     )
 
 
+def _refuse_on_truncation(api: Api | None, command: str) -> bool:
+    """Stop a state-changing command that was handed a partial listing.
+
+    Both of these commands write to the board from what they read. Acting on a
+    truncated view is not a smaller version of the right answer — it is the
+    wrong one, and it writes: a duplicate issue for a task whose handle sat past
+    the cap, or a released claim whose open PR was never seen. Refusing costs a
+    delayed run; proceeding costs queue state.
+    """
+    if api is None or not api.truncated:
+        return False
+    print(
+        f"queue_hooks: refusing to run {command} — a GitHub listing was truncated at the "
+        "pagination cap, so the plan would be built from an incomplete board. Narrow the "
+        "query (close or re-label finished tasks) and re-run.",
+        file=sys.stderr,
+    )
+    return True
+
+
 def plan_sync_handles(
     tasks: list[dict[str, Any]], issues: list[dict[str, Any]]
 ) -> list[dict[str, Any]]:
@@ -420,6 +440,12 @@ class Api:
     def __init__(self, repo: str, token: str) -> None:
         self.repo = repo
         self.token = token
+        # Set by paginate() when a listing hits the page cap. A warning alone was
+        # not enough: both state-changing commands act on what they were handed,
+        # so a partial view makes sync-handles open a duplicate issue for a task
+        # whose handle sat past the cap, and sweep-claims release a claim whose
+        # PR it never saw. The flag is what lets those two refuse instead.
+        self.truncated = False
 
     def request(self, method: str, path: str, body: Any = None) -> Any:
         url = path if path.startswith("http") else f"{API_ROOT}{path}"
@@ -447,13 +473,11 @@ class Api:
             page += 1
         else:
             # Falling out of the `while` means page 11 was reachable: the list is
-            # truncated. Silence here is what makes it dangerous — sweep-claims
-            # would act on a partial view, and plan_sync_handles would read a task
-            # whose handle sits past the cap as having no handle and open a
-            # duplicate issue for it.
+            # truncated.
+            self.truncated = True
             print(
                 f"queue_hooks: {path} returned more than {len(out)} records — the list "
-                "is truncated, so plans built from it may be incomplete",
+                "is truncated, so plans built from it are incomplete",
                 file=sys.stderr,
             )
         return out
@@ -689,6 +713,8 @@ def main(argv: list[str] | None = None) -> int:
                 return 2
             actions = plan_pr_closed(_load_json(event_path), tasks, issues)
         elif args.command == "sync-handles":
+            if _refuse_on_truncation(api, "sync-handles"):
+                return 2
             actions = plan_sync_handles(tasks, issues)
         else:
             if args.prs is not None:
@@ -697,6 +723,8 @@ def main(argv: list[str] | None = None) -> int:
                 prs = api.open_prs()
             else:
                 prs = []
+            if _refuse_on_truncation(api, "sweep-claims"):
+                return 2
             now = _parse_ts(args.now) or datetime.now(UTC)
             actions = plan_sweep_claims(
                 issues,
