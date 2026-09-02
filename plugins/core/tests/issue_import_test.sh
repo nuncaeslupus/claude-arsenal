@@ -266,4 +266,49 @@ files=$(find "${fresh}" -name '*.md' | wc -l)
 [[ ${files} -eq 0 ]] || fail "the rollback left ${files} task file(s) behind"
 echo "PASS: an unencodable body rolls the batch back and emits nothing"
 
+# Gate 13: a task file that appears between the pre-loop directory snapshot and
+# the write is never overwritten. `mint()` picks ids against a snapshot taken
+# before the loop, so a concurrent import — or a worker landing its own task —
+# is invisible to it, and a non-exclusive write silently destroys that file.
+# Pre-creating the file cannot stage this: it would be IN the snapshot and mint
+# would simply pick another id. The race is reproduced where it actually opens,
+# by creating the file after the snapshot and before the write.
+fresh="${tmp}/tasks10"
+mkdir -p "${fresh}"
+cat >"${tmp}/issues-collide.json" <<'JSON'
+[{"number":80,"state":"open","labels":[{"name":"arsenal:queue"}],"html_url":"https://example/80","title":"collides","body":"ordinary"}]
+JSON
+set +e
+out=$(IMPORT="${IMPORT}" TASKS="${fresh}" ISSUES="${tmp}/issues-collide.json" python3 - <<'PY' 2>&1
+import importlib.util, os, pathlib, sys
+
+spec = importlib.util.spec_from_file_location("issue_import", os.environ["IMPORT"])
+mod = importlib.util.module_from_spec(spec)
+sys.modules["issue_import"] = mod
+spec.loader.exec_module(mod)
+
+tasks = pathlib.Path(os.environ["TASKS"])
+real_render = mod.render
+
+
+def racing_render(issue, task_id):
+    """Another writer wins the path between the snapshot and this run's write."""
+    (tasks / f"{task_id}.md").write_text("PRE-EXISTING TASK\n", encoding="utf-8")
+    return real_render(issue, task_id)
+
+
+mod.render = racing_render
+sys.argv = ["issue_import", "--issues", os.environ["ISSUES"], "--tasks-dir", str(tasks), "--apply"]
+sys.exit(mod.main())
+PY
+)
+code=$?
+set -e
+[[ ${code} -ne 0 ]] || fail "an id won by another writer must not import silently: ${out}"
+grep -q "could not create" <<<"${out}" \
+    || fail "a collision must name the create that failed: ${out}"
+survivor=$(grep -rl 'PRE-EXISTING TASK' "${fresh}" || true)
+[[ -n ${survivor} ]] || fail "the other writer's task file was destroyed: $(ls -A "${fresh}")"
+echo "PASS: an id won by another writer is never overwritten"
+
 echo "PASS: issue_import_test — all gates passed"
