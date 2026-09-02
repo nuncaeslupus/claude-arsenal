@@ -505,4 +505,43 @@ grep -q "applied=False" <<<"${out}" \
     || fail "an unresolved handle must make the run exit non-zero: ${out}"
 echo "PASS: pr-closed reports an unresolvable handle instead of ignoring the task"
 
+# Gate 15: keyword-guard does not fail open when truncation is WHY the handle
+# could not be resolved. The fail-open reads "no handle exists yet", which only
+# holds for a complete listing; past the cap the handle may exist, and then the
+# PR's `Closes #N` names an unrelated issue that the merge closes for good. The
+# guard must stay open for a genuinely absent handle, and must keep checking
+# normally when the handle resolved despite the truncation.
+out=$(HOOKS="${HOOKS}" python3 - <<'GATE15' 2>&1
+import importlib.util, os, sys
+
+spec = importlib.util.spec_from_file_location("queue_hooks", os.environ["HOOKS"])
+mod = importlib.util.module_from_spec(spec)
+sys.modules["queue_hooks"] = mod
+spec.loader.exec_module(mod)
+
+event = {
+    "pull_request": {
+        "number": 7,
+        "html_url": "https://example/7",
+        # The unrelated issue this PR would close if the guard waved it through.
+        "body": "Closes #4321",
+        "head": {"ref": "arsenal/t-aaaa1111-x"},
+    },
+}
+tasks = [{"id": "t-aaaa1111", "path": "arsenal/tasks/t-aaaa1111.md"}]
+handle = [{"number": 99, "title": "t", "body": "arsenal-task: t-aaaa1111", "labels": []}]
+
+print("absent=" + str(mod.check_keyword(event, tasks, [], [], truncated=False)[0]))
+print("truncated=" + str(mod.check_keyword(event, tasks, [], [], truncated=True)[0]))
+print("resolved=" + str(mod.check_keyword(event, tasks, handle, [], truncated=True)[0]))
+GATE15
+)
+grep -q "absent=True" <<<"${out}" \
+    || fail "a complete listing with no handle must still fail open: ${out}"
+grep -q "truncated=False" <<<"${out}" \
+    || fail "an unresolvable handle under truncation must not pass the guard: ${out}"
+grep -q "resolved=False" <<<"${out}" \
+    || fail "a resolved handle is checked normally; #4321 is not its issue: ${out}"
+echo "PASS: keyword-guard fails an unresolvable handle rather than waving the PR through"
+
 echo "PASS: queue_hooks_test — all gates passed"
