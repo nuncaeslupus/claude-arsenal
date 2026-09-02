@@ -159,6 +159,16 @@ def build(
     # the board reports missing handles and `handle_sync.py` proposes duplicate
     # issues for tasks that already have one. Refusing the collision here costs
     # one rename; allowing it costs the body fetch for the whole board.
+    #
+    # Best-effort, deliberately: this reads the tree before the caller writes,
+    # so two processes racing could both pass. A lock would not close that,
+    # because the collision that actually reaches a board is not two processes
+    # sharing a directory -- it is two agents on separate branches or worktrees,
+    # whose files meet only at the merge, where no lock of ours exists. The
+    # authoritative detector therefore stays where it can see the merged result:
+    # `task_select.task_id_from_issue` resolves an ambiguous title to None and
+    # says so. This check exists to turn the ordinary sequential case into an
+    # error at the moment of the typo, not to be that detector.
     if normalise_title(title) in existing_titles(tasks_dir):
         raise ValueError(
             f"a task in {tasks_dir} already has the title {title!r}. Titles have to be "

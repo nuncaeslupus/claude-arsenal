@@ -417,5 +417,61 @@ set -e
     || fail "the unreachable-remote case said nothing at all"
 echo "PASS: an unreachable remote is a warning, not an abort"
 
+# --- 14: a CONFLICTING subtree merge must leave no merge in progress ---------
+#     The clean-tree check above is what the worker loop relies on, and a
+#     conflicting `git subtree merge` used to leave MERGE_HEAD, a populated
+#     index and conflict markers behind while this script warned and exited 0 --
+#     so the session reported no failure and workers ran against a tree the
+#     script had just declared clean.
+cmarket="${tmp}/cmarket"
+mkdir -p "${cmarket}/$(dirname "${UPSTREAM_VERSION_PATH}")"
+git init -q -b main "${cmarket}"
+git -C "${cmarket}" config user.email "test@arsenal.example"
+git -C "${cmarket}" config user.name "Arsenal Test"
+echo "0.20.5" > "${cmarket}/${UPSTREAM_VERSION_PATH}"
+echo "upstream original" > "${cmarket}/shared.txt"
+git -C "${cmarket}" add -A
+git -C "${cmarket}" commit -q -m "chore: release 0.20.5"
+git -C "${cmarket}" tag -a v0.20.5 -m "Release v0.20.5"
+
+cconsumer="${tmp}/cconsumer"
+git init -q -b main "${cconsumer}"
+git -C "${cconsumer}" config user.email "test@arsenal.example"
+git -C "${cconsumer}" config user.name "Arsenal Test"
+echo "seed" > "${cconsumer}/README.md"
+git -C "${cconsumer}" add -A
+git -C "${cconsumer}" commit -q -m "chore: seed"
+git -C "${cconsumer}" remote add arsenal "${cmarket}"
+git -C "${cconsumer}" fetch -q arsenal
+# A real subtree, so `_is_subtree` passes and the update path reaches the merge.
+git -C "${cconsumer}" subtree add -q --prefix=claude-arsenal arsenal main --squash \
+    >/dev/null 2>&1 || { echo "SKIP: git subtree unavailable"; git -C "${cconsumer}" rev-parse HEAD >/dev/null; }
+
+if git -C "${cconsumer}" rev-parse HEAD:claude-arsenal >/dev/null 2>&1; then
+    # Both sides edit the same line under the prefix, and upstream publishes a
+    # newer tag. The squash merge then has a conflict it cannot resolve.
+    echo "consumer edit" > "${cconsumer}/claude-arsenal/shared.txt"
+    git -C "${cconsumer}" add -A
+    git -C "${cconsumer}" commit -q -m "chore: local edit under the prefix"
+    echo "upstream edit" > "${cmarket}/shared.txt"
+    echo "0.23.0" > "${cmarket}/${UPSTREAM_VERSION_PATH}"
+    git -C "${cmarket}" add -A
+    git -C "${cmarket}" commit -q -m "chore: release 0.23.0"
+    git -C "${cmarket}" tag -a v0.23.0 -m "Release v0.23.0"
+
+    conflict_code=0
+    (cd "${cconsumer}" && bash "${CHECK}" >/dev/null 2>"${tmp}/conflict.err") || conflict_code=$?
+    [[ ${conflict_code} -eq 0 ]] \
+        || fail "a conflicting update aborted the session with exit ${conflict_code}; the header promises 0 always"
+    if git -C "${cconsumer}" rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1; then
+        fail "a conflicting subtree merge left MERGE_HEAD behind: the worker loop would run against a mid-merge tree"
+    fi
+    git -C "${cconsumer}" grep -q '^<<<<<<< ' -- claude-arsenal \
+        && fail "conflict markers were left under the prefix"
+    echo "PASS: a conflicting subtree merge is aborted, not left in the tree"
+else
+    echo "SKIP: git subtree add did not produce a subtree here"
+fi
+
 echo "PASS: check_update_test — all gates passed"
 exit 0
