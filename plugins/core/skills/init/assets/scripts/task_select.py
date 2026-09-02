@@ -478,12 +478,16 @@ def select(
         # dependency is satisfied is how work gets done out of order.
         if any(state.get(dep) not in TERMINAL for dep in task["deps"]):
             continue
-        if not set(task["requires"]).issubset(capabilities):
-            gated.append(task["id"])
-            continue
         if workspace and task["workspace"] != workspace:
             continue
         if tags and not tags.issubset(set(task["tags"])):
+            continue
+        # Last of the filters, so `gated` only ever names tasks the caller asked
+        # about. Ahead of the scope filters it collected the whole board, and a
+        # `--workspace FRONTEND` run with no eligible work reported a gated
+        # BACKEND task — blaming capabilities for what was really an empty scope.
+        if not set(task["requires"]).issubset(capabilities):
+            gated.append(task["id"])
             continue
         eligible.append(task)
 

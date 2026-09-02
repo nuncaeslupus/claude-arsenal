@@ -646,4 +646,30 @@ out=$(python3 "${SELECT_PY}" --tasks-dir "${gated}" --capability surface:cli </d
 grep -q 't-gate0001' <<<"${out}" \
     || fail "the task must be selectable once the capability is offered: ${out}"
 
+# --- 29: the gated-task warning is scoped to what the caller asked for. Ahead
+#         of the workspace and tag filters it named the whole board, so a run
+#         scoped to one workspace blamed capabilities for what was really an
+#         empty scope — and named a task the caller has no interest in.
+cat > "${gated}/t-gate0002.md" <<'EOF'
+---
+id: t-gate0002
+title: "Gated, and in another workspace"
+priority: 5
+requires: [surface:cli]
+workspace: BACKEND
+---
+
+## Acceptance gate
+```bash
+true
+```
+EOF
+err=$(python3 "${SELECT_PY}" --tasks-dir "${gated}" --workspace FRONTEND </dev/null 2>&1 >/dev/null)
+grep -q 't-gate0002' <<<"${err}" \
+    && fail "a gated task outside the requested workspace must not be reported: ${err}"
+err=$(python3 "${SELECT_PY}" --tasks-dir "${gated}" --workspace BACKEND </dev/null 2>&1 >/dev/null)
+grep -q 't-gate0002' <<<"${err}" \
+    || fail "a gated task INSIDE the requested workspace must still be reported: ${err}"
+rm -f "${gated}/t-gate0002.md"
+
 echo "PASS: task_select_test — all gates passed"
