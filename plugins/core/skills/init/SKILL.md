@@ -76,7 +76,7 @@ python3 "${CLAUDE_SKILL_DIR}/scripts/init.py" --workspace BACKEND --root ./backe
 ```
 
 The script:
-1. Creates `claude-arsenal/` structure: `bin/`, `project/`, `queue/`, `session/`, `agents/`.
+1. Creates the `claude-arsenal/` bundle structure: `bin/`, `scripts/`, `agents/`, `references/`. The host-owned `project/`, `queue/` and `session/` state does **not** live here — it is scaffolded under `arsenal/` by item 3.
 2. Copies bundle scripts from the plugin into `claude-arsenal/bin/` (checksum-based; refreshes stale files only).
 3. Scaffolds the host-owned `arsenal/` tree — `tasks/`, `specs/`, `plans/`, `session/handover.md` — and seeds `arsenal/config.toml`. Upstream owns `claude-arsenal/` and may overwrite it on every re-run; it never writes into `arsenal/` again, so an upgrade cannot touch the host repo's tasks or settings.
 4. Vendors the skills for the chosen sections into `.claude/skills/` — `core` always, plus `workflow` and/or `python`. Flipping a section to `false` in `arsenal/config.toml` prunes its skills on the next run and keeps them pruned; an upgrade of a repo that predates sections keeps whatever it already had.
@@ -84,7 +84,7 @@ The script:
 6. Adds `.gitignore` entries for `surface_profile.json` and the statusLine-written `rate_limits.json`.
 7. Registers `statusline_capture.sh` as the host `statusLine` command (skipped if one already exists) so `budget_check.sh` can read quota.
 8. Injects the session-start protocol block + `@claude-arsenal/AGENTS.md` import into `CLAUDE.md`.
-9. Declares the `claude-arsenal` marketplace and enables `core` + `skill-workshop` in `.claude/settings.json`, pinned to `ref: v<bundle-version>`. An existing declaration is left alone — a consumer who pinned an older ref, a fork, or a local directory meant it.
+9. Leaves `.claude/settings.json` alone except for the statusLine in item 7. The marketplace declaration this step used to write has been retired: the web runtime never fetches a git marketplace, so the skills are **vendored** into `.claude/skills/` (item 4) where every surface can read them from the clone itself.
 
 **Retiring vendored skill copies:**
 ```bash

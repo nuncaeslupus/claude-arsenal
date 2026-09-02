@@ -707,17 +707,22 @@ if ! commit_err="$(git commit "${commit_args[@]}" 2>&1 >/dev/null)"; then
     # Reaching here then means a hook, a git-config problem, or an identity that
     # cannot be resolved — and the message used to name the one cause that
     # cannot apply, sending the reader to look in the wrong place.
+    # The backup is deleted per-branch, not once at the end: on the failed-rollback
+    # branch the task file is still in tasks/_history/ and this byte-exact copy is
+    # the only way back — and the failure message above names that exact path. The
+    # host-gate failure path keeps it for the same reason.
     if [[ -n "${_ARCHIVED_DEST}" ]]; then
         if _unarchive_task_file; then
             restored="The task file has been restored to ${ARSENAL_HOME}/tasks/."
+            [[ -n "${_ARCHIVED_BACKUP}" ]] && rm -f "${_ARCHIVED_BACKUP}"
         else
-            restored="THE ROLLBACK ALSO FAILED — see above; the tree needs a hand before re-running."
+            restored="THE ROLLBACK ALSO FAILED — see above; the tree needs a hand before re-running. The backup at ${_ARCHIVED_BACKUP:-<none>} has been kept."
         fi
     else
         restored="Nothing had been archived, so the tree is unchanged."
+        [[ -n "${_ARCHIVED_BACKUP}" ]] && rm -f "${_ARCHIVED_BACKUP}"
     fi
     echo "open_task_pr: could not commit ${TASK_ID} — no PR opened. ${restored} git said: ${commit_err:-<no output>}" >&2
-    [[ -n "${_ARCHIVED_BACKUP}" ]] && rm -f "${_ARCHIVED_BACKUP}"
     exit 1
 fi
 # The commit holds the archive now, so the backup has nothing left to protect.

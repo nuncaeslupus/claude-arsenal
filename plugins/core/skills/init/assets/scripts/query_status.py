@@ -8,7 +8,8 @@ what the selector sees — both derive from the same two inputs.
     python3 claude-arsenal/scripts/query_status.py --issues /tmp/issues.json [--detail]
 
 Exit: 0 always; 1 with --fail-on-problems if any task has no gate, no handle, or a
-dependency that does not exist.
+dependency that does not exist; 2 if --issues names a file that cannot be read or
+parsed.
 """
 
 from __future__ import annotations
@@ -75,7 +76,15 @@ def main(argv: list[str] | None = None) -> int:
     issues: list[dict[str, Any]] = []
     handles_known = bool(args.issues and args.issues.is_file())
     if handles_known:
-        payload = json.loads(args.issues.read_text(encoding="utf-8"))
+        # Session-start step 3 runs this straight after the board fetch, so a
+        # truncated or unreadable fetch file is a realistic input. The sibling
+        # scripts (handle_sync, issue_for_task, issue_import) all return 2 here
+        # rather than letting a traceback escape a documented exit contract.
+        try:
+            payload = json.loads(args.issues.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            print(f"query_status: cannot read --issues — {exc}", file=sys.stderr)
+            return 2
         if isinstance(payload, dict):
             payload = payload.get("issues", [])
         issues = [i for i in payload if isinstance(i, dict)]

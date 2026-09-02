@@ -43,6 +43,7 @@ Exit: 0 (an empty import is an answer), 2 on unreadable input.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import html
 import json
 import sys
@@ -218,6 +219,7 @@ def main(argv: list[str] | None = None) -> int:
                 return candidate
         return None
 
+    written_paths: list[Path] = []
     for issue in rows:
         task_id = mint()
         if task_id is None:
@@ -229,8 +231,27 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         path = args.tasks_dir / f"{task_id}.md"
         if args.apply:
-            args.tasks_dir.mkdir(parents=True, exist_ok=True)
-            path.write_text(render(issue, task_id), encoding="utf-8")
+            # A half-applied import is worse than none: the files that did land
+            # carry no `arsenal-task:` marker on their issues yet (the caller
+            # applies those from the rows printed below), so the next
+            # handle_sync proposes a second issue for each of them. Anything
+            # this invocation created is therefore removed if a later write
+            # fails, and the failure is reported rather than raised.
+            try:
+                args.tasks_dir.mkdir(parents=True, exist_ok=True)
+                path.write_text(render(issue, task_id), encoding="utf-8")
+            except OSError as exc:
+                for created in written_paths:
+                    with contextlib.suppress(OSError):
+                        created.unlink()
+                print(
+                    f"issue_import: could not write {path} — {exc}. Rolled back "
+                    f"{len(written_paths)} task file(s) written by this run; no issue "
+                    "was relabelled, so re-running is safe.",
+                    file=sys.stderr,
+                )
+                return 1
+            written_paths.append(path)
         print(
             json.dumps(
                 {

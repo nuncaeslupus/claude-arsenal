@@ -159,14 +159,27 @@ def parameter_changes(only_left: Rows, only_right: Rows) -> list[str]:
     how a diff invents a change that did not happen. Naming the pattern is
     useful; merging the entries is not.
     """
-    by_path: dict[tuple[str, str, str], list[set[str]]] = defaultdict(lambda: [set(), set()])
+    # Scheme and port belong in the key because identity() treats them as identity:
+    # without them a request moved from https://host:443/p?a=1 to http://host:80/p?b=1
+    # reads as one request whose parameters changed, rather than two requests.
+    by_path: dict[tuple[str, str, str, str, str], list[set[str]]] = defaultdict(
+        lambda: [set(), set()]
+    )
     for side, rows in ((0, only_left), (1, only_right)):
         for row in rows:
-            key = (str(row.get("method")), str(row.get("host")), str(row.get("path")))
+            key = (
+                str(row.get("method")),
+                str(row.get("scheme")),
+                str(row.get("host")),
+                str(row.get("port")),
+                str(row.get("path")),
+            )
             by_path[key][side].update(name for name, _ in row.get("query") or [])
 
     lines: list[str] = []
-    for (method, host, path), (left_names, right_names) in sorted(by_path.items()):
+    for (method, _scheme, host, _port, path), (left_names, right_names) in sorted(
+        by_path.items()
+    ):
         if not left_names and not right_names:
             continue
         added = sorted(right_names - left_names)
@@ -272,7 +285,15 @@ def main(argv: list[str] | None = None) -> int:
         args.output.write_text("\n".join(lines) + "\n", encoding="utf-8")
         print(f"wrote {len(lines)} line(s) to {args.output}", file=sys.stderr)
     else:
-        kept, note = apply_budget(lines, 0 if args.limit == 0 else 4096)
+        # --limit is documented as a row cap that 0 removes, so a positive value
+        # has to actually cap rows: passing only the byte budget made --limit 1
+        # and --limit 1000 print exactly the same thing.
+        if args.limit > 0 and len(lines) > args.limit:
+            shown = lines[: args.limit]
+            shown.append(f"... {len(lines) - args.limit} more line(s) — raise --limit to see them")
+        else:
+            shown = lines
+        kept, note = apply_budget(shown, 0 if args.limit == 0 else 4096)
         print("\n".join(kept))
         if note:
             print(note)

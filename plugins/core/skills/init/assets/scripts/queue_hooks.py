@@ -153,7 +153,7 @@ def plan_pr_closed(
     base_ref = str((pull.get("base") or {}).get("ref") or "")
     default_branch = str(
         (event.get("repository") or {}).get("default_branch")
-        or (pull.get("base") or {}).get("repo", {}).get("default_branch")
+        or ((pull.get("base") or {}).get("repo") or {}).get("default_branch")
         or ""
     )
     into_default = bool(default_branch) and base_ref == default_branch
@@ -445,6 +445,17 @@ class Api:
             if len(chunk) < 100:
                 break
             page += 1
+        else:
+            # Falling out of the `while` means page 11 was reachable: the list is
+            # truncated. Silence here is what makes it dangerous — sweep-claims
+            # would act on a partial view, and plan_sync_handles would read a task
+            # whose handle sits past the cap as having no handle and open a
+            # duplicate issue for it.
+            print(
+                f"queue_hooks: {path} returned more than {len(out)} records — the list "
+                "is truncated, so plans built from it may be incomplete",
+                file=sys.stderr,
+            )
         return out
 
     def issues(self, label: str, state: str = "all") -> list[dict[str, Any]]:
