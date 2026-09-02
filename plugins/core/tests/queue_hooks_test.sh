@@ -421,4 +421,88 @@ python3 "${HOOKS}" keyword-guard --tasks-dir "${tasks}" --issues "${tmp}/issues.
     || fail "an unknown branch must pass the guard, not fail it"
 echo "PASS: the closing keyword must name the task's own issue"
 
+# Gate 13: a listing of EXACTLY 1,000 records is whole, not truncated. Ten full
+# pages is what 1,001 records looks like and equally what 1,000 looks like, so
+# inferring truncation from a full tenth page declared a complete board partial —
+# and `_refuse_on_truncation` then refused sync-handles and sweep-claims on it.
+# Page 11 is the only thing that tells the two apart.
+out=$(HOOKS="${HOOKS}" python3 - <<'PY' 2>&1
+import importlib.util, os, sys
+
+spec = importlib.util.spec_from_file_location("queue_hooks", os.environ["HOOKS"])
+mod = importlib.util.module_from_spec(spec)
+sys.modules["queue_hooks"] = mod
+spec.loader.exec_module(mod)
+
+
+def api_returning(total):
+    api = mod.Api.__new__(mod.Api)
+    api.repo, api.token, api.truncated = "o/r", "t", False
+    pages = {}
+    for page in range(1, 13):
+        lo, hi = (page - 1) * 100, page * 100
+        pages[page] = [{"number": n} for n in range(lo, min(hi, total))]
+    api.request = lambda method, path, data=None: pages.get(
+        int(path.rsplit("page=", 1)[1]), []
+    )
+    return api
+
+
+exact = api_returning(1000)
+rows = exact.paginate("/x")
+print(f"exact1000 count={len(rows)} truncated={exact.truncated}")
+
+over = api_returning(1200)
+rows = over.paginate("/x")
+print(f"over1000 count={len(rows)} truncated={over.truncated}")
+PY
+)
+grep -q "exact1000 count=1000 truncated=False" <<<"${out}" \
+    || fail "exactly 1,000 records must not be reported as truncated: ${out}"
+grep -q "over1000 count=1000 truncated=True" <<<"${out}" \
+    || fail "more than 1,000 records must still be reported as truncated: ${out}"
+echo "PASS: truncation is proven by page 11, not guessed from a full page 10"
+
+# Gate 14: pr-closed never reads a truncated listing as "this task has no
+# handle". The handle may simply have sat past the pagination cap, and treating
+# it as absent leaves a merged task closing nothing and its issue open and
+# claimed. Unlike sync-handles and sweep-claims this command cannot refuse and
+# retry — its webhook fires once — so it must report and exit non-zero.
+out=$(HOOKS="${HOOKS}" python3 - <<'PY' 2>&1
+import importlib.util, os, sys
+
+spec = importlib.util.spec_from_file_location("queue_hooks", os.environ["HOOKS"])
+mod = importlib.util.module_from_spec(spec)
+sys.modules["queue_hooks"] = mod
+spec.loader.exec_module(mod)
+
+event = {
+    "repository": {"full_name": "o/r", "default_branch": "main"},
+    "pull_request": {
+        "number": 7,
+        "html_url": "https://example/7",
+        "merged": True,
+        "body": "",
+        "head": {"ref": "arsenal/t-aaaa1111-x", "repo": {"full_name": "o/r"}},
+        "base": {"ref": "main", "repo": {"full_name": "o/r", "default_branch": "main"}},
+    },
+}
+tasks = [{"id": "t-aaaa1111", "path": "arsenal/tasks/t-aaaa1111.md"}]
+
+# The handle exists but sat past the cap, so the listing handed over is empty.
+whole = mod.plan_pr_closed(event, tasks, [], truncated=False)
+partial = mod.plan_pr_closed(event, tasks, [], truncated=True)
+print("whole kinds=" + ",".join(a["kind"] for a in whole))
+print("partial kinds=" + ",".join(a["kind"] for a in partial))
+print("applied=" + str(mod.apply_action(partial[0], None, tasks_dir=None)))
+PY
+)
+grep -q "whole kinds=note" <<<"${out}" \
+    || fail "a complete listing with no handle is still just a note: ${out}"
+grep -q "partial kinds=unresolved" <<<"${out}" \
+    || fail "a truncated listing must not report the handle as absent: ${out}"
+grep -q "applied=False" <<<"${out}" \
+    || fail "an unresolved handle must make the run exit non-zero: ${out}"
+echo "PASS: pr-closed reports an unresolvable handle instead of ignoring the task"
+
 echo "PASS: queue_hooks_test — all gates passed"

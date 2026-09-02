@@ -28,6 +28,28 @@ Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
   the base ref, where there are no task files and so no task issue a `Closes`
   line could name wrongly. 3.4.3 widened that guard to also match a task id in
   the PR body, which is what began routing bootstrap PRs into it.
+- `issue_import.py --apply` creates each task file exclusively instead of
+  overwriting whatever is at the path. Ids are minted against a directory
+  snapshot read before the loop, so a task file that lands in the gap — a
+  concurrent import, a worker committing its own task — was invisible to the
+  mint and silently destroyed. It is now a clean refusal with the batch rolled
+  back.
+- `pr-closed` no longer reads a truncated issue listing as "this task has no
+  handle". The handle may simply have sat past the pagination cap, and treating
+  it as absent left a merged task closing nothing and its issue open and claimed
+  forever. Its webhook fires once, so unlike `sync-handles` and `sweep-claims`
+  it cannot refuse and retry: it now names the task and exits non-zero so the
+  run goes red where somebody will see it.
+- A listing of **exactly** 1,000 records is no longer reported as truncated. Ten
+  full pages was taken as proof of an eleventh, so a board of exactly 1,000
+  issues made `sync-handles` and `sweep-claims` refuse to run on a board that
+  was in fact complete. An eleventh request now settles it.
+- **The default surface profile grants no capabilities.** It previously claimed
+  `surface:cli`, `surface:web` and `surface:cloud` at once, which no session can
+  be — so every task gated on `requires: [surface:cli]` was selectable on the
+  web, where it cannot run. Tasks with no `requires:` are unaffected. If you use
+  `requires:` and have not run `bin/detect_surface.sh` on a surface, run it
+  there; the selector now warns, naming the tasks it held back and the fix.
 
 ## [3.4.3] - 2026-09-02
 

@@ -617,4 +617,33 @@ err=$(python3 "${HANDLE_PY}" --tasks-dir "${onlynear}" --issues "${tmpdir}/issue
 grep -q 'every task has an issue handle' <<<"${err}"     && fail "a suppressed task must not be summarised as handled: ${err}"
 grep -q 'held back' <<<"${err}" || fail "the summary must count what it held back: ${err}"
 
+# --- 28: a task ruled out by `requires:` is reported, not silently dropped.
+#         The default surface profile now grants NOTHING — a session runs on one
+#         surface, and an undetected one promises none — so a board made entirely
+#         of gated tasks would otherwise read as an empty queue with no reason
+#         given, which is indistinguishable from "all work is done".
+gated="${tmpdir}/gated"
+mkdir -p "${gated}"
+cat > "${gated}/t-gate0001.md" <<'EOF'
+---
+id: t-gate0001
+title: "Needs a browser"
+priority: 5
+requires: [surface:cli]
+---
+
+## Acceptance gate
+```bash
+true
+```
+EOF
+err=$(python3 "${SELECT_PY}" --tasks-dir "${gated}" </dev/null 2>&1 >/dev/null)
+grep -q 'requires:' <<<"${err}" \
+    || fail "a capability-gated task must say so rather than vanish: ${err}"
+grep -q 'detect_surface' <<<"${err}" \
+    || fail "the warning must name the fix: ${err}"
+out=$(python3 "${SELECT_PY}" --tasks-dir "${gated}" --capability surface:cli </dev/null 2>/dev/null)
+grep -q 't-gate0001' <<<"${out}" \
+    || fail "the task must be selectable once the capability is offered: ${out}"
+
 echo "PASS: task_select_test — all gates passed"
