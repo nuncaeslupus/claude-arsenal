@@ -125,7 +125,9 @@ def render(issue: dict[str, Any], task_id: str) -> str:
     # decode to whitespace afterwards, and land in the file as a body that is
     # blank but truthy — so the `_(no issue body)_` fallback, which exists to
     # tell a reader there is nothing here, never fires.
-    body = html.unescape(issue.get("body") or "").strip() or "_(no issue body)_"
+    raw_body = issue.get("body")
+    text = html.unescape(raw_body if isinstance(raw_body, str) else "").strip()
+    body = text or "_(no issue body)_"
     return TEMPLATE.format(
         task_id=task_id,
         # Two spellings to undo before this lands in the repo, because a task
@@ -267,6 +269,19 @@ def main(argv: list[str] | None = None) -> int:
             # handle_sync proposes a second issue for each of them. Anything
             # this invocation created is therefore removed if a later write
             # fails, and the failure is reported rather than raised.
+            # Rendering happens BEFORE the path joins the rollback list, because
+            # it is the one step here that can fail without having touched the
+            # filesystem — a body or title that is not a string reaches
+            # `html.unescape` and raises. Inside the write `try` it escaped the
+            # rollback entirely (only OSError was caught) and left every earlier
+            # file behind, which is the half-applied import this guards against.
+            try:
+                rendered = render(issue, task_id)
+            except Exception as exc:  # a malformed issue payload, not a fault here
+                return _rollback(
+                    written_paths,
+                    f"could not render issue #{issue.get('number')} — {exc}",
+                )
             # Recorded BEFORE the write, because write_text creates and truncates
             # before it can fail: a path that raised halfway is a file this run
             # made, and leaving it out of the rollback list is what leaves the
@@ -274,7 +289,7 @@ def main(argv: list[str] | None = None) -> int:
             written_paths.append(path)
             try:
                 args.tasks_dir.mkdir(parents=True, exist_ok=True)
-                path.write_text(render(issue, task_id), encoding="utf-8")
+                path.write_text(rendered, encoding="utf-8")
             except OSError as exc:
                 return _rollback(written_paths, f"could not write {path} — {exc}")
         print(

@@ -157,7 +157,12 @@ def task_id_from_issue(
     but not in the task file fails to resolve and is reported — which is the
     existing `handle_sync.py` conversation about drifted handles, not a new one.
     """
-    body = issue.get("body") or ""
+    # A GitHub issue body is a string or null. Anything else is a malformed
+    # payload, and the honest reading of it is "carries no marker" — searching
+    # it raised a TypeError that surfaced as a traceback from whichever caller
+    # happened to be reading the board.
+    raw_body = issue.get("body")
+    body = raw_body if isinstance(raw_body, str) else ""
     for pattern in (TASK_MARKER_RE, TASK_PATH_RE):
         if match := pattern.search(body):
             return match.group(1)
