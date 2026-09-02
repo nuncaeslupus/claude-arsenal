@@ -26,7 +26,10 @@ Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
   listing — past the pagination cap the handle may exist, and the PR's
   `Closes #N` then names an unrelated issue that merging closes for good.
   A handle that resolved within the cap is still checked exactly as before, so
-  this does not block task PRs on a board merely large enough to truncate.
+  this does not block task PRs on a board merely large enough to truncate, and
+  only the issue listing's own completeness is consulted — a PR with a long
+  enough commit list no longer trips the guard through the shared pagination
+  flag.
 
 ## [3.4.4] - 2026-09-02
 

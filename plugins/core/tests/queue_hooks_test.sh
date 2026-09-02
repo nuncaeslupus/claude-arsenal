@@ -544,4 +544,54 @@ grep -q "resolved=False" <<<"${out}" \
     || fail "a resolved handle is checked normally; #4321 is not its issue: ${out}"
 echo "PASS: keyword-guard fails an unresolvable handle rather than waving the PR through"
 
+# Gate 16: keyword-guard reads the truncation of the ISSUE listing only.
+# `Api.truncated` is one sticky flag across every listing, and this command also
+# pages through the PR's commits. Reading the flag after that fetch let a long
+# commit list reject a PR whose issue listing was complete and whose handle is
+# simply absent — a deliberate fail-open turned into a rejection the author
+# cannot act on. Exercised through main(), because the defect is in the caller.
+out=$(HOOKS="${HOOKS}" python3 - <<'GATE16' 2>&1
+import importlib.util, json, os, sys, tempfile
+from pathlib import Path
+
+spec = importlib.util.spec_from_file_location("queue_hooks", os.environ["HOOKS"])
+mod = importlib.util.module_from_spec(spec)
+sys.modules["queue_hooks"] = mod
+spec.loader.exec_module(mod)
+
+tmp = Path(tempfile.mkdtemp())
+tasks_dir = tmp / "tasks"
+tasks_dir.mkdir()
+(tasks_dir / "t-aaaa1111.md").write_text(
+    "---\nid: t-aaaa1111\ntitle: \"t\"\npriority: 5\n---\n\n## Acceptance gate\n```bash\ntrue\n```\n"
+)
+event = tmp / "event.json"
+event.write_text(json.dumps({"pull_request": {
+    "number": 7, "html_url": "https://example/7",
+    "body": "Closes #4321", "head": {"ref": "arsenal/t-aaaa1111-x"},
+}}))
+
+class FakeApi:
+    """Issue listing COMPLETE; the commit listing is what truncates."""
+    def __init__(self, repo, token):
+        self.repo, self.token, self.truncated = repo, token, False
+    def issues(self, label, state="all"):
+        return []                      # complete, and the handle genuinely absent
+    def pr_commit_messages(self, number):
+        self.truncated = True          # the long commit list, after the issues fetch
+        return []
+
+mod.Api = FakeApi
+os.environ["GITHUB_TOKEN"] = "x"
+rc = mod.main(["keyword-guard", "--repo", "o/r",
+               "--tasks-dir", str(tasks_dir), "--event", str(event)])
+print("rc=" + str(rc))
+GATE16
+)
+grep -q "rc=0" <<<"${out}" \
+    || fail "a truncated COMMIT list must not make the guard reject an absent handle: ${out}"
+grep -q "sync-handles will open one" <<<"${out}" \
+    || fail "the guard should fail open with its usual note here: ${out}"
+echo "PASS: keyword-guard reads issue-listing truncation, not the sticky flag"
+
 echo "PASS: queue_hooks_test — all gates passed"

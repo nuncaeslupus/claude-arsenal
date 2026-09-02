@@ -756,6 +756,14 @@ def main(argv: list[str] | None = None) -> int:
         else:
             print("queue_hooks: no --issues and no usable token", file=sys.stderr)
             return 2
+        # Read HERE, before anything else paginates. `Api.truncated` is one
+        # sticky flag across every listing, and keyword-guard goes on to page
+        # through the PR's commits: a long enough commit list would raise the
+        # flag and make the guard reject a PR whose ISSUE listing was complete
+        # and whose handle is simply absent — turning a deliberate fail-open
+        # into a rejection the author cannot act on. Only the completeness of
+        # the issue listing says anything about whether a handle exists.
+        issues_truncated = bool(args.issues is None and api is not None and api.truncated)
 
         if args.command == "keyword-guard":
             # Returns straight from here: this command reports a verdict on
@@ -782,7 +790,7 @@ def main(argv: list[str] | None = None) -> int:
                 tasks,
                 issues,
                 commits,
-                truncated=bool(api is not None and api.truncated),
+                truncated=issues_truncated,
             )
             print(message, file=sys.stdout if ok else sys.stderr)
             return 0 if ok else 1
@@ -796,7 +804,7 @@ def main(argv: list[str] | None = None) -> int:
                 _load_json(event_path),
                 tasks,
                 issues,
-                truncated=bool(api is not None and api.truncated),
+                truncated=issues_truncated,
             )
         elif args.command == "sync-handles":
             if _refuse_on_truncation(api, "sync-handles"):
