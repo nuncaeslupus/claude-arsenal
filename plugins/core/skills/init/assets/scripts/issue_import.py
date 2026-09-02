@@ -253,6 +253,13 @@ def main(argv: list[str] | None = None) -> int:
         return None
 
     written_paths: list[Path] = []
+    # Collected, not printed, until the whole batch lands. These rows are the
+    # caller's instruction to relabel the issue and stamp `arsenal-task:` into
+    # its body; printed as the loop runs, a rollback three issues later leaves
+    # the caller holding instructions for task files that no longer exist, and
+    # an issue marked as the handle for nothing is as broken as a task file with
+    # no handle.
+    emitted: list[str] = []
     for issue in rows:
         task_id = mint()
         if task_id is None:
@@ -290,9 +297,13 @@ def main(argv: list[str] | None = None) -> int:
             try:
                 args.tasks_dir.mkdir(parents=True, exist_ok=True)
                 path.write_text(rendered, encoding="utf-8")
-            except OSError as exc:
+            except (OSError, UnicodeError) as exc:
+                # UnicodeError alongside OSError: a GitHub body can carry a lone
+                # surrogate, which survives JSON decoding and fails only here, on
+                # the UTF-8 encode. It is a ValueError, so `except OSError` let it
+                # past the rollback with the file already created and truncated.
                 return _rollback(written_paths, f"could not write {path} — {exc}")
-        print(
+        emitted.append(
             json.dumps(
                 {
                     "issue": issue.get("number"),
@@ -316,6 +327,9 @@ def main(argv: list[str] | None = None) -> int:
                 separators=(",", ":"),
             )
         )
+
+    for row in emitted:
+        print(row)
 
     if not args.apply:
         print(
