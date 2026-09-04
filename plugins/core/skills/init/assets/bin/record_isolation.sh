@@ -101,23 +101,58 @@ if ! mkdir -p "${dir}" 2>/dev/null; then
     exit 2
 fi
 
-# The sentinel is read with a bare `.strip()` by task_select.py, so it holds one
-# word and nothing else. Provenance goes in a sibling file: an attestation that
-# leaves no record of who made it, when, or on what grounds is the thing this
-# was supposed to be better than.
-if ! printf 'available\n' > "${dir}/worktree_isolation" 2>/dev/null; then
-    echo "record_isolation: cannot write ${dir}/worktree_isolation" >&2
+# ORDER MATTERS, and it is the provenance that goes first.
+#
+# The sentinel is what lifts a safety clamp. Provenance is one of the three
+# things bounding that decision — a closed vocabulary, a refusal that writes
+# nothing, and a record of who attested what and when. Writing the sentinel
+# first and letting the sidecar fail soft meant a blocked provenance write
+# (a stale directory at that path is enough) still lifted the clamp, still
+# exited 0, and still printed that provenance existed. An attestation nobody
+# can audit is the thing this was supposed to be better than.
+#
+# So: build the provenance in a temp file, publish it, and only then record the
+# verdict. Every failure leaves the sentinel untouched, which leaves the clamp
+# ON — the safe direction. The reverse ordering has no safe failure at all.
+session="${CLAUDE_CODE_REMOTE_SESSION_ID:-${CLAUDE_CODE_SESSION_ID:-unknown}}"
+why="${dir}/worktree_isolation.why"
+why_tmp="${why}.$$.tmp"
+
+# `mv file dir` MOVES THE FILE INTO THE DIRECTORY and reports success, so a
+# stale directory at the provenance path would sail through the publish below
+# and leave the sentinel lifted with the provenance filed one level down where
+# nothing looks for it. Reject anything that is not a regular file up front, and
+# assert the result after — a publish that "succeeded" is not the same fact as
+# the provenance being where it belongs.
+if [[ -e "${why}" && ! -f "${why}" ]]; then
+    echo "record_isolation: ${why} exists and is not a regular file — recording NOTHING. The verdict gates a batch-width clamp and is only as good as its provenance; remove whatever is at that path and re-run." >&2
     exit 2
 fi
 
-session="${CLAUDE_CODE_REMOTE_SESSION_ID:-${CLAUDE_CODE_SESSION_ID:-unknown}}"
-{
+if ! {
     printf 'verdict: available\n'
     printf 'basis: attested-dispatch-mechanism\n'
     printf 'mechanism: %s\n' "${MECHANISM}"
     printf 'recorded_at: %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo unknown)"
     printf 'recorded_by_session: %s\n' "${session}"
-} > "${dir}/worktree_isolation.why" 2>/dev/null || true
+} > "${why_tmp}" 2>/dev/null; then
+    rm -f "${why_tmp}" 2>/dev/null || true
+    echo "record_isolation: cannot write provenance to ${why_tmp} — recording NOTHING. The verdict gates a batch-width clamp and is only as good as the record of who attested it, so a provenance that cannot be written is a refusal, not a warning." >&2
+    exit 2
+fi
 
-echo "record_isolation: recorded available (mechanism: ${MECHANISM}) — provenance in ${dir}/worktree_isolation.why"
+if ! mv -f "${why_tmp}" "${why}" 2>/dev/null || [[ ! -f "${why}" ]]; then
+    rm -f "${why_tmp}" 2>/dev/null || true
+    echo "record_isolation: cannot publish provenance to ${why} — recording NOTHING, and the isolation sentinel is untouched." >&2
+    exit 2
+fi
+
+# Last, and only now. A failure here leaves provenance describing a verdict that
+# was not recorded, which reads correctly: the clamp stays on.
+if ! printf 'available\n' > "${dir}/worktree_isolation" 2>/dev/null; then
+    echo "record_isolation: provenance was written to ${why} but the verdict could not be written to ${dir}/worktree_isolation — nothing has been lifted; the batch stays clamped." >&2
+    exit 2
+fi
+
+echo "record_isolation: recorded available (mechanism: ${MECHANISM}) — provenance in ${why}"
 exit 0

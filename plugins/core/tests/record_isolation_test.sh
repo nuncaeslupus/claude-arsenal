@@ -92,6 +92,40 @@ grep -q 'mechanism: separate-clone' "${tmp}/session/worktree_isolation.why" \
     || fail "separate-clone did not record its own mechanism"
 echo "PASS: separate-clone records too"
 
+# --- a provenance that cannot be written is a REFUSAL, not a warning --------
+# The sentinel lifts a safety clamp, and provenance is one of the three things
+# bounding that decision. Writing the sentinel first and letting the sidecar
+# fail soft meant a blocked provenance write still lifted the clamp, still
+# exited 0, and still PRINTED that provenance existed — an attestation nobody
+# can audit, which is what this was supposed to be better than.
+#
+# A directory at the provenance path is enough to trigger it, and it is the
+# case that hides: `mv file dir` moves the file INTO the directory and reports
+# success, so a publish that "worked" is not the same fact as the provenance
+# being where anything looks for it.
+rm -rf "${tmp}/session"
+mkdir -p "${tmp}/session/worktree_isolation.why"
+rc="$(_run "separate-session")"
+[[ "${rc}" -eq 2 ]] \
+    || fail "a blocked provenance write returned ${rc}, expected 2 — it must refuse, not warn"
+[[ ! -e "${tmp}/session/worktree_isolation" ]] \
+    || fail "a blocked provenance write STILL lifted the clamp: the sentinel was written with no auditable record of who attested it"
+[[ -z "$(find "${tmp}/session" -maxdepth 1 -name '*.tmp' 2>/dev/null)" ]] \
+    || fail "a refused run left its temp file behind"
+echo "PASS: a provenance that cannot be written records nothing and lifts nothing"
+
+# ...and it must not DOWNGRADE an existing verdict either. A refusal that
+# clobbers `unavailable` on its way out would turn a failed attestation into a
+# lost measurement.
+rm -rf "${tmp}/session"
+mkdir -p "${tmp}/session/worktree_isolation.why"
+printf 'unavailable\n' > "${tmp}/session/worktree_isolation"
+rc="$(_run "separate-session")"
+[[ "${rc}" -eq 2 ]] || fail "a blocked provenance write returned ${rc}, expected 2"
+[[ "$(cat "${tmp}/session/worktree_isolation")" == "unavailable" ]] \
+    || fail "a refused run overwrote an existing 'unavailable' verdict — a failed attestation must never destroy a real measurement"
+echo "PASS: a refused run leaves an existing verdict exactly as it found it"
+
 # --- --list must stay honest ------------------------------------------------
 # The refusal message prints this list, so it is what a blocked operator reads.
 listing="$(bash "${REC}" --list 2>&1)"
