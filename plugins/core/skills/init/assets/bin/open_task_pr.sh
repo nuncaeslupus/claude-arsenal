@@ -107,7 +107,7 @@ _positional=()
 _reject_optionlike() {  # _reject_optionlike <option> <value>
     case "$2" in
         "")  echo "open_task_pr: $1 needs a non-empty value" >&2; _usage >&2; return 1 ;;
-        -*)  echo "open_task_pr: $1 got '$2', which looks like an option — quote it if it is really the value" >&2; _usage >&2; return 1 ;;
+        -*)  echo "open_task_pr: $1 got '$2', which starts with '-' and is rejected as an option — quoting does not change that, the shell strips the quotes before this sees the value. Pass one that does not start with '-'; for a file that really is named that way, prefix the path: ./$2" >&2; _usage >&2; return 1 ;;
     esac
 }
 while [[ $# -gt 0 ]]; do

@@ -19,14 +19,14 @@ S="${A}/bin/open_task_pr.sh"
 for args in "--title --body-file x.md" "--type --title" "--body-file --title"; do
     # shellcheck disable=SC2086
     out="$(bash "$S" lo-cf3d $args 2>&1)"; rc=$?
-    if [[ $rc -ne 0 && "$out" == *"looks like an option"* ]]; then
+    if [[ $rc -ne 0 && "$out" == *"rejected as an option"* ]]; then
         ok "open_task_pr rejects an option-like value: $args"
     else
         bad "open_task_pr accepted '$args' (rc=$rc)"
     fi
 done
 out="$(bash "$S" lo-cf3d --title=--body-file 2>&1)"; rc=$?
-if [[ $rc -ne 0 && "$out" == *"looks like an option"* ]]; then
+if [[ $rc -ne 0 && "$out" == *"rejected as an option"* ]]; then
     ok "open_task_pr rejects an option-like value in the = form"
 else
     bad "open_task_pr accepted --title=--body-file (rc=$rc)"
@@ -49,10 +49,16 @@ fi
 # UnicodeDecodeError derives from ValueError, so `except OSError` let it escape
 # — as a traceback, from a branch that only prints a diagnostic, after the gate
 # decision was already made.
-if grep -q 'except (OSError, UnicodeDecodeError):' "${A}/bin/gate_run.sh"; then
-    ok "gate_run's diagnostic read catches UnicodeDecodeError"
+# There are TWO such reads — the default-branch one and the working-copy one —
+# and `grep -q` would pass on either alone, so a regression in one is invisible.
+# Each read's very next line must be the widened handler; count both.
+_reads="$(grep -c 'gate_command(gate_section(pathlib.Path(working).read_text' "${A}/bin/gate_run.sh")"
+_guards="$(grep -A1 'gate_command(gate_section(pathlib.Path(working).read_text' "${A}/bin/gate_run.sh" \
+           | grep -c 'except (OSError, UnicodeDecodeError):')"
+if [[ "$_reads" -eq 2 && "$_guards" -eq "$_reads" ]]; then
+    ok "both of gate_run's diagnostic reads catch UnicodeDecodeError"
 else
-    bad "gate_run still catches only OSError around read_text"
+    bad "gate_run has $_reads diagnostic read(s) but $_guards widened handler(s) — expected 2 and 2"
 fi
 
 # --- 3. arsenal_migrate.py validates merge-policy BEFORE it writes ----------
@@ -77,13 +83,25 @@ import ast, pathlib, sys
 src = pathlib.Path(sys.argv[1], "plugins/core/skills/init/scripts/init.py").read_text()
 fn = next(n for n in ast.walk(ast.parse(src))
           if isinstance(n, ast.FunctionDef) and n.name == "_retire_shadow_handover")
-# every unlink() call must sit inside a Try that handles OSError
-tries = [t for t in ast.walk(fn) if isinstance(t, ast.Try)]
-def guarded(node):
-    return any(node is d or node in list(ast.walk(t)) for t in tries for d in ast.walk(t))
+# Every unlink() must sit in the BODY of a Try whose handlers catch OSError.
+# "Somewhere below an ast.Try" is not enough: `except ValueError: shadow.unlink()`
+# is below one, catches nothing relevant, and would still abort the install.
+def catches_oserror(handler):
+    if handler.type is None:          # bare `except:` does catch OSError
+        return True
+    names = handler.type.elts if isinstance(handler.type, ast.Tuple) else [handler.type]
+    return any(getattr(n, "id", None) == "OSError"
+               or getattr(n, "attr", None) == "OSError" for n in names)
+
+protected = set()
+for t in ast.walk(fn):
+    if isinstance(t, ast.Try) and any(catches_oserror(h) for h in t.handlers):
+        for stmt in t.body:           # body only — not handlers, orelse, finally
+            protected.update(id(n) for n in ast.walk(stmt))
+
 unlinks = [c for c in ast.walk(fn)
            if isinstance(c, ast.Call) and getattr(c.func, "attr", None) == "unlink"]
-sys.exit(0 if unlinks and all(guarded(u) for u in unlinks) else 1)
+sys.exit(0 if unlinks and all(id(u) in protected for u in unlinks) else 1)
 PY
 then
     ok "init.py's shadow-handover unlink is guarded"
