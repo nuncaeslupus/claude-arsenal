@@ -18,6 +18,36 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [3.5.0] - 2026-09-04
+
+- `open_task_pr.sh` now **rejects an unknown option** instead of taking it as
+  the PR title. `open_task_pr.sh <id> --body-file x.md` used to open a PR
+  subjected `x.md: --body-file` and merge it; the subject is the one part of a
+  PR that survives a squash, so the only fix was rewriting shared history.
+  (#352)
+- `open_task_pr.sh` gains `--title`, `--type`, `--body-file` and `--help`.
+  `--body-file` supplies the PR body's Summary prose; the `Closes #<issue>`
+  line, the gate note and the review receipt are still written by the script,
+  because a body without them does not complete the task.
+- **Branch slugs are now ASCII on every locale.** A non-English title could
+  produce a branch name `git push` refuses — glibc collates accented letters
+  inside `a-z` under a UTF-8 locale, and `cut -c1-40` splits multibyte
+  characters. Invisible on CI (the runners are C.UTF-8), reproducible on any
+  workstation with a real UTF-8 locale. If you carry a local patch for this,
+  you can drop it. (#350)
+- **The board reports a stale working tree.** `query_status.py` makes one
+  read-only `git ls-remote` and warns when your checkout is behind the remote
+  default branch. A stale task file and a genuinely open task read identically
+  from the board, so a behind-by-N tree hands out work that is already merged.
+  Skip it with `--no-remote-check`; it is silent when the remote is
+  unreachable. Session-start step 3 now begins with `git fetch --quiet origin`.
+  (#351)
+- `task_select.py --issues` now **exits 2 on a file it cannot read**, matching
+  `query_status.py`. A missing path raised `FileNotFoundError` and a truncated
+  `{"issues": null}` raised `TypeError`; either could leave an empty state map,
+  which is indistinguishable from a healthy new board — so the selector would
+  hand out a task that was already finished. (#345)
+
 ## [3.4.5] - 2026-09-02
 
 - `keyword-guard` no longer passes a task PR when a truncated `arsenal:task`
