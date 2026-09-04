@@ -338,13 +338,36 @@ def migrate(
         # `payload` is a path out of the legacy queue file, so it is contained
         # before it is read: a row carrying `../../.ssh/id_rsa` would otherwise
         # have its contents copied into a task file under `arsenal/tasks/`.
-        payload_path = queue_dir / str(row.get("payload") or f"{row['id']}.md")
-        try:
-            resolved = _contained(payload_path, queue_dir, where=f"row {row['id']} payload")
-        except MigrateError as exc:
-            report.append(f"payload: {exc} — skipped")
-            return ""
-        return resolved.read_text(encoding="utf-8") if resolved.is_file() else ""
+        declared = row.get("payload")
+        payload_path = queue_dir / str(declared or f"{row['id']}.md")
+        resolved = _contained(payload_path, queue_dir, where=f"row {row['id']} payload")
+        if not resolved.is_file():
+            # A row that never named a payload, with no `<id>.md` beside the
+            # queue, is a task that was recorded without a body. The gateless
+            # fallback is the honest rendering of that and always has been.
+            # A row that DID name one is the opposite: the gate exists, we
+            # cannot read it, and writing the same fallback would report a
+            # missing gate as an absent one.
+            if not declared:
+                return ""
+            raise MigrateError(
+                f"row {row['id']}: payload {payload_path} does not exist — "
+                "its acceptance gate would be silently replaced by the "
+                "'no gate was recorded' fallback"
+            )
+        return resolved.read_text(encoding="utf-8")
+
+    # Every payload is resolved BEFORE the first task file is written. Both of
+    # these used to degrade to an empty body: an uncontained path appended a
+    # `payload: … — skipped` line and returned "", and a missing file returned
+    # "" with no line at all. Either way the task was written carrying the
+    # `<!-- No gate was recorded -->` fallback, the run summarised as
+    # `task files: N to create` and exited 0 — so the operator deleted the
+    # legacy queue and the gate was gone, from a migration that reported
+    # success. `main()` turns a MigrateError into exit 2 having written
+    # nothing, which is the only safe answer for a one-shot irreversible move.
+    for _row in [*live, *finished]:
+        payload_for(_row)
 
     created = skipped = 0
     for row in live:
@@ -464,7 +487,21 @@ def migrate(
                 f'"{merge_policy}" to keep the policy this queue was using.'
             )
         else:
-            body = _MERGE_POLICY_LINE.sub(f'merge-policy = "{merge_policy}"', template, count=1)
+            # subn, not sub: the anchored pattern can miss a template whose
+            # spacing drifted (`merge-policy  =  "x"`), and `sub` returns the
+            # text unchanged when it matches nothing. The report then announced
+            # the policy it meant to write while the file on disk kept another
+            # one — a config that lies about the merge policy an agent goes on
+            # to enforce.
+            body, _subs = _MERGE_POLICY_LINE.subn(
+                f'merge-policy = "{merge_policy}"', template, count=1
+            )
+            if _subs != 1:
+                raise MigrateError(
+                    "init.py's config template has no `merge-policy = \"...\"` line to set "
+                    f"(matched {_subs} times) — refusing to write a config whose reported "
+                    "merge policy is not the one in the file"
+                )
             if apply:
                 home.mkdir(parents=True, exist_ok=True)
                 config.write_text(body, encoding="utf-8")

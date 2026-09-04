@@ -18,6 +18,40 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [3.6.1] - 2026-09-04
+
+- **The skill-edit gate no longer opens when its own analyser breaks.** Any
+  crash inside `gate_target.py` produced an empty target, which the hook read as
+  "nothing to gate" and allowed — silently, with nothing in the transcript to
+  say the check had stopped running. A crash now refuses the call and prints
+  why. An unparseable payload is still allowed: that is a handled case, not a
+  crash. (#347, in part)
+- **An unusable evidence gate is no longer scored as a failed one.** A JSON
+  number too large for a float raised `OverflowError` out of `gate_evidence.py`,
+  and the traceback's exit 1 is `gate_run.sh`'s *assertion failed* — so a gate
+  that could not be scored was reported as a gate the work had failed. It now
+  exits 2 ("declared but unusable"), which existed for exactly this. (#346)
+- **A migration will not write a task with no gate.** `arsenal_migrate.py`
+  turned a payload that was missing, or that pointed outside the queue
+  directory, into an empty task body carrying the `<!-- No gate was recorded -->`
+  fallback — then summarised the run as a success and exited 0, so the operator
+  deleted the legacy queue and the gate was gone. Every payload is now resolved
+  before the first file is written, and an unreadable one exits 2 having
+  written nothing. (#346)
+- `arsenal_migrate.py` also refuses to write a `config.toml` whose reported
+  merge policy is not the one in the file — the substitution was never checked,
+  so a template whose spacing had drifted was reported as set and written
+  unchanged. (#346)
+- **`gate_run.sh` says when your branch's gate edit was ignored.** A task's gate
+  comes from the default branch by design; a branch that edits it had that edit
+  discarded in silence, so the gate failed naming a symbol the implementation
+  had renamed and the worker debugged its own code. It now says which command
+  ran and why. Its other diagnostic said the task file was "not on disk" when it
+  usually is — corrected to "preferred over the working copy". (#349, in part)
+- `pr-review-loop.md` pointed at an upstream path that does not exist in a
+  consumer's tree; it now names the vendored
+  `claude-arsenal/references/github-automation.md`. (#346)
+
 ## [3.6.0] - 2026-09-04
 
 - **Security: a migration no longer executes your skills.** `arsenal_migrate.py`

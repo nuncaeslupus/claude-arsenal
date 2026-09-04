@@ -29,7 +29,23 @@ set -euo pipefail
 
 payload="$(cat)"
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-file_path="$(printf '%s' "$payload" | python3 "${here}/gate_target.py" 2>/dev/null || true)"
+# `|| true` used to swallow the exit status here, so ANY crash inside
+# gate_target.py — a NameError, a missing interpreter, a syntax error from a
+# half-applied edit — produced an empty target, which the next line reads as
+# "nothing to gate" and allows. A gate that opens when its own analyser breaks
+# is not a gate, and it fails silently: nothing in the transcript says the
+# check stopped running. gate_target.py's main() returns 0 on every path it
+# handles, including an unparseable payload, so a non-zero status means it
+# crashed and nothing else. Fail CLOSED on that, loudly.
+gate_err="$(mktemp)"
+if ! file_path="$(printf '%s' "$payload" | python3 "${here}/gate_target.py" 2>"${gate_err}")"; then
+    echo "check_skill_workshop_loaded: gate_target.py failed — the skill-edit gate cannot" >&2
+    echo "determine what this call writes, so it is refused rather than allowed." >&2
+    sed 's/^/  /' "${gate_err}" >&2
+    rm -f "${gate_err}"
+    exit 2
+fi
+rm -f "${gate_err}"
 session_id="$(printf '%s' "$payload" | python3 -c 'import json,sys; print(json.loads(sys.stdin.read()).get("session_id",""))' 2>/dev/null || true)"
 
 # Empty target → nothing this call would write inside a skill folder.
