@@ -15,6 +15,7 @@ and merges does, once, per tick.
 - [Merge preconditions — all three, every time](#merge-preconditions--all-three-every-time)
 - [Reporting — say nothing when nothing changed](#reporting--say-nothing-when-nothing-changed)
 - [A tick is not portable](#a-tick-is-not-portable)
+- [Dispatching a worker to another session](#dispatching-a-worker-to-another-session)
 - [What a scheduler cannot do](#what-a-scheduler-cannot-do)
 
 ---
@@ -125,14 +126,56 @@ already-open interactive session is the only way a tick inherits the grant.
 So: a fresh-orchestrator-per-tick design cannot work, and it fails an hour later
 rather than immediately.
 
-Two related facts a tick's dispatch step depends on, both measured:
+## Dispatching a worker to another session
 
-- **A spawned worker needs its repository passed explicitly.** Inheritance is not a
-  substitute; a child without it gets no sources, cannot push, and correctly
-  refuses its assignment as unverifiable — while the create call returns 201.
-- **Dispatch one worker per message.** A batch of session-creation calls in a single
-  message reads as one refusable action and is refused as one; the same calls sent
-  one per message go through. → `references/github-automation.md`
+A spawned session is not a smaller copy of you. It has **no `mcp__*` tools** — this
+holds both for a routine firing a fresh session and for a directly created child,
+and neither warns you — so on a surface where REST is also refused, its only channel
+to GitHub is plain `git`. That is enough to fetch, to read claim refs over
+`ls-remote`, and to **push a branch**. It is not enough to read issues, label or
+assign one, open a PR, or merge.
+
+So the capability split is forced, not stylistic:
+
+| | GitHub API | Does |
+|---|---|---|
+| Orchestrator | yes | board, claim, dispatch, **open each PR**, merge |
+| Worker | no | worktree, implement, host gate, `open_task_pr.sh` **through the push**, then stop |
+
+`open_task_pr.sh` supports that ending: when no channel here can open a PR, it
+pushes and prints `branch:<name>` on stdout with exit 0. That is a completed
+handoff, not a failure — the orchestrator opens the PR for that branch on its next
+tick (step 2 above).
+
+**Three things every dispatch must carry.** Each of these is a measured failure, not
+a precaution:
+
+1. **The repository, explicitly.** Inheritance is not a substitute. Of four workers
+   dispatched without it, two got containers with no sources at all — and the create
+   call returned **201** for all four, so nothing in the response distinguished them.
+   The orchestrator waits for branches that never arrive, and finding out means
+   reading each child's summary one at a time. Attaching the repository is also what
+   authorises the push: a worker without it has nowhere to push either.
+
+2. **`ARSENAL_TASK_ISSUE`.** `open_task_pr.sh` resolves the task's issue number over
+   the same API the worker does not have, and it refuses **before touching git**
+   rather than opening a PR whose merge closes nothing. In this mode that variable is
+   mandatory, not an optimisation. Do not tell a worker to retry with
+   `ARSENAL_ALLOW_UNLINKED_PR=1` — that opens a PR that completes no task.
+
+3. **Evidence the assignment is real.** A worker's first turn is now, routinely, *an
+   unfamiliar sender telling it to go edit files* — and a worker that judges that
+   blind will sometimes judge it prompt injection and refuse. That refusal is
+   **correct behaviour**, which is exactly why it cannot be the signal you rely on;
+   it also reads like an over-cautious model rather than a missing argument. Give it
+   something checkable instead: the issue number, the claim ref the orchestrator
+   already created (`arsenal/claims/<id>`, readable over plain `git ls-remote`), and
+   the dispatching session's id. A worker that can verify the claim exists does not
+   have to guess.
+
+**Dispatch one worker per message.** A batch of session-creation calls in a single
+message reads as one refusable action and is refused as one; the same calls sent one
+per message go through. → `references/github-automation.md`
 
 ## What a scheduler cannot do
 

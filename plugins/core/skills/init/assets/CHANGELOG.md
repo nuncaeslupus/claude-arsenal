@@ -18,6 +18,74 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [3.9.0] - 2026-09-04
+
+### A spawned worker is no longer told to do what it cannot
+
+A session spawned by another carries **no `mcp__*` tools** — true both for a
+routine firing a fresh session and for a directly created child, and neither
+warns you. Where REST is also refused, such a worker's only channel to GitHub is
+plain `git`: enough to fetch, read claim refs and push a branch; not enough to
+read issues, claim, open a PR or merge.
+
+The protocol block `/init` injects into your `CLAUDE.md` told **every** session
+to fetch the board, claim, and open PRs — and a spawned child reads that file
+like any other session. Three workers blocked on exactly this. It now opens by
+naming the spawned case and sending it straight to its task, and its dispatch
+step says to pass the repository and `ARSENAL_TASK_ISSUE` explicitly.
+
+`agents/worker.md` says how far a worker gets on each surface. As a Task-tool
+subagent it opens the PR itself; as a separate session its last step is the push,
+and `open_task_pr.sh` printing `branch:<name>` is **a completed handoff, not a
+failure**.
+
+`references/orchestrator-tick.md` gains a dispatch section with the three things
+every dispatch must carry, each a measured failure rather than a precaution:
+
+1. **The repository, explicitly.** Of four workers dispatched without it, two got
+   containers with no sources — and the create call returned **201** for all
+   four, so nothing in the response told them apart.
+2. **`ARSENAL_TASK_ISSUE`.** The helper resolves the issue over the API the
+   worker does not have, and refuses before touching git. Do not work around it
+   with `ARSENAL_ALLOW_UNLINKED_PR=1` — that opens a PR that completes no task.
+3. **Evidence the assignment is real** — the issue number, the claim ref
+   (`arsenal/claims/<id>`, readable over `git ls-remote`), the dispatching
+   session id. A worker's first turn is now routinely an unfamiliar sender
+   telling it to edit files; refusing that is correct behaviour, which is
+   precisely why it cannot be the signal you rely on.
+
+### `record_isolation.sh` — breaking the batch-of-one deadlock
+
+**New:** `claude-arsenal/bin/record_isolation.sh <mechanism>`.
+
+`available` had exactly one writer: `worker_postcheck.sh`, observing a returned
+worker's toplevel. A worker dispatched as a separate session never returns
+through it, so the sentinel stayed `unknown` forever and `task_select.py` clamped
+every batch to **one task, permanently** — on the surface where separate sessions
+are the only shape that works. The only way out was `--no-isolation-clamp`, which
+disables the check rather than satisfying it.
+
+Run `record_isolation.sh separate-session` after dispatching that way. It records
+that isolation follows from **how you dispatched** — a container per worker
+cannot share a tree — rather than from a path comparison.
+
+That distinction matters: the obvious fix, feeding a cross-container path to
+`worker_postcheck.sh`, **inverts**. Its check is `worker_root != own_root`, and
+two containers routinely both check out at `/home/user/<repo>` — identical paths
+would read as "the worker ran in my tree" at the moment isolation is most
+complete.
+
+The vocabulary is closed (`separate-session`, `separate-clone`); an unknown
+mechanism is refused, not recorded, because this file gates a safety clamp.
+Provenance is written to `worktree_isolation.why` (machine-local, gitignored by
+`/init`). Do **not** use it for Task-tool subagents — `worker_postcheck.sh`
+measures that case correctly, and a measurement beats an attestation.
+
+> **Judgement call worth reviewing.** That a separate container structurally
+> guarantees isolation is an assumption this script cannot verify from inside;
+> it is an attestation by the orchestrator about how it dispatched. The closed
+> vocabulary is what bounds it.
+
 ## [3.8.2] - 2026-09-04
 
 ### `AGENTS.md` is 201 tokens lighter, with nothing removed
