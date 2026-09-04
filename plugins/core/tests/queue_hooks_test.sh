@@ -497,13 +497,68 @@ print("partial kinds=" + ",".join(a["kind"] for a in partial))
 print("applied=" + str(mod.apply_action(partial[0], None, tasks_dir=None)))
 PY
 )
-grep -q "whole kinds=note" <<<"${out}" \
-    || fail "a complete listing with no handle is still just a note: ${out}"
+grep -q "whole kinds=archive-task,note" <<<"${out}" \
+    || fail "a complete listing with no handle must still archive on merge: ${out}"
 grep -q "partial kinds=unresolved" <<<"${out}" \
     || fail "a truncated listing must not report the handle as absent: ${out}"
 grep -q "applied=False" <<<"${out}" \
     || fail "an unresolved handle must make the run exit non-zero: ${out}"
 echo "PASS: pr-closed reports an unresolvable handle instead of ignoring the task"
+
+# Gate 14b: the keyword guard passes a handle-less task PR on the stated grounds
+# that `plan_pr_closed` "still reconciles on merge". That sentence has to be
+# true. It was not: pr-closed returned a bare note, so the work merged and the
+# task file stayed LIVE — and the next `handle_sync.py` proposed a fresh handle
+# for work that had already landed, which is the drift the queue exists to
+# prevent arriving through the door the guard was told to watch (#344).
+#
+# Reconciliation here is the ARCHIVE only. With no handle there is no issue to
+# close, and none may be invented.
+out=$(HOOKS="${HOOKS}" python3 - <<'GATE14B' 2>&1
+import importlib.util, os, sys
+
+spec = importlib.util.spec_from_file_location("queue_hooks", os.environ["HOOKS"])
+mod = importlib.util.module_from_spec(spec)
+sys.modules["queue_hooks"] = mod
+spec.loader.exec_module(mod)
+
+def event(merged=True, base="main"):
+    return {
+        "repository": {"full_name": "o/r", "default_branch": "main"},
+        "pull_request": {
+            "number": 9,
+            "html_url": "https://example/9",
+            "merged": merged,
+            "body": "",
+            "head": {"ref": "arsenal/t-aaaa1111-x", "repo": {"full_name": "o/r"}},
+            "base": {"ref": base, "repo": {"full_name": "o/r", "default_branch": "main"}},
+        },
+    }
+
+live = [{"id": "t-aaaa1111", "path": "arsenal/tasks/t-aaaa1111.md"}]
+done = [{"id": "t-aaaa1111", "path": "arsenal/tasks/_history/t-aaaa1111.md"}]
+
+for label, ev, tasks in (
+    ("merged", event(), live),
+    ("stacked", event(base="feature-x"), live),
+    ("closed", event(merged=False), live),
+    ("already-archived", event(), done),
+):
+    plan = mod.plan_pr_closed(ev, tasks, [], truncated=False)
+    print(f"{label}=" + ",".join(a["kind"] for a in plan))
+GATE14B
+)
+grep -q "merged=archive-task,note" <<<"${out}" \
+    || fail "a merged handle-less task PR must archive its task file: ${out}"
+! grep -q "close-issue" <<<"${out}" \
+    || fail "no issue handle means no issue to close — none may be invented: ${out}"
+grep -q "stacked=note" <<<"${out}" \
+    || fail "a merge into a non-default branch must not archive the task: ${out}"
+grep -q "closed=note" <<<"${out}" \
+    || fail "a PR closed without merging must not archive the task: ${out}"
+grep -q "already-archived=note" <<<"${out}" \
+    || fail "an already-archived task must not be archived twice: ${out}"
+echo "PASS: a handle-less task PR really is reconciled on merge, as the guard claims"
 
 # Gate 15: keyword-guard does not fail open when truncation is WHY the handle
 # could not be resolved. The fail-open reads "no handle exists yet", which only

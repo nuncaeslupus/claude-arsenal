@@ -1,6 +1,6 @@
 # Claude Arsenal
 
-<!-- claude-arsenal v3.6.2 — imported via @claude-arsenal/AGENTS.md -->
+<!-- claude-arsenal v3.7.0 — imported via @claude-arsenal/AGENTS.md -->
 
 This file is imported by the host repo's `CLAUDE.md` via the session-protocol block
 that `/init` injects, so it sits in context on **every turn of every session**. It
@@ -153,6 +153,9 @@ M=5, L=1, larger runs sooner — and nothing else; build order belongs in `deps`
 commands, are never executed: a gate that runs nothing passes everything. `query_status.py`
 and `task_select.py` both report a task with no block, because an entire gate layer can go
 inert without anyone noticing — one consumer audit found 0 of 70 payloads carried one.
+
+**The gate is fixed for the life of the task** — read from the default branch, so a task's
+own PR can never amend its own acceptance criteria. Never write a task that says otherwise.
 → `claude-arsenal/references/evidence-gates.md`
 
 ---
