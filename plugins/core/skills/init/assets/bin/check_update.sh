@@ -253,11 +253,13 @@ _report_skill_skew "${installed}"
 # concluded upgrades had to be done by copying files in, which is the exact
 # failure `verify-subtree` exists to catch, arrived at by trusting the tool
 # whose job is to know.
+_plugin_route="update the plugin (/plugin update claude-arsenal), re-vendor .claude/skills from it, then: python3 .claude/skills/init/scripts/init.py --repo-path . --silent"
+
 if ! git remote get-url "${REMOTE}" >/dev/null 2>&1; then
     if _is_subtree; then
         _warn "no '${REMOTE}' remote configured — update checking is INERT for this repo. '${PREFIX}' IS a git subtree here; only the remote is missing, which is expected on a fresh clone. Wire it up with: git remote add ${REMOTE} <marketplace-url>"
     else
-        _warn "no '${REMOTE}' remote configured — update checking is INERT for this repo, and '${PREFIX}' has no subtree merge in this history either, so it cannot be updated by merge even once the remote is added. Wire up the remote with: git remote add ${REMOTE} <marketplace-url>"
+        _warn "no '${REMOTE}' remote configured and '${PREFIX}' has no subtree merge in this history — which is what a PLUGIN install looks like, not a broken one. This script only reports drift for a subtree install, so INERT is the correct steady state here and step 0(a) has nothing to act on. To update: ${_plugin_route}. Adding the remote is optional and buys drift REPORTING only (it cannot merge without a subtree): git remote add ${REMOTE} <marketplace-url>"
     fi
     exit 0
 fi
@@ -308,7 +310,6 @@ fi
 # merge — the skill's assets ARE the distribution — so both halves of the subtree
 # command fail, and the consumer is sent down that route twice with nothing in
 # the text to tell them it cannot work here.
-_plugin_route="update the plugin (/plugin update claude-arsenal), re-vendor .claude/skills from it, then: python3 .claude/skills/init/scripts/init.py --repo-path . --silent"
 if _is_subtree; then
     _manual_hint="git fetch ${REMOTE} refs/tags/v${latest}:refs/tags/v${latest} && git subtree merge --prefix=${PREFIX} \"v${latest}^{commit}\" --squash"
 else

@@ -43,6 +43,40 @@ the PR — what is lost is the cleanup that happens when no session is running.
 
 ---
 
+## Which install do you have?
+
+Two installs exist and they update by different routes, so the first question
+is which one you are looking at. One command answers it:
+
+```bash
+git log --basic-regexp --grep='git-subtree-dir: claude-arsenal\(/\)\?$' \
+    --max-count=1 --format=%H | grep -q . && echo subtree || echo plugin
+```
+
+That is the same test `check_update.sh` makes (`_is_subtree`), down to
+`--basic-regexp` — a consumer with `grep.patternType=fixed` in their git config
+would otherwise match nothing and see every subtree report as a plugin.
+
+| | **Plugin install** (the common one) | **Subtree install** |
+|---|---|---|
+| How it got here | `/init`, from the marketplace plugin | `git subtree add --prefix=claude-arsenal` |
+| Tell-tale | no `arsenal` remote, no merge commit touching `claude-arsenal/` | a subtree merge in the history |
+| How you update | `/plugin update claude-arsenal`, then `/init` | `check_update.sh`, then a subtree merge |
+| `check_update.sh --check-only` | **INERT — and that is correct.** It reports drift for subtree installs only. Nothing to act on. | reports drift against the newest tag |
+
+The one that trips people up is the plugin row. `check_update.sh` runs on every
+session (session-start step 0a) and, finding no remote and no subtree, says the
+bundle "cannot be updated by merge" — which is true, and reads like a fault. It
+is not: a plugin install was never going to update by merge. Re-run `/init` and
+the bundle is current.
+
+Adding `git remote add arsenal <marketplace-url>` to a plugin install is
+optional. It upgrades that message from inert to a real version comparison,
+which is useful — but a remote is local git config, so every clone needs it
+added again, and it still cannot merge anything without a subtree.
+
+---
+
 ## File ownership
 
 | Path | Owner | Survives `/plugin update`? |
@@ -75,11 +109,23 @@ To customise a skill the marketplace ships:
 1. Copy the skill folder into your project: `cp -r
    ~/.claude/plugins/cache/claude-arsenal/plugins/core/skills/specify
    <project>/.claude/skills/`.
-2. Edit the copy. Claude Code resolves skills with project-level
-   precedence over plugin-level, so your fork takes over.
-3. (Optional) Document the divergence in your project's `CLAUDE.md` so
+2. **Delete the vendor marker if one came with the copy:** `rm -f
+   <project>/.claude/skills/specify/.arsenal-vendored`. This is what actually
+   protects a fork, and it is worth being exact about. `/init` replaces a
+   skill folder with `shutil.rmtree` when it carries `.arsenal-vendored`, and
+   leaves it alone when it does not — project-level precedence decides which
+   skill *loads*, not which files survive an upgrade. Copying from the cache
+   (step 1) is safe because the marketplace does not ship the marker; copying
+   from another project's `.claude/skills/`, which is the more natural thing to
+   do once you have a fork you like, carries it — and the next `/init` deletes
+   your fork without a word. The prune pass removes a marked folder the same
+   way when its section is switched off.
+3. Edit the copy. With no marker it is yours: `/init` prints
+   `skills: <name> exists and is not arsenal-vendored — left alone`. Look for
+   that line after the next upgrade; it is the receipt that your fork survived.
+4. (Optional) Document the divergence in your project's `CLAUDE.md` so
    teammates know the local version is the source of truth.
-4. Run `validate.py` on the fork before committing — the meta-skill's
+5. Run `validate.py` on the fork before committing — the meta-skill's
    rubric still applies:
 
    ```bash
