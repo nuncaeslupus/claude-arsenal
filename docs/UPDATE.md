@@ -45,30 +45,37 @@ the PR — what is lost is the cleanup that happens when no session is running.
 
 ## Which install do you have?
 
-Two installs exist and they update by different routes, so the first question
-is which one you are looking at. One command answers it:
+Three installs exist and they update by different routes, so the first question
+is which one you are looking at. One command splits them in two:
 
 ```bash
 git log --basic-regexp --grep='git-subtree-dir: claude-arsenal\(/\)\?$' \
-    --max-count=1 --format=%H | grep -q . && echo subtree || echo plugin
+    --max-count=1 --format=%H | grep -q . && echo subtree || echo non-subtree
 ```
 
 That is the same test `check_update.sh` makes (`_is_subtree`), down to
 `--basic-regexp` — a consumer with `grep.patternType=fixed` in their git config
-would otherwise match nothing and see every subtree report as a plugin.
+would otherwise match nothing and see every subtree report as a non-subtree one.
 
-| | **Plugin install** (the common one) | **Subtree install** |
-|---|---|---|
-| How it got here | `/init`, from the marketplace plugin | `git subtree add --prefix=claude-arsenal` |
-| Tell-tale | no `arsenal` remote, no merge commit touching `claude-arsenal/` | a subtree merge in the history |
-| How you update | `/plugin update claude-arsenal`, then `/init` | `check_update.sh`, then a subtree merge |
-| `check_update.sh --check-only` | **INERT — and that is correct.** It reports drift for subtree installs only. Nothing to act on. | reports drift against the newest tag |
+Git cannot tell the two non-subtree installs apart, because they leave the same
+history; what separates them is whether the machine has the marketplace plugin.
 
-The one that trips people up is the plugin row. `check_update.sh` runs on every
-session (session-start step 0a) and, finding no remote and no subtree, says the
-bundle "cannot be updated by merge" — which is true, and reads like a fault. It
-is not: a plugin install was never going to update by merge. Re-run `/init` and
-the bundle is current.
+| | **Plugin install** (the common one) | **Clone-based install** | **Subtree install** |
+|---|---|---|---|
+| How it got here | `/init`, from the marketplace plugin | `init.py` run from a clone of upstream (`docs/INSTALL.md`) — the cloud-only, CI and fresh-container route | `git subtree add --prefix=claude-arsenal` |
+| Tell-tale | no `arsenal` remote, no subtree merge, and `/plugin` lists `claude-arsenal` | the same git state, but no plugin installed | a subtree merge in the history |
+| How you update | `/plugin update claude-arsenal`, then `/init` | re-clone upstream at the newer tag and run its `init.py --repo-path .` | `check_update.sh`, then a subtree merge |
+| `check_update.sh --check-only` | **INERT — and that is correct.** It reports drift for subtree installs only. Nothing to act on. | **INERT — and that is correct.** Same reason. | reports drift against the newest tag |
+
+The two non-subtree rows are what trips people up. `check_update.sh` runs on
+every session (session-start step 0a) and, finding no remote and no subtree,
+says the bundle "cannot be updated by merge" — which is true, and reads like a
+fault. It is not: neither install was ever going to update by merge. Re-run
+`init.py` by whichever of the two routes you have and the bundle is current.
+
+Do not read that message as "you must install the plugin". A clone-based
+install has no plugin to update, and telling one to run `/plugin update` sends
+it after something that does not exist there.
 
 Adding `git remote add arsenal <marketplace-url>` to a plugin install is
 optional. It upgrades that message from inert to a real version comparison,
