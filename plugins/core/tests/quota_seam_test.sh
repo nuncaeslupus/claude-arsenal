@@ -49,16 +49,79 @@ rc="$(_check '{"seven_day": {"used_percentage": 99}}')"
 [[ "${rc}" -eq 3 ]] || fail "the seven_day window is not checked (exit ${rc}, expected 3)"
 echo "PASS: the seven_day window engages the guard too"
 
-# The trap the doc warns about: a document that plainly describes exhaustion in
-# another vocabulary still buys nothing, and says nothing about it.
-for shape in '{"status": "allowed", "rateLimitType": "five_hour"}' \
-             '{"status": "rejected"}' \
-             '{"five_hour": {"used_percentage": "95"}}'; do
+# A refusal is its own stop condition, not a percentage. These two shapes carry
+# no `used_percentage` at all — they are what `get_session` gives a cloud
+# session — and used to land in the "no used_percentage" fail-open, which is the
+# half of #329 that left the guard inert on the one surface that runs unattended.
+for shape in '{"status": "rejected", "rateLimitType": "five_hour", "resetsAt": 1787709000}' \
+             '{"five_hour": {"status": "rejected"}}' \
+             '{"five_hour": {"status": "throttled"}}'; do
+    rc="$(_check "${shape}")"
+    [[ "${rc}" -eq 3 ]] \
+        || fail "a refusal did not stop the loop (exit ${rc}, expected 3): ${shape}"
+done
+echo "PASS: a refusal stops the loop with no percentage anywhere in the document"
+
+# A MALFORMED status is an unrecognised status. Keying the check on the value
+# being a string let `null`, `false` and `0` fall through to the no-percentage
+# fail-open — a present status permitting another dispatch, which is the one
+# outcome the polarity forbids. Presence of the KEY is what decides.
+for shape in '{"status": null}' \
+             '{"status": false}' \
+             '{"five_hour": {"status": 0}}' \
+             '{"five_hour": {"status": null}}'; do
+    rc="$(_check "${shape}")"
+    [[ "${rc}" -eq 3 ]] \
+        || fail "a present-but-malformed status did not stop the loop (exit ${rc}): ${shape}"
+done
+echo "PASS: a present status that is not \"allowed\" stops, malformed values included"
+
+# ...and an ABSENT status is not a malformed one. These must still fail open, or
+# every document written before this shape existed becomes a hard stop.
+for shape in '{"five_hour": {"used_percentage": 10}}' \
+             '{}'; do
     rc="$(_check "${shape}")"
     [[ "${rc}" -eq 0 ]] \
-        || fail "a shape the docs call unsatisfying returned ${rc}, expected 0 (fail open): ${shape}"
+        || fail "an absent status was treated as a refusal (exit ${rc}): ${shape}"
 done
-echo "PASS: a non-conforming shape fails open, as documented"
+echo "PASS: an absent status is not a refusal"
+
+# A window that is not an object at all used to raise AttributeError and escape
+# as exit 1 — the loud "stop" code — from a document the contract says fails
+# open. Unreadable is unreadable, whatever its shape.
+rc="$(_check '{"five_hour": "nonsense"}')"
+[[ "${rc}" -eq 0 ]] \
+    || fail "a non-object window did not fail open (exit ${rc})"
+echo "PASS: a non-object window fails open instead of crashing"
+
+# The property that makes it a SEPARATE signal rather than a synthesised 100%:
+# no threshold setting can talk the loop past a refusal. If the refusal were
+# mapped onto the percentage path, ARSENAL_QUOTA_STOP_PCT=101 would disable it.
+printf '%s' '{"status": "rejected"}' > "${tmp}/rl.json"
+ARSENAL_QUOTA_STOP_PCT=101 ARSENAL_RATE_LIMITS_FILE="${tmp}/rl.json" \
+    bash "${BUDGET}" >/dev/null 2>&1
+[[ $? -eq 3 ]] || fail "ARSENAL_QUOTA_STOP_PCT=101 talked the loop past a refusal"
+echo "PASS: ARSENAL_QUOTA_STOP_PCT cannot disable the refusal stop"
+
+# `allowed` is an answer, not missing data — it must not stop the loop, and it
+# must not be reported as a fail-open either.
+printf '%s' '{"status": "allowed", "rateLimitType": "five_hour"}' > "${tmp}/rl.json"
+out="$(ARSENAL_RATE_LIMITS_FILE="${tmp}/rl.json" bash "${BUDGET}" 2>&1)"
+rc=$?
+[[ "${rc}" -eq 0 ]] || fail "status=allowed stopped the loop (exit ${rc})"
+grep -q 'failing open' <<<"${out}" \
+    && fail "status=allowed was reported as a fail-open: ${out}"
+echo "PASS: status=allowed passes, and is not reported as missing data"
+
+# Genuinely unusable data still fails open — the quota half of the guard is not
+# allowed to stop a loop over a document it cannot read.
+for shape in '{"five_hour": {"used_percentage": "95"}}' \
+             '{"five_hour": {}}'; do
+    rc="$(_check "${shape}")"
+    [[ "${rc}" -eq 0 ]] \
+        || fail "an unreadable shape returned ${rc}, expected 0 (fail open): ${shape}"
+done
+echo "PASS: a shape carrying neither signal still fails open, as documented"
 
 # The doc must keep carrying a working example. If someone edits the JSON in
 # quota-governance.md into something budget_check.sh does not accept, this
