@@ -246,3 +246,15 @@ $RECYCLE.BIN/
 *~
 *.swp
 *.swo
+
+# Machine-local session state for this repo's own queue dogfood. `/init` seeds
+# these in a consumer's .gitignore, but this repo is the source of /init and has
+# never run it on itself — so its own session state was stageable, and a plain
+# `budget_check.sh` run left a counter file staged into the next commit. Keep
+# this list in step with `_add_gitignore_entry` in init.py.
+arsenal/session/surface_profile.json
+arsenal/session/rate_limits.json
+arsenal/session/budget_iterations.json
+arsenal/session/worktree_isolation
+arsenal/session/host_branch
+arsenal/session/rescue_refs
