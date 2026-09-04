@@ -154,7 +154,13 @@ dispatches that many workers at once. Run when the queue has open tasks:
    `worker_postcheck.sh` calls below do not apply — there is no returned worker
    to run them against, and inventing an outcome to feed one would replace a
    measurement with a guess. Everything else in step 6 — the PR, the gate
-   evidence, `Closes #<issue>` — you read from the PR itself.
+   evidence, `Closes #<issue>` — you read from the PR itself. A session that
+   returns `branch:<name>` had no channel that could open one: **open it
+   yourself**, with the `Closes #<issue>` line, before you count that task as
+   dispatched. Step 6 writes that handoff out, and this mode skips step 6 — so
+   it is named here too, because a pushed branch is not an opened PR: a task
+   left at a branch holds its claim until `sweep-claims` releases it a day
+   later, and its PR never opens by itself.
 
 6. **Wait for all workers** (Task-tool dispatch only — separate sessions are
    picked up off GitHub, per step 5). Then, for each returned outcome:

@@ -51,6 +51,24 @@ out="$(cd "${repo}" && python3 "${INIT}" --repo-path . 2>&1)"
 grep -q "removed:" <<<"${out}" || fail "the removal was not reported: ${out}"
 echo "PASS: an untouched shadow handover is removed and reported"
 
+# ...and the stock template itself, which is what an upgraded consumer actually
+# carries. Its numbered "How to continue" steps are ordinary prose, so the
+# authored-content heuristic read them as something a session wrote and the
+# shadow survived (#373). The shortened fixture above never exercised that path.
+mkdir -p "${repo}/claude-arsenal/session"
+python3 - "${INIT}" > "${repo}/claude-arsenal/session/handover.md" <<'TEMPLATE_PY'
+import importlib.util, sys
+spec = importlib.util.spec_from_file_location("arsenal_init", sys.argv[1])
+mod = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(mod)
+sys.stdout.write(mod.HANDOVER_TEMPLATE)
+TEMPLATE_PY
+out="$(cd "${repo}" && python3 "${INIT}" --repo-path . 2>&1)"
+[[ -e "${repo}/claude-arsenal/session/handover.md" ]] \
+    && fail "the stock HANDOVER_TEMPLATE shadow survived as authored content: ${out}"
+grep -q "removed:" <<<"${out}" || fail "the template removal was not reported: ${out}"
+echo "PASS: a shadow holding the stock template verbatim is removed"
+
 # One somebody wrote into is data. It must survive, and be reported.
 mkdir -p "${repo}/claude-arsenal/session"
 printf '# Session Handover\n\nParser shipped; CLI half done.\n' \
