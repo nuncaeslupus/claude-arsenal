@@ -18,6 +18,41 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [3.8.0] - 2026-09-04
+
+### New reference: `orchestrator-tick.md`
+
+`worker-loop.md` documents how one task gets implemented. The other half — what
+the session that dispatches, reviews and merges actually does — had no written
+counterpart, so in practice it lived in the prompt text of whatever routine was
+driving the fleet.
+
+That is a bad place for a contract: not in any repository, so not reviewed, not
+versioned, not diffable, retyped by hand into each successive trigger until the
+copies drift, and gone when the routine is deleted.
+
+The new reference covers one tick's ordered steps, where a tick defers to the
+owner instead of deciding, and three things worth knowing before building a fleet:
+
+- **The merge preconditions, restated at the moment they are applied** — not held,
+  every thread resolved, and *the orchestrator ran the host gate itself and saw
+  exit 0*. A worker reporting its own gate passed is a claim, not evidence. This
+  is the precondition most likely to be quietly dropped when nobody is watching.
+- **Report at most six lines, or "no change".** An hourly loop that narrates itself
+  spends its context on its own transcript and eventually runs out mid-tick.
+- **A tick is not portable.** A trigger that spawns a fresh session per firing
+  stores no MCP connectors, so that session has no channel to the GitHub API and
+  blocks on the tick's first step. Binding to an already-open session is the only
+  shape that works — and the design that looks better fails an hour later rather
+  than immediately.
+
+It also states the boundary that keeps people from trying to move the loop into
+CI: `arsenal-queue.yml` can run board hygiene on a schedule, but an Actions job
+has no Claude session in it and can never do the reviewing or merging half.
+
+Arsenal still ships no scheduler. The reference owns what a tick does; your
+surface owns when it happens.
+
 ## [3.7.1] - 2026-09-04
 
 - **Four helpers that aborted or lied instead of degrading.** All four share a
