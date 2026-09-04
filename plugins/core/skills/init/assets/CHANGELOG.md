@@ -18,6 +18,43 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [3.6.0] - 2026-09-04
+
+- **Security: a migration no longer executes your skills.** `arsenal_migrate.py`
+  read `init.py`'s config template by *importing* every `init.py` it could glob
+  under `.claude/skills/*/scripts/`, running that file's top level — so any
+  skill in the tree could run arbitrary code during a migration, and it happened
+  on the **dry run** too, because `--apply` only guards the write. The template
+  is now read by parsing, never importing, and only from the one path `/init`
+  actually vendors to. (#343)
+- **The migration carries your handover across.** `arsenal_migrate.py` used to
+  decline the whole of `arsenal/session/` whenever it already existed — and
+  since `UPDATE.md` documents trees-first-then-migrate, `init.py` had always
+  created it first, so the real handover was *never* carried over on a migration
+  that followed the documented order. It now merges file by file, and names
+  anything it genuinely declines instead of reporting `left alone`. (#353)
+- **`/init` no longer shadows your handover.** The bundle shipped
+  `session/handover.md`, so every run recreated an empty
+  `claude-arsenal/session/handover.md` beside the real
+  `arsenal/session/handover.md`. Nothing read it, and an empty handover looks
+  exactly like a fresh install — so a session that opened it concluded there was
+  no prior context. The bundle no longer ships it; an existing copy is removed
+  when untouched, and **preserved with a warning** when it has content. (#353)
+- **A section you enable is now honoured or explained, never dropped.** A
+  vendored `init.py` derived the requestable sections from the skills already
+  installed, so a section whose skills were all un-vendored could not be named:
+  `--sections extract` failed as "unknown section", and `extract = true` in
+  `arsenal/config.toml` was dropped in silence behind the usual success line.
+  Sections now come from the shipped `sections.json`, and a section that is on
+  with no skill to satisfy it says so and tells you to re-run the plugin's
+  `init.py`. (#354)
+- **A GitHub outage is no longer reported as a permission problem.**
+  `github_channel.sh` matched a bare `403`/`404` anywhere in `gh`'s output, so an
+  HTTP 500 whose body carried a `#404` documentation link — or a connection
+  reset with `403` inside a trace id — came back as "this channel may read but
+  not write here", which `claim_task.sh` maps to `manual`. The match is now
+  anchored to `gh`'s own `HTTP <code>:` framing. (#342)
+
 ## [3.5.0] - 2026-09-04
 
 - `open_task_pr.sh` now **rejects an unknown option** instead of taking it as
