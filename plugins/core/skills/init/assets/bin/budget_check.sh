@@ -29,8 +29,10 @@
 # session returns `rate_limit_info` with `status` and no `used_percentage`, so a
 # document carrying only what that surface can supply used to hit the
 # "no used_percentage" fail-open and guard nothing. Any value other than
-# "allowed" stops: the field's vocabulary names the permitting value, and a value
-# this script does not recognise is not a permission to continue. That direction
+# "allowed" stops — including `null`, `false` and a number: the field's vocabulary
+# names the permitting value, and anything else, malformed or merely unfamiliar,
+# is not a permission to continue. The check is keyed on the KEY being present,
+# never on the value being well-formed. That direction
 # is deliberate — the field is written only by a host that chose to write it, so
 # an unrecognised value is a misconfiguration worth halting loudly over rather
 # than a guard that quietly does nothing.
@@ -125,26 +127,43 @@ def _resets(d):
     # `resets_at` is this file's spelling; `resetsAt` is what `get_session`
     # returns, and an orchestrator copying that object verbatim is the whole
     # point of accepting the status shape.
+    if not isinstance(d, dict):
+        return None
     return d.get("resets_at") or d.get("resetsAt")
 
 
 # A refusal, at either level. Top level too: `rate_limit_info` is a flat object
 # naming its own window in `rateLimitType`, so a host that writes it through
 # unchanged has no per-window key to nest it under.
+_ABSENT = object()
+
+
+def _status_of(d):
+    """The `status` a document declares, or `_ABSENT` when it declares none.
+
+    Keyed on the KEY being present, not on the value being a string. `null`,
+    `false` and `0` are all present statuses that are not "allowed", and typing
+    the check meant each of them fell through to the no-percentage fail-open —
+    the one outcome the polarity below forbids. A malformed status is an
+    unrecognised status.
+    """
+    return d.get("status", _ABSENT) if isinstance(d, dict) else _ABSENT
+
+
 refused = []
 allowed = []
 for window in ("five_hour", "seven_day"):
     w = data.get(window) or {}
-    st = w.get("status") if isinstance(w, dict) else None
-    if not isinstance(st, str):
+    st = _status_of(w)
+    if st is _ABSENT:
         continue
     if st == "allowed":
         allowed.append(st)
     else:
         refused.append((window, st, _resets(w)))
 
-st = data.get("status")
-if isinstance(st, str):
+st = _status_of(data)
+if st is not _ABSENT:
     if st == "allowed":
         allowed.append(st)
     else:
@@ -152,7 +171,8 @@ if isinstance(st, str):
 
 if refused:
     for window, status, resets in refused:
-        msg = f"budget_check: {window} reports status={status!r} — quota refused, not a threshold"
+        shown = status if isinstance(status, str) else f"{status!r} (not a string)"
+        msg = f"budget_check: {window} reports status={shown} — quota refused, not a threshold"
         if resets:
             msg += f" (resets_at={resets})"
         print(msg, file=sys.stderr)
@@ -167,6 +187,12 @@ worst = None
 over = []
 for window in ("five_hour", "seven_day"):
     w = data.get(window) or {}
+    # A window that is not an object at all — `{"five_hour": "nonsense"}` —
+    # used to raise AttributeError here and escape as exit 1, which is the
+    # loud "stop" code, from a document this script's own contract says it
+    # should fail open on. Unreadable is unreadable, whatever its shape.
+    if not isinstance(w, dict):
+        continue
     v = w.get("used_percentage")
     if isinstance(v, (int, float)):
         worst = v if worst is None else max(worst, v)

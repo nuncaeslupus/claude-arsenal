@@ -84,9 +84,12 @@ you do, `ARSENAL_QUOTA_STOP_PCT=101` silently turns off a guard that is
 reporting a wall already hit.
 
 A `status` value this script does not recognise stops the loop rather than
-passing it. The field is only ever written by a host that chose to write it, so
-an unrecognised value is a misconfiguration worth halting loudly over — not a
-reason to keep dispatching.
+passing it, and that includes a malformed one — `null`, `false`, a number. The
+check is keyed on the **key being present**, not on the value being well-formed:
+the field is only ever written by a host that chose to write it, so anything
+other than `"allowed"` is a misconfiguration worth halting loudly over, not a
+reason to keep dispatching. An **absent** `status` is a different thing entirely
+and changes nothing.
 
 Anything carrying **neither** signal is "fields absent" and fails open
 **silently**: `{"five_hour": {}}`, or a `used_percentage` sent as a string. That

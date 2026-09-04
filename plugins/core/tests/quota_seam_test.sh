@@ -62,6 +62,38 @@ for shape in '{"status": "rejected", "rateLimitType": "five_hour", "resetsAt": 1
 done
 echo "PASS: a refusal stops the loop with no percentage anywhere in the document"
 
+# A MALFORMED status is an unrecognised status. Keying the check on the value
+# being a string let `null`, `false` and `0` fall through to the no-percentage
+# fail-open — a present status permitting another dispatch, which is the one
+# outcome the polarity forbids. Presence of the KEY is what decides.
+for shape in '{"status": null}' \
+             '{"status": false}' \
+             '{"five_hour": {"status": 0}}' \
+             '{"five_hour": {"status": null}}'; do
+    rc="$(_check "${shape}")"
+    [[ "${rc}" -eq 3 ]] \
+        || fail "a present-but-malformed status did not stop the loop (exit ${rc}): ${shape}"
+done
+echo "PASS: a present status that is not \"allowed\" stops, malformed values included"
+
+# ...and an ABSENT status is not a malformed one. These must still fail open, or
+# every document written before this shape existed becomes a hard stop.
+for shape in '{"five_hour": {"used_percentage": 10}}' \
+             '{}'; do
+    rc="$(_check "${shape}")"
+    [[ "${rc}" -eq 0 ]] \
+        || fail "an absent status was treated as a refusal (exit ${rc}): ${shape}"
+done
+echo "PASS: an absent status is not a refusal"
+
+# A window that is not an object at all used to raise AttributeError and escape
+# as exit 1 — the loud "stop" code — from a document the contract says fails
+# open. Unreadable is unreadable, whatever its shape.
+rc="$(_check '{"five_hour": "nonsense"}')"
+[[ "${rc}" -eq 0 ]] \
+    || fail "a non-object window did not fail open (exit ${rc})"
+echo "PASS: a non-object window fails open instead of crashing"
+
 # The property that makes it a SEPARATE signal rather than a synthesised 100%:
 # no threshold setting can talk the loop past a refusal. If the refusal were
 # mapped onto the percentage path, ARSENAL_QUOTA_STOP_PCT=101 would disable it.
