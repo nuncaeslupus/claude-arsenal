@@ -18,6 +18,35 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [3.8.2] - 2026-09-04
+
+### `AGENTS.md` is 201 tokens lighter, with nothing removed
+
+`AGENTS.md` sits in context on **every turn of every session**, so what it costs
+is paid forever by every consumer. Three changes landed in it in one day and the
+resident budget fell to 33 tokens of headroom against the 5000 cap — enough that
+the next addition, whatever it was, would have failed CI.
+
+Four passages moved or compressed. Every **instruction** stays resident; only the
+reasoning behind them moved:
+
+- The bundle-refresh guard keeps "if (a) reported `VENDORED SKILL BEHIND BUNDLE`,
+  skip (b)" and drops the paragraph explaining the guard's history.
+- The issue-fetch step keeps the field list and the ~9k-vs-~1.2k numbers, and
+  drops the explanation of why no script reads a body.
+- **Why the `arsenal-task:` marker must be visible text and never an HTML
+  comment** is now in `references/queue-seeding.md`, under its own heading. Same
+  rule, more room to say what a stripped id actually costs you.
+- **Why ending a session is reporting and not repair** is now in
+  `references/github-automation.md`, next to the transitions that make it true.
+  It carries the rule worth keeping: if you find yourself writing "remember to X
+  before the session ends", X belongs in a workflow or a script, not a protocol.
+
+Nothing a session is told to do has changed. If you have forked `AGENTS.md`,
+this is a text-only merge.
+
+Headroom is back to 234 tokens.
+
 ## [3.8.1] - 2026-09-04
 
 - **The evidence-gate reference now documents the placeholder exception.** 3.7.0
