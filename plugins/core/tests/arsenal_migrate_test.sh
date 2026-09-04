@@ -36,6 +36,22 @@ bash tests/thing_test.sh
 ```
 EOF
 
+# lo-b2c1 declares this payload in the row above. It used to be left uncreated,
+# which made the fixture assert — incidentally, while testing deps — that a
+# DECLARED payload that cannot be read still produces a task file. That is the
+# gate-loss #346 reports: the task lands carrying the "no gate was recorded"
+# fallback and the run exits 0. The declared-and-missing case is now a hard
+# error, pinned in gate_integrity_test.sh alongside the row that declares no
+# payload at all, which still falls back as it always has.
+cat > "${QUEUE_DIR}/lo-b2c1.md" <<'EOF'
+# T2: build on it
+
+## Acceptance gate
+```bash
+bash tests/build_on_it_test.sh
+```
+EOF
+
 echo "handover contents" > "${REPO}/claude-arsenal/session/handover.md"
 echo "overview contents" > "${REPO}/claude-arsenal/project/overview.md"
 
@@ -165,12 +181,19 @@ printf 'SECRET-CONTENTS\n' > "${TRAV}/outside.md"
 cat > "${TRAV}/claude-arsenal/queue/tasks.jsonl" <<'JSON'
 {"id": "lo-esc", "title": "reads outside", "status": "open", "payload": "../../outside.md"}
 JSON
-out=$(python3 "${MIGRATE_PY}" --repo-root "${TRAV}" --apply 2>&1)
+# Exit 2, captured rather than left to `set -e`: an uncontained payload used to
+# be reported and skipped, leaving the task file to be written with the "no gate
+# was recorded" fallback on a run that exited 0. It now aborts before anything
+# is written, so the code is part of what this asserts.
+trav_code=0
+out=$(python3 "${MIGRATE_PY}" --repo-root "${TRAV}" --apply 2>&1) || trav_code=$?
+[[ ${trav_code} -eq 2 ]] || fail "an uncontained payload must exit 2, got ${trav_code}"
 if grep -rq "SECRET-CONTENTS" "${TRAV}/arsenal" 2>/dev/null; then
     fail "a ../ payload was read into a task file: ${out}"
 fi
+[[ -e "${TRAV}/arsenal/tasks" ]] && fail "task files were written before the refusal: ${out}"
 grep -q "resolves outside" <<<"${out}" || fail "the containment refusal was not reported: ${out}"
-echo "PASS: a legacy payload path cannot escape the queue directory"
+echo "PASS: a legacy payload path cannot escape the queue directory, and nothing is written"
 
 TRAV2="${tmpdir}/traversal-id"
 mkdir -p "${TRAV2}/claude-arsenal/queue"
