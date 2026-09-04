@@ -18,6 +18,20 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [3.7.2] - 2026-09-04
+
+- **The evidence-gate reference now documents the placeholder exception.** 3.7.0
+  stated the rule flatly — *"a task's own PR can never amend its own acceptance
+  gate"* — but `gate_run.sh` has always had a bootstrap case: when the default
+  branch still carries the `# arsenal:gate-placeholder` command, it runs the
+  working copy's instead, and says so on stderr. A worker reading only the
+  reference had two ways to get it wrong: preserve the placeholder to look
+  compliant, or treat the "running the working copy's instead" line as a bug.
+  The rule now says *already real* where it meant it, names the exception, and
+  says why it is not a relaxation — a placeholder asserts nothing, so there is no
+  criterion for a branch to weaken, and the gate block's threshold is still read
+  from the default branch either way.
+
 ## [3.7.1] - 2026-09-04
 
 - **Four helpers that aborted or lied instead of degrading.** All four share a
