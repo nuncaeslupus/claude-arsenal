@@ -1,6 +1,6 @@
 # Claude Arsenal
 
-<!-- claude-arsenal v3.7.1 — imported via @claude-arsenal/AGENTS.md -->
+<!-- claude-arsenal v3.8.0 — imported via @claude-arsenal/AGENTS.md -->
 
 This file is imported by the host repo's `CLAUDE.md` via the session-protocol block
 that `/init` injects, so it sits in context on **every turn of every session**. It
@@ -221,6 +221,7 @@ Each is a plain file to open, not an import. Nothing below is in context until y
 | File | Read it when |
 |---|---|
 | `references/worker-loop.md` | Dispatching workers: the loop, worktree isolation, `worker_postcheck.sh`, per-task PRs, credit guards, every `ARSENAL_*` knob |
+| `references/orchestrator-tick.md` | Running the board unattended: one tick's steps, the merge preconditions, why a tick is not portable |
 | `references/queue-seeding.md` | The queue is empty: seeding from a plan table, importing filed issues, seeding a `D-N` divergence |
 | `references/evidence-gates.md` | Writing or trusting a gate: the fence rule, hardened execution, numeric evidence, `unmeasured` |
 | `references/claiming-internals.md` | A claim misbehaves: why ref creation is the lock, attempt refs, ref accumulation, `on: push` cost |
