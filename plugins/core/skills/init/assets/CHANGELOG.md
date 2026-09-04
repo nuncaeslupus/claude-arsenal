@@ -18,6 +18,21 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [3.6.2] - 2026-09-04
+
+- **The quota guard's override is documented.** `ARSENAL_RATE_LIMITS_FILE`
+  shipped working and named in no markdown file in the repo. It matters most on
+  a cloud session — Claude Code on the web, the apps, a routine — which never
+  runs a statusLine, so `rate_limits.json` is never written and the
+  percentage guard fails open on every round. That is the surface most likely
+  to be running an unattended fleet, and the one where `ARSENAL_MAX_ITERATIONS`
+  is not a backstop but the entire ceiling. `references/quota-governance.md`
+  now says so, gives the exact JSON shape `budget_check.sh` accepts, and warns
+  that a document describing exhaustion in any other vocabulary (a
+  `get_session` `{"status": "..."}` response, say) fails open **silently** —
+  the guard stays inert while looking configured. Also listed in the
+  tuning-knobs table. (#329, first half)
+
 ## [3.6.1] - 2026-09-04
 
 - **The skill-edit gate no longer opens when its own analyser breaks.** Any
