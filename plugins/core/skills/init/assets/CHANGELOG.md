@@ -18,6 +18,36 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [3.6.4] - 2026-09-04
+
+- **Four helpers that aborted or lied instead of degrading.** All four share a
+  shape: the guard already exists a line away, and the path that skipped it is
+  the one nobody exercises.
+  - `open_task_pr.sh` took an option as a value. `--title --body-file x.md`
+    satisfies the `$# -ge 2` count check, so `TITLE` became `--body-file` and
+    `x.md` fell through to positional — the #352 subject bug, reachable again
+    through the option form added to fix it, and the comment above the parser
+    already claimed it could not happen. The subject survives a squash, so a
+    wrong one is only fixable by rewriting shared history. Empty and `-`-leading
+    values are now rejected in both the spaced and `=` forms.
+  - `gate_run.sh` caught only `OSError` around a `read_text`. `UnicodeDecodeError`
+    derives from `ValueError`, so a non-UTF-8 task file escaped as a traceback —
+    out of a branch that only prints a diagnostic, after the gate decision was
+    already made.
+  - `arsenal_migrate.py` raised its merge-policy `MigrateError` from the config
+    block, which runs after the task files, the history files and
+    `_migrated-history.md` are on disk. `main()` then printed `nothing was
+    written` over a half-migrated tree. The check moves to pre-flight, beside
+    the payload resolution that is there for exactly this reason.
+  - `init.py` left one `shadow.unlink()` unguarded while the read either side of
+    it and the following `rmdir` were both non-fatal. A read-only checkout or a
+    permission ended `init_base` before `_vendor_skills`, `_register_gate_hook`
+    and `_inject_claude_md` ran — a half-installed repo, to tidy up a file
+    nothing reads.
+
+  `vendored_robustness_test.sh` pins all four; every one of its gates fails
+  against 3.6.3.
+
 ## [3.6.3] - 2026-09-04
 
 - **A non-subtree install no longer reads as a broken one.** With no `arsenal`
