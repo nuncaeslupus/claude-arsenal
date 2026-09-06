@@ -71,6 +71,60 @@ TASK_PATH_RE = re.compile(
     r"(?:arsenal|claude-arsenal)/tasks/(?:_history/)?([A-Za-z0-9._-]+)\.md"
 )
 
+# Third way in, and the only exact one that survives a body-less fetch. Both
+# markers above live in the issue *body*, and the session-start fetch
+# deliberately does not ask for bodies — ~9k tokens against ~1.2k on a 40-issue
+# board. That left the title as the only path on the surface the board is
+# actually read from, and a title is a heuristic: renaming a task unpaired it
+# from its issue, and `handle_sync.py` then reported not "I cannot find the
+# issue for this task" but "this task has no issue", which is the one sentence a
+# caller acts on by opening a second one. A label is exact like the marker and
+# cheap like the title — `labels` is already in the field list every fetch asks
+# for, so this costs a body-less board nothing.
+ID_LABEL_PREFIX = "arsenal-id:"
+
+
+def labels_of(issue: dict[str, Any]) -> set[str]:
+    """Label names on an issue, however the fetch spelled them.
+
+    REST returns objects, the MCP tools and some fixtures return bare strings.
+    """
+    return {
+        label["name"] if isinstance(label, dict) else str(label)
+        for label in (issue.get("labels") or [])
+    }
+
+
+def task_id_from_labels(issue: dict[str, Any]) -> str | None:
+    """The task id an `arsenal-id:<id>` label states, or None.
+
+    Two of them is not a tie to break: an issue is the handle for exactly one
+    task, so a second label means somebody stamped the wrong one and guessing
+    would attribute a task's state to another. None sends the caller to the
+    body marker, which is exact too.
+    """
+    found = {
+        name[len(ID_LABEL_PREFIX) :].strip()
+        for name in labels_of(issue)
+        if name.startswith(ID_LABEL_PREFIX)
+    }
+    found = {f for f in found if f and re.fullmatch(r"[A-Za-z0-9._-]+", f)}
+    return found.pop() if len(found) == 1 else None
+
+
+def task_id_from_body(issue: dict[str, Any]) -> str | None:
+    """The task id the issue body states, or None."""
+    # A GitHub issue body is a string or null. Anything else is a malformed
+    # payload, and the honest reading of it is "carries no marker" — searching
+    # it raised a TypeError that surfaced as a traceback from whichever caller
+    # happened to be reading the board.
+    raw_body = issue.get("body")
+    body = raw_body if isinstance(raw_body, str) else ""
+    for pattern in (TASK_MARKER_RE, TASK_PATH_RE):
+        if match := pattern.search(body):
+            return match.group(1)
+    return None
+
 
 def normalise_title(text: str) -> str:
     """Fold a title to the form two sources can be compared on.
@@ -139,9 +193,9 @@ def task_id_from_issue(
 ) -> str | None:
     """The task an issue is a handle for, or None.
 
-    The body is asked first and always: the `arsenal-task:` line is an exact
-    statement of identity, and a title is a heuristic that must never override
-    one.
+    Exact evidence first and always, in the order it is cheapest to have: the
+    `arsenal-id:` label, then the `arsenal-task:` line in the body. A title is a
+    heuristic and must never override either.
 
     `titles` adds the fallback that lets a caller stop fetching bodies at all.
     Resolving from the body means the session-start fetch has to request `body`
@@ -151,21 +205,17 @@ def task_id_from_issue(
     before any work is read. Measured on a 40-issue board: ~9k tokens with
     bodies, ~1.2k without, for a payload of one identifier per issue.
 
-    The fallback is safe to lean on because the titles are not independently
-    written: `handle_sync.py` and `arsenal-queue.yml` both title the handle from
-    the task file's `title:`, so they match verbatim. A title edited on GitHub
-    but not in the task file fails to resolve and is reported — which is the
-    existing `handle_sync.py` conversation about drifted handles, not a new one.
+    The label is what makes that fallback shrink rather than grow: it is exact,
+    and it arrives on the same cheap fetch, so a board whose handles have been
+    stamped never reaches the title at all. Until they have been, the title
+    still carries body-less boards — safely, because the titles are not
+    independently written: `handle_sync.py` and `arsenal-queue.yml` both title
+    the handle from the task file's `title:`, so they match verbatim. A title
+    edited on GitHub but not in the task file fails to resolve, which is what
+    the stamping in `sync-handles` exists to stop being possible.
     """
-    # A GitHub issue body is a string or null. Anything else is a malformed
-    # payload, and the honest reading of it is "carries no marker" — searching
-    # it raised a TypeError that surfaced as a traceback from whichever caller
-    # happened to be reading the board.
-    raw_body = issue.get("body")
-    body = raw_body if isinstance(raw_body, str) else ""
-    for pattern in (TASK_MARKER_RE, TASK_PATH_RE):
-        if match := pattern.search(body):
-            return match.group(1)
+    if resolved := (task_id_from_labels(issue) or task_id_from_body(issue)):
+        return resolved
     if not titles:
         return None
     key = normalise_title(issue.get("title") or "")
@@ -175,7 +225,7 @@ def task_id_from_issue(
     if resolved is None and warnings is not None:
         warnings.append(
             f"issue #{issue.get('number', '?')}: title matches more than one task file — "
-            "left unresolved. Give the issue an `arsenal-task: <id>` line, or make the "
+            "left unresolved. Give the issue an `arsenal-id:<id>` label, or make the "
             "task titles distinct."
         )
     return resolved

@@ -41,10 +41,13 @@ running session and a crashed one present identically from outside, and the ref 
 only thing standing between them and two agents on one task.
 
 **Two costs to know about.** Claim refs accumulate, roughly one per task ever claimed,
-grouped under `arsenal/claims/` — prune them from a CLI session occasionally, but only
-refs whose task is finished or whose claim has been swept. The ref *is* the lock: deleting
-a live one lets a second session claim a task the first is still working. Confirm the
-owner and confirm the claim is stale before deleting anything under `arsenal/claims/`. And creating
+grouped under `arsenal/claims/`. The scheduled `sweep-claims` job in `arsenal-queue.yml`
+prunes them — `queue_hooks.py prune-claims`, which deletes the refs of tasks archived as
+`done` or `merged` and nothing else. That runs in Actions rather than in a session
+because the proxy in front of a sandboxed session refuses every ref write, by git and by
+API alike, so a prune that needed a CLI session was one most consumers could never run.
+Deleting anything else by hand is the risk to know about: the ref *is* the lock, so
+removing a live one lets a second session claim a task the first is still working. And creating
 a ref fires GitHub's `push`/`create` events, so a repository whose workflows trigger on an
 unfiltered `on: push` will run CI on every claim; scope them with
 `branches-ignore: ['arsenal/**']`.

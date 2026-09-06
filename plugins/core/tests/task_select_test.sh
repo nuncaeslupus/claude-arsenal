@@ -672,4 +672,34 @@ grep -q 't-gate0002' <<<"${err}" \
     || fail "a gated task INSIDE the requested workspace must still be reported: ${err}"
 rm -f "${gated}/t-gate0002.md"
 
+# An `arsenal-id:` label identifies the handle exactly, on a fetch that asked
+# for no bodies — the fetch every session actually runs. Before it, such a board
+# could only be matched on title, so renaming either side unpaired the two and
+# the task was reported as having no issue at all.
+SELECT_PY="${SELECT_PY}" python3 - <<'PYCHK' || fail "arsenal-id label resolution"
+import importlib.util, os, sys
+
+spec = importlib.util.spec_from_file_location("task_select", os.environ["SELECT_PY"])
+ts = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(ts)
+
+titles = {"a title": "t-bytitle"}
+label = {"labels": [{"name": "arsenal:task"}, {"name": "arsenal-id:t-bylabel"}], "title": "a title"}
+assert ts.task_id_from_issue(label, titles=titles) == "t-bylabel", "label must win over title"
+assert ts.task_id_from_issue(label) == "t-bylabel", "label must resolve with no titles index"
+
+# Exact beats exact in the order they are cheap to have, and the two only
+# disagree when somebody stamped the wrong one.
+both = {"labels": ["arsenal-id:t-bylabel"], "body": "`arsenal-task: t-bybody`"}
+assert ts.task_id_from_issue(both) == "t-bylabel", "label must win over the body marker"
+
+# Two id labels is one issue claiming to handle two tasks. Guessing would
+# attribute one task's state to another; falling through to the body does not.
+two = {"labels": ["arsenal-id:t-one", "arsenal-id:t-two"], "body": "`arsenal-task: t-bybody`"}
+assert ts.task_id_from_issue(two) == "t-bybody", "two id labels must not resolve to either"
+
+assert ts.task_id_from_issue({"labels": ["arsenal-id:"]}) is None, "an empty id is not an id"
+PYCHK
+echo "PASS: an arsenal-id label resolves a handle with no body and a drifted title"
+
 echo "PASS: task_select_test — all gates passed"

@@ -1,6 +1,6 @@
 # Claude Arsenal
 
-<!-- claude-arsenal v4.0.0 — imported via @claude-arsenal/AGENTS.md -->
+<!-- claude-arsenal v4.1.0 — imported via @claude-arsenal/AGENTS.md -->
 
 This file is imported by the host repo's `CLAUDE.md` via the session-protocol block
 that `/init` injects, so it sits in context on **every turn of every session**. It
@@ -58,10 +58,10 @@ At the start of every session (fresh start, context compaction, or cold restart)
 2. **Fetch the task issues** — list issues labelled `arsenal:task`, **open and closed**,
    and save the JSON (e.g. to `/tmp/arsenal-issues.json`). Closed ones are not optional: a
    closed-as-completed issue is what marks a dependency satisfied.
-   > Ask for **`number`, `title`, `state`, `labels`, `assignees` — not `body`.** Nothing
-   > below reads a body, and a 40-issue board costs ~9k tokens with them and ~1.2k
-   > without, charged every session. MCP: the `fields` argument. `gh`: `--json
-   > number,title,state,labels,assignees`.
+   > Ask for **`number`, `title`, `state`, `labels`, `assignees` — not `body`.** What
+   > pairs an issue to its task is its `arsenal-id:<id>` label, which is in `labels`; a
+   > 40-issue board costs ~9k tokens with bodies and ~1.2k without, every session. MCP:
+   > the `fields` argument. `gh`: `--json number,title,state,labels,assignees`.
 
 3. **Read the board** — `git fetch --quiet origin`, then
    `python3 claude-arsenal/scripts/query_status.py --issues /tmp/arsenal-issues.json`.
@@ -75,8 +75,9 @@ At the start of every session (fresh start, context compaction, or cold restart)
 4. **Create any missing handles** (usually a no-op — `.github/workflows/arsenal-queue.yml`
    opens them when the task file lands) —
    `python3 claude-arsenal/scripts/handle_sync.py --issues /tmp/arsenal-issues.json`
-   prints one JSON object per task file that has no issue yet; create those issues with the
-   `arsenal:task` label and a **visible** `` `arsenal-task: <id>` `` line in the body —
+   prints one JSON object per task file that has no issue yet; create those issues with
+   **every label the row lists** — the board label and `arsenal-id:<id>`, which is what
+   survives a rename — and a **visible** `` `arsenal-task: <id>` `` line in the body,
    visible text, never an HTML comment.
    A row carrying an `ambiguous` key is a collision to resolve first,
    not an issue to create. This is the only sync in the system: one-directional and
@@ -90,10 +91,10 @@ At the start of every session (fresh start, context compaction, or cold restart)
    > content, and it is also where an existing `arsenal-task:` marker lives — omit it and
    > every task file is written empty and every already-imported issue is imported again
    > as a second task.
-   Apply everything each row prints — the `arsenal-task: <id>` line into the body, plus
-   the `add_label` / `remove_label` swap onto `arsenal:task`; an issue left on the import
-   label is invisible to step 2 and `handle_sync.py` proposes a duplicate for it next
-   session. Then commit the new task files.
+   Apply everything each row prints — the `arsenal-task: <id>` line into the body, the
+   `add_id_label`, and the `add_label` / `remove_label` swap onto `arsenal:task`; an issue
+   left on the import label is invisible to step 2 and `handle_sync.py` proposes a
+   duplicate for it next session. Then commit the new task files.
    → `claude-arsenal/references/queue-seeding.md`
 
 5. **Read handover** — if `arsenal/session/handover.md` has content beyond the template

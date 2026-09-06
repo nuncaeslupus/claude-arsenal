@@ -18,6 +18,50 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [4.1.0] - 2026-09-06
+
+Three ways the queue could hand out one piece of work twice, or accumulate
+state nobody could clear — all three found by a consumer running the board from
+Claude Code on the web.
+
+### Fixed
+
+- **An issue is now paired to its task by an `arsenal-id:<id>` label**, not by
+  its title. The `arsenal-task:` marker is in the issue *body*, and the
+  session-start fetch deliberately does not ask for bodies (~1.2k tokens
+  instead of ~9k on a 40-issue board) — so the only pairing left was the title,
+  and renaming a task unpaired it. `handle_sync.py` then reported not "I cannot
+  find this task's issue" but "this task has no issue", which is the sentence a
+  caller acts on by opening a second one.
+
+  Nothing is required of you: the scheduled `sync-handles` job stamps the label
+  onto every existing handle from its body marker, and new handles are created
+  with it. If you create handles by hand, add the label the row now lists
+  alongside `arsenal:task`. `handle_sync.py` also says how many issues it could
+  only match by title, so you can see the backlog shrink.
+
+- **`issue_import.py` is idempotent, as it always claimed to be.** The task id
+  was four random bytes, so the dry run announced an id `--apply` would not use,
+  and running `--apply` twice — the ordinary reaction to a first run whose
+  remote half never got applied — wrote a *second* task file for the same issue.
+  Two task files are one piece of work dispatched twice, holding two claims that
+  cannot collide because the ids differ. The id is now derived from the issue's
+  URL, so the dry run tells the truth and a re-run writes nothing.
+
+  Ids minted before this update are unaffected; nothing is renamed.
+
+### Added
+
+- **`queue_hooks.py prune-claims`**, wired into the scheduled `sweep-claims`
+  job, deletes the claim refs of tasks archived as `done` or `merged`. Claim
+  refs accumulate roughly one per task ever claimed, and the only remedy on
+  offer was "prune them from a CLI session" — which a session on the web cannot
+  do at all, because its proxy refuses every ref write by git and by API alike.
+  Live tasks' refs are never touched: the ref is the lock.
+
+  **Re-vendor `.github/workflows/arsenal-queue.yml`** (re-running `/init` does
+  it) — that job now needs `contents: write` to delete a ref.
+
 ## [4.0.0] - 2026-09-06
 
 ### Changed — action required
