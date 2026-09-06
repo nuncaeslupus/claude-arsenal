@@ -82,7 +82,7 @@ telemetry, GrowthBook, gateway, Bedrock or Vertex setting is suppressing
 the flag fetch, and the build is current), so it waits on Anthropic
 enabling the org. A `claude -p` harness was measured and rejected: $0.098 per prompt, no clean room
 (`--bare` loses auth; without it, hooks and other plugins skew routing),
-one fixture repo per skill. When it opens, retest `continue` first — it
+one fixture repo per skill. When it opens, retest `queue-next` first — it
 did not fire on its own load prompt.
 
 ## 2026-05-08 — container directories swallow skills silently

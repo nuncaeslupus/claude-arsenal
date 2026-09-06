@@ -343,8 +343,8 @@ before starting; older versions do not support `statusLine.rate_limits`.
 | `ARSENAL_MAX_ITERATIONS` | `50` | Always-available per-session dispatch-round cap (quota-independent). `0` disables it. |
 | `ARSENAL_RATE_LIMITS_FILE` | `<session>/rate_limits.json` | Where the quota guard reads its snapshot. Override it to feed quota from a surface with no statusLine — a cloud session writes this file for itself or the percentage guard never engages. See `references/quota-governance.md`. |
 | `ARSENAL_GATE_INHERIT_ENV` | _(unset)_ | Set `1` to run gate blocks with the caller's full environment instead of the hardened throwaway HOME + restricted PATH. |
-| `LOOP_WORKSPACE` | _(unset)_ | Workspace scope; set by `/continue` token inference. |
-| `LOOP_TAGS` | _(unset)_ | Comma/space-separated tag scope (ANDed); set by `/continue` token inference. |
+| `LOOP_WORKSPACE` | _(unset)_ | Workspace scope; set by `/queue-next` token inference. |
+| `LOOP_TAGS` | _(unset)_ | Comma/space-separated tag scope (ANDed); set by `/queue-next` token inference. |
 | `ARSENAL_QUEUE_REMOTE` | `origin` | Remote for claim refs + per-task pushes. |
 | `ARSENAL_CLAIM_PREFIX` | `arsenal/claims` | Ref namespace for atomic claim refs. |
 | `ARSENAL_HOME` | `arsenal` | Host-owned tree (tasks, specs, plans, config, session). |

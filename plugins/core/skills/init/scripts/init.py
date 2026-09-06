@@ -131,7 +131,7 @@ listing-budget = 8000
 #   python    python-bootstrap, pypi-release, coverage-gaps, dep-upgrade,
 #             mutmut-report
 #
-# The core section — init, continue, queue-add, queue-status, github,
+# The core section — init, queue-next, queue-add, queue-status, github,
 # session-end — is always installed and is not listed: the vendored session
 # protocol names those skills directly, so switching one off would break every
 # session rather than save anything worth saving.
@@ -156,7 +156,7 @@ workers = "sonnet"
 # Permissive on purpose: until the probe runs, every `surface:` task stays
 # eligible. `access:` capabilities are deliberately absent — they gate work a
 # session may genuinely be unable to do, so they are granted by the probe or by
-# naming one at /continue, never by a default nobody chose.
+# naming one at /queue-next, never by a default nobody chose.
 # Deny by default. A session runs on exactly ONE surface, so claiming cli, web
 # and cloud at once was not permissive — it was false, and every task gated on
 # `requires: [surface:cli]` became selectable on the web, where it cannot run.

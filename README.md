@@ -128,7 +128,7 @@ Two ideas, and everything else follows.
 **The repository defines the work.** Tasks are files in `arsenal/tasks/` —
 versioned, reviewed in the PR that adds them, readable with no network,
 identical for every agent. `deps:` between them makes the board a dependency
-graph, so `/continue` picks the next **unblocked** task rather than the next one
+graph, so `/queue-next` picks the next **unblocked** task rather than the next one
 in a list.
 
 **GitHub coordinates who is doing it.** An issue is a *handle* for a task, not a
@@ -139,8 +139,8 @@ in step.
 
 ```bash
 /queue-add --title "Extract the surface probe" --deps t-3f8a91c2 --size M
-/continue                  # claim the next unblocked task and work it
-/continue CLI              # …scoped to a tag
+/queue-next                # claim the next unblocked task and work it
+/queue-next CLI            # …scoped to a tag
 /queue-status              # counts, plus an audit for missing gates and broken deps
 ```
 
@@ -199,7 +199,7 @@ Without Claude Code on the machine, the same script runs from a clone — see
 | | |
 |---|---|
 | **Workflow** | `specify` · `design` · `execution` · `review` · `ship` |
-| **Queue** | `init` · `queue-add` · `queue-status` · `continue` · `gate-check` |
+| **Queue** | `init` · `queue-add` · `queue-status` · `queue-next` · `gate-check` |
 | **Git / GitHub** | `github` (Conventional Commits, branch naming, the PR review loop) |
 | **Session** | `session-end` (handoff, retrospective, PR audit) |
 | **Python toolchain** | `python-bootstrap` · `pypi-release` · `dep-upgrade` · `coverage-gaps` · `mutmut-report` |

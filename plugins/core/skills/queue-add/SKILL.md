@@ -80,10 +80,10 @@ it holds until the moment an unattended worker asks for that tag, then fails thr
 | `surface:cli` | a real terminal on a machine | the probe |
 | `surface:cloud` | a cloud session (`surface:web` is the older name for the same thing) | the probe |
 | `services:postgres`, `services:redis` | that daemon answering | the probe |
-| `access:human` | a person to decide, label, answer, or approve | naming it at `/continue` |
+| `access:human` | a person to decide, label, answer, or approve | naming it at `/queue-next` |
 | `access:browser` | a driveable browser | the session's own tools |
-| `access:secrets` | machine-local credentials — prod tokens, SSH keys, a vault | naming it at `/continue` |
-| `access:device` | hardware physically attached — a phone, a serial port, a board | naming it at `/continue` |
+| `access:secrets` | machine-local credentials — prod tokens, SSH keys, a vault | naming it at `/queue-next` |
+| `access:device` | hardware physically attached — a phone, a serial port, a board | naming it at `/queue-next` |
 
 Reach for a new capability only when a session that already has `surface:cli` would
 *still* be unable to do the task. That test is what keeps the list this short: LAPTOP, PC,

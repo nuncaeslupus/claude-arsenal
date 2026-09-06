@@ -11,7 +11,7 @@ project two plugins:
   `session-end`), the Python toolchain skills
   (`python-bootstrap`, `pypi-release`, `coverage-gaps`, `dep-upgrade`,
   `mutmut-report`), and the git-backed DAG task queue (`init`,
-  `continue`, `queue-add`, `queue-status`). `/init` asks which of these
+  `queue-next`, `queue-add`, `queue-status`). `/init` asks which of these
   **sections** a repo wants and installs only those — see "Choosing what gets
   installed" below. `init` injects a proactive
   session-protocol block into `CLAUDE.md` so Claude auto-seeds the queue
@@ -77,7 +77,7 @@ session from then on — whether or not it ever triggers.
 
 | Profile | Sections installed |
 |---|---|
-| `minimal` | `core` — `init`, `continue`, `queue-add`, `queue-status`, `github`, `session-end` |
+| `minimal` | `core` — `init`, `queue-next`, `queue-add`, `queue-status`, `github`, `session-end` |
 | `general` | `core` + `workflow` (`specify`, `design`, `execution`, `review`, `ship`, `gate-check`) |
 | `python` | `core` + `workflow` + `python` (`python-bootstrap`, `pypi-release`, `coverage-gaps`, `dep-upgrade`, `mutmut-report`) |
 
@@ -106,7 +106,7 @@ existed changes nothing: the sections already in use are detected and recorded.
 No plugin needed — the same script runs straight from a clone:
 
 ```bash
-git clone --depth 1 --branch v3.9.1 https://github.com/nuncaeslupus/claude-arsenal.git /tmp/arsenal
+git clone --depth 1 --branch v4.0.0 https://github.com/nuncaeslupus/claude-arsenal.git /tmp/arsenal
 python3 /tmp/arsenal/plugins/core/skills/init/scripts/init.py --repo-path .
 git add .claude claude-arsenal arsenal .github CLAUDE.md .gitignore && git commit -m "chore: add claude-arsenal"
 ```
