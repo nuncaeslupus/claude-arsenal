@@ -115,6 +115,7 @@ three remote changes for you to apply:
 |---|---|
 | `add_to_issue_body` | append the `` `arsenal-task: <id>` `` line to that issue's body — visible text, never an HTML comment |
 | `add_label` | add `arsenal:task` to the issue |
+| `add_id_label` | add `arsenal-id:<id>` — what keeps the issue paired to its task after either is renamed, and the only exact marker a body-less fetch can see |
 | `remove_label` | drop the import label |
 
 The first turns the existing issue into the task's handle rather than opening a

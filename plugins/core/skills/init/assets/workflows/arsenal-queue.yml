@@ -12,7 +12,10 @@
 #                 immediately, so the next session finds a complete board rather
 #                 than a chore list.
 #   sweep-claims  a claim held with no open PR for a day belonged to a session
-#                 that crashed; it is released.
+#                 that crashed; it is released. The same job deletes the claim
+#                 refs of tasks that are finished — a sandboxed session is
+#                 refused every ref write by its proxy, so a prune that depends
+#                 on one is a prune most consumers can never run.
 #   keyword-guard a task PR that would merge without closing anything fails its
 #                 check BEFORE the merge, not after.
 #
@@ -20,8 +23,9 @@
 # works, it just goes back to needing a tidy end to every session.
 #
 # Permissions: `issues: write` to close/label/comment on task issues,
-# `contents: write` only so pr-closed can archive a merged task file that its PR
-# did not archive itself. It never checks out or runs code from a pull request.
+# `contents: write` so pr-closed can archive a merged task file that its PR did
+# not archive itself, and so sweep-claims can delete a finished task's claim ref.
+# It never checks out or runs code from a pull request.
 
 name: arsenal queue
 
@@ -89,11 +93,12 @@ jobs:
         run: python3 claude-arsenal/scripts/queue_hooks.py sync-handles
 
   sweep-claims:
-    name: release abandoned claims
+    name: release abandoned claims, prune finished ones
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      # write, not read: the prune below deletes refs.
+      contents: write
       issues: write
       pull-requests: read
     steps:
@@ -102,6 +107,15 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python3 claude-arsenal/scripts/queue_hooks.py sweep-claims --max-age-hours 24
+      # The claim ref of a finished task is not a lock any more, it is litter —
+      # roughly one per task ever claimed. This is the only place the bundle can
+      # sweep it: the proxy in front of a sandboxed session refuses every ref
+      # write, by git and by API alike, so "prune from a CLI session" was advice
+      # a web-only consumer had no way to take.
+      - name: Delete the claim refs of finished tasks
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 claude-arsenal/scripts/queue_hooks.py prune-claims
 
   keyword-guard:
     name: task PR closes its task

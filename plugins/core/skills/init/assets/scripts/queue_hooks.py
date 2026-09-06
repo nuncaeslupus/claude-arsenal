@@ -24,6 +24,7 @@ watching.
     queue_hooks.py pr-closed      # on: pull_request_target [closed]
     queue_hooks.py sync-handles   # on: push to the default branch, arsenal/tasks/**
     queue_hooks.py sweep-claims   # on: schedule
+    queue_hooks.py prune-claims   # on: schedule
 
 Deciding and doing are split: every subcommand builds a list of actions from
 its inputs with no network at all, then applies them. `--dry-run` prints the
@@ -54,11 +55,22 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from handle_sync import missing_handles
 from issue_for_task import issue_number_for
-from task_select import TERMINAL, load_tasks, task_id_from_issue
+from task_select import (
+    ID_LABEL_PREFIX,
+    TERMINAL,
+    load_tasks,
+    task_id_from_body,
+    task_id_from_issue,
+    task_id_from_labels,
+)
 
 CLAIMED_LABEL = "arsenal:claimed"
 TASK_LABEL = "arsenal:task"
 API_ROOT = "https://api.github.com"
+# Same default and same env knob as claim_task.sh, which is what writes them.
+DEFAULT_CLAIM_PREFIX = os.environ.get("ARSENAL_CLAIM_PREFIX", "").strip() or "arsenal/claims"
+# `<id>.a2` is attempt 2 on `<id>` — the same task, so the same prune decision.
+CLAIM_ATTEMPT_RE = re.compile(r"\.a\d+$")
 
 
 # ---------------------------------------------------------------- pure planning
@@ -433,9 +445,24 @@ def plan_sync_handles(
     """
     warnings: list[str] = []
     rows = missing_handles(tasks, issues, label=TASK_LABEL, warnings=warnings)
+
+    # The migration for every handle opened before the label existed, and the
+    # reason a body-less board can stop resolving by title at all. Only the body
+    # marker is allowed to authorise a stamp: a title match is a heuristic, and
+    # stamping from one would make a wrong pairing permanent instead of visible.
+    # This job always has the bodies — it fetches the board over REST — which is
+    # exactly why the stamping belongs here and not in a session.
+    stamps = [
+        {"kind": "stamp-id", "issue": number, "task": task_id}
+        for issue in issues
+        if isinstance(number := issue.get("number"), int)
+        and (task_id := task_id_from_body(issue))
+        and not task_id_from_labels(issue)
+    ]
+
     return [
         {"kind": "note", "message": f"handle_sync: {warning}"} for warning in warnings
-    ] + [
+    ] + stamps + [
         {
             "kind": "create-issue",
             "task": row["task"],
@@ -501,6 +528,37 @@ def plan_sweep_claims(
                 ),
             }
         )
+    return actions
+
+
+def plan_prune_claims(
+    refs: list[dict[str, Any]], tasks: list[dict[str, Any]], *, prefix: str
+) -> list[dict[str, Any]]:
+    """Delete the claim refs of tasks that are already finished.
+
+    `claiming-internals.md` acknowledges that claim refs accumulate, roughly one
+    per task ever claimed, and had exactly one remedy for it: prune them from a
+    CLI session. A consumer working only from Claude Code on the web has no such
+    session, and its proxy refuses every ref write — `git push --delete` and the
+    REST `DELETE` both 403 — so the only remedy on offer could never be run
+    there and the cost it names had no ceiling. Nothing session-side fixes that,
+    because the 403 is the proxy and not the caller. This runs where a write
+    token already exists, which is what makes the prune surface-independent.
+
+    Terminal tasks only. The ref *is* the lock, so an id with no finished task
+    behind it is either live work or a task file that never merged, and deleting
+    either lets a second session claim a task the first is still working on.
+    """
+    done = {t["id"] for t in tasks if str(t.get("status") or "") in TERMINAL}
+    head = f"refs/heads/{prefix.strip('/')}/"
+    actions: list[dict[str, Any]] = []
+    for ref in refs:
+        name = str(ref.get("ref") or "")
+        if not name.startswith(head):
+            continue
+        task_id = CLAIM_ATTEMPT_RE.sub("", name[len(head) :])
+        if task_id in done:
+            actions.append({"kind": "delete-ref", "ref": name, "task": task_id})
     return actions
 
 
@@ -592,6 +650,11 @@ class Api:
             if "pull_request" not in i
         ]
 
+    def matching_refs(self, prefix: str) -> list[dict[str, Any]]:
+        """Every ref under `refs/heads/<prefix>/`. An empty list when there are none."""
+        quoted = urllib.parse.quote(prefix.strip("/"), safe="/")
+        return self.paginate(f"/repos/{self.repo}/git/matching-refs/heads/{quoted}/")
+
     def open_prs(self) -> list[dict[str, Any]]:
         return self.paginate(f"/repos/{self.repo}/pulls?state=open")
 
@@ -628,7 +691,7 @@ def apply_action(action: dict[str, Any], api: Api | None, *, tasks_dir: Path) ->
     # one. Validating the number before dispatching by kind made that branch
     # unreachable, so `sync-handles` could plan a handle and never open it.
     number = -1
-    if kind != "create-issue":
+    if kind not in ("create-issue", "delete-ref"):
         raw_number = action.get("issue")
         if not isinstance(raw_number, int):
             print(f"queue_hooks: {kind} carries no issue number — skipped", file=sys.stderr)
@@ -662,7 +725,18 @@ def apply_action(action: dict[str, Any], api: Api | None, *, tasks_dir: Path) ->
                 {"body": action["comment"]},
             )
             print(f"queue_hooks: released the claim on #{number} ({action['task']})")
+        elif kind == "stamp-id":
+            name = f"{ID_LABEL_PREFIX}{action['task']}"
+            _ensure_label(api, name)
+            api.request("POST", f"/repos/{api.repo}/issues/{number}/labels", {"labels": [name]})
+            print(f"queue_hooks: labelled #{number} `{name}`")
+        elif kind == "delete-ref":
+            ref = str(action["ref"])
+            api.request("DELETE", f"/repos/{api.repo}/git/{ref.removeprefix('refs/')}")
+            print(f"queue_hooks: deleted claim ref {ref} ({action['task']})")
         elif kind == "create-issue":
+            for name in action["labels"]:
+                _ensure_label(api, name)
             created = api.request(
                 "POST",
                 f"/repos/{api.repo}/issues",
@@ -674,14 +748,38 @@ def apply_action(action: dict[str, Any], api: Api | None, *, tasks_dir: Path) ->
             return False
     except urllib.error.HTTPError as exc:
         print(
-            f"queue_hooks: {kind} on #{number} failed — HTTP {exc.code} {exc.reason}",
+            f"queue_hooks: {kind} on {_target(action, number)} failed — "
+            f"HTTP {exc.code} {exc.reason}",
             file=sys.stderr,
         )
         return False
     except urllib.error.URLError as exc:
-        print(f"queue_hooks: {kind} on #{number} failed — {exc.reason}", file=sys.stderr)
+        print(
+            f"queue_hooks: {kind} on {_target(action, number)} failed — {exc.reason}",
+            file=sys.stderr,
+        )
         return False
     return True
+
+
+def _target(action: dict[str, Any], number: int) -> str:
+    """What the failed action was acting on. Not every kind has an issue."""
+    if number >= 0:
+        return f"#{number}"
+    return str(action.get("ref") or action.get("task") or "the queue")
+
+
+def _ensure_label(api: Api, name: str) -> None:
+    """Create a repository label if it is not there yet.
+
+    Every `arsenal-id:` label is unique to one task, so each handle needs one
+    that has never existed. Whether the issues endpoints mint an unknown label
+    on the way past is not something an unattended weekly job should be betting
+    on, and the failure would be a red run per new task. A 422 here means it
+    already exists, which is the outcome wanted either way.
+    """
+    with contextlib.suppress(urllib.error.HTTPError):
+        api.request("POST", f"/repos/{api.repo}/labels", {"name": name, "color": "ededed"})
 
 
 def _assignees(api: Api, number: int) -> list[dict[str, Any]]:
@@ -761,7 +859,8 @@ def _load_json(path: Path) -> Any:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "command", choices=["pr-closed", "sync-handles", "sweep-claims", "keyword-guard"]
+        "command",
+        choices=["pr-closed", "sync-handles", "sweep-claims", "prune-claims", "keyword-guard"],
     )
     parser.add_argument(
         "--commits", type=Path, default=None,
@@ -774,6 +873,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--issues", type=Path, default=None, help="issue JSON, instead of fetching")
     parser.add_argument("--prs", type=Path, default=None, help="open-PR JSON, instead of fetching")
+    parser.add_argument("--refs", type=Path, default=None, help="git-ref JSON, instead of fetching")
+    parser.add_argument("--claim-prefix", default=DEFAULT_CLAIM_PREFIX)
     parser.add_argument("--max-age-hours", type=int, default=24)
     parser.add_argument("--now", default=None, help="ISO timestamp, for tests")
     parser.add_argument("--dry-run", action="store_true", help="print the plan, change nothing")
@@ -787,7 +888,12 @@ def main(argv: list[str] | None = None) -> int:
         print(f"queue_hooks: {warning}", file=sys.stderr)
 
     try:
-        if args.issues is not None:
+        if args.command == "prune-claims":
+            # The one command that reads refs and not the board. Fetching the
+            # issues anyway would be a page of API calls to answer a question
+            # nothing here asks, and would refuse to run without a board.
+            issues = []
+        elif args.issues is not None:
             issues = [i for i in _load_json(args.issues) if isinstance(i, dict)]
         elif api is not None:
             issues = api.issues(TASK_LABEL)
@@ -844,6 +950,15 @@ def main(argv: list[str] | None = None) -> int:
                 issues,
                 truncated=issues_truncated,
             )
+        elif args.command == "prune-claims":
+            if args.refs is not None:
+                refs = [r for r in _load_json(args.refs) if isinstance(r, dict)]
+            elif api is not None:
+                refs = api.matching_refs(args.claim_prefix)
+            else:
+                print("queue_hooks: no --refs and no usable token", file=sys.stderr)
+                return 2
+            actions = plan_prune_claims(refs, tasks, prefix=args.claim_prefix)
         elif args.command == "sync-handles":
             if _refuse_on_truncation(api, "sync-handles"):
                 return 2

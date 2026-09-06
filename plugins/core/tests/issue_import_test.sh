@@ -94,6 +94,30 @@ again=$(python3 "${IMPORT}" --issues "${tmp}/issues.json" --tasks-dir "${tasks}"
 [[ -z "${again}" ]] || fail "re-import after the marker was applied should be a no-op, got: ${again}"
 echo "PASS: import is idempotent once the issue carries its handle marker"
 
+# Gate 3b (#374): and idempotent BEFORE it carries it, which is the case that
+# corrupts. The marker is applied by the caller over a channel that can fail,
+# so the ordinary reaction to a half-finished run is to run it again — and with
+# a random id that minted a second task file for the same issue. Two task files
+# are one piece of work dispatched twice, holding two claims that cannot collide
+# because the ids differ. The same run also has to name the id it will really
+# write: a dry run whose id is not the applied one is a review of nothing.
+fresh_id="${tmp}/tasks-id"
+mkdir -p "${fresh_id}"
+cat > "${tmp}/issues-id.json" <<'JSON'
+[{"number": 90, "state": "open", "labels": [{"name": "arsenal:queue"}],
+  "html_url": "https://example/90", "title": "derive me", "body": "prose"}]
+JSON
+id_of() { python3 -c 'import json,sys; print(json.loads(sys.stdin.readline())["task"])'; }
+dry=$(python3 "${IMPORT}" --issues "${tmp}/issues-id.json" --tasks-dir "${fresh_id}" 2>/dev/null | id_of)
+applied=$(python3 "${IMPORT}" --issues "${tmp}/issues-id.json" --tasks-dir "${fresh_id}" --apply 2>/dev/null | id_of)
+[[ "${dry}" == "${applied}" ]] \
+    || fail "the dry run named ${dry} and --apply wrote ${applied}"
+twice=$(python3 "${IMPORT}" --issues "${tmp}/issues-id.json" --tasks-dir "${fresh_id}" --apply 2>/dev/null)
+[[ -z "${twice}" ]] || fail "a second --apply must import nothing, got: ${twice}"
+count=$(ls "${fresh_id}" | wc -l)
+[[ "${count}" -eq 1 ]] || fail "one issue must leave one task file, found ${count}: $(ls "${fresh_id}")"
+echo "PASS: the id is derived from the issue, so re-running --apply changes nothing"
+
 # Gate 4 (#143): the listing budget is settable, and the effective value and its
 # source are printed. A cap a library cannot pass is a check it stops running,
 # and a configurable cap whose value never appears is one nobody can tell was
@@ -177,12 +201,18 @@ row=$(python3 "${IMPORT}" --issues "${tmp}/issues-body.json" --tasks-dir "${fres
 python3 - "${row}" <<'PY' || fail "the import row does not carry the label swap: see above"
 import json, sys
 row = json.loads(sys.argv[1])
-missing = [k for k in ("add_to_issue_body", "add_label", "remove_label") if k not in row]
+missing = [k for k in ("add_to_issue_body", "add_label", "add_id_label", "remove_label") if k not in row]
 if missing:
     print(f"row is missing {missing}: {row}", file=sys.stderr)
     raise SystemExit(1)
 if row["add_label"] != "arsenal:task":
     print(f"add_label must be the board label, got {row['add_label']!r}", file=sys.stderr)
+    raise SystemExit(1)
+# The marker line above lives in the body, and the fetch that reads the board
+# every session does not ask for bodies. Without the label the imported issue is
+# paired to its task by title alone.
+if row["add_id_label"] != f"arsenal-id:{row['task']}":
+    print(f"add_id_label must name this task, got {row['add_id_label']!r}", file=sys.stderr)
     raise SystemExit(1)
 if row["remove_label"] != "arsenal:queue":
     print(f"remove_label must be the import label, got {row['remove_label']!r}", file=sys.stderr)
@@ -267,12 +297,16 @@ files=$(find "${fresh}" -name '*.md' | wc -l)
 echo "PASS: an unencodable body rolls the batch back and emits nothing"
 
 # Gate 13: a task file that appears between the pre-loop directory snapshot and
-# the write is never overwritten. `mint()` picks ids against a snapshot taken
-# before the loop, so a concurrent import — or a worker landing its own task —
-# is invisible to it, and a non-exclusive write silently destroys that file.
-# Pre-creating the file cannot stage this: it would be IN the snapshot and mint
-# would simply pick another id. The race is reproduced where it actually opens,
-# by creating the file after the snapshot and before the write.
+# the write is never overwritten. The snapshot is taken before the loop, so a
+# file that lands in the gap is invisible to it and a non-exclusive write would
+# silently destroy it. Pre-creating the file cannot stage this: it would be IN
+# the snapshot and the issue would be skipped before any write. The race is
+# reproduced where it actually opens, between the snapshot and the write.
+#
+# Since the id is derived from the issue, the file at that path is this issue's
+# own task written by a racing importer — so the run skips it and says so
+# rather than failing. The exclusive create is what makes that safe to assume
+# cheaply: it refuses, it never clobbers.
 fresh="${tmp}/tasks10"
 mkdir -p "${fresh}"
 cat >"${tmp}/issues-collide.json" <<'JSON'
@@ -304,11 +338,14 @@ PY
 )
 code=$?
 set -e
-[[ ${code} -ne 0 ]] || fail "an id won by another writer must not import silently: ${out}"
-grep -q "could not create" <<<"${out}" \
-    || fail "a collision must name the create that failed: ${out}"
+[[ ${code} -eq 0 ]] || fail "a raced path is this issue's own task, not a failure: ${out}"
+grep -q "already imported" <<<"${out}" \
+    || fail "a raced path must be reported, not passed over in silence: ${out}"
+if grep -q '"issue":80' <<<"${out}"; then
+    fail "the row belongs to the run that wrote the file, not to this one: ${out}"
+fi
 survivor=$(grep -rl 'PRE-EXISTING TASK' "${fresh}" || true)
 [[ -n ${survivor} ]] || fail "the other writer's task file was destroyed: $(ls -A "${fresh}")"
-echo "PASS: an id won by another writer is never overwritten"
+echo "PASS: a path won by another writer is left intact and reported, not overwritten"
 
 echo "PASS: issue_import_test — all gates passed"

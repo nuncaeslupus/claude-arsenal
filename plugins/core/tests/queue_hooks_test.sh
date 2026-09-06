@@ -137,8 +137,71 @@ echo "PASS: stale claims are released, claims with open PRs are not"
 write_task t-cccc3333 "${tasks}"
 plan=$(python3 "${HOOKS}" sync-handles --tasks-dir "${tasks}" --issues "${tmp}/issues.json" --dry-run)
 echo "${plan}" | grep -q '"task":"t-cccc3333"' || fail "missing handle was not planned: ${plan}"
-if echo "${plan}" | grep -q '"task":"t-aaaa1111"'; then fail "already-handled task proposed again: ${plan}"; fi
+if echo "${plan}" | grep '"kind":"create-issue"' | grep -q '"task":"t-aaaa1111"'; then
+    fail "already-handled task proposed again: ${plan}"
+fi
+echo "${plan}" | grep -q '"labels":\["arsenal:task","arsenal-id:t-cccc3333"\]' \
+    || fail "a new handle must carry its id label: ${plan}"
 echo "PASS: only task files without an issue get a handle"
+
+# Gate 6b: the migration. An issue that resolves by its BODY marker but carries
+# no `arsenal-id:` label gets one stamped, so the pairing stops depending on a
+# title the moment anything renames either side. An issue that already has the
+# label is left alone — this runs on every push, so a plan that re-stamps is a
+# plan that never converges.
+echo "${plan}" | grep -q '"issue":10,"kind":"stamp-id","task":"t-aaaa1111"' \
+    || fail "a handle with no id label was not stamped: ${plan}"
+cat > "${tmp}/issues-stamped.json" <<'JSON'
+[
+  {"number": 10, "state": "open", "updated_at": "2026-01-01T00:00:00Z",
+   "labels": [{"name": "arsenal:task"}, {"name": "arsenal-id:t-aaaa1111"}],
+   "body": "`arsenal-task: t-aaaa1111`"}
+]
+JSON
+plan=$(python3 "${HOOKS}" sync-handles --tasks-dir "${tasks}" --issues "${tmp}/issues-stamped.json" --dry-run)
+if echo "${plan}" | grep -q '"kind":"stamp-id"'; then fail "a stamped handle was stamped again: ${plan}"; fi
+echo "PASS: a body-marked handle is stamped with its id label exactly once"
+
+# Gate 6c: a task whose id label alone identifies its issue — no body at all,
+# which is what the session-start fetch actually returns — is not proposed a
+# second handle. This is the whole point of the label: before it, the fetch that
+# every session runs could only match on title, and a rename reported the task
+# as having no issue, which is the sentence a caller opens a duplicate for.
+cat > "${tmp}/issues-bodyless.json" <<'JSON'
+[
+  {"number": 10, "state": "open",
+   "labels": [{"name": "arsenal:task"}, {"name": "arsenal-id:t-aaaa1111"}],
+   "title": "a title nobody kept in sync"}
+]
+JSON
+plan=$(python3 "${HOOKS}" sync-handles --tasks-dir "${tasks}" --issues "${tmp}/issues-bodyless.json" --dry-run)
+if echo "${plan}" | grep '"kind":"create-issue"' | grep -q '"task":"t-aaaa1111"'; then
+    fail "a retitled, body-less handle was duplicated: ${plan}"
+fi
+echo "PASS: an id label pairs a handle to its task with no body and a drifted title"
+
+# Gate 6d: claim refs of finished tasks are pruned; a live task's ref is the
+# lock and is never touched. The prune runs in Actions because the surface that
+# needs it most — a web-only session — is refused every ref write by its proxy.
+write_task t-eeee5555 "${tasks}/_history"
+printf '%s\n' "$(sed 's/^priority: 5$/priority: 5\nstatus: merged/' "${tasks}/_history/t-eeee5555.md")" \
+    > "${tasks}/_history/t-eeee5555.md"
+cat > "${tmp}/refs.json" <<'JSON'
+[
+  {"ref": "refs/heads/arsenal/claims/t-eeee5555"},
+  {"ref": "refs/heads/arsenal/claims/t-eeee5555.a3"},
+  {"ref": "refs/heads/arsenal/claims/t-aaaa1111"},
+  {"ref": "refs/heads/feature/unrelated"}
+]
+JSON
+plan=$(python3 "${HOOKS}" prune-claims --tasks-dir "${tasks}" --refs "${tmp}/refs.json" --dry-run)
+echo "${plan}" | grep -q '"ref":"refs/heads/arsenal/claims/t-eeee5555"' \
+    || fail "a merged task's claim ref was not pruned: ${plan}"
+echo "${plan}" | grep -q '"ref":"refs/heads/arsenal/claims/t-eeee5555.a3"' \
+    || fail "a retry attempt ref belongs to the same task and must be pruned too: ${plan}"
+if echo "${plan}" | grep -q 't-aaaa1111'; then fail "a live task's claim is the lock: ${plan}"; fi
+if echo "${plan}" | grep -q 'feature/unrelated'; then fail "prune reached outside the claim prefix: ${plan}"; fi
+echo "PASS: finished tasks lose their claim refs, live ones keep theirs"
 
 # Gate 7: query_status reports completion drift in both directions. Merging is
 # meant to be the single act that finishes a task; when only half of it
