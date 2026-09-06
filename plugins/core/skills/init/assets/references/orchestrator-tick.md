@@ -32,7 +32,7 @@ The split matters because only one half belongs in a repository:
 | | Owns |
 |---|---|
 | **This reference** | what a tick does, in what order, and where it stops |
-| **The surface** | when a tick happens — a routine's cron, a CI schedule, a human typing "continue" |
+| **The surface** | when a tick happens — a routine's cron, a CI schedule, a human typing `/queue-next` |
 
 Nothing in a repository can create an account-scoped trigger, so nothing here
 tries. Write the contract once, here, where it is versioned and reviewed; supply

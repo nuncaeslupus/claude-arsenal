@@ -1,25 +1,25 @@
 ---
-name: continue
-description: When the user wants to resume work or run the worker loop — picks the next unblocked task, optionally scoped by tag(s) and/or a workspace, or matched by title text. Use /continue [TAG … | WORKSPACE | search-text]. Do NOT use before running init.
+name: queue-next
+description: When the user wants to resume work or run the worker loop — picks the next unblocked task, optionally scoped by tag(s) and/or a workspace, or matched by title text. Use /queue-next [TAG … | WORKSPACE | search-text]. Do NOT use before running init.
 user-invocable: true
 argument-hint: "[CAPABILITY | TAG … | WORKSPACE | search-text]"
 metadata:
   type: workflow
 ---
 
-# continue
+# queue-next
 
 Resumes session work: reads the task graph from the repository, picks the next unblocked
 task, claims it so no other agent can take it, and runs the worker loop. Optionally scoped
 by tag(s) and/or a workspace, or matched against a fuzzy task title.
 
-CANARY: continue-loaded-2026-06-13-fb78d23e-b2c3d4e5f6a7b8c9
+CANARY: queue-next-loaded-2026-06-13-fb78d23e-b2c3d4e5f6a7b8c9
 
 ## When to load
 
 Load this skill when:
 
-- The user types `/continue`, "continue", "resume", "run the workers", or "WORKSPACE: Continue".
+- The user types `/queue-next`, "continue", "resume", "run the workers", or "WORKSPACE: Continue".
 - The session needs to pick up where a previous session left off.
 - The user provides a workspace name or task search string after the command.
 
@@ -119,15 +119,15 @@ Bare-word tokens are order-independent and resolved by membership, in this order
 | nothing above | fuzzy title search |
 
 ```bash
-/continue HUMAN             # access:human — the tasks waiting on a person
-/continue BROWSER FRONTEND  # access:browser AND workspace FRONTEND
-/continue DOCS INFRA        # tag DOCS AND tag INFRA
+/queue-next HUMAN             # access:human — the tasks waiting on a person
+/queue-next BROWSER FRONTEND  # access:browser AND workspace FRONTEND
+/queue-next DOCS INFRA        # tag DOCS AND tag INFRA
 ```
 
 The suffix rule is derived from the vocabulary rather than a table to keep in step:
 `HUMAN` finds `access:human`, `POSTGRES` finds `services:postgres`, `CLI` finds
 `surface:cli`. Should two classes ever end in the same word, that token must be written
-in full as `class:value`. `/continue BROWSER FRONTEND` and `/continue FRONTEND BROWSER`
+in full as `class:value`. `/queue-next BROWSER FRONTEND` and `/queue-next FRONTEND BROWSER`
 resolve to the same scope, and a task qualifies only if it satisfies **every** token.
 
 **Naming a capability grants it only where nothing can check it.** A token always
@@ -136,7 +136,7 @@ knows the answer:
 
 | token names | granted by the token? | because |
 |---|---|---|
-| `surface:*`, `services:*` | **no** — the probe decides | `/continue CLI` on a cloud session would otherwise hand out work that surface genuinely cannot run |
+| `surface:*`, `services:*` | **no** — the probe decides | `/queue-next CLI` on a cloud session would otherwise hand out work that surface genuinely cannot run |
 | `access:browser` | **no** — the session's tools decide | if none is connected, say so and stop rather than spending an attempt discovering it |
 | `access:human`, `access:secrets`, `access:device` | **yes** | nothing can probe whether a person is watching or which keys this machine holds, so the person typing it is the evidence |
 
@@ -147,7 +147,7 @@ a typo would quietly promote a session past a limit that exists for a reason.
 ## Gotchas
 
 - **`WORKSPACE: Continue`** as natural language (e.g. "FRONTEND: Continue") is equivalent
-  to `/continue FRONTEND`.
+  to `/queue-next FRONTEND`.
 - **Task files are read from the default branch.** That is what makes every agent compute
   the same graph regardless of the branch it is working on. A task file on an unmerged
   branch is not yet in the queue.

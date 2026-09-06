@@ -18,6 +18,26 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [4.0.0] - 2026-09-06
+
+### Changed — action required
+
+- **The `continue` skill is now `queue-next`, invoked as `/queue-next`.**
+  `/continue` is a built-in Claude Code slash command, so typing it got you the
+  built-in and never the queue loop — the collision made the command
+  unusable by its documented name. The new name also puts it in the
+  `queue-*` family alongside `queue-add` and `queue-status`.
+
+  Everything else about it is unchanged: same scoping tokens, same worker
+  loop, same `argument-hint`. `/init` prunes skills it no longer ships, so
+  updating removes `continue/` and installs `queue-next/` for you — but
+  **anything of yours that names the skill needs the new one**: routines or
+  cron jobs whose prompt is `/continue`, CI steps that pass `/continue …`,
+  and your own `CLAUDE.md` or docs that tell people to type it.
+
+  Natural-language triggers are untouched — "continue", "resume", "run the
+  workers" and `WORKSPACE: Continue` still load the skill.
+
 ## [3.9.1] - 2026-09-04
 
 Three things a consumer's review caught in 3.9.0, all confirmed against the

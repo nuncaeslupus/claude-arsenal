@@ -9,20 +9,20 @@
       "blurb": "the bundle itself — installer, queue engine, and the skills the protocol names",
       "skills": [
         {
-          "name": "continue",
-          "description": "When the user wants to resume work or run the worker loop — picks the next unblocked task, optionally scoped by tag(s) and/or a workspace, or matched by title text. Use /continue [TAG … | WORKSPACE | search-text]. Do NOT use before running init."
-        },
-        {
           "name": "github",
           "description": "Use whenever the user is creating commits, opening pull requests, or waiting on PR review/CI feedback — applies Conventional Commits + branch naming, then polls the PR for review-bot comments and CI status until it is ready to merge. Triggers — \"open a PR\", \"address review comments\". Do NOT use for engineering review of a diff (see review) or generic git mechanics (see execution)."
         },
         {
           "name": "init",
-          "description": "When the user needs claude-arsenal/ set up in a host repo, or wants to register a workspace via --workspace. Re-running is safe (refreshes stale bundle files only). Do NOT use to add tasks (see queue-add) or resume the worker loop (see continue)."
+          "description": "When the user needs claude-arsenal/ set up in a host repo, or wants to register a workspace via --workspace. Re-running is safe (refreshes stale bundle files only). Do NOT use to add tasks (see queue-add) or resume the worker loop (see queue-next)."
         },
         {
           "name": "queue-add",
           "description": "When the user wants to add a task to the claude-arsenal queue. Do NOT use to update or remove existing tasks."
+        },
+        {
+          "name": "queue-next",
+          "description": "When the user wants to resume work or run the worker loop — picks the next unblocked task, optionally scoped by tag(s) and/or a workspace, or matched by title text. Use /queue-next [TAG … | WORKSPACE | search-text]. Do NOT use before running init."
         },
         {
           "name": "queue-status",
