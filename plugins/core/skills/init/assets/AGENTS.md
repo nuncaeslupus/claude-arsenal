@@ -1,6 +1,6 @@
 # Claude Arsenal
 
-<!-- claude-arsenal v4.1.0 — imported via @claude-arsenal/AGENTS.md -->
+<!-- claude-arsenal v4.2.0 — imported via @claude-arsenal/AGENTS.md -->
 
 This file is imported by the host repo's `CLAUDE.md` via the session-protocol block
 that `/init` injects, so it sits in context on **every turn of every session**. It
@@ -107,11 +107,12 @@ At the start of every session (fresh start, context compaction, or cold restart)
    (`claude-arsenal/references/queue-seeding.md`); if there is no plan either, report done
    or ask the user.
 
-   Which model runs what is the host's setting, not this file's:
-   `python3 claude-arsenal/scripts/arsenal_config.py --get models.workers` is what the
-   orchestrator exports as `CLAUDE_CODE_SUBAGENT_MODEL` before any dispatch. If
-   `models.orchestrator` is set and is not the model you are running as, say so once —
-   nothing can switch it from inside the session, so noticing is the whole of the check.
+   Which model runs what is the host's setting, not this file's: `arsenal_config.py
+   --get models.workers` (and `models.reviewers`, empty meaning fall back to it) is what
+   the orchestrator passes as each dispatch's own `model` argument — never `env:`, which
+   a cloud surface's fresh-shell Bash calls discard. If `models.orchestrator` is set and
+   is not the model you are running as, say so once — nothing can switch it from inside
+   the session, so noticing is the whole of the check.
 
 7. **Before ending a session with open work** — audit every task whose issue is claimed or
    whose PR is open (CI, reviews, mergeability), print the table for the user, then write

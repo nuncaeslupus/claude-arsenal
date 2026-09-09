@@ -18,6 +18,58 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [4.2.0] - 2026-09-09
+
+### Fixed — `models.workers` reached nothing on cloud surfaces (#379)
+
+The orchestrator carried the configured worker model to the fleet by exporting
+`CLAUDE_CODE_SUBAGENT_MODEL` in a Bash call. **On Claude Code on the web every
+Bash tool call gets a fresh shell**, so that export died with the call that made
+it and the setting governed nothing there. It worked on a laptop, which is how
+it survived this long.
+
+Two things made the failure silent instead of loud, and both pushed toward the
+*expensive* model: an explicit `model:` on a dispatch outranks the env var, and
+omitting `model:` does **not** fall back to `models.workers` — a subagent with
+no model named inherits the **parent's**. So an Opus orchestrator dispatched
+Opus workers by default while `models.workers` said `sonnet`. In one overnight
+run downstream that was ~20 agents on the wrong model, 3–4M tokens, and a
+5-hour limit exhausted twice.
+
+**The protocol now passes the resolved model as the dispatch's own `model`
+argument**, keeping the export only as belt-and-braces where shells persist.
+`agents/worker.md`'s launch block moves `model:` out of `env:` accordingly, and
+`references/worker-loop.md` records that cloud Bash calls share no shell state
+— the same assumption was load-bearing for the `CLAUDE_CODE_DISABLE_1M_CONTEXT`
+and `CLAUDE_CODE_DISABLE_FAST_MODE` credit guards beside it.
+
+Nothing in a session can observe which model a subagent actually ran on, and the
+token report arrives after the spend, so there is no gate for this — making the
+correct path the only path is the guard.
+
+### Added — `models.reviewers` (#380)
+
+The bundle shipped two agent roles and let you configure one of them.
+`agents/reviewer.md` named no model at all, so a consumer who wanted cheap
+implementers and a strong reviewer — the natural split, since the reviewer does
+the spec-derivation and mutation work — had no way to say so. Writing
+`reviewers = "opus"` anyway was worse than the gap: unknown keys are tolerated
+on read, so it parsed fine, sat in `config.toml` looking configured, and reached
+nothing.
+
+```toml
+[models]
+workers   = "sonnet"
+reviewers = "opus"    # empty (the default) = no separate opinion, use workers
+```
+
+`agents/reviewer.md` gains a **Launch parameters** block resolving it, and
+`references/pre-pr-review.md` says to dispatch with it. Scoped to the pre-PR
+adversarial reviewer that `bin/adversarial_review.sh` spawns from a case file —
+the only reviewer role with an agent definition upstream. Empty means fall back
+to `models.workers`, so a repo that never sets it is unaffected by this release.
+
+
 ## [4.1.0] - 2026-09-06
 
 Three ways the queue could hand out one piece of work twice, or accumulate

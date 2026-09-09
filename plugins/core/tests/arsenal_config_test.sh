@@ -67,6 +67,23 @@ printf '[models]\norchestrator = ""\n' > arsenal/config.toml
 [[ "$(get_rc models.orchestrator)" == "0" ]] || fail "empty models.orchestrator is valid"
 echo "PASS: empty workers rejected, empty orchestrator allowed"
 
+# --- models.reviewers: a real key, not one tolerated into oblivion ---
+# It was writable-but-inert before v4.2.0: unknown keys are tolerated on read,
+# so `reviewers = "opus"` parsed fine, sat in the file looking configured and
+# reached nothing. The read is the whole point of the key.
+rm -f arsenal/config.toml
+[[ -z "$(get models.reviewers)" ]] || fail "default models.reviewers should be empty"
+printf '[models]\nreviewers = "opus"\n' > arsenal/config.toml
+[[ "$(get models.reviewers)" == "opus" ]] || fail "models.reviewers should read 'opus'"
+# Empty is the documented "no separate opinion — fall back to models.workers",
+# so unlike workers it must not be an error.
+printf '[models]\nreviewers = ""\n' > arsenal/config.toml
+[[ "$(get_rc models.reviewers)" == "0" ]] || fail "empty models.reviewers is valid"
+# ...but it is still shape-checked like every other model value.
+printf '[models]\nreviewers = "opus; rm -rf /"\n' > arsenal/config.toml
+[[ "$(get_rc models.reviewers)" == "2" ]] || fail "a non-model reviewers value should exit 2"
+echo "PASS: models.reviewers reads, allows empty, rejects junk"
+
 # --- init.py's key upsert must land above the first table header ---
 if [[ -f "${INIT}" ]]; then
     cat > arsenal/config.toml <<'TOML'

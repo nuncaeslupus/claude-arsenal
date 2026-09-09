@@ -13,6 +13,41 @@ it claims to do, which is a different question and the one that catches things.
 Your job is not to approve. It is to find the reason this should not be merged,
 and to fail to find one only after looking properly.
 
+## Launch parameters
+
+```yaml
+model: "<models.reviewers from arsenal/config.toml, else models.workers>"
+env:
+  CLAUDE_CODE_DISABLE_1M_CONTEXT: "1"
+  CLAUDE_CODE_DISABLE_FAST_MODE: "1"
+```
+
+The session dispatching the review resolves that model first:
+
+```bash
+root="$(git rev-parse --show-toplevel)"
+config="${root}/claude-arsenal/scripts/arsenal_config.py"
+reviewer_model="$(python3 "${config}" --repo-root "${root}" --get models.reviewers)" \
+  || { echo "arsenal: models.reviewers is unusable — fix arsenal/config.toml" >&2; exit 1; }
+if [ -z "${reviewer_model}" ]; then
+  reviewer_model="$(python3 "${config}" --repo-root "${root}" --get models.workers)" \
+    || { echo "arsenal: models.workers is unusable — fix arsenal/config.toml" >&2; exit 1; }
+fi
+printf 'dispatch the reviewer with model: %s\n' "${reviewer_model:?resolved empty}"
+```
+
+**Empty `models.reviewers` means "no separate opinion" and falls back to
+`models.workers`** — so a repo that never sets it is unaffected. The key exists
+because the two roles are not symmetric: an implementer is usually applying a
+named remedy, while this role derives the spec and mutates against a change it
+has never seen. That is the half that earns the stronger model.
+
+**Pass it as the dispatch's own `model` argument, not through `env:`.** On cloud
+surfaces each Bash call gets a fresh shell, so an exported
+`CLAUDE_CODE_SUBAGENT_MODEL` is gone before the dispatch reads it, and a
+subagent with no model named inherits the parent's — it does not fall back to
+the configured value. See `references/worker-loop.md` § Credit guards.
+
 ## The one rule about where your information comes from
 
 **Write nothing into the repository except your reply.** Your verdict is bound
