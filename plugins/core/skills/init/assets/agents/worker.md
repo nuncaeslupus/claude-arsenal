@@ -37,17 +37,24 @@ rather than working around it.
 
 ```yaml
 isolation: worktree
+model: "<models.workers from arsenal/config.toml>"
 env:
   CLAUDE_CODE_DISABLE_1M_CONTEXT: "1"
   CLAUDE_CODE_DISABLE_FAST_MODE: "1"
-  CLAUDE_CODE_SUBAGENT_MODEL: "<models.workers from arsenal/config.toml>"
 ```
 
-The orchestrator resolves that last value before dispatch with
+The orchestrator resolves that model before dispatch with
 `python3 claude-arsenal/scripts/arsenal_config.py --get models.workers`
 (default `sonnet`). It is not written literally here because which model runs
 the workers is the host repo's choice, and a value hardcoded in a vendored file
 is one an upgrade silently replaces.
+
+**It is `model:`, not an `env:` entry.** It was
+`CLAUDE_CODE_SUBAGENT_MODEL` under `env:` until v4.2.0, and on cloud surfaces
+that reached nothing: each Bash call gets a fresh shell, so the export died
+before any dispatch could read it and the fleet inherited the orchestrator's
+model instead — the expensive one, silently. The dispatch argument is the only
+thing that actually decides. See `references/worker-loop.md` § Credit guards.
 
 ## Relative-path directive (required)
 

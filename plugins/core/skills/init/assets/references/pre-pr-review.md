@@ -56,6 +56,13 @@ Use the printed path rather than a remembered one: with `--task <id>` the packet
 lives in a per-task slot, and `verdict` reads the reply from beside the packet it
 answers.
 
+**Dispatch it with the configured reviewer model, as the dispatch's own `model`
+argument** — `models.reviewers`, falling back to `models.workers` when empty.
+`claude-arsenal/agents/reviewer.md` § Launch parameters has the resolution
+snippet. A dispatch that names no model inherits the model of the session
+spawning it, which is how a repo that configured a cheap fleet ends up paying
+for an expensive reviewer, or the reverse — silently, either way.
+
 That is the whole prompt. Do not summarize the change for it, do not tell it
 what you were trying to do, do not mention which parts you are confident about,
 and do not pass any conversation history. Every one of those transplants the

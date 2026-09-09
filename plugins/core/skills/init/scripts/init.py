@@ -139,8 +139,13 @@ listing-budget = 8000
 # Which model runs what. An alias Claude Code resolves (opus | sonnet | haiku)
 # or a full model id.
 #
-# workers is enforced: the orchestrator exports it as CLAUDE_CODE_SUBAGENT_MODEL
-# before dispatching, so it governs every worker subagent in the session.
+# workers is enforced: the orchestrator resolves it and passes it as each
+# dispatch's own model argument, so it governs every worker subagent in the
+# session.
+#
+# reviewers governs the pre-PR adversarial reviewer the same way. Empty means
+# "no separate opinion" and falls back to workers — set it when you want cheap
+# implementers and a stronger reader, which is the usual split.
 #
 # orchestrator is advisory — a session cannot change the model it is already
 # running as. It is read at session start and reported when the running model
@@ -151,6 +156,7 @@ listing-budget = 8000
 [models]
 orchestrator = ""
 workers = "sonnet"
+reviewers = ""
 """
 
 # Permissive on purpose: until the probe runs, every `surface:` task stays

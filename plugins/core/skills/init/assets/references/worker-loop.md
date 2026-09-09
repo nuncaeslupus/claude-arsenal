@@ -299,17 +299,42 @@ Two of these are fixed. The third is the consumer's call, so it is read from
 vendored file is a preference an upgrade overwrites:
 
 ```bash
-export CLAUDE_CODE_DISABLE_1M_CONTEXT=1
-export CLAUDE_CODE_DISABLE_FAST_MODE=1
-
 root="$(git rev-parse --show-toplevel)"
 workers_model="$(python3 "${root}/claude-arsenal/scripts/arsenal_config.py" \
     --repo-root "${root}" --get models.workers)" \
   || { echo "arsenal: models.workers is unusable — fix arsenal/config.toml" >&2; exit 1; }
-export CLAUDE_CODE_SUBAGENT_MODEL="${workers_model:?models.workers resolved empty}"
+printf 'dispatch workers with model: %s\n' "${workers_model:?models.workers resolved empty}"
+
+# Belt-and-braces for surfaces where a shell's exports survive to the dispatch.
+# They are not what decides — the lines above are.
+export CLAUDE_CODE_DISABLE_1M_CONTEXT=1
+export CLAUDE_CODE_DISABLE_FAST_MODE=1
+export CLAUDE_CODE_SUBAGENT_MODEL="${workers_model}"
 ```
 
-**Assign, check, then export** — and anchor both paths on the repo root. Written
+**Pass the resolved value as the dispatch's own `model` argument.** Read the
+model out of that `printf` and write it into each Task dispatch; do not rely on
+the export having reached anything. **On cloud surfaces every Bash tool call
+gets a fresh shell** — env vars and functions do not carry from one call to the
+next, so `CLAUDE_CODE_SUBAGENT_MODEL` is gone before any dispatch could read it
+and `models.workers` governs nothing. The same is true of the two
+`CLAUDE_CODE_DISABLE_*` guards above, which is why they are set in the same call
+as the dispatch rather than once at session start.
+
+Two things make that failure silent rather than loud, and both push toward the
+*expensive* model. An explicit `model:` on the dispatch outranks the env var, so
+an orchestrator that names one wins and is told nothing. And omitting `model:`
+does **not** fall back to `models.workers`: with no env var and no model in the
+agent definition, a subagent inherits the **parent's** model, so an Opus
+orchestrator dispatches Opus workers by default. Naming the model on the
+dispatch is the only path that yields the configured value.
+
+Nothing inside a session can observe which model a subagent actually ran on, and
+the token report arrives after the spend — so this is not pinnable by a gate the
+way the rest of the protocol prefers. Making the correct path the only path is
+the guard.
+
+**Assign, check, then use** — and anchor both paths on the repo root. Written
 as one line, `export VAR="$(cmd)"` reports the exit status of `export`, which
 always succeeds: a rejected model or a script path that did not resolve from a
 subdirectory would set an empty value, `export` would return 0, and the fleet

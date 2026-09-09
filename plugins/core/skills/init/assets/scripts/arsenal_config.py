@@ -12,7 +12,7 @@ repo with a partial file only overrides what it names.
 Keys are flat, except that a TOML table reads as dotted keys — `[models]`
 with `workers = "sonnet"` is the key `models.workers`. Grouping the model
 choices under one header is what lets a consumer state them the way they think
-of them, rather than as two unrelated top-level strings.
+of them — one decision per role — rather than as unrelated top-level strings.
 
 Usage:
     arsenal_config.py                      # print the effective config as JSON
@@ -116,11 +116,32 @@ DEFAULTS: dict[str, Any] = {
     # Empty means "whatever the session was launched with" — no opinion.
     "models.orchestrator": "",
     # Which model runs worker subagents. This one has a data path: the
-    # orchestrator exports it as CLAUDE_CODE_SUBAGENT_MODEL before any Task
-    # dispatch, so it governs every worker in the session. It used to be a
+    # orchestrator resolves it and passes it as the dispatch's own model
+    # argument, so it governs every worker in the session. It used to be a
     # model id hardcoded in the protocol prose, which meant a consumer who
     # wanted a different one had to edit a vendored file an upgrade overwrites.
+    #
+    # The transport is the dispatch argument and not an exported
+    # CLAUDE_CODE_SUBAGENT_MODEL because on cloud surfaces every Bash call gets
+    # a fresh shell: the export died with the call that made it, and the fleet
+    # ran on the orchestrator's model — the expensive default — while this key
+    # resolved to something cheaper and governed nothing (#379).
     "models.workers": "sonnet",
+    # Which model runs adversarial reviewer subagents (`agents/reviewer.md`,
+    # dispatched from a case file by bin/adversarial_review.sh). Empty means
+    # "no separate opinion — use models.workers", which is why it is not
+    # defaulted to a model name: copying the workers value here would make the
+    # two drift the moment a consumer edits one of them.
+    #
+    # It exists because the roles are not symmetric. An implementer is usually
+    # applying a named remedy; the reviewer derives the spec and mutates
+    # against a change it has never seen, and it is the half that earns the
+    # stronger model. Before this key the only lever was `models.workers`,
+    # which governs the other half — and a `reviewers = ...` written anyway
+    # parsed fine, sat in the file looking configured, and reached nothing,
+    # because unknown keys are tolerated on read (below). A key that records a
+    # decision and changes nothing is worse than no key (#380).
+    "models.reviewers": "",
 }
 
 ENUMS: dict[str, set[str]] = {
@@ -157,12 +178,12 @@ def _config_path(repo_root: Path, home: str) -> Path:
 # and a closed set here would reject the model a consumer is actually running
 # — the vendored file would have to ship a new version to allow a name that
 # already works everywhere else. So the check is on shape, not membership: a
-# bare token, because the value ends up inside an exported environment
-# variable, and anything with quotes, spaces or shell metacharacters in it is a
-# typo at best.
+# bare token, because the value is interpolated into a dispatch argument (and,
+# on surfaces where it survives, an exported environment variable), and
+# anything with quotes, spaces or shell metacharacters in it is a typo at best.
 MODEL_VALUE_REGEX = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]*$")
 
-MODEL_KEYS = ("models.orchestrator", "models.workers")
+MODEL_KEYS = ("models.orchestrator", "models.workers", "models.reviewers")
 
 
 def _flatten(raw: dict[str, Any]) -> dict[str, Any]:
@@ -248,8 +269,9 @@ def load(repo_root: Path | None = None) -> tuple[dict[str, Any], dict[str, str]]
         if not isinstance(value, str):
             raise ConfigError(f"{key} must be a string, got {value!r} (from {sources[key]})")
         # Empty is meaningful for the orchestrator ("no opinion, use whatever
-        # the session was launched with") and meaningless for workers, which
-        # would export an empty CLAUDE_CODE_SUBAGENT_MODEL and silently get the
+        # the session was launched with") and for reviewers ("no separate
+        # opinion, use models.workers"). It is meaningless for workers, which
+        # would hand the dispatch an empty model argument and silently get the
         # default — a setting that looks configured and is not.
         if value == "":
             if key == "models.workers":
