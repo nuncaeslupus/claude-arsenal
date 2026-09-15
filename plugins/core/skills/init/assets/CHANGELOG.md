@@ -18,6 +18,47 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [4.3.0] - 2026-09-15
+
+### Added — `context-window`, the lever that decides what a fleet costs (#383)
+
+A turn is charged for the context it carries, not for what it writes. Nine
+sessions in one day read 438M tokens to write 1.3M, and a host that raises its
+auto-compact window to "avoid filling up" raises the floor every turn pays.
+Those same turns replayed at lower caps: 500k → 453M, 300k → 387M, 200k → 287M,
+120k → 186M.
+
+`context-window` in `arsenal/config.toml` is now written by `/init` into your
+`.claude/settings.json` as `autoCompactWindow`:
+
+```toml
+context-window = 200000
+```
+
+**It is off by default (`0`) and an upgrade changes nothing for you.** The right
+value is a judgement about your repo — set too low, sessions compact mid-task
+and re-read what they dropped, paying in turns instead of context. Accepted
+range is 100000–1000000 (Claude Code's own bounds); anything else is refused at
+read time rather than written into a settings file that would silently ignore
+it. With the key unset, an `autoCompactWindow` you set by hand is left alone.
+
+### Added — `scripts/usage_report.py`, so the number is measured (#383)
+
+None of the above was visible until transcripts were parsed by hand.
+
+```
+python3 claude-arsenal/scripts/usage_report.py --since 2026-09-14
+```
+
+Reports turns, average and peak context, output and cache-read per session and
+**per model**, plus the busiest hour. Dispatched subagent turns are included and
+called out separately — they live a directory deeper than the session transcript
+and are the direct evidence of what model your workers actually ran as, which is
+the question `models.workers` alone cannot answer.
+
+`budget_check.sh` still answers "may I dispatch?" from remaining quota; this
+answers "where did the window go?" after the fact.
+
 ## [4.2.0] - 2026-09-09
 
 ### Fixed — `models.workers` reached nothing on cloud surfaces (#379)

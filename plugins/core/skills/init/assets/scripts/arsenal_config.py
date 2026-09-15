@@ -109,6 +109,24 @@ DEFAULTS: dict[str, Any] = {
     # whatever the repo already had (init.py:_resolve_sections).
     "skills.workflow": True,
     "skills.python": False,
+    # The auto-compact threshold, in tokens, written into the host's
+    # `.claude/settings.json` as `autoCompactWindow` by `/init`. 0 means "no
+    # opinion" — leave whatever the harness defaults to, and never touch a value
+    # already in settings.json.
+    #
+    # This is the largest single lever on what a fleet costs, and it is the one
+    # that reads backwards. Cost is `turns x context`, not output: a day of nine
+    # sessions read 438M tokens to write 1.3M. A host that raises its window to
+    # "avoid filling up" raises the per-turn floor instead of lowering it —
+    # replaying those same turns at lower caps gives 500k -> 453M, 300k -> 387M,
+    # 200k -> 287M, 120k -> 186M. Compaction is the cheap event; carrying the
+    # context that postpones it is the expensive one.
+    #
+    # Off by default because the right value is a judgement about this repo's
+    # work, not one upstream can make: too low and sessions compact mid-task and
+    # re-read what they dropped, which costs turns instead of context. Set it,
+    # measure with scripts/usage_report.py, move it.
+    "context-window": 0,
     # Which model runs the session that dispatches work. Advisory, and the one
     # key here nothing can enforce from inside a session: a session cannot
     # change the model it is already running as, so this is read and reported
@@ -184,6 +202,10 @@ def _config_path(repo_root: Path, home: str) -> Path:
 MODEL_VALUE_REGEX = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]*$")
 
 MODEL_KEYS = ("models.orchestrator", "models.workers", "models.reviewers")
+
+# Claude Code's own accepted bounds for `autoCompactWindow`; it additionally caps
+# the value at the running model's context window, which is not knowable here.
+CONTEXT_WINDOW_RANGE = (100_000, 1_000_000)
 
 
 def _flatten(raw: dict[str, Any]) -> dict[str, Any]:
@@ -263,6 +285,18 @@ def load(repo_root: Path | None = None) -> tuple[dict[str, Any], dict[str, str]]
     if type(values["listing-budget"]) is not int or values["listing-budget"] <= 0:
         raise ConfigError(
             f"listing-budget must be a positive integer, got {values['listing-budget']!r}"
+        )
+    # Same `type(...) is int` guard and the same reason as listing-budget above.
+    # The bounds are Claude Code's own for `autoCompactWindow`; a value outside
+    # them is rejected here rather than written into settings.json, because a
+    # settings key the harness discards is precisely the failure this key exists
+    # to end — it would sit in two files looking configured and govern nothing.
+    window = values["context-window"]
+    low, high = CONTEXT_WINDOW_RANGE
+    if type(window) is not int or (window != 0 and not low <= window <= high):
+        raise ConfigError(
+            f"context-window must be 0 (no opinion) or an integer between {low} "
+            f"and {high}, got {window!r} (from {sources['context-window']})"
         )
     for key in MODEL_KEYS:
         value = values[key]
