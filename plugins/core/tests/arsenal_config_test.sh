@@ -128,5 +128,42 @@ TOML
 [[ "$(get listing-budget)" == "12000" ]] || fail "a positive integer budget must still be read"
 echo "PASS: listing-budget rejects a boolean and still accepts an integer"
 
+# --- context-window: off by default, bounded when set ---
+# The key exists to be written into .claude/settings.json as autoCompactWindow,
+# which Claude Code accepts only between 100k and 1M. A value outside that range
+# is discarded silently by the harness, so it must be refused here instead —
+# otherwise it sits in two files looking configured and governs nothing, which is
+# the exact failure this key was added to end.
+rm -f arsenal/config.toml
+[[ "$(get context-window)" == "0" ]] || fail "context-window must default to 0 (no opinion)"
+
+cat > arsenal/config.toml <<'TOML'
+context-window = 200000
+TOML
+[[ "$(get context-window)" == "200000" ]] || fail "an in-range context-window must be read"
+
+for bad in 50 99999 1000001 true '"200000"'; do
+    cat > arsenal/config.toml <<TOML
+context-window = ${bad}
+TOML
+    [[ "$(get_rc context-window)" == "2" ]] || fail "context-window = ${bad} must be refused"
+done
+out=$(python3 "${CFG}" --repo-root . --get context-window 2>&1 || true)
+grep -q "100000" <<<"${out}" || fail "the refusal must name the accepted range: ${out}"
+echo "PASS: context-window defaults off, accepts 100k-1M, refuses the rest"
+
+# The shipped template must keep `context-window` ABOVE the [models] header. A
+# bare key written after a table header is read as a member of that table, so a
+# template that drifted would ship `models.context-window` — a key nothing reads,
+# and a `context-window` that silently stays 0 in every repo that set it.
+python3 - "${INIT}" <<'PY' || fail "context-window must sit above [models] in the shipped template"
+import re, sys, tomllib
+src = open(sys.argv[1], encoding="utf-8").read()
+template = re.search(r'_CONFIG_TEMPLATE = """\\\n(.*?)\n"""', src, re.S).group(1)
+raw = tomllib.loads(template)
+sys.exit(0 if raw.get("context-window") == 0 and "context-window" not in raw.get("models", {}) else 1)
+PY
+echo "PASS: shipped config template keeps context-window at the top level"
+
 echo "PASS: arsenal_config_test — model settings and table handling"
 exit 0

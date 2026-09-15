@@ -118,6 +118,22 @@ session-end = "handoff"
 # that is not yours.
 listing-budget = 8000
 
+# Auto-compact threshold in tokens, written into .claude/settings.json as
+# `autoCompactWindow`. 0 = no opinion: leave the harness default alone, and
+# leave any autoCompactWindow already in settings.json untouched.
+#
+# The biggest lever there is on what a fleet costs, and it reads backwards.
+# A turn is charged for the context it carries, not the tokens it writes —
+# nine sessions in one day read 438M tokens to write 1.3M. Raising the window
+# to "avoid filling up" raises the floor every turn pays. The same turns
+# replayed at lower caps: 500k -> 453M, 300k -> 387M, 200k -> 287M, 120k -> 186M.
+#
+# Too low is a real cost too: sessions compact mid-task and re-read what they
+# dropped. Set a value, then check it against what actually happened with
+# `python3 claude-arsenal/scripts/usage_report.py --since <date>`.
+#   context-window = 200000
+context-window = 0
+
 # Which skill sections this repo installs. Written by `/init` from the profile
 # you picked ("what kind of project is this?"), as a [skills] table below.
 #
@@ -440,6 +456,59 @@ def _register_statusline(repo_path: Path) -> None:
     settings_path.parent.mkdir(parents=True, exist_ok=True)
     settings_path.write_text(json.dumps(settings, indent=2) + "\n", encoding="utf-8")
     print("  settings.json: registered statusLine (statusline_capture.sh)")
+
+
+def _read_context_window(config: Path) -> int:
+    """The `context-window` key from arsenal/config.toml, or 0 when unset.
+
+    Reads the file directly rather than shelling out to arsenal_config.py: on a
+    fresh install the vendored scripts are not in place yet, and an installer
+    that depends on its own output cannot run the first time.
+
+    Out-of-range and wrong-typed values return 0 rather than exiting. The
+    validator in arsenal_config.py is where a bad value is reported loudly — it
+    runs on every read, so the consumer hears about it — and stopping the whole
+    install over a settings key nobody has typed yet is the wrong trade.
+    """
+    if not config.is_file():
+        return 0
+    try:
+        raw = tomllib.loads(config.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
+        return 0
+    value = raw.get("context-window", 0)
+    if type(value) is not int or not 100_000 <= value <= 1_000_000:
+        return 0
+    return value
+
+
+def _register_context_window(repo_path: Path, window: int) -> None:
+    """Propagate `context-window` into .claude/settings.json as autoCompactWindow.
+
+    Unlike statusLine, an existing value IS overwritten — but only when the host
+    has set the key. The two cases are deliberately asymmetric. statusLine is
+    something a user picked for themselves and `/init` is a guest there; this
+    value is *derived*, in the same sense `make sync-version` propagates
+    `.bundle-version`: `arsenal/config.toml` is where the host states it once,
+    and a settings.json that disagrees is drift, not a second opinion.
+
+    With the key unset (0) nothing is touched at all — including any
+    autoCompactWindow already in the file. Opting out of the lever must not be a
+    way of silently deleting a setting the repo configured by hand.
+    """
+    if window <= 0:
+        return
+    settings_path = repo_path / ".claude" / "settings.json"
+    settings = _read_settings(settings_path)
+    if settings is None:
+        print("  settings.json: unparseable — skipping autoCompactWindow")
+        return
+    if settings.get("autoCompactWindow") == window:
+        return
+    settings["autoCompactWindow"] = window
+    settings_path.parent.mkdir(parents=True, exist_ok=True)
+    settings_path.write_text(json.dumps(settings, indent=2) + "\n", encoding="utf-8")
+    print(f"  settings.json: autoCompactWindow = {window:,} (from arsenal/config.toml)")
 
 
 # --- vendoring --------------------------------------------------------------
@@ -1531,6 +1600,10 @@ def init_base(
 
     # statusLine command feeding budget_check.sh (token-budget stop)
     _register_statusline(repo_path)
+
+    # The other half of the token story: statusLine reports the window, this
+    # bounds what each turn puts in it.
+    _register_context_window(repo_path, _read_context_window(_home(repo_path) / "config.toml"))
 
     # Vendor the skills and wire the gate — the only path that reaches a cloud
     # session — then retire a plugin declaration an older init may have written.

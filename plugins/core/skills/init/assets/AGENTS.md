@@ -1,6 +1,6 @@
 # Claude Arsenal
 
-<!-- claude-arsenal v4.2.0 — imported via @claude-arsenal/AGENTS.md -->
+<!-- claude-arsenal v4.3.0 — imported via @claude-arsenal/AGENTS.md -->
 
 This file is imported by the host repo's `CLAUDE.md` via the session-protocol block
 that `/init` injects, so it sits in context on **every turn of every session**. It
@@ -112,7 +112,8 @@ At the start of every session (fresh start, context compaction, or cold restart)
    the orchestrator passes as each dispatch's own `model` argument — never `env:`, which
    a cloud surface's fresh-shell Bash calls discard. If `models.orchestrator` is set and
    is not the model you are running as, say so once — nothing can switch it from inside
-   the session, so noticing is the whole of the check.
+   the session, so noticing is the whole of the check. `context-window` is applied for
+   you: `/init` writes `.claude/settings.json`, so never hand-edit `autoCompactWindow`.
 
 7. **Before ending a session with open work** — audit every task whose issue is claimed or
    whose PR is open (CI, reviews, mergeability), print the table for the user, then write
