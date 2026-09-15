@@ -65,6 +65,10 @@
           "description": "Use when the user wants to triage a Python project's surviving mutmut mutants after a run — classifies each survivor as REAL_GAP, EQUIVALENT, or UNTESTABLE and reports the test fixes worth making. Triggers — \"which mutants survived\", \"triage mutation testing results\". Do NOT use to run mutmut itself, for coverage reports (see coverage-gaps), or for non-Python mutation testing."
         },
         {
+          "name": "pin-check",
+          "description": "Use when the user wants to know whether a test really pins the behaviour it claims to — reverts that one line, runs only the scoped test, restores, and reports PINNED / NOT PINNED. Triggers — \"does this test actually catch that\", \"is this claim pinned\". Do NOT use for whole-suite mutation scoring (see mutmut-report) or line coverage (see coverage-gaps)."
+        },
+        {
           "name": "pypi-release",
           "description": "Use whenever a Python package is ready to publish to PyPI — the build, twine check, version bump, tag, and upload runbook, catching version drift and stale dist/ artifacts before upload. Triggers — \"publish to PyPI\", \"cut a release\". Do NOT use to scaffold project tooling (see python-bootstrap) or to upgrade dependencies (see dep-upgrade)."
         },

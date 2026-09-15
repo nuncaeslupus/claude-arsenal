@@ -112,8 +112,18 @@ rule for anything added later:
 `arsenal/config.toml` carries `merge-policy`, and this is the step that reads it:
 
 ```bash
-python3 claude-arsenal/scripts/arsenal_config.py --get merge-policy
+bash claude-arsenal/bin/merge_ready.sh <pr>     # 0 ready · 1 not · 3 policy is `never`
+bash claude-arsenal/bin/merge_ready.sh <pr> --body   # ...and the merge commit body
+python3 claude-arsenal/scripts/arsenal_config.py --get merge-policy   # the bare word
 ```
+
+`merge_ready.sh` fetches the PR, the check runs **for its head SHA**, and the reviews,
+and hands them to `scripts/pr_audit.py` for the verdict. Prefer it to writing the query
+again: every session that merged used to spell these three questions its own way, and the
+two rows below — *absent is not green*, *a summary line is not the finding list* — are
+precisely the two a hand-written `--jq` gets wrong. Where there is no scriptable GitHub
+channel it prints the exact calls to make and the command to pipe them into, rather than
+skipping.
 
 One bare word, one of five. It is a decision the host already made and wrote down, so
 both directions are failures: merging past what it allows, and stopping to ask a
@@ -170,6 +180,44 @@ past what it requires — it is a reason to wait, requeue, and keep working what
 already cleared the bar while the clock runs out on the rest.
 
 ---
+
+## A fleet that stopped — `scripts/pr_audit.py`
+
+The policy above answers "may I merge *this* PR?". It cannot notice the state a stalled
+fleet actually lands in: eight sessions each open a PR, the machine goes down mid-cycle,
+and three days later seven PRs sit open with CI green, claims still held and issues still
+assigned. Every ledger reads "in progress". Nothing is.
+
+```bash
+python3 claude-arsenal/scripts/pr_audit.py --prs open-prs.json --claims claims.json
+```
+
+One row per open PR — head SHA, age, CI, review, and the **one next action** — plus the
+claim refs with no open PR behind them. A claim ref cannot be deleted from a sandboxed
+session, which is the right trade (a crashed session blocks nothing, since the next
+attempt takes the next ref) with one cost: the ref outlives the work, and nothing else
+says "claimed, and no session is on it".
+
+`--json` for a machine, `--pr <n> --require-ready` for one PR's exit code. It performs no
+network I/O: hand it the payload GitHub already returned, the same split `query_status.py`
+uses, so the report still works on a surface where `gh` does not exist — which is exactly
+when a fleet is in trouble.
+
+## Reviewing the same head twice — `bin/claim_review.sh`
+
+A review is a unit of expensive work with no compare-and-swap, and it showed: two sessions
+dispatched a second reader at the same head within minutes, and the duplicate was only
+caught because one of them said so in a message.
+
+```bash
+bash claude-arsenal/bin/claim_review.sh <pr> <head-sha>   # 0 won · 1 lost · 5 manual
+```
+
+Same primitive as `claim_task.sh`, one more ref namespace (`arsenal/reviews/<pr>-<sha>`).
+**The head SHA is part of the key**, and that is the whole difference from a task claim: a
+task is claimed once, a review is about one tree. Keying on the PR number alone would
+block the re-read after the next push — the case a fleet hits most — while keying on the
+head makes a new push a new unit of work, claimable by whoever gets there first.
 
 ## Upkeep GitHub does — `.github/workflows/arsenal-queue.yml`
 

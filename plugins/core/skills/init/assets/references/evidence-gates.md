@@ -154,6 +154,18 @@ to close, reopened somewhere new.
 
 ---
 
+## Would the number move if the thing it measures broke?
+
+Everything above is about a gate existing and producing a number. None of it asks
+whether that number would change if the behaviour it measures regressed — and a gate
+that cannot move is a gate that passes forever.
+
+That question is one deliberate revert per claim, and it is a skill rather than a rule
+here: `pin-check` (in the `python` section, beside `mutmut-report`) changes the exact
+line a case claims to pin, runs only that case, restores, and reports `PINNED` /
+`NOT PINNED` / `NOT MUTATED`. Run it on the claim, not on the module — it is seconds,
+where a survivor score over a whole module is CPU-hours.
+
 ## The placeholder, and the first PR that replaces it
 
 Every task is filed with a gate command that fails on purpose:
