@@ -50,8 +50,13 @@ policy="$(section "${REF}" '## Merge policy')"
 # `AGENTS.md` is the file resident at the moment the question is asked. A pointer
 # to a reference is not enough on its own: the reference is only opened by someone
 # who already knows the key exists, which is exactly what nobody did.
-grep -q 'arsenal_config.py --get merge-policy' <<<"${completion}" \
-    || note "AGENTS.md § Completion never names the command that reads merge-policy"
+# Either spelling satisfies this: what the assertion is about is that the RESIDENT
+# file names a runnable command, not which one. `merge_ready.sh` is the stronger
+# answer — it reads the policy and then checks what that policy requires against
+# the head — but a session that only learns the key exists has still been given a
+# data path, which is the thing #192 was missing.
+grep -qE 'arsenal_config.py --get merge-policy|merge_ready\.sh' <<<"${completion}" \
+    || note "AGENTS.md § Completion never names a command that reads merge-policy"
 grep -q 'github-automation.md' <<<"${completion}" \
     || note "AGENTS.md § Completion does not route to github-automation.md"
 grep -q 'arsenal_config.py --get merge-policy' <<<"${policy}" \

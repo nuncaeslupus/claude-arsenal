@@ -194,6 +194,21 @@ CANONICAL_ARGS = {
     "--unresolved-only",
     "--write-claude-md",
     "--claude-md",
+    # pin-check flags — the "intentional, extend the canon" case the check offers.
+    # A pin check is stated as a sentence, not as an input and an output: replace
+    # THIS text in THIS file and run THAT case. `--input`/`--output` would name
+    # the file twice and the experiment not at all, and `--test` is the flag that
+    # makes the scoped run the default — nobody re-runs four thousand tests
+    # fifty times because the tool never offered to.
+    "--source",
+    "--replace",
+    "--with",
+    "--test",
+    "--expect-count",
+    "--verify-restore",
+    # ...and the directory pytest runs in, which is not `--root` (already the
+    # tree whose bytecode is purged) and not the file under mutation.
+    "--cwd",
     # session-end skill flags
     "--project",
     # init skill flags — what a bundle install is pointed at
@@ -261,6 +276,11 @@ FORBIDDEN_ARG_SYNONYMS = {
     "--input-folder": "--input-dir",
 }
 ALLOWED_SCRIPT_VERBS = {
+    # `pin` as in "does this case pin that claim" — the question pin_check.py
+    # asks. `validate` would be the nearest canonical verb and is wrong: nothing
+    # here is checked against a schema, and the answer is about a test, not
+    # about the file it names.
+    "pin",
     "capture",
     "fetch",
     "query",

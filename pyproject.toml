@@ -45,6 +45,10 @@ select = ["E", "W", "F", "I", "UP", "RUF", "B", "SIM", "PTH"]
 # are inherent to that markup, and its info/warning glyphs are intentional
 # stderr output, not ambiguous identifiers.
 "plugins/core/skills/init/assets/scripts/create_reader.py" = ["E501", "RUF001"]
+# `(2×)` is the verdict line this script was specified to print, and the
+# multiplication sign is the point of it: the number is an occurrence count, not
+# a variable named x.
+"plugins/core/skills/pin-check/scripts/pin_check.py" = ["RUF001"]
 
 [tool.mypy]
 python_version = "3.12"

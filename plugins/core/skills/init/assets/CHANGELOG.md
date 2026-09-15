@@ -18,6 +18,63 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [4.4.0] - 2026-09-15
+
+### Added — a stalled fleet now has somewhere to look (#382)
+
+Eight sessions each opened a PR, the machine went down mid-cycle, and three days later
+seven were still open: CI green, claims still held, issues still assigned, every ledger
+reading "in progress". Nothing was. Three new pieces, all vendored by `/init`:
+
+- **`bin/merge_ready.sh <pr>`** — the three merge conditions, asked once. It reads your
+  `merge-policy`, fetches the PR, its check runs **for the head SHA**, and its reviews,
+  and exits `0` ready, `1` not (the table says what is missing), `3` when the policy is
+  `never`. `--body` prints the merge commit body. Use it instead of writing the query
+  again: the two mistakes a hand-written `gh ... --jq` makes are reading *no checks at
+  all* as green — which merges the queue during a runner outage — and reading a review's
+  summary state when the finding list is the open threads.
+- **`scripts/pr_audit.py`** — the fleet view. One row per open PR (head SHA, age, CI,
+  review, and the one next action), plus the claim refs with no open PR behind them. It
+  makes no network calls: hand it the payload GitHub already returned, so the report
+  still works on a surface without `gh`, which is exactly when a fleet is in trouble.
+- **`bin/claim_review.sh <pr> <head-sha>`** — a compare-and-swap for review work, the
+  same primitive as `claim_task.sh` over `arsenal/reviews/<pr>-<sha>`. Two sessions used
+  to be able to dispatch a second reader at the same head. **The head SHA is part of the
+  key**: a task is claimed once, a review is about one tree, so the next push is a new
+  unit of work rather than something the first reader's claim blocks forever.
+
+Conditions are evaluated against the head SHA throughout. A check run that reported on
+the previous push is evidence about the previous push, and a review of an earlier tree is
+not a review of this one.
+
+### Added — `pin-check`, the skill that asks whether a gate can move (#384)
+
+A new skill in the `python` section, beside `mutmut-report` and `coverage-gaps`. Three
+questions, three budgets, and consumers keep collapsing them: `coverage-gaps` asks
+whether a line ran, `mutmut-report` scores thousands of automatic mutants over CPU-hours,
+and `pin-check` asks *this claim says a case pins it — does it?* in seconds.
+
+```bash
+python3 .claude/skills/pin-check/scripts/pin_check.py \
+    --source config/schedule.yaml --replace "asynchronous" --with "async" \
+    --test tests/test_cue_audit.py
+# → NOT PINNED — target present (1×), mutated, scoped test still green.
+```
+
+Doing this by hand is what it replaces, because three of its four failure modes are
+invisible to a person and each produces a confident wrong answer: stale `.pyc` bytecode
+(validated on mtime at one-second resolution, so an equal-length revert inside the same
+second runs the mutated bytecode), a module already imported and therefore never re-read,
+a replacement that matched nothing and whose green test reads exactly like "not pinned",
+and a killed session leaving a mutated tree the next session reads as the code. Exit
+codes distinguish `PINNED` (0), `NOT PINNED` (1), `NOT MUTATED` (3) and `INCONCLUSIVE`
+(4) — the last for a scoped test that was already red, which goes red under any mutation
+and proves nothing.
+
+`AGENTS.md` now points at `merge_ready.sh` for the merge step;
+`references/github-automation.md`, `references/claiming-internals.md` and
+`references/evidence-gates.md` carry the detail.
+
 ## [4.3.0] - 2026-09-15
 
 ### Added — `context-window`, the lever that decides what a fleet costs (#383)

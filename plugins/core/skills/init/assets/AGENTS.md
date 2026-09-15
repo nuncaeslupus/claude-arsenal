@@ -1,6 +1,6 @@
 # Claude Arsenal
 
-<!-- claude-arsenal v4.3.0 — imported via @claude-arsenal/AGENTS.md -->
+<!-- claude-arsenal v4.4.0 — imported via @claude-arsenal/AGENTS.md -->
 
 This file is imported by the host repo's `CLAUDE.md` via the session-protocol block
 that `/init` injects, so it sits in context on **every turn of every session**. It
@@ -204,8 +204,9 @@ nothing. Pass `ARSENAL_TASK_ISSUE=<n>` or create the handle with `handle_sync.py
 reach for `ARSENAL_ALLOW_UNLINKED_PR=1`, which is the old silent failure, opted into.
 
 **Merging is the one step with a configured answer.** Before merging, run
-`python3 claude-arsenal/scripts/arsenal_config.py --get merge-policy` and do not merge
-beyond what it allows — nor ask the user a question the host already answered there.
+`bash claude-arsenal/bin/merge_ready.sh <pr>`: it reads `merge-policy` and checks what
+that policy requires against the head SHA. Exit 0 merges — do not merge past it, nor ask
+the user a question the host already answered.
 → `claude-arsenal/references/github-automation.md`
 
 ---

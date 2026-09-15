@@ -25,6 +25,14 @@ tie-break, and no window in which two agents both believe they won. It needs no 
 no shared branch, and no push — which is why it works on a sandbox that only permits
 pushing the session's own working branch.
 
+**The second namespace: reviews.** `claim_review.sh <pr> <head-sha>` is the same
+compare-and-swap over `arsenal/reviews/<pr>-<sha>`, for the other expensive unit of work
+in this queue. One difference, and it is the point: a task claim is keyed on the task, a
+review claim on the **head SHA**. A review is evidence about one tree, so the next push
+is a new unit of work rather than something the first reader's claim should block — which
+is what a PR-number key would do, permanently, since a sandboxed session cannot delete a
+ref.
+
 **Marking the issue.** After winning, self-assign, add `arsenal:claimed`, and comment
 with the session id from `CLAUDE_CODE_REMOTE_SESSION_ID`, falling back to
 `CLAUDE_CODE_SESSION_ID`. Do not invent an id — the old code read `CLAUDE_SESSION_ID`,
