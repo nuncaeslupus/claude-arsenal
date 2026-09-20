@@ -125,4 +125,30 @@ Anything carrying **neither** signal is "fields absent" and fails open
 is still the trap to watch for — a document that describes exhaustion in a third
 vocabulary buys nothing and says nothing about it.
 
+### What the guard above still cannot see — other sessions
+
+Every check above is **per session**: this session's `rate_limits.json`, this
+session's round counter. Nine independent orchestrators each saw a compliant
+budget and shared one five-hour window between them, because nothing compared
+notes. There is no API a script can poll for "how many sessions are live", so
+`budget_check.sh` does the next-best thing: it lists `~/.claude/projects/<project
+dir>/<session id>.jsonl` transcripts (one file per top-level session, written
+continuously while that session runs) modified in the last
+`ARSENAL_CONCURRENCY_WINDOW_MIN` minutes (default 15; `0` disables) that belong
+to a session id other than its own, and — only when it finds at least one —
+prints how many on stderr:
+
+```
+budget_check: 3 other session(s) touched a transcript in the last 15m — this account's quota window is shared across all of them
+```
+
+This is a **report, not a gate** — it never changes the exit code, because
+recent activity is not the same fact as "still running" and turning it into a
+stop would be inventing a threshold nobody asked for. It is also **CLI-only in
+practice**: on a cloud session each container has its own filesystem, so there
+are never any sibling transcripts to find, and the check stays silent — the
+same silence as a healthy single-session run. Treat its silence on a cloud
+surface as "not observable", the same reading `budget_check.sh`'s own header
+gives a missing `rate_limits.json` — not as "confirmed alone".
+
 ---
