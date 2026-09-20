@@ -331,7 +331,9 @@ markers it sets for its own sessions live here:
 
 `handoff=no` because the ledger here is already the merged work — the PRs, the
 `skill-workshop` improvements log, and the vendored docs under
-`plugins/core/skills/init/assets/`. `status/specification.md` and
-`status/plan.md` are archived records of a design that never shipped, not a live
-plan a handoff would keep current, so a `status/handoff.md` would be a fourth
-place to keep in sync and the first to go stale.
+`plugins/core/skills/init/assets/`. `status/specification.md`,
+`status/plan.md`, and `status/orchestrator-scaling-plan.md` are archived
+records of the `.loop/`-based coordination-branch design superseded in
+v0.25.0 (each file says so in its own banner) — not a live plan a handoff
+would keep current, so a `status/handoff.md` would be a fourth place to keep
+in sync and the first to go stale.

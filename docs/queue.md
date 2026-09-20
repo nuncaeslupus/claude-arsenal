@@ -5,6 +5,10 @@
 > machinery are gone. Existing repos migrate with `arsenal_migrate.py` (below).
 > It replaces the old `orchestrator-guide` doc (deleted in v0.25.0), which described the old design
 > and has been removed.
+>
+> This page covers one task, one claim. For several workers claimed and running
+> at once, a quota guard, and unattended ticks, see
+> [`docs/fleet.md`](fleet.md).
 
 Two ideas, and everything else follows from them.
 
@@ -346,7 +350,7 @@ identical. A label is the one signal every surface can read.
 ### Finished tasks
 
 `arsenal/tasks/_history/<id>.md` holds tasks that are already done — same front
-matter plus `status:` and `pr:`. They are never selected as work. They exist so
+matter plus `status: merged`. They are never selected as work. They exist so
 a dep pointing at completed work resolves instead of reading as unknown (an
 unknown dep blocks by design), and so a finished task's acceptance gate stays on
 disk for any check that re-asserts it.
