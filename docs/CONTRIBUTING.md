@@ -163,10 +163,17 @@ plugins/
       tests/skills_smoke.sh
   core/
     .claude-plugin/plugin.json
-    skills/{specify,design,execution,review,ship,github,
-            session-end,mutmut-report}/
+    skills/
+      specify/ design/ execution/ review/ ship/          # workflow
+      init/ queue-add/ queue-next/ queue-status/          # queue
+      gate-check/ pin-check/                              # gates
+      github/ session-end/                                # git + session
+      python-bootstrap/ dep-upgrade/ pypi-release/
+        coverage-gaps/ mutmut-report/                     # python toolchain
+      har/                                                 # applied example
 Makefile  pyproject.toml  .pre-commit-config.yaml
-.github/workflows/ci.yml            # `uv sync && make smoke`
+.github/workflows/                  # ci.yml (`uv sync && make smoke`),
+                                     # tag-release.yml, benchmark.yml
 ```
 
 CLAUDE.md at the repo root is *internal-only* — it describes how

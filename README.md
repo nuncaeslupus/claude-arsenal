@@ -28,7 +28,7 @@ with.
 | The agent writes code before anyone agreed what the problem was | **Spec-driven**: `specify` → `design` → `execution` → `review` → `ship`, each with its own output document |
 | "Done" means the agent said so | **Gates with numbers**: a task's acceptance gate is a fenced block a script runs, against a committed measurement |
 | Tests get written after the code, to fit it | **RED → GREEN → RECORD**: the check that proves the gate fails must fail first, for the expected reason |
-| Skills that sound useful but never load | **A rubric and a validator**: 132 checkable rows, a mechanical pass, and a hook that blocks unguarded edits |
+| Skills that sound useful but never load | **A rubric and a validator**: 146 checkable rows, a mechanical pass, and a hook that blocks unguarded edits |
 
 ---
 
@@ -45,7 +45,7 @@ archive](docs/research/claude-skill-system_v1.17.md) — Anthropic's official sk
 documentation, the `anthropics/skills` shipping repository, and academic sources
 — into two rubrics it walks on every edit:
 
-- **107 structural rows** ([`skill-rules.md`](plugins/skill-workshop/skills/skill-workshop/references/skill-rules.md)) — frontmatter, naming, workspace topology, script CLI conventions, reference chunking.
+- **121 structural rows** ([`skill-rules.md`](plugins/skill-workshop/skills/skill-workshop/references/skill-rules.md)) — frontmatter, naming, workspace topology, script CLI conventions, reference chunking.
 - **25 content-quality rows** ([`content-quality-rules.md`](plugins/skill-workshop/skills/skill-workshop/references/content-quality-rules.md)) — prose shape, trigger quality, example currency, and procedural shape.
 
 That last one is grounded in measurement, not taste. Across ~8,100 agent trial
@@ -148,8 +148,14 @@ Each task ends in its own PR, opened only if its gate passed and the host's own
 gate passed. Abandoned claims are released by a shipped GitHub Actions workflow,
 so a session that dies mid-task doesn't wedge the board.
 
+**One orchestrator can run several of these at once.** Up to
+`ARSENAL_MAX_WORKERS` workers, each in its own git worktree, each claiming,
+gating, and opening its own PR — behind a quota guard that stops the round
+*before* it burns through a rate-limit window, not after.
+
 Full model, including the migration path for an existing repo:
-[`docs/queue.md`](docs/queue.md).
+[`docs/queue.md`](docs/queue.md). Parallel dispatch, the quota guard, and
+unattended ticks: [`docs/fleet.md`](docs/fleet.md).
 
 ---
 
@@ -199,10 +205,11 @@ Without Claude Code on the machine, the same script runs from a clone — see
 | | |
 |---|---|
 | **Workflow** | `specify` · `design` · `execution` · `review` · `ship` |
-| **Queue** | `init` · `queue-add` · `queue-status` · `queue-next` · `gate-check` |
+| **Queue** | `init` · `queue-add` · `queue-status` · `queue-next` · `gate-check` · `pin-check` |
 | **Git / GitHub** | `github` (Conventional Commits, branch naming, the PR review loop) |
 | **Session** | `session-end` (handoff, retrospective, PR audit) |
 | **Python toolchain** | `python-bootstrap` · `pypi-release` · `dep-upgrade` · `coverage-gaps` · `mutmut-report` |
+| **Applied example** | `har` — a HAR/network-capture analysis toolkit built with this workflow, gate and all |
 | **Meta** | `skill-workshop` |
 
 ---
@@ -233,6 +240,23 @@ a line or two, not prose the model is asked to re-derive on every run.
 
 ---
 
+## Known limits
+
+Honest, not exhaustive — full detail is in the docs linked below.
+
+- **GitHub only.** Claims, task handles, and hygiene all run on GitHub's own
+  APIs (issues, git refs, Actions) — no GitLab, Bitbucket, or plain git remote.
+- **Parallel dispatch is CLI-first.** Worktree isolation and unrestricted
+  pushes are confirmed there; cloud surfaces (web, desktop, mobile, Claude
+  Tag, routines) lose pieces of both — see [`docs/fleet.md`](docs/fleet.md).
+- **The queue's cleanup needs GitHub Actions turned on** (off by default on a
+  fork). Without it, claiming and gating still work session to session, but
+  abandoned claims stop being released and new task files stop getting issue
+  handles.
+- **bash/POSIX tooling.** No native Windows support — WSL or Git Bash.
+
+---
+
 ## For contributors
 
 ```bash
@@ -241,7 +265,7 @@ cd claude-arsenal
 uv sync
 make help            # every target
 make smoke           # validate all plugins
-make test            # 31 behaviour tests
+make test            # 58 behaviour tests
 make dev             # run Claude with both plugins loaded from the working tree
 ```
 
@@ -253,6 +277,7 @@ consumers). Full walkthrough: [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md).
 **Docs:** [install](docs/INSTALL.md) ·
 [update & uninstall](docs/UPDATE.md) ·
 [the task queue](docs/queue.md) ·
+[the fleet](docs/fleet.md) ·
 [contributing](docs/CONTRIBUTING.md) ·
 [the research archive](docs/research/claude-skill-system_v1.17.md)
 
