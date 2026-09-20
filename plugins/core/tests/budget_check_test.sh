@@ -143,5 +143,70 @@ if [[ ! -f "${HOME_DIR}/session/budget_iterations.json" ]]; then
 fi
 echo "PASS: the round counter follows ARSENAL_HOME"
 
+# --- Sibling-session report — informational, never touches the exit code -----
+PROJ="${tmpdir}/projects/proj1"
+mkdir -p "${PROJ}"
+rm -f "${FILE}" "${ITER}"
+
+concurrency_stderr() {
+    local window="$1"
+    set +e
+    env -u CLAUDE_CODE_SESSION_ID -u CLAUDE_SESSION_ID \
+        ARSENAL_RATE_LIMITS_FILE="${FILE}" ARSENAL_MAX_ITERATIONS=0 \
+        ARSENAL_ITER_STATE_FILE="${ITER}" CLAUDE_CODE_REMOTE_SESSION_ID="sess-self" \
+        ARSENAL_PROJECTS_DIR="${tmpdir}/projects" ARSENAL_CONCURRENCY_WINDOW_MIN="${window}" \
+        bash "${BUDGET}" 2>&1 >/dev/null
+    set -e
+}
+
+# No sibling transcripts at all → nothing printed.
+out=$(concurrency_stderr 15)
+if [[ "${out}" == *"other session"* ]]; then
+    echo "FAIL: no transcripts should report no other sessions, got: ${out}" >&2; exit 1
+fi
+echo "PASS: no sibling transcripts stays quiet"
+
+# A fresh transcript under a different session id → counted.
+: > "${PROJ}/sess-other.jsonl"
+out=$(concurrency_stderr 15)
+if [[ "${out}" != *"1 other session"* ]]; then
+    echo "FAIL: one fresh sibling transcript should be reported, got: ${out}" >&2; exit 1
+fi
+echo "PASS: a fresh sibling transcript is reported"
+
+# Our own session id's transcript is excluded even though it is fresh.
+: > "${PROJ}/sess-self.jsonl"
+out=$(concurrency_stderr 15)
+if [[ "${out}" != *"1 other session"* ]]; then
+    echo "FAIL: this session's own transcript must not count itself, got: ${out}" >&2; exit 1
+fi
+echo "PASS: this session's own transcript is excluded"
+
+# Outside the window → not counted.
+touch -d "20 minutes ago" "${PROJ}/sess-other.jsonl"
+out=$(concurrency_stderr 15)
+if [[ "${out}" == *"other session"* ]]; then
+    echo "FAIL: a transcript outside the window should not be reported, got: ${out}" >&2; exit 1
+fi
+echo "PASS: a stale sibling transcript ages out of the window"
+
+# Window disabled (0) → quiet even with a fresh sibling.
+touch "${PROJ}/sess-other.jsonl"
+out=$(concurrency_stderr 0)
+if [[ "${out}" == *"other session"* ]]; then
+    echo "FAIL: ARSENAL_CONCURRENCY_WINDOW_MIN=0 should disable the report, got: ${out}" >&2; exit 1
+fi
+echo "PASS: ARSENAL_CONCURRENCY_WINDOW_MIN=0 disables the report"
+
+# A subagent sidechain file, nested one level deeper, is not a sibling session.
+mkdir -p "${PROJ}/sess-other/subagents"
+: > "${PROJ}/sess-other/subagents/agent-1.jsonl"
+rm -f "${PROJ}/sess-other.jsonl"
+out=$(concurrency_stderr 15)
+if [[ "${out}" == *"other session"* ]]; then
+    echo "FAIL: a nested subagent transcript must not count as a sibling session, got: ${out}" >&2; exit 1
+fi
+echo "PASS: a subagent sidechain file is not mistaken for a sibling session"
+
 echo "PASS: budget_check_test — all gates passed"
 exit 0

@@ -18,6 +18,37 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [4.5.0] - 2026-09-20
+
+### Added — `budget_check.sh` reports sibling sessions sharing the window (#383)
+
+`models.workers` and the per-session dispatch cap fixed the two ways the wrong
+model or an unbounded loop burned quota; neither touches a third: nine
+concurrent orchestrators each saw a *compliant per-session* budget and shared
+one five-hour window between them, because nothing compared notes across
+sessions. There is no API for "how many sessions are live", so this reads the
+next-best signal already on disk — `~/.claude/projects/<project>/<session
+id>.jsonl`, one transcript file per top-level session — and reports, on every
+call, how many were modified in the last `ARSENAL_CONCURRENCY_WINDOW_MIN`
+minutes (default 15; `0` disables) under a session id other than its own.
+
+Report, not gate: the exit code is untouched, because recent activity is not
+proof a session is still running and turning it into a stop would invent a
+threshold nobody asked for. CLI-only in practice — a cloud session's container
+has no sibling transcripts to find, so it stays silent there, same as a
+healthy single-session run.
+
+### Added — parallel test execution documented as host-gate's default shape (#387)
+
+`host-gate` stays entirely host-defined, but a slow serial suite is now paid
+for on every worker (`ARSENAL_MAX_WORKERS`, default 2) and every verification
+round, not once. `references/evidence-gates.md` now documents the shape a
+`test` target should default to: `-n auto` in the Makefile recipe (never in
+`addopts`, which also fires on the single-file gate calls most tasks use) and
+`--dist loadfile` the other way around (safe in `addopts`, inert without
+`-n`). Measured 3x-5x on one host repo; expect real cross-worker races to
+surface, and fix them rather than back out the parallelism.
+
 ## [4.4.0] - 2026-09-15
 
 ### Added — a stalled fleet now has somewhere to look (#382)

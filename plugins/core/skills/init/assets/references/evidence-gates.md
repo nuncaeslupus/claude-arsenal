@@ -9,6 +9,7 @@ numeric threshold has no number behind it yet.
 - [Gate blocks run verbatim](#gate-blocks-run-verbatim)
 - [The gate is fixed for the life of the task](#the-gate-is-fixed-for-the-life-of-the-task)
 - [Evidence gates (numeric acceptance)](#evidence-gates-numeric-acceptance)
+- [Parallel test execution in host-gate](#parallel-test-execution-in-host-gate)
 - [Unmeasured — the third outcome](#unmeasured--the-third-outcome)
 - [The placeholder, and the first PR that replaces it](#the-placeholder-and-the-first-pr-that-replaces-it)
 
@@ -122,6 +123,46 @@ hand-merge one — the right content is neither side, it is what the code measur
 on the resulting tree. `bin/rebase_stack.sh` handles this: an evidence-only
 conflict is regenerated with the repo's `host-gate` and the rebase continues; a
 conflict anywhere else stops it.
+
+---
+
+## Parallel test execution in host-gate
+
+`host-gate` is entirely host-defined — this bundle never scaffolds or
+templates it — but the framework's own operating model makes a slow serial
+suite expensive in a way that compounds rather than stays fixed:
+`worker-loop.md` runs up to `ARSENAL_MAX_WORKERS` (default 2) concurrent
+workers, each capable of its own full `make host-gate`, and a repo's own
+verification tooling that re-runs the gate per review round pays the same
+serial cost again on every pass. Default a host-gate's full-suite `test`
+target to running in parallel (`pytest-xdist`'s `-n auto`, or the equivalent
+for the repo's runner) rather than leaving every host repo to notice
+independently that its suite has become the bottleneck.
+
+One structural rule decides where the flag goes, and getting it backwards is
+the failure mode worth naming up front:
+
+- **`-n auto` belongs in the Makefile's `test` recipe, not in `addopts`.**
+  `addopts` applies to *every* pytest invocation, including the single-file
+  gate calls most task files and CONTRIBUTING docs write
+  (`pytest tests/test_x.py`) — putting `-n auto` there spins up a dozen workers
+  to run one file. Only the full-suite recipe should add it.
+- **`--dist loadfile` goes the other way, in `addopts`.** Nothing reads a
+  Makefile recipe body, so a flag placed only there is unenforced for any
+  invocation that bypasses that recipe; `--dist` alone is inert without `-n`,
+  so it is safe to set unconditionally — a single-file run stays unchanged
+  with it set.
+
+Measured on one host repo, three independent re-runs of the same tree:
+3x-5x (329→88s, 412→86s, 372→109s — reported as a band, not one derived
+percentage, since three points do not support one).
+
+**Expect parallelism to expose real cross-worker races**, not just move a
+config flag — that is a cost of turning this on, not a reason not to. One host
+repo's fix (`nuncaeslupus/integral-job-search@9cf4965e`, PR #490) found two
+tests that independently touched the live working tree's untracked-file
+listing interleaving across workers once they ran concurrently. A repo
+enabling this should expect to find and fix genuine shared-state races.
 
 ---
 
