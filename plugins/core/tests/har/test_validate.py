@@ -90,11 +90,15 @@ def test_a_null_response_is_a_finding_not_a_traceback(validate_mod, tmp_path):
                     "version": "1.2",
                     "creator": {"name": "proxy", "version": "1"},
                     "entries": [
-                        {"request": {"method": "GET", "url": "https://x.invalid/"},
-                         "response": None},
+                        {
+                            "request": {"method": "GET", "url": "https://x.invalid/"},
+                            "response": None,
+                        },
                         "not even an object",
-                        {"request": {"method": "GET", "url": "https://x.invalid/b"},
-                         "response": {"status": 200, "content": {"text": "hi"}}},
+                        {
+                            "request": {"method": "GET", "url": "https://x.invalid/b"},
+                            "response": {"status": 200, "content": {"text": "hi"}},
+                        },
                     ],
                 }
             }

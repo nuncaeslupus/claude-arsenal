@@ -80,9 +80,7 @@ def _repo_root(start: Path) -> Path:
     return start.resolve()
 
 
-def _scan_files(
-    paths: list[Path], groups: dict[frozenset[str], list[Path]]
-) -> None:
+def _scan_files(paths: list[Path], groups: dict[frozenset[str], list[Path]]) -> None:
     """Scan a list of files for the duplication header and populate groups."""
     seen: set[Path] = {f.resolve() for files in groups.values() for f in files}
     for script in paths:

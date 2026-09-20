@@ -18,6 +18,18 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [4.6.1] - 2026-09-20
+
+### Fixed — `make lint` now actually checks formatting
+
+`ruff format --check` was in the pre-commit hook's own description as
+"matches what CI's `make lint` runs" — but `make lint` never called it,
+only `ruff check` and `mypy`. Formatting drift was invisible to CI and to
+anyone who hadn't opted into pre-commit locally; ~37 files had quietly
+drifted from `ruff format`'s canonical layout as a result. `make lint`
+now runs `ruff format --check` first, and every vendored script is
+reformatted to match. No behavior change — this is layout only.
+
 ## [4.6.0] - 2026-09-20
 
 ### Added — a third plugin, `repo-audit`: analyze and improve any repository (#394)

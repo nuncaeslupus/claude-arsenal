@@ -155,11 +155,12 @@ queue-doctor:  ## dogfood: audit this repo's own task files (arsenal/tasks) the 
 sync-dupes:  ## sync_duplicates.py --check across plugins/*/scripts/_shared/
 	uv run python $(SYNC_DUPES) --check
 
-lint:  ## ruff + mypy on plugins/*/scripts
+lint:  ## ruff format --check + ruff check + mypy on plugins/*/scripts
 ifeq ($(PLUGIN_DIRS),)
 	@echo "make lint: no plugins yet — skipping ruff/mypy on plugins/*/scripts." >&2
 	@exit 0
 else
+	uv run ruff format --check plugins scripts
 	uv run ruff check plugins scripts
 	uv run mypy plugins scripts
 endif

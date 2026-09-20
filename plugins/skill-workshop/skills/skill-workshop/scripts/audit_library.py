@@ -65,9 +65,7 @@ LISTING_BUDGET_CHARS = DEFAULT_LISTING_BUDGET_CHARS
 LISTING_BUDGET_SOURCE = "default"
 
 
-def resolve_listing_budget(
-    cli_value: int | None, repo_root: Path | None = None
-) -> tuple[int, str]:
+def resolve_listing_budget(cli_value: int | None, repo_root: Path | None = None) -> tuple[int, str]:
     """Return (budget, source). Precedence: flag, env, arsenal config, default."""
     if cli_value is not None:
         return cli_value, "--listing-budget"

@@ -39,7 +39,7 @@ _AGENTS_HEADER = re.compile(rf"(?P<pre><!-- claude-arsenal v)(?P<ver>{SEMVER})(?
 # prerequisite tool version) are never silently rewritten to the bundle version.
 _TAG_PIN = re.compile(
     rf'(?P<pre>--branch v|ARSENAL_REF\s*\?=\s*v|skills @ v|"ref"\s*:\s*"v)'
-    rf'(?P<ver>{SEMVER})(?P<post>)'
+    rf"(?P<ver>{SEMVER})(?P<post>)"
 )
 
 

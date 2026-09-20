@@ -28,6 +28,7 @@ its own (`timeout 30 python3 -c …`) hides the interpreter behind it; and a
 script file — or a module run with `-m` — is trusted to be what it says it is,
 since its contents are not read. This raises the cost of an accidental bypass; it is not a sandbox.
 """
+
 from __future__ import annotations
 
 import json
@@ -42,9 +43,7 @@ import sys
 # so the prefix is a real directory path and may contain anything a filesystem
 # allows — spaces included. Ending it at `/` keeps the match on a path
 # boundary, so `notplugins/core/skills/x` is not mistaken for a skill.
-SKILL_PATH = re.compile(
-    r"^(?:.*/)?(?:\.claude/skills|plugins/[^/]+/skills)/[^/]+(?:/.*)?$"
-)
+SKILL_PATH = re.compile(r"^(?:.*/)?(?:\.claude/skills|plugins/[^/]+/skills)/[^/]+(?:/.*)?$")
 
 # The same shape, found anywhere inside a larger string (an interpreter script).
 # Inside an interpreter argument the prefix is unknowable, so only the marker
@@ -64,10 +63,19 @@ SEPARATORS = {";", "&&", "||", "|", "&", "\n"}
 #   "last" — only the final path argument (cp: sources are reads)
 ALL, LAST = "all", "last"
 UTILITIES = {
-    "tee": ALL, "truncate": ALL, "touch": ALL, "chmod": ALL, "chown": ALL,
-    "patch": ALL, "ln": ALL, "install": ALL, "shred": ALL,
+    "tee": ALL,
+    "truncate": ALL,
+    "touch": ALL,
+    "chmod": ALL,
+    "chown": ALL,
+    "patch": ALL,
+    "ln": ALL,
+    "install": ALL,
+    "shred": ALL,
     # mv and rm remove their sources, which mutates the skill just as much.
-    "mv": ALL, "rm": ALL, "rmdir": ALL,
+    "mv": ALL,
+    "rm": ALL,
+    "rmdir": ALL,
     "cp": LAST,
 }
 
@@ -108,9 +116,7 @@ WRITERS = re.compile(
 # mention of it sits inside a construct that can only read. The ways to write a
 # file are unbounded; the ways to read one that are worth allowing are not, and
 # under-listing a read only ever blocks more, never less.
-INTERPRETERS = re.compile(
-    r"^(?:python[\d.]*|node|nodejs|deno|bun|perl|ruby|php|sh|bash|zsh|dash)$"
-)
+INTERPRETERS = re.compile(r"^(?:python[\d.]*|node|nodejs|deno|bun|perl|ruby|php|sh|bash|zsh|dash)$")
 
 # Flags that mean "the program is right here, or on stdin".
 #
@@ -127,9 +133,7 @@ INLINE_SOURCE_FLAGS = frozenset({"-c", "-e", "--eval", "--exec", "-"})
 # A quoted path with a skill folder in it, as it appears inside interpreter
 # source. Quoted, because an unquoted or interpolated path is one this file
 # cannot resolve — and an unresolvable path must not qualify as a read.
-_QUOTED_SKILL_PATH = (
-    r"""['"][^'"]*(?:\.claude/skills|plugins/[^/'"]+/skills)/[^'"]*['"]"""
-)
+_QUOTED_SKILL_PATH = r"""['"][^'"]*(?:\.claude/skills|plugins/[^/'"]+/skills)/[^'"]*['"]"""
 
 # The closed set of read-only uses. Each is removed from the source before it is
 # searched for skill paths; whatever path is still standing afterwards is a
@@ -165,10 +169,15 @@ INTERPRETER_HEREDOC = re.compile(
 # Prefixes that stand in front of the real command. The `run` pair matters here:
 # this repo's own scripts are launched as `uv run python3 …`, which read as the
 # utility `uv` and went to the fallback branch instead of being seen as python.
-WRAPPERS = frozenset({"sudo", "command", "env", "time", "nice", "stdbuf",
-                      "npx", "uvx", "bunx"})
-WRAPPER_SUBCOMMANDS = {"uv": "run", "poetry": "run", "pipenv": "run",
-                       "pdm": "run", "hatch": "run", "rye": "run"}
+WRAPPERS = frozenset({"sudo", "command", "env", "time", "nice", "stdbuf", "npx", "uvx", "bunx"})
+WRAPPER_SUBCOMMANDS = {
+    "uv": "run",
+    "poetry": "run",
+    "pipenv": "run",
+    "pdm": "run",
+    "hatch": "run",
+    "rye": "run",
+}
 
 
 # The interpreters for which an uppercase `-E` carries the program. Perl only:
@@ -346,7 +355,7 @@ def _git_destinations(rest: list[str]) -> list[str]:
     # Everything after the subcommand that is not a flag or the `--` separator.
     # A tree-ish (`git checkout HEAD~1 -- path`) or a branch name lands here too
     # and is harmless: it is not shaped like a skill path, so it never matches.
-    return [a for a in rest[i + 1:] if a != "--" and not a.startswith("-")]
+    return [a for a in rest[i + 1 :] if a != "--" and not a.startswith("-")]
 
 
 def _redirect_targets(cmd: list[str]) -> tuple[list[str], list[str]]:
@@ -383,7 +392,7 @@ def _command_head(args: list[str]) -> tuple[str, list[str]]:
             break
     if pos >= len(args):
         return "", []
-    return args[pos].rsplit("/", 1)[-1], args[pos + 1:]
+    return args[pos].rsplit("/", 1)[-1], args[pos + 1 :]
 
 
 def _destinations(cmd: list[str]) -> list[str]:

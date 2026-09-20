@@ -160,9 +160,7 @@ def validate(path: Path) -> tuple[list[str], list[str], dict[str, Any]]:
             "Re-export with 'Save all as HAR (with content)'"
         )
     if report["resource_type_declared"] == 0 and report["entries"]:
-        warnings.append(
-            "no `_resourceType` on any entry — `--type` filters fall back to inference"
-        )
+        warnings.append("no `_resourceType` on any entry — `--type` filters fall back to inference")
     if report["undecodable_bodies"]:
         warnings.append(
             f"{report['undecodable_bodies']} body(ies) could not be decoded; "

@@ -31,8 +31,10 @@ def compare(scratch):
         with redirect_stdout(out), redirect_stderr(err):
             code = module.main(
                 [
-                    "--input", str(scratch / f"{left}.har"),
-                    "--against", str(scratch / f"{right}.har"),
+                    "--input",
+                    str(scratch / f"{left}.har"),
+                    "--against",
+                    str(scratch / f"{right}.har"),
                     *args,
                 ]
             )

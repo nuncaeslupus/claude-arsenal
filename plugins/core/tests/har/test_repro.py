@@ -88,9 +88,7 @@ def test_repro_quotes_every_argument_even_when_it_need_not(repro):
     code, out, _ = repro("basic", "--id", "2", "--format", "curl")
     assert code == 0
     body_lines = [
-        line.strip()
-        for line in out.splitlines()
-        if line.strip().startswith(("curl", "-H"))
+        line.strip() for line in out.splitlines() if line.strip().startswith(("curl", "-H"))
     ]
     for line in body_lines:
         argument = line.split(" ", 1)[1] if line.startswith("curl") else line[3:]

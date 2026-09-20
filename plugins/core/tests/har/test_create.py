@@ -262,8 +262,12 @@ def test_a_body_predicate_actually_narrows_the_fixture(derive, scratch, tmp_path
 
     target = tmp_path / "fixture.har"
     code, _, err = derive(
-        "basic", "--response-match", "Senior Rust Engineer 2", "--keep-bodies",
-        "--output", str(target),
+        "basic",
+        "--response-match",
+        "Senior Rust Engineer 2",
+        "--keep-bodies",
+        "--output",
+        str(target),
     )
     assert code == 0, err
 

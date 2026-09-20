@@ -88,7 +88,7 @@ def test_decode_body_bom_wins_over_everything(harlib, fixtures_dir):
 
 
 def test_absent_body_is_not_a_failed_decode(harlib, fixtures_dir):
-    """"No body was captured" and "no match" are different answers.
+    """ "No body was captured" and "no match" are different answers.
 
     Conflating them sends a session hunting for an endpoint it already found.
     """

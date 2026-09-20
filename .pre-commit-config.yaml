@@ -20,19 +20,19 @@ repos:
         require_serial: true
 
       - id: ruff-check
-        name: ruff check (plugins)
-        description: Lint Python under plugins/ — matches what CI's `make lint` runs
-        entry: uv run ruff check plugins
+        name: ruff check (plugins + scripts)
+        description: Lint Python under plugins/ and scripts/ — matches what CI's `make lint` runs
+        entry: uv run ruff check plugins scripts
         language: system
         pass_filenames: false
-        files: ^plugins/.*\.py$
+        files: ^(plugins|scripts)/.*\.py$
         require_serial: true
 
       - id: ruff-format
-        name: ruff format --check (plugins)
+        name: ruff format --check (plugins + scripts)
         description: Verify formatting — matches what CI's `make lint` runs
-        entry: uv run ruff format --check plugins
+        entry: uv run ruff format --check plugins scripts
         language: system
         pass_filenames: false
-        files: ^plugins/.*\.py$
+        files: ^(plugins|scripts)/.*\.py$
         require_serial: true

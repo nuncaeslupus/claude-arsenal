@@ -212,8 +212,7 @@ def main() -> None:
         measured = float(raw_measured)
     except OverflowError:
         _fail(
-            f"evidence value at {key!r} is out of float range — "
-            "a gate cannot be scored against it",
+            f"evidence value at {key!r} is out of float range — a gate cannot be scored against it",
             2,
         )
     # `json.loads` accepts the JavaScript spellings `NaN`, `Infinity` and

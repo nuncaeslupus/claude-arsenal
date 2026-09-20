@@ -67,9 +67,7 @@ TASK_MARKER_RE = re.compile(r"arsenal-task:\s*`?([A-Za-z0-9._-]+)`?")
 # Second way in: the task file's path, which every issue body names and which is
 # ordinary markdown. This is what rescues issues opened before the visible token
 # existed, on the surface where their comment is stripped.
-TASK_PATH_RE = re.compile(
-    r"(?:arsenal|claude-arsenal)/tasks/(?:_history/)?([A-Za-z0-9._-]+)\.md"
-)
+TASK_PATH_RE = re.compile(r"(?:arsenal|claude-arsenal)/tasks/(?:_history/)?([A-Za-z0-9._-]+)\.md")
 
 # Third way in, and the only exact one that survives a body-less fetch. Both
 # markers above live in the issue *body*, and the session-start fetch
@@ -230,12 +228,14 @@ def task_id_from_issue(
         )
     return resolved
 
+
 TERMINAL = {"done", "merged"}
 
 # Finished tasks keep their file here. They are not work — they are what makes
 # a dep on completed work resolve instead of reading as unknown, and what keeps
 # a finished task's gate on disk for a host check that re-asserts it.
 HISTORY_DIRNAME = "_history"
+
 
 # Where worktree_probe.sh and worker_postcheck.sh record whether git worktrees
 # actually work on this surface.
@@ -479,9 +479,7 @@ def load_tasks(tasks_dir: Path) -> tuple[list[dict[str, Any]], list[str]]:
     return tasks, warnings
 
 
-def effective_state(
-    tasks: list[dict[str, Any]], state: dict[str, str]
-) -> dict[str, str]:
+def effective_state(tasks: list[dict[str, Any]], state: dict[str, str]) -> dict[str, str]:
     """Merge the file-declared status of finished tasks over the issue-derived
     state. A task file that records `status: merged` is the record of work that
     is done; there may be no issue left to say so."""
