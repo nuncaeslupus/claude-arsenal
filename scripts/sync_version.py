@@ -2,7 +2,7 @@
 """Sync every version string in the repo from the canonical ``.bundle-version``.
 
 ``.bundle-version`` (read by ``tag-release.yml`` and ``check_update.sh``) is the
-single source of truth for the marketplace version. Both plugin manifests, the
+single source of truth for the marketplace version. Every plugin manifest, the
 vendored ``AGENTS.md`` header, and the consumer ``ARSENAL_REF`` pin examples in
 ``docs/INSTALL.md`` carry their own copy that used to drift (issue #80).
 
@@ -60,6 +60,11 @@ def build_targets(root: Path) -> tuple[Target, ...]:
             root / "plugins/skill-workshop/.claude-plugin/plugin.json",
             _JSON_VERSION,
             "skill-workshop/plugin.json",
+        ),
+        Target(
+            root / "plugins/repo-audit/.claude-plugin/plugin.json",
+            _JSON_VERSION,
+            "repo-audit/plugin.json",
         ),
         Target(
             root / "plugins/core/skills/init/assets/AGENTS.md",

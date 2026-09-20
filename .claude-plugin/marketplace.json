@@ -11,6 +11,11 @@
       "name": "core",
       "source": "./plugins/core",
       "description": "Generic engineering workflows plus task queue orchestration: specify, design, execution, review, ship, github, session-end, and the Python toolchain skills; plus init, queue-next, queue-add, and queue-status for git-backed DAG queue management."
+    },
+    {
+      "name": "repo-audit",
+      "source": "./plugins/repo-audit",
+      "description": "Analyzes a repository end to end — how it actually works, what's undocumented, what's inconsistent or fragile — and produces a findings-backed write-up plus verified documentation fixes. General-purpose repo analysis, not specific to claude-arsenal's own engineering workflow."
     }
   ]
 }

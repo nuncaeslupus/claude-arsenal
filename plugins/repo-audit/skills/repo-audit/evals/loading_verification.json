@@ -1,0 +1,13 @@
+{
+  "skill": "repo-audit",
+  "canary": "repo-audit-loaded-2026-09-20-fb78d23e-6a5b7d83932f7e55",
+  "negative_control": "repo-audit only analyzes repositories written in Python",
+  "load_prompts": [
+    "Can you audit this repository — what's undocumented, what's fragile, what's inconsistent between the docs and the code?",
+    "Help me understand this whole codebase well enough to explain it to someone who's never seen it, and fix any documentation gaps you find."
+  ],
+  "no_load_prompts": [
+    "Can you review this PR for bugs before I merge it?",
+    "Fix the failing test in auth.py"
+  ]
+}

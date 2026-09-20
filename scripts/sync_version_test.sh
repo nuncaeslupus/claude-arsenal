@@ -23,6 +23,7 @@ trap cleanup EXIT
 mkdir -p "${tmp}/plugins/core/skills/init/assets" \
          "${tmp}/plugins/core/.claude-plugin" \
          "${tmp}/plugins/skill-workshop/.claude-plugin" \
+         "${tmp}/plugins/repo-audit/.claude-plugin" \
          "${tmp}/docs"
 
 printf '0.15.0\n' > "${tmp}/plugins/core/skills/init/assets/.bundle-version"
@@ -41,6 +42,14 @@ cat > "${tmp}/plugins/skill-workshop/.claude-plugin/plugin.json" <<'JSON'
   "name": "skill-workshop",
   "version": "0.1.0",
   "author": { "name": "nuncaeslupus" }
+}
+JSON
+
+cat > "${tmp}/plugins/repo-audit/.claude-plugin/plugin.json" <<'JSON'
+{
+  "name": "repo-audit",
+  "version": "0.3.0",
+  "description": "x"
 }
 JSON
 
@@ -64,8 +73,8 @@ fail() { echo "FAIL: $1" >&2; exit 1; }
 # --- Gate 1: --check reports drift on every target and exits 1. ---
 out="$(python3 "${SYNC}" --repo-root "${tmp}" --check 2>&1)"; rc=$?
 [[ "${rc}" -eq 1 ]] || fail "drifted tree should --check exit 1, got ${rc}: ${out}"
-for label in "core/plugin.json" "skill-workshop/plugin.json" "AGENTS.md header" \
-             "INSTALL.md ARSENAL_REF pin"; do
+for label in "core/plugin.json" "skill-workshop/plugin.json" "repo-audit/plugin.json" \
+             "AGENTS.md header" "INSTALL.md ARSENAL_REF pin"; do
     printf '%s' "${out}" | grep -qF "${label}" || fail "--check did not name '${label}': ${out}"
 done
 echo "PASS: --check names every drifted target and exits 1"
@@ -76,6 +85,8 @@ grep -q '"version": "0.15.0"' "${tmp}/plugins/core/.claude-plugin/plugin.json" \
     || fail "core/plugin.json not synced to 0.15.0"
 grep -q '"version": "0.15.0"' "${tmp}/plugins/skill-workshop/.claude-plugin/plugin.json" \
     || fail "skill-workshop/plugin.json not synced to 0.15.0"
+grep -q '"version": "0.15.0"' "${tmp}/plugins/repo-audit/.claude-plugin/plugin.json" \
+    || fail "repo-audit/plugin.json not synced to 0.15.0"
 grep -q "<!-- claude-arsenal v0.15.0 " "${tmp}/plugins/core/skills/init/assets/AGENTS.md" \
     || fail "AGENTS.md header not synced to 0.15.0"
 # Both INSTALL.md pins must land on the canonical version (no stale token left behind).

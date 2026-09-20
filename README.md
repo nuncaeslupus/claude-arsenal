@@ -176,6 +176,18 @@ Help me create a new skill          # loads skill-workshop (announces a canary p
 Investigate why login is slow       # loads core:specify
 ```
 
+Separately — not part of the engineering-workflow pitch above, its own tool
+in the same toolbox:
+
+```text
+/plugin install repo-audit@claude-arsenal       # analyze & document any repo
+```
+
+Point it at any repository, not just this one, and it audits how the thing
+actually works, tries to falsify what it just found, and hands back a
+findings-backed write-up plus verified doc fixes:
+[`plugins/repo-audit/skills/repo-audit/SKILL.md`](plugins/repo-audit/skills/repo-audit/SKILL.md).
+
 ### Then vendor it — this is the part that matters
 
 A cloud session — web, `claude --cloud`, the desktop and mobile apps, Claude

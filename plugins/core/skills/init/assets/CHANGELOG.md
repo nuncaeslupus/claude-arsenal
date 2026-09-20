@@ -18,6 +18,24 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [4.6.0] - 2026-09-20
+
+### Added — a third plugin, `repo-audit`: analyze and improve any repository (#394)
+
+Separate from `core`'s engineering-workflow pitch on purpose: point the
+`repo-audit` skill at any repository and it runs a four-pass audit —
+orient, fan out parallel research across the repo's major subsystems, an
+adversarial pass that tries to falsify what the first pass found, then
+independent re-verification of every numeric claim before it repeats one —
+and produces a findings-backed write-up plus a ledger of fixes applied
+directly versus items flagged for a maintainer's call. Ships three scripts:
+`create_artifact.py` renders the write-up as a themed, responsive HTML
+artifact from structured JSON, so a run isn't re-deriving the same several
+hundred lines of CSS every time; `validate_findings.py` and
+`validate_markdown.py` sanity-check the ledger and any proposed doc changes
+before they go out. `/plugin install repo-audit@claude-arsenal` adds it
+independently of `core`.
+
 ## [4.5.0] - 2026-09-20
 
 ### Added — `budget_check.sh` reports sibling sessions sharing the window (#383)

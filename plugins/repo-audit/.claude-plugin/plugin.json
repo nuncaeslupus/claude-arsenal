@@ -1,0 +1,6 @@
+{
+  "name": "repo-audit",
+  "version": "4.6.0",
+  "description": "Analyzes a repository end to end — how it actually works, what's undocumented, what's inconsistent or fragile — and produces a findings-backed write-up plus verified documentation fixes. General-purpose repo analysis, not specific to claude-arsenal's own engineering workflow.",
+  "author": { "name": "nuncaeslupus" }
+}

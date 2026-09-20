@@ -117,6 +117,10 @@ CANONICAL_ARGS = {
     "--input",
     "--input-dir",
     "--url",
+    # Where to resolve a relative path against, when it differs from
+    # --input/--input-dir (e.g. checking one subdirectory while resolving
+    # links against the repo root that contains it).
+    "--repo-root",
     # Driving a browser or a subprocess
     "--browser",
     "--executable",
