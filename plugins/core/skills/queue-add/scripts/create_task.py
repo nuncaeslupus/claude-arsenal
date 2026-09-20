@@ -56,11 +56,11 @@ false
 """
 
 
-
 # The documented meaning of `priority`: task size, larger runs sooner. Kept here
 # rather than in prose so `--size` and the board's convention check agree on one
 # set of values.
 SIZE_PRIORITY = {"S": 10, "M": 5, "L": 1}
+
 
 def new_task_id() -> str:
     return f"t-{secrets.token_hex(4)}"

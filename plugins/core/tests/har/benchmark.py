@@ -135,10 +135,23 @@ def main() -> int:
     # Each phase gets a fresh interpreter.
     def run(phase: str) -> dict[str, float]:
         proc = subprocess.run(
-            [sys.executable, __file__, "--phase", phase, "--output-dir", str(out_dir),
-             "--target-mb", str(args.target_mb), "--entries", str(args.entries),
-             "--seed", str(args.seed)],
-            capture_output=True, text=True, check=True,
+            [
+                sys.executable,
+                __file__,
+                "--phase",
+                phase,
+                "--output-dir",
+                str(out_dir),
+                "--target-mb",
+                str(args.target_mb),
+                "--entries",
+                str(args.entries),
+                "--seed",
+                str(args.seed),
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
         )
         return json.loads(proc.stdout)
 

@@ -280,8 +280,13 @@ def encodings() -> dict[str, Any]:
         # 6. brotli, declared, with a payload that is not valid brotli: whether
         #    the module is installed or not, the only acceptable outcome is an
         #    honest failure naming `br` — never a plausible-looking string.
-        ("base64-brotli", b64(b"\x1b\x00\x00not-really-brotli"), "base64",
-         "application/json", "br"),
+        (
+            "base64-brotli",
+            b64(b"\x1b\x00\x00not-really-brotli"),
+            "base64",
+            "application/json",
+            "br",
+        ),
         # 7. latin-1 declared
         ("latin1-declared", b64(latin1), "base64", "application/json; charset=latin-1", None),
         # 8. latin-1 undeclared — undecodable, and must say so
@@ -402,9 +407,7 @@ def compare_pair() -> tuple[dict[str, Any], dict[str, Any]]:
         url = "https://api.example.com/api/detail?id=7"
         if extra_param:
             url += "&expand=salary"
-        entries.append(
-            _entry(url=url, text=json.dumps({"id": 7}), resp_headers=[("x-a", "1")])
-        )
+        entries.append(_entry(url=url, text=json.dumps({"id": 7}), resp_headers=[("x-a", "1")]))
         return _log(entries)
 
     return side(200, False), side(500, True)

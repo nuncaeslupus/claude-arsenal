@@ -97,7 +97,6 @@ def config_template(repo_root: Path) -> str | None:
     return None
 
 
-
 def _is_placeholder(path: Path) -> bool:
     """Whether a file holds nothing a session would want to read.
 
@@ -390,7 +389,7 @@ def migrate(
             )
             if _subs != 1:
                 raise MigrateError(
-                    "init.py's config template has no `merge-policy = \"...\"` line to set "
+                    'init.py\'s config template has no `merge-policy = "..."` line to set '
                     f"(matched {_subs} times) — refusing to write a config whose reported "
                     "merge policy is not the one in the file"
                 )
@@ -425,9 +424,7 @@ def migrate(
             continue
         if apply:
             history_dir.mkdir(parents=True, exist_ok=True)
-            target.write_text(
-                task_markdown(row, payload_for(row), terminal=True), encoding="utf-8"
-            )
+            target.write_text(task_markdown(row, payload_for(row), terminal=True), encoding="utf-8")
         kept += 1
     if finished:
         report.append(

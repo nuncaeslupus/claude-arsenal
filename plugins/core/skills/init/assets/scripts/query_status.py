@@ -52,7 +52,6 @@ def blocking(task: dict[str, Any], state: dict[str, str]) -> list[str]:
     return [d for d in task["deps"] if state.get(d) not in TERMINAL]
 
 
-
 def _git(args: list[str], cwd: Path, timeout: float = 10.0) -> str | None:
     """Run a git command, returning its stdout, or None if it did not succeed.
 
@@ -133,6 +132,7 @@ def staleness_warning(tasks_dir: Path, remote: str = "origin") -> str | None:
         f"board computed from a tree {behind} commit(s) behind {label} — fetch first; "
         "a task file that is merely stale is indistinguishable from an open task"
     )
+
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)

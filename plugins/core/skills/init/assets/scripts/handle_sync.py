@@ -110,9 +110,7 @@ def missing_handles(
     # a caller that creates them unattended puts a second issue on the board for
     # whichever one the near-match already covered (#239).
     candidates = [
-        t
-        for t in tasks
-        if t["id"] not in handled and str(t.get("status") or "") not in TERMINAL
+        t for t in tasks if t["id"] not in handled and str(t.get("status") or "") not in TERMINAL
     ]
     key_users: dict[str, int] = {}
     for task in candidates:
@@ -162,10 +160,7 @@ def missing_handles(
             # renamed. Both are set at creation so a handle opened here never
             # depends on its title.
             "labels": [label, f"{ID_LABEL_PREFIX}{task['id']}"],
-            "body": (
-                f"`arsenal-task: {task['id']}`\n\n"
-                f"Task defined in `{task['path']}`"
-            ),
+            "body": (f"`arsenal-task: {task['id']}`\n\nTask defined in `{task['path']}`"),
         }
         if ambiguous:
             # Reported, never created on its own: the two callers of this list

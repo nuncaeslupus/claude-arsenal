@@ -152,9 +152,16 @@ def test_index_only_modes_never_open_the_capture(analyze_cli, scratch, monkeypat
 
 def test_every_mode_stays_within_the_byte_budget(analyze_cli):
     for args in (
-        ("--endpoints",), ("--headers",), ("--cookies",), ("--errors",),
-        ("--redirects",), ("--slowest",), ("--largest",), ("--websockets",),
-        ("--stats", "host"), (),
+        ("--endpoints",),
+        ("--headers",),
+        ("--cookies",),
+        ("--errors",),
+        ("--redirects",),
+        ("--slowest",),
+        ("--largest",),
+        ("--websockets",),
+        ("--stats", "host"),
+        (),
     ):
         code, out, _ = analyze_cli("encodings", *args)
         assert code == 0

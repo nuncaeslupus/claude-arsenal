@@ -61,10 +61,24 @@ def _flags(script: str) -> set[str]:
 
 
 SELECTION_FLAGS = {
-    "--url", "--host", "--method", "--status", "--mime", "--type",
-    "--min-size", "--max-size", "--slower-than", "--has-header", "--param",
-    "--page", "--since", "--until",
-    "--from-cache", "--no-cache", "--unknown-cache", "--invert",
+    "--url",
+    "--host",
+    "--method",
+    "--status",
+    "--mime",
+    "--type",
+    "--min-size",
+    "--max-size",
+    "--slower-than",
+    "--has-header",
+    "--param",
+    "--page",
+    "--since",
+    "--until",
+    "--from-cache",
+    "--no-cache",
+    "--unknown-cache",
+    "--invert",
 }
 
 
@@ -101,9 +115,12 @@ def test_compare_refuses_body_filters_rather_than_running_slowly(scratch):
     with redirect_stderr(err):
         code = module.main(
             [
-                "--input", str(scratch / "compare_a.har"),
-                "--against", str(scratch / "compare_b.har"),
-                "--response-match", "anything",
+                "--input",
+                str(scratch / "compare_a.har"),
+                "--against",
+                str(scratch / "compare_b.har"),
+                "--response-match",
+                "anything",
             ]
         )
     assert code == 2

@@ -252,9 +252,7 @@ def main(argv: list[str] | None = None) -> int:
         if external:
             cost = sum(entries[s] for s in external)
             names = ", ".join(sorted(s.parent.name for s in external))
-            print(
-                f"\n  not vendored by /init, so resident for nobody: {names} ({cost} tokens)"
-            )
+            print(f"\n  not vendored by /init, so resident for nobody: {names} ({cost} tokens)")
     else:
         # No installer to read: every shipped skill counts, which is what this
         # reported before sections existed and what a bare tree deserves.
@@ -270,8 +268,7 @@ def main(argv: list[str] | None = None) -> int:
         where = f"  [{section}]" if section else ""
         print(f"    {skill.parent.name:<42} {tokens:>6}{where}")
 
-    bodies = sorted(((s, approx_tokens(t)) for s, t in bodies_text.items()),
-                    key=lambda e: -e[1])
+    bodies = sorted(((s, approx_tokens(t)) for s, t in bodies_text.items()), key=lambda e: -e[1])
     print("\nON INVOCATION — one SKILL.md body, paid when that skill triggers")
     for skill, tokens in bodies[:5]:
         print(f"  {skill.parent.name:<44} {tokens:>6}")

@@ -460,25 +460,27 @@ def plan_sync_handles(
         and not task_id_from_labels(issue)
     ]
 
-    return [
-        {"kind": "note", "message": f"handle_sync: {warning}"} for warning in warnings
-    ] + stamps + [
-        {
-            "kind": "create-issue",
-            "task": row["task"],
-            "title": row["title"],
-            "body": row["body"],
-            "labels": row["labels"],
-        }
-        # A row marked ambiguous names a collision the id resolution cannot
-        # settle: an unresolved issue that is the handle for at most one of
-        # several tasks. Creating it here would put a second issue on the board
-        # for whichever one it already covered, unattended and unreviewed. The
-        # warning above already carries the row, so nothing is hidden — the
-        # decision is just left to someone who can make it (#239).
-        for row in rows
-        if not row.get("ambiguous")
-    ]
+    return (
+        [{"kind": "note", "message": f"handle_sync: {warning}"} for warning in warnings]
+        + stamps
+        + [
+            {
+                "kind": "create-issue",
+                "task": row["task"],
+                "title": row["title"],
+                "body": row["body"],
+                "labels": row["labels"],
+            }
+            # A row marked ambiguous names a collision the id resolution cannot
+            # settle: an unresolved issue that is the handle for at most one of
+            # several tasks. Creating it here would put a second issue on the board
+            # for whichever one it already covered, unattended and unreviewed. The
+            # warning above already carries the row, so nothing is hidden — the
+            # decision is just left to someone who can make it (#239).
+            for row in rows
+            if not row.get("ambiguous")
+        ]
+    )
 
 
 def plan_sweep_claims(
@@ -591,7 +593,6 @@ class Api:
         # pr-closed read a merged task as having no handle at all. The flag is
         # what lets the first two refuse and the third report.
         self.truncated = False
-
 
     def request(self, method: str, path: str, body: Any = None) -> Any:
         url = path if path.startswith("http") else f"{API_ROOT}{path}"
@@ -819,9 +820,7 @@ def _archive(action: dict[str, Any], tasks_dir: Path) -> bool:
         if end != -1:
             front = text[4:end]
             front = (
-                "\n".join(
-                    line for line in front.splitlines() if not line.startswith("status:")
-                )
+                "\n".join(line for line in front.splitlines() if not line.startswith("status:"))
                 + "\nstatus: merged"
             )
             text = f"---\n{front}\n---\n" + text[end + 5 :]
@@ -863,7 +862,9 @@ def main(argv: list[str] | None = None) -> int:
         choices=["pr-closed", "sync-handles", "sweep-claims", "prune-claims", "keyword-guard"],
     )
     parser.add_argument(
-        "--commits", type=Path, default=None,
+        "--commits",
+        type=Path,
+        default=None,
         help="JSON array of commit messages, for keyword-guard instead of fetching",
     )
     parser.add_argument("--tasks-dir", type=Path, default=Path("arsenal/tasks"))

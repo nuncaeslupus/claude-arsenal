@@ -222,8 +222,9 @@ def _next_action(pr: dict[str, Any], audit: dict[str, Any], policy: str) -> str:
         if review == "changes-requested":
             return "address the requested changes, then re-request review"
         if review == "stale":
-            return (f"re-read the head: claim_review.sh {pr.get('number')} <head-sha>"
-                    f" ({review_detail})")
+            return (
+                f"re-read the head: claim_review.sh {pr.get('number')} <head-sha> ({review_detail})"
+            )
         if review == "absent":
             return f"dispatch a second reader: claim_review.sh {pr.get('number')} <head-sha>"
 
@@ -268,8 +269,9 @@ def audit_pr(pr: dict[str, Any], policy: str) -> dict[str, Any]:
     return result
 
 
-def stale_claims(claims: Iterable[dict[str, Any]], audits: list[dict[str, Any]],
-                 stale_hours: float) -> list[dict[str, Any]]:
+def stale_claims(
+    claims: Iterable[dict[str, Any]], audits: list[dict[str, Any]], stale_hours: float
+) -> list[dict[str, Any]]:
     """Claims held longer than `stale_hours` with no open PR behind them.
 
     A claim ref cannot be deleted from a sandboxed session, which is the right
@@ -309,8 +311,10 @@ def render(audits: list[dict[str, Any]], stale: list[dict[str, Any]], policy: st
         lines.append("  (nothing open)")
     for a in audits:
         flag = "READY" if a["ready"] else "WAIT "
-        lines.append(f"  {flag} #{a['number']} {_short(a['head'])} {_hours(a['age_hours'])} "
-                     f"{a['title'][:52]}")
+        lines.append(
+            f"  {flag} #{a['number']} {_short(a['head'])} {_hours(a['age_hours'])} "
+            f"{a['title'][:52]}"
+        )
         lines.append(f"        ci: {a['ci']} ({a['ci_detail']})")
         lines.append(f"        review: {a['review']} ({a['review_detail']})")
         if a["mergeable"] is False:
@@ -320,8 +324,9 @@ def render(audits: list[dict[str, Any]], stale: list[dict[str, Any]], policy: st
         lines.append("")
         lines.append(f"  {len(stale)} claim(s) with no open PR:")
         for claim in stale:
-            lines.append(f"    {claim['task_id']} held "
-                         f"{_hours(claim['age_hours'])} ({claim['ref']})")
+            lines.append(
+                f"    {claim['task_id']} held {_hours(claim['age_hours'])} ({claim['ref']})"
+            )
     return "\n".join(lines)
 
 
@@ -333,8 +338,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--policy", choices=sorted(POLICIES), help="override arsenal/config.toml")
     parser.add_argument("--pr", type=int, help="narrow the report to one PR")
     parser.add_argument("--stale-hours", type=float, default=24.0)
-    parser.add_argument("--require-ready", action="store_true",
-                        help="exit 1 unless every reported PR is ready to merge")
+    parser.add_argument(
+        "--require-ready",
+        action="store_true",
+        help="exit 1 unless every reported PR is ready to merge",
+    )
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
 

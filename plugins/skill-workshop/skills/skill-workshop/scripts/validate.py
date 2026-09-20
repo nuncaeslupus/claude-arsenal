@@ -413,9 +413,7 @@ def _strip_fences(text: str) -> str:
     """
     spans, _ = scan_fences(text)
     inside = {n for open_line, close in spans for n in range(open_line, close + 1)}
-    return "\n".join(
-        line for i, line in enumerate(text.splitlines(), 1) if i not in inside
-    )
+    return "\n".join(line for i, line in enumerate(text.splitlines(), 1) if i not in inside)
 
 
 def _strip_inline_code(text: str) -> str:

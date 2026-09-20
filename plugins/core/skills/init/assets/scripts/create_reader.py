@@ -62,6 +62,7 @@ HR_RE = re.compile(r"^-{3,}\s*$")
 
 # ---------------------------------------------------------------- Markdown parsing
 
+
 def normalize_list_indent(text: str) -> str:
     """Promote 1-3 space list indents to 4 spaces for python-markdown (HTML path only)."""
     out = []
@@ -72,7 +73,7 @@ def normalize_list_indent(text: str) -> str:
         if not in_code_block:
             m = re.match(r"^( {1,3})([-*+]|\d+[.)])(\s)", ln)
             if m:
-                ln = "    " + ln[len(m.group(1)):]
+                ln = "    " + ln[len(m.group(1)) :]
         out.append(ln)
     return "\n".join(out)
 
@@ -197,17 +198,19 @@ def build_part(file_md: str, code: str, part_label: str, title: str) -> dict:
 
     if intro_md.strip():
         domid = mk(f"{code}-intro")
-        items.append({
-            "domid": domid,
-            "key": f"{code} · intro",
-            "chip": "overview",
-            "title_html": "Preamble &amp; scope",
-            "label": "Preamble & scope",
-            "level": 2,
-            "body_html": render_md(intro_md),
-            "toc": "Preamble & scope",
-            "raw_body": intro_md,
-        })
+        items.append(
+            {
+                "domid": domid,
+                "key": f"{code} · intro",
+                "chip": "overview",
+                "title_html": "Preamble &amp; scope",
+                "label": "Preamble & scope",
+                "level": 2,
+                "body_html": render_md(intro_md),
+                "toc": "Preamble & scope",
+                "raw_body": intro_md,
+            }
+        )
     for s in sections:
         heading = s["heading"]
         m = NUM_RE.match(heading)
@@ -227,17 +230,19 @@ def build_part(file_md: str, code: str, part_label: str, title: str) -> dict:
             label = plain
             toc = plain
             domid = mk(f"{code}-{slug(plain)[:32]}")
-        items.append({
-            "domid": domid,
-            "key": key,
-            "chip": chip,
-            "title_html": title_html,
-            "label": label,
-            "level": s["level"],
-            "body_html": render_md(s["body_md"]),
-            "toc": toc,
-            "raw_body": s["body_md"],
-        })
+        items.append(
+            {
+                "domid": domid,
+                "key": key,
+                "chip": chip,
+                "title_html": title_html,
+                "label": label,
+                "level": s["level"],
+                "body_html": render_md(s["body_md"]),
+                "toc": toc,
+                "raw_body": s["body_md"],
+            }
+        )
     return {
         "code": code,
         "part_label": part_label,
@@ -275,7 +280,9 @@ def collect_parts_workspace(workspace_dir: Path) -> list[tuple[str, dict]]:
         ws_name = spec_file.parent.name
         code = ws_name.upper()[:8]
         raw = spec_file.read_text(encoding="utf-8")
-        parts.append(("workspace", build_part(raw, code, "Workspace", ws_name.replace("-", " ").title())))
+        parts.append(
+            ("workspace", build_part(raw, code, "Workspace", ws_name.replace("-", " ").title()))
+        )
     return parts
 
 
@@ -303,6 +310,7 @@ def infer_title(cwd: Path) -> str:
     """Infer project title from git remote name or directory name."""
     try:
         import subprocess
+
         remote = subprocess.check_output(
             ["git", "remote", "get-url", "origin"], cwd=cwd, stderr=subprocess.DEVNULL, text=True
         ).strip()
@@ -366,13 +374,19 @@ def read_notes(path: Path) -> dict:
 
 # ---------------------------------------------------------------- HTML build
 
+
 def esc(t: str) -> str:
-    return (t.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-             .replace('"', "&quot;"))
+    return t.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
 
 
-def build_html(parts: list[tuple[str, dict]], title: str, gen_date: str, seed_notes: dict | None = None,
-               single_label: str = "Specification", doc_slug: str = "spec") -> str:
+def build_html(
+    parts: list[tuple[str, dict]],
+    title: str,
+    gen_date: str,
+    seed_notes: dict | None = None,
+    single_label: str = "Specification",
+    doc_slug: str = "spec",
+) -> str:
     seed_notes = seed_notes or {}
     total_sections = sum(len(p["items"]) for _, p in parts)
     ls_ns = slug(title) + f"-{doc_slug}-v1:"
@@ -381,9 +395,9 @@ def build_html(parts: list[tuple[str, dict]], title: str, gen_date: str, seed_no
     for _kind, p in parts:
         head = esc(p["title"])
         if p["part_label"] != single_label:
-            head = f'{esc(p["part_label"])} — {head}'
+            head = f"{esc(p['part_label'])} — {head}"
         toc.append('<details class="toc-part">')
-        toc.append(f'<summary>{head}</summary><ul>')
+        toc.append(f"<summary>{head}</summary><ul>")
         for it in p["items"]:
             toc.append(f'<li><a href="#{it["domid"]}">{esc(it["toc"])}</a></li>')
         toc.append("</ul></details>")
@@ -394,13 +408,13 @@ def build_html(parts: list[tuple[str, dict]], title: str, gen_date: str, seed_no
     for kind, p in parts:
         part_head = esc(p["title"])
         if p["part_label"] != single_label:
-            part_head = f'{esc(p["part_label"])} — {part_head}'
+            part_head = f"{esc(p['part_label'])} — {part_head}"
         badge_cls = kind
         badge_label = p["part_label"]
         body.append('<section class="part">')
         body.append(
             f'<h2 class="part-title"><span class="badge {badge_cls}">{esc(badge_label)}</span>'
-            f'{part_head}</h2>'
+            f"{part_head}</h2>"
         )
         for it in p["items"]:
             tag = "h3" if it["level"] == 2 else "h4"
@@ -423,7 +437,7 @@ def build_html(parts: list[tuple[str, dict]], title: str, gen_date: str, seed_no
                 f'<textarea class="note-ta" data-key="{esc(it["domid"])}" '
                 f'data-label="{esc(it["label"])}" data-part="{part_head}" '
                 f'rows="1" placeholder="Tap to add a note for this point…"></textarea>'
-                f'</div>'
+                f"</div>"
             )
             body.append("</article>")
         body.append("</section>")
@@ -441,8 +455,12 @@ def build_html(parts: list[tuple[str, dict]], title: str, gen_date: str, seed_no
     # that week, so the filename carries the project as well as the document kind:
     # `my-project-spec-notes-2026-08-24.md`, not a bare `spec-notes-…`.
     file_slug = f"{slug(title)}-{doc_slug}"
-    page = page.replace("__JS__", JS.replace("__LS_NS__", ls_ns).replace("__DOC_SLUG__", file_slug)
-                                    .replace("__DOC_LABEL__", single_label))
+    page = page.replace(
+        "__JS__",
+        JS.replace("__LS_NS__", ls_ns)
+        .replace("__DOC_SLUG__", file_slug)
+        .replace("__DOC_LABEL__", single_label),
+    )
     page = page.replace(
         "__SEED_NOTES__",
         json.dumps(seed_notes, ensure_ascii=False).replace("<", "\\u003c"),
@@ -452,8 +470,14 @@ def build_html(parts: list[tuple[str, dict]], title: str, gen_date: str, seed_no
 
 # ---------------------------------------------------------------- Markdown build
 
-def build_markdown(parts: list[tuple[str, dict]], title: str, gen_date: str, seed_notes: dict | None = None,
-                   single_label: str = "Specification") -> str:
+
+def build_markdown(
+    parts: list[tuple[str, dict]],
+    title: str,
+    gen_date: str,
+    seed_notes: dict | None = None,
+    single_label: str = "Specification",
+) -> str:
     """Render the annotated Markdown edition: the document, with a note slot per section.
 
     The counterpart to the HTML reader, for a reviewer who would rather annotate
@@ -470,8 +494,11 @@ def build_markdown(parts: list[tuple[str, dict]], title: str, gen_date: str, see
     )
     out += ["", "---", ""]
     for _, p in parts:
-        title_line = f"# {p['part_label']} — {p['title']}" if p["part_label"] != single_label \
+        title_line = (
+            f"# {p['part_label']} — {p['title']}"
+            if p["part_label"] != single_label
             else f"# {p['title']}"
+        )
         out.append(title_line)
         out.append("")
         for it in p["items"]:
@@ -842,14 +869,24 @@ HTML_TEMPLATE = r"""<!doctype html>
 
 # ---------------------------------------------------------------- Entry point
 
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--input", metavar="FILE", help="single spec or plan Markdown file")
-    parser.add_argument("--input-dir", metavar="DIR", help="directory containing workspace subdirs with spec.md")
-    parser.add_argument("--notes", metavar="FILE",
-                        help="returned export to seed notes from (default: <output-dir>/notes.json)")
-    parser.add_argument("--output-dir", metavar="DIR", help="where to write the reader and annotated Markdown")
-    parser.add_argument("--name", metavar="TEXT", help="project name for the reader title (default: git repo name)")
+    parser.add_argument(
+        "--input-dir", metavar="DIR", help="directory containing workspace subdirs with spec.md"
+    )
+    parser.add_argument(
+        "--notes",
+        metavar="FILE",
+        help="returned export to seed notes from (default: <output-dir>/notes.json)",
+    )
+    parser.add_argument(
+        "--output-dir", metavar="DIR", help="where to write the reader and annotated Markdown"
+    )
+    parser.add_argument(
+        "--name", metavar="TEXT", help="project name for the reader title (default: git repo name)"
+    )
     args = parser.parse_args()
 
     cwd = Path.cwd()

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """init.py - Bootstrap or update claude-arsenal/ in a host repository."""
+
 import argparse
 import contextlib
 import hashlib
@@ -417,9 +418,7 @@ def _check_bundle_version(bundle: Path, arsenal: Path) -> tuple[str, str] | None
     installed_parsed, bundle_parsed = _parse_version(installed_ver), _parse_version(bundle_ver)
     if installed_parsed and bundle_parsed and installed_parsed > bundle_parsed:
         return installed_ver, bundle_ver
-    print(
-        f"Upgrading claude-arsenal bundle: {installed_ver} → {bundle_ver}"
-    )
+    print(f"Upgrading claude-arsenal bundle: {installed_ver} → {bundle_ver}")
     changelog = _changelog_since(bundle, installed_ver, bundle_ver)
     if changelog:
         print(f"\nWhat's new:\n\n{changelog}\n")
@@ -612,9 +611,7 @@ def _known_sections() -> set[str]:
     """
     try:
         shipped = {
-            _skill_section(d)
-            for d in _source_skills_dir().iterdir()
-            if (d / "SKILL.md").is_file()
+            _skill_section(d) for d in _source_skills_dir().iterdir() if (d / "SKILL.md").is_file()
         }
     except OSError:
         shipped = set()
@@ -812,9 +809,7 @@ def _read_sections_table(config: Path) -> dict[str, bool] | None:
     # six skills; it now stops the install and says which line to fix.
     for name, value in table.items():
         if not isinstance(value, bool):
-            sys.exit(
-                f"init: {config}: [skills] {name} = {value!r} is not true or false"
-            )
+            sys.exit(f"init: {config}: [skills] {name} = {value!r} is not true or false")
     # Unknown names are NOT fatal, deliberately: a repo that has run a newer
     # bundle carries sections this one has never heard of, and downgrading
     # should not be an error. They are ignored here, and a name absent from the
@@ -837,9 +832,9 @@ def _write_sections_table(config: Path, enabled: set[str], known: list[str]) -> 
     text = config.read_text(encoding="utf-8") if config.is_file() else ""
     existing = re.search(r"^\[skills\]\s*$", text, re.MULTILINE)
     if existing:
-        rest = text[existing.end():]
+        rest = text[existing.end() :]
         nxt = re.search(r"^\[", rest, re.MULTILINE)
-        tail = rest[nxt.start():] if nxt else ""
+        tail = rest[nxt.start() :] if nxt else ""
         text = text[: existing.start()] + header + "\n" + ("\n" + tail if tail else "")
     else:
         text = (text.rstrip("\n") + "\n\n" if text.strip() else "") + header + "\n"
@@ -890,9 +885,7 @@ def _resolve_sections(
         recorded = _read_sections_table(config)
         if recorded is not None:
             return {_CORE_SECTION} | {
-                name
-                for name in known
-                if recorded.get(name, _SECTION_DEFAULTS.get(name, False))
+                name for name in known if recorded.get(name, _SECTION_DEFAULTS.get(name, False))
             }
         # Asked of the *bundle*, by name, not of the installed files by their
         # metadata. `_skill_section` falls back to `core` for a SKILL.md it
@@ -905,14 +898,12 @@ def _resolve_sections(
         # consumer's workflow and python skills on a run they invoked to
         # upgrade them. Names are stable across every version that ever
         # shipped, and `by_section` is keyed on them.
-        vendored_names = {
-            d.name
-            for d in dest.iterdir()
-            if d.is_dir() and (d / _VENDOR_MARKER).is_file()
-        } if dest.is_dir() else set()
-        vendored = {
-            section for section, names in by_section.items() if names & vendored_names
-        }
+        vendored_names = (
+            {d.name for d in dest.iterdir() if d.is_dir() and (d / _VENDOR_MARKER).is_file()}
+            if dest.is_dir()
+            else set()
+        )
+        vendored = {section for section, names in by_section.items() if names & vendored_names}
         chosen = (
             vendored - {_CORE_SECTION}
             if vendored
@@ -957,9 +948,7 @@ def _vendor_skills(
                 if sections is not None
                 else {name for name, on in recorded.items() if on}
             )
-            on_disk = {
-                _skill_section(d) for d in source.iterdir() if (d / "SKILL.md").is_file()
-            }
+            on_disk = {_skill_section(d) for d in source.iterdir() if (d / "SKILL.md").is_file()}
             empty = sorted(asked - on_disk - {_CORE_SECTION})
             if empty:
                 print(
@@ -1177,7 +1166,6 @@ def _inject_claude_md(repo_path: Path) -> None:
         return
     claude_md.write_text(replaced.rstrip("\n") + "\n", encoding="utf-8")
     print("  CLAUDE.md: session-protocol block refreshed (was out of date)")
-
 
 
 # The host-owned handover template. It lives here, not in `assets/`, because
@@ -1568,9 +1556,7 @@ def init_base(
     # Default surface profile (gitignored — overwritten by detect_surface.sh hook)
     profile = home / "session" / "surface_profile.json"
     if not profile.exists():
-        profile.write_text(
-            json.dumps(DEFAULT_SURFACE_PROFILE, indent=2) + "\n", encoding="utf-8"
-        )
+        profile.write_text(json.dumps(DEFAULT_SURFACE_PROFILE, indent=2) + "\n", encoding="utf-8")
         print(f"  created: {profile.relative_to(repo_path)}")
 
     # .gitignore — surface profile, the statusLine-written rate-limit snapshot,
@@ -1639,9 +1625,16 @@ def init_workspace(
     # Strip Windows-style trailing dots/spaces before checking (they normalize
     # to ".." on NTFS) and retain the substring ".." guard for defence-in-depth.
     normalized = workspace.rstrip(". ")
-    bad = (not normalized or normalized in (".", "..") or ".." in workspace
-           or "/" in workspace or "\\" in workspace or "|" in workspace
-           or "\n" in workspace or "\r" in workspace)
+    bad = (
+        not normalized
+        or normalized in (".", "..")
+        or ".." in workspace
+        or "/" in workspace
+        or "\\" in workspace
+        or "|" in workspace
+        or "\n" in workspace
+        or "\r" in workspace
+    )
     if bad or any(c in p for p in (root, spec, plan) for c in ("|", "\n", "\r")):
         sys.exit("init: invalid workspace name or paths (must not contain '|' or newlines)")
 
@@ -1723,8 +1716,7 @@ def main() -> None:
         choices=sorted(_PROFILES),
         help="What kind of project this is, as a starting set of skill sections: "
         + "; ".join(
-            f"{name} = core"
-            + ("".join(f" + {s}" for s in secs) if secs else " only")
+            f"{name} = core" + ("".join(f" + {s}" for s in secs) if secs else " only")
             for name, secs in sorted(_PROFILES.items())
         )
         + ". Recorded as an editable [skills] table in arsenal/config.toml.",
@@ -1750,11 +1742,15 @@ def main() -> None:
     # `--quiet` is the canon's spelling; `--silent` shipped first and keeps
     # working, so no consumer's existing invocation breaks.
     p.add_argument(
-        "--quiet", "--silent", action="store_true", dest="silent",
+        "--quiet",
+        "--silent",
+        action="store_true",
+        dest="silent",
         help="Suppress 'up to date' lines; only print refreshed files and version banner.",
     )
     p.add_argument(
-        "--allow-downgrade", action="store_true",
+        "--allow-downgrade",
+        action="store_true",
         help="Overwrite a NEWER installed bundle with this skill's older copies.",
     )
     args = p.parse_args()
@@ -1775,14 +1771,26 @@ def main() -> None:
         ws_rel = (_home(repo_path).relative_to(repo_path) / "project" / name).as_posix()
         spec = args.spec or f"{ws_rel}/spec.md"
         plan = args.plan or f"{ws_rel}/plan.md"
-        init_workspace(repo_path, name, root, spec, plan, bundle_override,
-                       allow_downgrade=args.allow_downgrade,
-                       skills_profile=args.profile,
-                       sections=_parse_sections(args.sections))
+        init_workspace(
+            repo_path,
+            name,
+            root,
+            spec,
+            plan,
+            bundle_override,
+            allow_downgrade=args.allow_downgrade,
+            skills_profile=args.profile,
+            sections=_parse_sections(args.sections),
+        )
     else:
-        init_base(repo_path, bundle_override, silent=args.silent,
-                  allow_downgrade=args.allow_downgrade, skills_profile=args.profile,
-                  sections=_parse_sections(args.sections))
+        init_base(
+            repo_path,
+            bundle_override,
+            silent=args.silent,
+            allow_downgrade=args.allow_downgrade,
+            skills_profile=args.profile,
+            sections=_parse_sections(args.sections),
+        )
 
 
 if __name__ == "__main__":

@@ -62,9 +62,7 @@ def test_extract_body_traversal_path_stays_inside_output_dir(query, tmp_path):
 
 def test_extract_body_warns_that_bodies_are_not_redacted(query, tmp_path):
     """Redaction reaches named fields; a body is unbounded text. Say so, once, per run."""
-    code, out, _ = query(
-        "hostile", "--extract-body", "--output-dir", str(tmp_path / "b")
-    )
+    code, out, _ = query("hostile", "--extract-body", "--output-dir", str(tmp_path / "b"))
     assert code == 0
     assert "as sensitive as the capture" in out
 

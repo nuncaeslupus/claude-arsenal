@@ -47,7 +47,10 @@ from analyze_har import ensure_index, verify_for_seek
 # Windows device names, which are reserved as filenames on that platform
 # whatever extension follows them.
 _RESERVED_STEMS = {
-    "con", "prn", "aux", "nul",
+    "con",
+    "prn",
+    "aux",
+    "nul",
     *(f"com{i}" for i in range(1, 10)),
     *(f"lpt{i}" for i in range(1, 10)),
 }
@@ -169,9 +172,7 @@ def _text_from_html(html: str, selector: str) -> list[str]:
                 return
             values = dict(attrs)
             by_tag = want_tag is not None and tag == want_tag
-            by_attr = want_attr is not None and want_value in (
-                values.get(want_attr) or ""
-            ).split()
+            by_attr = want_attr is not None and want_value in (values.get(want_attr) or "").split()
             if by_tag or by_attr:
                 self.depth = 1
 
@@ -223,9 +224,7 @@ def show_entry(entry: dict[str, Any], row: dict[str, Any], max_body: int) -> lis
         lines.append("query:")
         lines += [f"  {name} = {value}" for name, value in row["query"]]
     lines.append("request headers:")
-    lines += [
-        f"  {h.get('name')}: {h.get('value')}" for h in (request.get("headers") or [])
-    ]
+    lines += [f"  {h.get('name')}: {h.get('value')}" for h in (request.get("headers") or [])]
     post = request.get("postData") or {}
     if post.get("text"):
         decoded = decode_body(post)
@@ -271,7 +270,8 @@ def main(argv: list[str] | None = None) -> int:
     extract.add_argument("--xpath", metavar="EXPR", help="ElementTree path from an XML body")
     extract.add_argument("--schema", action="store_true", help="print a JSON body's shape")
     extract.add_argument(
-        "--secrets", action="store_true",
+        "--secrets",
+        action="store_true",
         help="answer value patterns against redacted headers by reading the capture",
     )
     args = parser.parse_args(argv)
@@ -464,10 +464,7 @@ def _json_payload(
     fields: list[str] | None,
     uncapped: bool,
 ) -> dict[str, Any]:
-    rows = [
-        {key: row.get(key) for key in fields} if fields else row
-        for row in limited
-    ]
+    rows = [{key: row.get(key) for key in fields} if fields else row for row in limited]
     return {
         "entries": rows,
         "shown": len(rows),

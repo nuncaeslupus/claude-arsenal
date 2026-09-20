@@ -104,8 +104,7 @@ def purge_bytecode(roots: list[Path]) -> int:
     return gone
 
 
-def run_test(test: str, roots: list[Path], extra: list[str],
-             cwd: Path) -> tuple[bool, str]:
+def run_test(test: str, roots: list[Path], extra: list[str], cwd: Path) -> tuple[bool, str]:
     """Run the scoped test in a FRESH subprocess. Returns (passed, last output).
 
     Fresh, always, and this is failure mode 2: a module that is already imported
@@ -117,8 +116,7 @@ def run_test(test: str, roots: list[Path], extra: list[str],
     env["PYTHONDONTWRITEBYTECODE"] = "1"
     cmd = [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", test, *extra]
     try:
-        proc = subprocess.run(cmd, cwd=cwd, env=env, capture_output=True, text=True,
-                              timeout=1800)
+        proc = subprocess.run(cmd, cwd=cwd, env=env, capture_output=True, text=True, timeout=1800)
     except FileNotFoundError as exc:  # pragma: no cover - no interpreter is fatal
         raise PinCheckError(f"cannot run pytest: {exc}") from exc
     except subprocess.TimeoutExpired as exc:
@@ -127,8 +125,7 @@ def run_test(test: str, roots: list[Path], extra: list[str],
     return proc.returncode == 0, tail.strip()
 
 
-def plan_mutation(source: Path, old: str, new: str,
-                  expect_count: int | None) -> tuple[str, int]:
+def plan_mutation(source: Path, old: str, new: str, expect_count: int | None) -> tuple[str, int]:
     """Validate the mutation before anything is written. Returns (original, count).
 
     Failure mode 3 lives here. A `sed` that matches nothing mutates nothing, and
@@ -166,9 +163,17 @@ def _write(source: Path, text: str) -> None:
     os.utime(source, (now, now + 1))
 
 
-def check(source: Path, old: str, new: str, test: str, roots: list[Path],
-          extra: list[str], cwd: Path, expect_count: int | None,
-          verify_restore: bool) -> dict[str, Any]:
+def check(
+    source: Path,
+    old: str,
+    new: str,
+    test: str,
+    roots: list[Path],
+    extra: list[str],
+    cwd: Path,
+    expect_count: int | None,
+    verify_restore: bool,
+) -> dict[str, Any]:
     sentinel = _sentinel_for(source)
     if sentinel.exists():
         raise PinCheckError(
@@ -249,20 +254,30 @@ def check(source: Path, old: str, new: str, test: str, roots: list[Path],
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Revert one claim and see whether the test that claims to pin it notices.")
+        description="Revert one claim and see whether the test that claims to pin it notices."
+    )
     parser.add_argument("--source", required=True, type=Path, help="file to mutate")
     parser.add_argument("--replace", required=True, help="exact text to replace")
     parser.add_argument("--with", dest="replacement", required=True, help="text to replace it with")
-    parser.add_argument("--test", required=True,
-                        help="the scoped pytest target — a file, or file::case")
-    parser.add_argument("--expect-count", type=int,
-                        help="refuse unless the target occurs exactly this many times")
-    parser.add_argument("--root", type=Path, action="append", default=[],
-                        help="tree to purge __pycache__ from (repeatable; default: cwd)")
-    parser.add_argument("--cwd", type=Path, default=Path(),
-                        help="directory to run pytest in")
-    parser.add_argument("--verify-restore", action="store_true",
-                        help="re-run the test after restoring (a third run)")
+    parser.add_argument(
+        "--test", required=True, help="the scoped pytest target — a file, or file::case"
+    )
+    parser.add_argument(
+        "--expect-count", type=int, help="refuse unless the target occurs exactly this many times"
+    )
+    parser.add_argument(
+        "--root",
+        type=Path,
+        action="append",
+        default=[],
+        help="tree to purge __pycache__ from (repeatable; default: cwd)",
+    )
+    parser.add_argument("--cwd", type=Path, default=Path(), help="directory to run pytest in")
+    parser.add_argument(
+        "--verify-restore",
+        action="store_true",
+        help="re-run the test after restoring (a third run)",
+    )
     parser.add_argument("--json", action="store_true")
     parser.add_argument("pytest_args", nargs="*", help="extra args forwarded to pytest")
     args = parser.parse_args(argv)
@@ -273,12 +288,25 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if not source.is_file():
             raise PinCheckError(f"{source}: not a file")
-        result = check(source, args.replace, args.replacement, args.test, roots,
-                       list(args.pytest_args), args.cwd, args.expect_count,
-                       args.verify_restore)
+        result = check(
+            source,
+            args.replace,
+            args.replacement,
+            args.test,
+            roots,
+            list(args.pytest_args),
+            args.cwd,
+            args.expect_count,
+            args.verify_restore,
+        )
     except NotMutated as exc:
-        result = {"verdict": "NOT MUTATED", "exit": NOT_MUTATED, "occurrences": 0,
-                  "detail": str(exc), "output": ""}
+        result = {
+            "verdict": "NOT MUTATED",
+            "exit": NOT_MUTATED,
+            "occurrences": 0,
+            "detail": str(exc),
+            "output": "",
+        }
     except PinCheckError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return ERROR
