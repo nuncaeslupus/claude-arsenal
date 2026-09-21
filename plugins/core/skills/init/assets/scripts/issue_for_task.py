@@ -55,17 +55,40 @@ def issue_number_for(
     right answer: the closed one is already in its terminal state, and pointing
     `Closes` at it would close nothing that was not closed already.
     """
-    best: int | None = None
+    return issue_numbers_by_task(issues, titles=titles).get(task_id)
+
+
+def issue_numbers_by_task(
+    issues: list[dict[str, Any]],
+    *,
+    titles: dict[str, str | None] | None = None,
+) -> dict[str, int]:
+    """Every task's handle, from ONE pass over the issue list.
+
+    `issue_number_for` scans the whole list per task, and `query_status.py`
+    called it twice for every task on the board: O(tasks x issues) on the path
+    the session-start protocol runs, which is ~40,000 title-and-marker matches
+    at the 200-task scale the queue is designed for. Resolving the board is one
+    pass over the issues, so it is done once here and the answers looked up.
+
+    Same preference as `issue_number_for`, which is now a lookup into this: an
+    open handle always wins over a closed one, and the first open one wins, so
+    the answer does not depend on the order GitHub returned the list.
+    """
+    best: dict[str, int] = {}
+    decided: set[str] = set()
     for issue in issues:
-        if task_id_from_issue(issue, titles=titles) != task_id:
+        task_id = task_id_from_issue(issue, titles=titles)
+        if task_id is None or task_id in decided:
             continue
         number = issue.get("number")
         if not isinstance(number, int):
             continue
         if str(issue.get("state", "open")).lower() == "open":
-            return number
-        if best is None:
-            best = number
+            best[task_id] = number
+            decided.add(task_id)
+        elif task_id not in best:
+            best[task_id] = number
     return best
 
 

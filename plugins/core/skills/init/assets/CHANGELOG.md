@@ -18,6 +18,24 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [4.10.1] - 2026-09-21
+
+### Fixed — `query_status.py --json` told a machine caller less than a human
+
+- **Every finding now reaches both output formats.** The `--json` branch printed
+  `problems` and returned; `warnings` and `notes` were rendered only after that
+  return, so a duplicate task id, malformed front matter, a title collision and
+  the mixed-priority-convention warning were invisible in JSON mode. JSON is the
+  documented cheap-fetch path, so the automated caller — the one that cannot
+  notice for itself — was the blind one: `--json --fail-on-problems` never
+  learned the board had two tasks sharing an id. Both paths now emit the same
+  stderr, and a test diffs them.
+- **Reading the board is one pass over the issues.** Both handle-resolution
+  sites rescanned the whole issue list per task. Measured on a 30-task board
+  with 30 issues: 525 issue matches before, 90 after — and the old cost grew
+  with tasks × issues, on the path the session-start protocol runs every
+  session.
+
 ## [4.10.0] - 2026-09-21
 
 ### Fixed — three settings that did nothing now work; two that did nothing are gone

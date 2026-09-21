@@ -33,7 +33,7 @@ from typing import Any
 # by hand.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from issue_for_task import issue_number_for
+from issue_for_task import issue_numbers_by_task
 from task_select import (
     TERMINAL,
     default_tasks_dir,
@@ -136,6 +136,28 @@ def staleness_warning(tasks_dir: Path, remote: str = "origin") -> str | None:
     )
 
 
+def _report(
+    notes: list[str],
+    warnings: list[str],
+    problems: list[str],
+    *,
+    fail_on_problems: bool,
+) -> int:
+    """Print every finding on stderr and return the exit code.
+
+    Both output paths end here. The --json branch used to print `problems` and
+    return, while `warnings` and `notes` — a duplicate task id, malformed front
+    matter, a title collision, the mixed-priority-convention warning — were
+    rendered only after it. JSON is the documented cheap-fetch path, so the
+    automated caller, the one that cannot notice for itself, was the blind one:
+    `--json --fail-on-problems` never learned the board had two tasks sharing
+    an id.
+    """
+    for line in (*notes, *warnings, *problems):
+        print(f"query_status: {line}", file=sys.stderr)
+    return 1 if (problems and fail_on_problems) else 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--tasks-dir", type=Path, default=default_tasks_dir())
@@ -212,6 +234,9 @@ def main(argv: list[str] | None = None) -> int:
         if stale:
             print(f"query_status: {stale}", file=sys.stderr)
 
+    # Resolved once, for the whole board. Both sites below used to rescan
+    # every issue per task.
+    handle_numbers = issue_numbers_by_task(issues, titles=titles)
     counts = {"open": 0, "claimed": 0, "done": 0, "cancelled": 0, "blocked": 0}
     problems: list[str] = []
     notes: list[str] = []
@@ -235,6 +260,27 @@ def main(argv: list[str] | None = None) -> int:
             if dep not in known_ids:
                 problems.append(f"{task['id']}: depends on unknown task {dep}")
 
+    # Mixed priority conventions. `priority` means size (S=10, M=5, L=1); a
+    # board seeded from an ordered plan table often encodes build-order rank
+    # instead (T1=100, T2=95, …). Both are documented somewhere, neither is
+    # wrong alone, and the sort cannot tell them apart — so when both are
+    # present, the rank scale's floor sits above the size scale's ceiling and
+    # every rank-encoded task outranks every size-encoded one unconditionally.
+    # Dispatch order then reflects when a row was written, which is an ordering
+    # nobody chose, and nothing errors (#146). The finding is about the MIX: a
+    # board that uses one scale throughout stays clean.
+    live = [t for t in tasks if t.get("status") not in TERMINAL]
+    sized = {t["id"] for t in live if t["priority"] in SIZE_PRIORITIES}
+    ranked = {t["id"] for t in live if t["priority"] not in SIZE_PRIORITIES}
+    if sized and ranked:
+        off = sorted({t["priority"] for t in live if t["id"] in ranked}, reverse=True)
+        warnings.append(
+            f"mixed-priority-convention: {len(sized)} task(s) use the size scale "
+            f"{sorted(SIZE_PRIORITIES, reverse=True)} and {len(ranked)} use other values "
+            f"{off} — every value above 10 outranks every sized task regardless of intent. "
+            "Put ordering in `deps` and size in `priority`, or move the whole board to one scale."
+        )
+
     # Completion drift: the task file and its issue disagree about whether the
     # work is finished. Each direction has one cause worth naming, because each
     # is a merge that did half of what it was supposed to.
@@ -242,7 +288,7 @@ def main(argv: list[str] | None = None) -> int:
         actual = issue_state.get(task["id"])
         if actual is None:
             continue
-        number = issue_number_for(task["id"], issues, titles=titles)
+        number = handle_numbers.get(task["id"])
         where = f"#{number}" if number else "its issue"
         if task.get("status") in TERMINAL and actual in {"open", "claimed"}:
             # `open_task_pr.sh` archives the task file in the SAME diff that
@@ -290,18 +336,14 @@ def main(argv: list[str] | None = None) -> int:
                         "state": current,
                         "terminal": current in TERMINAL,
                         "gate": task["gate"],
-                        "issue": issue_number_for(task["id"], issues, titles=titles),
+                        "issue": handle_numbers.get(task["id"]),
                         "blocked_by": blocking(task, state),
                     },
                     separators=(",", ":"),
                 )
             )
-        for problem in problems:
-            print(f"query_status: {problem}", file=sys.stderr)
-        return 1 if (problems and args.fail_on_problems) else 0
+        return _report(notes, warnings, problems, fail_on_problems=args.fail_on_problems)
 
-    for note in notes:
-        print(f"query_status: {note}", file=sys.stderr)
     print(
         f"tasks: {len(tasks)} — "
         + ", ".join(f"{k} {v}" for k, v in counts.items() if v or k in {"open", "claimed", "done"})
@@ -323,33 +365,7 @@ def main(argv: list[str] | None = None) -> int:
             suffix = f"  [{'; '.join(marks)}]" if marks else ""
             print(f"  {task['id']}  p{task['priority']:<3} {current:<9} {task['title']}{suffix}")
 
-    # Mixed priority conventions. `priority` means size (S=10, M=5, L=1); a
-    # board seeded from an ordered plan table often encodes build-order rank
-    # instead (T1=100, T2=95, …). Both are documented somewhere, neither is
-    # wrong alone, and the sort cannot tell them apart — so when both are
-    # present, the rank scale's floor sits above the size scale's ceiling and
-    # every rank-encoded task outranks every size-encoded one unconditionally.
-    # Dispatch order then reflects when a row was written, which is an ordering
-    # nobody chose, and nothing errors (#146). The finding is about the MIX: a
-    # board that uses one scale throughout stays clean.
-    live = [t for t in tasks if t.get("status") not in TERMINAL]
-    sized = {t["id"] for t in live if t["priority"] in SIZE_PRIORITIES}
-    ranked = {t["id"] for t in live if t["priority"] not in SIZE_PRIORITIES}
-    if sized and ranked:
-        off = sorted({t["priority"] for t in live if t["id"] in ranked}, reverse=True)
-        warnings.append(
-            f"mixed-priority-convention: {len(sized)} task(s) use the size scale "
-            f"{sorted(SIZE_PRIORITIES, reverse=True)} and {len(ranked)} use other values "
-            f"{off} — every value above 10 outranks every sized task regardless of intent. "
-            "Put ordering in `deps` and size in `priority`, or move the whole board to one scale."
-        )
-
-    for warning in warnings:
-        print(f"query_status: {warning}", file=sys.stderr)
-    for problem in problems:
-        print(f"query_status: {problem}", file=sys.stderr)
-
-    if problems and args.fail_on_problems:
+    if _report(notes, warnings, problems, fail_on_problems=args.fail_on_problems):
         return 1
     return 0
 
