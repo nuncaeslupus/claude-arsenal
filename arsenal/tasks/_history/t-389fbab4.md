@@ -3,6 +3,7 @@ id: t-389fbab4
 title: "Issue-payload hardening never reached handle_sync.py and issue_import.py"
 priority: 10
 tags: [robustness]
+status: merged
 ---
 
 query_status.py:190-196 and task_select.py were hardened against a truncated
@@ -30,10 +31,7 @@ Done means: both scripts reject a non-list payload the way their siblings do.
 ## Acceptance gate
 
 ```bash
-set -e
-T=$(mktemp -d); echo '{"issues": null}' > "$T/i.json"
-python3 plugins/core/skills/init/assets/scripts/handle_sync.py \
-  --issues "$T/i.json" --tasks-dir arsenal/tasks >/dev/null 2>&1; rc=$?
-rm -rf "$T"
-[ "$rc" -eq 2 ] || { echo "expected documented exit 2, got $rc" >&2; exit 1; }
+# Every reader of a `gh issue list --json` payload rejects a wrong-shaped
+# one with the documented exit 2, and there is only one such reader.
+bash plugins/core/tests/issue_payload_test.sh
 ```

@@ -27,15 +27,19 @@ whether that is fatal); 2 on unreadable input.
 from __future__ import annotations
 
 import argparse
-import json
-import os
 import sys
 from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from task_select import load_tasks, task_id_from_issue, title_index
+from task_select import (
+    default_tasks_dir,
+    load_tasks,
+    read_issue_payload,
+    task_id_from_issue,
+    title_index,
+)
 
 
 def issue_number_for(
@@ -65,14 +69,6 @@ def issue_number_for(
     return best
 
 
-def load_issues(source: Path) -> list[dict[str, Any]]:
-    text = sys.stdin.read() if str(source) == "-" else source.read_text(encoding="utf-8")
-    payload = json.loads(text)
-    if isinstance(payload, dict):
-        payload = payload.get("issues", [])
-    return [i for i in payload if isinstance(i, dict)]
-
-
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--task", required=True, help="task id, e.g. t-3f8a91c2")
@@ -85,15 +81,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--tasks-dir",
         type=Path,
-        default=Path(os.environ.get("ARSENAL_HOME", "arsenal")) / "tasks",
+        default=default_tasks_dir(),
         help="task files, used to resolve an issue that carries no body",
     )
     args = parser.parse_args(argv)
 
-    try:
-        issues = load_issues(args.issues)
-    except (OSError, json.JSONDecodeError) as exc:
-        print(f"issue_for_task: cannot read --issues — {exc}", file=sys.stderr)
+    issues = read_issue_payload(args.issues, "issue_for_task")
+    if issues is None:
         return 2
 
     # The saved snapshot this reads is the one the session-start protocol

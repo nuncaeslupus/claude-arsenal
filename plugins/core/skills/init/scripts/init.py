@@ -933,9 +933,21 @@ def _resolve_sections(
     else:
         recorded = _read_sections_table(config)
         if recorded is not None:
-            return {_CORE_SECTION} | {
+            enabled = {
                 name for name in known if recorded.get(name, _SECTION_DEFAULTS.get(name, False))
             }
+            # A table written under an older bundle has never heard of a section
+            # shipped since. Returning here skipped the write below, so that
+            # section stayed permanently absent from the very file consumers are
+            # told to edit — resolved correctly every run, invisible in every
+            # one. Only written when something is genuinely missing: rewriting
+            # an up-to-date table on every `--silent` session start would churn
+            # the file and drop any comment inside it for nothing.
+            missing = [name for name in known if name not in recorded]
+            if missing:
+                _write_sections_table(config, enabled, known)
+                print(f"  config: recorded newly shipped section(s): {', '.join(missing)}")
+            return {_CORE_SECTION} | enabled
         # Asked of the *bundle*, by name, not of the installed files by their
         # metadata. `_skill_section` falls back to `core` for a SKILL.md it
         # cannot classify — right for its own case, inverted here: a bundle

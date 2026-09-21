@@ -270,6 +270,42 @@ def default_tasks_dir() -> Path:
     return Path(os.environ.get("ARSENAL_HOME", "").strip() or "arsenal") / "tasks"
 
 
+def read_issue_payload(path: Path, prog: str) -> list[dict[str, Any]] | None:
+    """The issues in a `gh issue list --json …` file, or None having said why.
+
+    A truncated or wrong-shaped fetch is valid JSON that is not an issue list —
+    `null`, a bare scalar, `{"issues": null}` — and each of those raised a
+    TypeError out of the comprehension that consumed it, so the operator got a
+    traceback and exit 1 where every one of these scripts documents exit 2.
+    `query_status.py` was hardened after a real incident, and its comment even
+    claimed the siblings reading the identical payload already returned 2; they
+    did not. They import this now rather than each carrying a copy that can be
+    fixed alone.
+    """
+    try:
+        text = sys.stdin.read() if str(path) == "-" else path.read_text(encoding="utf-8")
+        payload = json.loads(text)
+    except (OSError, UnicodeDecodeError) as exc:
+        print(f"{prog}: cannot read --issues — {exc}", file=sys.stderr)
+        return None
+    except json.JSONDecodeError as exc:
+        # Kept distinct from the read error: "the file is not there / not
+        # readable" and "the fetch wrote something that is not JSON" send an
+        # operator to different places.
+        print(f"{prog}: --issues is not valid JSON — {exc}", file=sys.stderr)
+        return None
+    if isinstance(payload, dict):
+        payload = payload.get("issues")
+    if not isinstance(payload, list):
+        print(
+            f"{prog}: --issues {path} is not an issue list — expected a "
+            'JSON array, or an object with an "issues" array',
+            file=sys.stderr,
+        )
+        return None
+    return [i for i in payload if isinstance(i, dict)]
+
+
 ISOLATION_SENTINEL = _session_dir() / "worktree_isolation"
 
 
@@ -639,27 +675,11 @@ def main(argv: list[str] | None = None) -> int:
         # that says which file was unreadable — and on the branch where the
         # exception is swallowed by a caller, an empty state map hands out a
         # task that is already finished.
-        try:
-            payload = json.loads(args.issues.read_text(encoding="utf-8"))
-        except (OSError, UnicodeDecodeError) as exc:
-            print(f"task_select: cannot read --issues — {exc}", file=sys.stderr)
-            return 2
-        except json.JSONDecodeError as exc:
-            print(f"task_select: --issues is not valid JSON — {exc}", file=sys.stderr)
-            return 2
-        # Accept either a bare array or the {"issues": [...]} envelope some
-        # GitHub tools wrap results in, so the caller can save what it got.
-        if isinstance(payload, dict):
-            payload = payload.get("issues")
-        if not isinstance(payload, list):
-            print(
-                f"task_select: --issues {args.issues} is not an issue list — expected a "
-                'JSON array, or an object with an "issues" array',
-                file=sys.stderr,
-            )
+        issues = read_issue_payload(args.issues, "task_select")
+        if issues is None:
             return 2
         state = state_from_issues(
-            [i for i in payload if isinstance(i, dict)],
+            issues,
             titles=title_index(tasks),
             warnings=issue_warnings,
         )

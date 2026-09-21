@@ -64,6 +64,7 @@ from task_select import (
     default_tasks_dir,
     labels_of,
     load_tasks,
+    read_issue_payload,
     task_id_from_issue,
 )
 
@@ -251,14 +252,9 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 2
 
-    try:
-        payload = json.loads(args.issues.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        print(f"issue_import: cannot read --issues — {exc}", file=sys.stderr)
+    issues = read_issue_payload(args.issues, "issue_import")
+    if issues is None:
         return 2
-    if isinstance(payload, dict):
-        payload = payload.get("issues", [])
-    issues = [i for i in payload if isinstance(i, dict)]
 
     # Read only for its warnings — a malformed task file is worth naming here,
     # even though the import decision reads the issue bodies, not the board.

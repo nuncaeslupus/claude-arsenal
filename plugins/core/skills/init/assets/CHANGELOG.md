@@ -18,6 +18,27 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [4.9.2] - 2026-09-21
+
+### Fixed — a new section now shows up in your config, and a bad issue fetch says so
+
+- **A section shipped after your `arsenal/config.toml` was written now appears
+  in it.** `_resolve_sections` returned as soon as it found a `[skills]` table,
+  skipping the write that records the full set — so a section added upstream
+  after your config existed was resolved correctly on every run and never
+  written down, in the one file you are told to edit. Opting in meant knowing
+  the name of something never mentioned. The table is now topped up when
+  something is missing from it, and left untouched (comments and all) when it
+  is current.
+- **A truncated issue fetch no longer prints a traceback.** `handle_sync.py`,
+  `issue_import.py` and `issue_for_task.py` read the same
+  `gh issue list --json …` file as `query_status.py`, which was hardened after
+  a real incident — they were not. A failed fetch produces valid JSON that is
+  not an issue list (`null`, `{"issues": null}`), and each of those raised a
+  `TypeError` and exit 1 out of scripts that all document exit 2 for unreadable
+  input. All five readers now share one function and give the same one-sentence
+  refusal.
+
 ## [4.9.1] - 2026-09-21
 
 ### Fixed — `ARSENAL_HOME` now actually relocates the board

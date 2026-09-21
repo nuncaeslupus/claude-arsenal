@@ -206,3 +206,35 @@ python3 "$init_py" --repo-path "$repo" --workspace demo --profile all >/dev/null
     || fail "--workspace with --profile exited non-zero"
 have "$repo" har || fail "--profile all was ignored under --workspace on an existing install"
 echo "PASS: --sections and --profile take effect under --workspace"
+
+# --- a section shipped after the config was written gets recorded ------------
+#     _resolve_sections returned as soon as it found a [skills] table, skipping
+#     the write. A consumer whose config predates a new section resolved it
+#     correctly every run and never saw the line, in the one file they are told
+#     to edit — so opting in meant knowing the name of something never mentioned.
+repo="$tmp/older-config"; mkdir -p "$repo"
+python3 "$init_py" --repo-path "$repo" >/dev/null 2>&1 || fail "older-config: init exited non-zero"
+cfg="$repo/arsenal/config.toml"
+grep -q '^python = false' "$cfg" || fail "older-config: fixture needs a recorded python line"
+# The table as it would have been written before `python` existed.
+grep -v '^python = ' "$cfg" > "$cfg.tmp" && mv "$cfg.tmp" "$cfg"
+grep -q '^python = ' "$cfg" && fail "older-config: fixture still names python"
+# ...and a comment a consumer wrote in the table, which must survive an
+# unrelated run (below) even though this run has to rewrite the table.
+python3 "$init_py" --repo-path "$repo" --silent >/dev/null 2>&1 \
+    || fail "older-config: re-run exited non-zero"
+grep -q '^python = false' "$cfg" \
+    || fail "a section shipped after this config was written never appeared in it"
+have "$repo" dep-upgrade && fail "older-config: recording the section must not enable it"
+echo "PASS: a newly shipped section is recorded in an existing config, still off"
+
+# ...and an up-to-date table is left alone, byte for byte. Rewriting it on every
+# --silent session start would churn the file and drop any comment in it.
+printf '\n# why python is off here\n' >> "$cfg"
+before="$(cat "$cfg")"
+python3 "$init_py" --repo-path "$repo" --silent >/dev/null 2>&1 \
+    || fail "older-config: idempotent re-run exited non-zero"
+[ "$before" = "$(cat "$cfg")" ] \
+    || fail "an up-to-date config was rewritten on a routine run:
+$(diff <(printf '%s' "$before") "$cfg")"
+echo "PASS: an up-to-date [skills] table is not rewritten"
