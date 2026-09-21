@@ -39,7 +39,9 @@ coordination, which is what lets several agents add tasks at once.
 ## State directory layout
 
 ```
-claude-arsenal/        ← upstream. /init owns it and may overwrite it freely
+claude-arsenal/        ← upstream. /init refreshes what it ships and retires what
+                         it no longer ships. A file YOU add here is left alone.
+  .arsenal-manifest    ← what this install wrote; only these are ever retired
   AGENTS.md            ← the session protocol; imported via @claude-arsenal/AGENTS.md
   references/          ← the rest of the protocol, read on demand (never imported)
   agents/worker.md     ← worker subagent definition

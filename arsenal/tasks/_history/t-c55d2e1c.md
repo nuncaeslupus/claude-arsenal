@@ -3,6 +3,7 @@ id: t-c55d2e1c
 title: "worker_postcheck.sh runs reset --hard against whatever tree the caller is in"
 priority: 10
 tags: [fleet, safety]
+status: merged
 ---
 
 worker_postcheck.sh runs `git reset -q --hard` and `git clean -fdq` (:230-231)
@@ -28,13 +29,8 @@ way open_task_pr.sh does.
 
 ## Acceptance gate
 
-<!-- Replace this with a fenced bash block. A gate that is only prose runs
-     nothing, and a gate that runs nothing passes everything — `task_select.py`
-     reports gate: false for a task with no block, so an unenforced gate is
-     visible rather than quietly inert. -->
-
 ```bash
-# arsenal:gate-placeholder — replace with the real check; it may land in this task's own PR
-# e.g. bash tests/surface_probe_test.sh
-false
+# The destructive path anchors to the repo root, and refuses when there
+# is no repository to anchor to.
+bash plugins/core/tests/worker_postcheck_test.sh
 ```
