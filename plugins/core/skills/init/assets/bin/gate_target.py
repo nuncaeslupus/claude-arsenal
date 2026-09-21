@@ -32,6 +32,7 @@ since its contents are not read. This raises the cost of an accidental bypass; i
 from __future__ import annotations
 
 import json
+import posixpath
 import re
 import shlex
 import sys
@@ -77,6 +78,16 @@ UTILITIES = {
     "rm": ALL,
     "rmdir": ALL,
     "cp": LAST,
+    # rsync's last argument is its destination, the same shape as cp's.
+    "rsync": LAST,
+}
+
+# Utilities whose destination arrives as a flag's value rather than as a
+# positional argument, so nothing about where it sits says it is written.
+# `curl -o SKILL.md …` reached a skill file without this.
+FLAG_DESTINATIONS = {
+    "curl": ("-o", "--output"),
+    "wget": ("-O", "--output-document"),
 }
 
 # Interpreter write calls, for the heredoc-into-python route.
@@ -395,6 +406,47 @@ def _command_head(args: list[str]) -> tuple[str, list[str]]:
     return args[pos].rsplit("/", 1)[-1], args[pos + 1 :]
 
 
+def _flag_values(args: list[str], flags: tuple[str, ...]) -> list[str]:
+    """Values passed to any of `flags`, in all three spellings a tool accepts.
+
+    `-o FILE`, `-oFILE` and `--output=FILE` name the same destination. Reading
+    only the spaced form would repeat, one level down, the mistake of matching
+    a single spelling of a path.
+    """
+    out: list[str] = []
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        for flag in flags:
+            if arg == flag and i + 1 < len(args):
+                out.append(args[i + 1])
+                i += 1
+                break
+            if arg.startswith(f"{flag}="):
+                out.append(arg.split("=", 1)[1])
+                break
+            if len(flag) == 2 and len(arg) > 2 and arg.startswith(flag):
+                out.append(arg[2:])
+                break
+        i += 1
+    return out
+
+
+def _names_skill_path(dest: str) -> str:
+    """The skill path `dest` names, normalised, or "" when it names none.
+
+    `plugins//core/skills/x`, `plugins/core/./skills/x` and
+    `plugins/core/tmp/../skills/x` are all the same file, and a gate that
+    recognises one spelling is not a gate: a doubled slash walked straight
+    through the check whose whole job is noticing that write. Normalising is
+    purely lexical on purpose — a PreToolUse hook must not touch the filesystem
+    to answer, and resolving symlinks would make the answer depend on state the
+    command has not created yet.
+    """
+    candidate = posixpath.normpath(dest.strip("'\""))
+    return candidate if SKILL_PATH.match(candidate) else ""
+
+
 def _destinations(cmd: list[str]) -> list[str]:
     """Paths this simple command writes to."""
     dests, args = _redirect_targets(cmd)
@@ -413,6 +465,8 @@ def _destinations(cmd: list[str]) -> list[str]:
             dests.extend(files[1:] if len(files) > 1 else files)
     elif util == "dd":
         dests.extend(a.split("=", 1)[1] for a in rest if a.startswith("of="))
+    elif util in FLAG_DESTINATIONS:
+        dests.extend(_flag_values(rest, FLAG_DESTINATIONS[util]))
     elif util in UTILITIES:
         mode = UTILITIES[util]
         if mode == ALL:
@@ -440,12 +494,14 @@ def bash_target(command: str) -> str:
         _reads_stdin_source(*_command_head(_redirect_targets(c)[1])) for c in cmds
     ):
         for dest in _inline_source_targets(command):
-            if SKILL_PATH.match(dest.strip("'\"")):
-                return dest
+            named = _names_skill_path(dest)
+            if named:
+                return named
     for cmd in cmds:
         for dest in _destinations(cmd):
-            if SKILL_PATH.match(dest.strip("'\"")):
-                return dest
+            named = _names_skill_path(dest)
+            if named:
+                return named
     return ""
 
 

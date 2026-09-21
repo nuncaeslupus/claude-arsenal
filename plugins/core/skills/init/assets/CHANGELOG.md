@@ -18,6 +18,41 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [4.8.1] - 2026-09-21
+
+### Fixed — the skill-edit gate, the quota guard, and a dependency that was silently dropped
+
+Four fixes found by running `repo-audit` against this repository itself. Each
+one is a check that was quietly not doing its job.
+
+- **The skill-edit gate saw only one spelling of a path.** `plugins//core/…`,
+  `plugins/core/./…` and `plugins/core/tmp/../…` all name the same file, but
+  only the plain form was recognised — so a doubled slash walked straight
+  through the gate. Destinations are now compared lexically normalised. The
+  gate also modelled 13 write tools and treated everything else as harmless:
+  `rsync`, `curl -o`, `curl --output=`, `wget -O` and `wget --output-document`
+  now count as writes.
+- **The copy of that gate `/init` installs failed open.** When its analyser
+  crashed, the vendored hook swallowed the error and read the empty result as
+  "nothing to gate", allowing the write — while the canonical copy had been
+  fixed to refuse. Since vendoring is the only path a cloud session has, the
+  shipped gate was the broken one. Both copies now fail closed, and the
+  regression test runs against **both**, so the next divergence fails CI
+  instead of shipping.
+- **The quota guard passed a round at 97%.** `budget_check.sh` read
+  `used_percentage` only from the `five_hour`/`seven_day` windows, though it
+  already read `status` from the top level. A surface reporting both flat had
+  its percentage ignored, and the guard said "no used_percentage on this
+  surface" about a document containing exactly that. Its dispatch-round counter
+  also kept a single slot, so two sessions sharing a checkout reset each other
+  to 1 and `ARSENAL_MAX_ITERATIONS` never tripped; counts are now per session.
+- **A task written `deps: t-abc12345` ran before its prerequisite.** Without
+  brackets the value parses as a scalar, which was dropped to `[]` — read as
+  "no dependencies", so the task was offered as unblocked. It is now normalised
+  the same way `requires:` and `tags:` already were. Relatedly, a task blocked
+  by a **cancelled** dependency now says so instead of silently disappearing
+  from the board forever.
+
 ## [4.8.0] - 2026-09-21
 
 ### Added — repo-audit asks which model runs its worker agents

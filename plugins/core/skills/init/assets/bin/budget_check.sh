@@ -139,12 +139,20 @@ if max_iter > 0:
             state = {}
     except Exception:
         state = {}
-    count = (state.get("count", 0) if state.get("session") == session_id else 0) + 1
+    # Keyed by session rather than held in a single {session, count} slot. Two
+    # sessions resolving to the same state file — two of them in one clone —
+    # each read the other's id as "not mine" and reset to 1, so both stayed
+    # pinned there and ARSENAL_MAX_ITERATIONS never tripped for either. That is
+    # the one cap documented as not depending on observable state.
+    counts = state.get("counts")
+    if not isinstance(counts, dict):
+        counts = {}
+    prior = counts.get(session_id)
+    count = (prior if isinstance(prior, int) else 0) + 1
+    counts[session_id] = count
     try:
         iter_file.parent.mkdir(parents=True, exist_ok=True)
-        iter_file.write_text(
-            json.dumps({"session": session_id, "count": count}), encoding="utf-8"
-        )
+        iter_file.write_text(json.dumps({"counts": counts}), encoding="utf-8")
     except Exception as exc:
         # Said out loud rather than swallowed. The count lives only in this
         # file, so a write that fails means every later call recomputes `count`
@@ -253,6 +261,18 @@ for window in ("five_hour", "seven_day"):
         worst = v if worst is None else max(worst, v)
         if v >= stop:
             over.append((window, v, _resets(w)))
+
+# The same read at the top level, because a surface may flatten both signals
+# there — the shape `_status_of(data)` above is already read from. Taking
+# `status` from the top level but not `used_percentage` meant a document
+# carrying {"status":"allowed","used_percentage":97} was reported as having "no
+# used_percentage on this surface" and the round proceeded at 97%: the guard
+# asserting the absence of a field the document in front of it contained.
+v = data.get("used_percentage")
+if isinstance(v, (int, float)):
+    worst = v if worst is None else max(worst, v)
+    if v >= stop:
+        over.append((data.get("rateLimitType") or "session", v, _resets(data)))
 
 if worst is None:
     if allowed:
