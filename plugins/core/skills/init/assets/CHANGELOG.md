@@ -18,6 +18,33 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [4.11.0] - 2026-09-21
+
+### Changed — the audit hunts for simplicity, and three files say their thing once
+
+- **`repo-audit` has a ninth hunt group: simplicity and instruction economy.**
+  What costs more to read than it earns — a procedure stated three times, a
+  checklist restating the step above, an enumerated list where one open
+  question would do. Instructions are paid by every session that loads them,
+  and length that does not earn its keep makes the agent do the job worse, not
+  better. This group found real defects the other eight missed.
+- **`references/issue-taxonomy.md` prompts judgment instead of listing
+  patterns** — 144 lines to 59, at the density of `research-categories.md`,
+  which does the same dispatch job. Naming the patterns handed a worker
+  something to match instead of code to read.
+- **`skill-workshop`'s SKILL.md states its gate procedure once.** It said it
+  three times — "The two passes", a checklist restating the first three of
+  them, and a commit-time bullet pointing back — in the skill the pre-edit
+  hook requires loaded before any skill file is touched.
+- **`repo-audit`'s Gotchas name the reference rather than condensing it.** Two
+  of them restated sections `output-shape.md` states in full, with nothing
+  signalling the fuller decision tree existed, so the short version read as
+  complete.
+
+Measured: `issue-taxonomy.md` 1755 → 880 tokens, `repo-audit/SKILL.md` 1842 →
+1696, `skill-workshop/SKILL.md` 3195 → 3120. The resident tier is unchanged —
+no description was touched.
+
 ## [4.10.3] - 2026-09-21
 
 ### Fixed — the docs agree with what installs, and the doc checker stops crying wolf
