@@ -12,6 +12,7 @@ numeric threshold has no number behind it yet.
 - [Evidence gates (numeric acceptance)](#evidence-gates-numeric-acceptance)
 - [Parallel test execution in host-gate](#parallel-test-execution-in-host-gate)
 - [When one file is the long pole](#when-one-file-is-the-long-pole)
+- [Caching: inputs yes, outcomes no](#caching-inputs-yes-outcomes-no)
 - [Unmeasured — the third outcome](#unmeasured--the-third-outcome)
 - [The placeholder, and the first PR that replaces it](#the-placeholder-and-the-first-pr-that-replaces-it)
 
@@ -232,6 +233,43 @@ be free of them.
 The same shape applies to any runner whose unit of parallel scheduling is the
 file rather than the test — check which one the repo's runner uses before
 assuming a split is needed.
+
+---
+
+## Caching: inputs yes, outcomes no
+
+Caching is the other half of a fast suite, and the line that matters runs
+straight through this document's subject — what the gate actually certifies.
+
+**Cache inputs freely.** Resolved dependencies, virtualenvs, compiled
+extensions, Docker layers, a built frontend bundle, a migrated schema template:
+all of it feeds the same tests the same way, so a hit makes setup cheaper and
+changes nothing about what ran. On a suite whose gate is a full `make host-gate`
+per worker per review round, dependency install is often the larger half of the
+clock, and it is the cheapest thing on this page to fix.
+
+**Do not cache outcomes in `host-gate`.** Tooling that skips tests it believes a
+change could not affect — `pytest --lf`, `--ff`, `testmon`, a bare "no relevant
+files changed, skipping" branch in CI — converts the gate's claim from *this
+tree passes* into *nothing I chose to run failed*. Those are not the same
+sentence, and the second one is the failure this bundle keeps naming: green on a
+tree nobody verified, with no signal that the check narrowed. The
+change-detection is where the correctness moved, and it is not something the
+green tick reports on.
+
+The split follows the audience:
+
+- **The edit loop** is where outcome caching belongs. `pytest --lf` between two
+  keystrokes is exactly right — a human is about to run the whole thing anyway,
+  and a wrong skip costs one re-run.
+- **The gate** runs the full suite over the tree being shipped. Let it be slow
+  honestly, and take the time back from parallelism, from splitting the long
+  pole, and from input caching — none of which change what was verified.
+
+If a cache key is ever wrong, prefer the failure that re-runs work to the one
+that skips it: key on a content hash (a lockfile digest, a source tree digest),
+never on a branch name or a bare date, and make a miss cost time rather than
+coverage.
 
 ---
 
