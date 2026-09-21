@@ -25,7 +25,14 @@ from pathlib import Path
 
 LINK_RE = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
 PLACEHOLDER_RE = re.compile(r"\b(TODO|FIXME|TBD|XXX)\b")
-PLACEHOLDER_TOKEN_RE = re.compile(r"<[a-zA-Z][a-zA-Z0-9_-]*>")
+# There was a second check here for `<word>`, reported as an unfilled template
+# token. `<word>` is how every CLI usage line, type parameter and HTML snippet
+# in a doc names a variable, so it fired on documented, intentional text — six
+# times on the skill that ships it. A one-line signal whose findings have to be
+# hand-dismissed on a routine run makes the agent distrust the check, which
+# costs more than the check was worth. TODO/FIXME/TBD/XXX are unambiguous and
+# stay. The cost of dropping it: a genuinely unfilled `<PLACEHOLDER>` in prose
+# is no longer caught here.
 
 
 def find_markdown_files(input_dir: Path) -> list[Path]:
@@ -43,10 +50,6 @@ def check_file(path: Path, repo_root: Path) -> list[str]:
     for match in PLACEHOLDER_RE.finditer(text):
         line_no = text.count("\n", 0, match.start()) + 1
         problems.append(f"{path}:{line_no}: placeholder marker left in ({match.group(1)})")
-
-    for match in PLACEHOLDER_TOKEN_RE.finditer(text):
-        line_no = text.count("\n", 0, match.start()) + 1
-        problems.append(f"{path}:{line_no}: unfilled template token ({match.group(0)})")
 
     for match in LINK_RE.finditer(text):
         target = match.group(1).strip()

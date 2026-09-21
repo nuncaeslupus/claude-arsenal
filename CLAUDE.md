@@ -325,6 +325,10 @@ registry of flags a core skill honors:
 - `<!-- github-skill: projects=classic | v2 | none -->` — auto-detected
   on first run. Read by `github` to skip GitHub Projects re-detection in
   later sessions.
+- `<!-- ship: adversarial-review=skip -->` — absent by default. Read by
+  `ship`: with the marker, an abbreviated run may skip the adversarial
+  reviewer gate **only** for a docs-only or config-only change. Every code
+  change runs it regardless.
 
 Markers are per-host-repo and optional; absent a marker each skill uses
 its default (or asks once, for `session-end`).

@@ -1414,6 +1414,8 @@ When a skill is invoked, the rendered SKILL.md content enters the conversation a
 
 ### Parallelism & Delegation Topology
 
+<a id="parallelism-delegation-topology"></a>
+
 > **Q-006 added this subsection** _(blue)_
 >
 > Topology and quantitative bounds for runtime composition. All rules cross-link to [Multi-task Composition ↗](#multi-task-composition){tab=skill-spec}; this subsection is the *system view*.
@@ -1694,6 +1696,8 @@ Note the asymmetry: a 2-filesystem-depth file with a 1-graph-distance passes; a 
 
 <!-- @anchor: meta-skill-validation -->
 ## Meta-Skill & Validation
+
+<a id="meta-skill-validation"></a>
 
 ### Meta-Skill Spec
 
