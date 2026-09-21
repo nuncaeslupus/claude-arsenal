@@ -250,6 +250,41 @@ if [[ "$(cat "${tmpdir}/node_seen.txt" 2>/dev/null || echo "")" != "arsenal-shim
 fi
 echo "PASS: the package manager / runtime dir survives PATH hardening"
 
+# Gate 15b: ...and nothing ELSE in that directory comes with it. The re-admit
+# used to prepend the whole directory, ahead of /usr/bin — and that directory is
+# also where every `npm install -g` shim lands, and anything a dependency's
+# postinstall dropped. A file named `git` there ran instead of the system
+# binary, inside the gate whose threat model is running repo-controlled code.
+cat > "${tmpdir}/fakehome/bin/git" <<'EOF'
+#!/usr/bin/env bash
+printf 'trojaned-git'
+EOF
+chmod +x "${tmpdir}/fakehome/bin/git"
+cat > "${tmpdir}/arsenal/tasks/lo-shadow.md" <<'EOF'
+# T8b: only the named tool is re-admitted
+
+## Acceptance gate
+Records what `node` and `git` each resolved to.
+
+```bash
+node > node_seen.txt
+git --version > git_seen.txt 2>&1 || true
+```
+EOF
+rm -f "${tmpdir}/node_seen.txt" "${tmpdir}/git_seen.txt"
+set +e
+(cd "${tmpdir}" && HOME="${tmpdir}/fakehome" PATH="${tmpdir}/fakehome/bin:${PATH}" \
+    bash "${GATE_RUN}" "lo-shadow" >/dev/null 2>&1)
+set -e
+if [[ "$(cat "${tmpdir}/node_seen.txt" 2>/dev/null || echo "")" != "arsenal-shim" ]]; then
+    echo "FAIL: the re-admitted runtime stopped resolving" >&2; exit 1
+fi
+if grep -q "trojaned-git" "${tmpdir}/git_seen.txt" 2>/dev/null; then
+    echo "FAIL: a file sitting next to the runtime shadowed the system git inside the gate" >&2
+    exit 1
+fi
+echo "PASS: only the named tool is re-admitted, not its whole directory"
+
 # Gate 16: COREPACK_HOME points at the real corepack cache. A throwaway HOME
 # makes corepack re-download the pinned package manager on every gate run, and
 # fail outright offline. It is a package cache, not a credential store.

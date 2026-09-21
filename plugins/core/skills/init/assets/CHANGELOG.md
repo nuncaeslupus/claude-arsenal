@@ -18,6 +18,24 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [4.9.3] - 2026-09-21
+
+### Fixed — a gate no longer picks up whatever else is installed next to `node`
+
+`gate_run.sh` strips `$HOME`-writable directories from `PATH` so a gate running
+repo-controlled code cannot pick up a trojaned tool, then re-admits the ones
+holding your package manager and language runtime — those live under `$HOME`
+(nvm, volta, asdf, uv, rustup), and stripping them wholesale leaves every
+`pnpm test` gate at exit 127.
+
+It re-admitted the whole **directory**, prepended ahead of `/usr/bin`. But
+`~/.nvm/versions/node/vN/bin` is also where every `npm install -g` shim lands,
+and anything a dependency's postinstall dropped: a file named `git`, `curl` or
+`make` sitting there ran instead of the system binary, inside the gate. Only
+the named tools are admitted now, as symlinks, at exactly the precedence they
+had — `node` still resolves to your `node`, and nothing else in its directory
+is reachable from the gate.
+
 ## [4.9.2] - 2026-09-21
 
 ### Fixed — a new section now shows up in your config, and a bad issue fetch says so

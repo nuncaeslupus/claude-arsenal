@@ -374,32 +374,59 @@ for system_dir in ("/usr/local/sbin", "/usr/local/bin", "/usr/sbin", "/usr/bin",
 # friends with exit 127 — a gate that CANNOT RUN, which is worse than an
 # unhardened one: it verifies nothing, and every caller has to work around it
 # with ARSENAL_GATE_INHERIT_ENV=1, which hands the gate the *entire* real
-# HOME/PATH. Admitting just these dirs keeps the rest of $HOME off PATH, and
+# HOME/PATH. Admitting just these tools keeps the rest of $HOME off PATH, and
 # HOME itself stays a throwaway.
-for tool in ("pnpm", "npm", "yarn", "bun", "node", "corepack", "uv", "poetry", "cargo"):
-    found = shutil.which(tool, path=os.environ.get("PATH", ""))
-    tool_dir = os.path.dirname(os.path.abspath(found)) if found else None
-    if tool_dir and tool_dir not in safe_path.split(os.pathsep):
-        safe_path = f"{tool_dir}{os.pathsep}{safe_path}" if safe_path else tool_dir
+# Admitted as symlinks to those tools, not as the directories holding them.
+# Prepending a whole directory put every OTHER file in it ahead of /usr/bin, and
+# `~/.nvm/versions/node/vN/bin` is also where every `npm install -g` shim lands
+# — and anything a dependency's postinstall dropped. A file named `git`, `curl`
+# or `make` sitting there ran instead of the system binary, inside the gate
+# whose own threat model is running attacker-influenceable code. Symlinks keep
+# each toolchain resolving exactly where it did, at the same precedence, and
+# make nothing else in its directory reachable. (Re-applying the $HOME filter
+# here instead, or resolving against the hardened PATH, would find none of these
+# tools at all — being under $HOME is the whole reason they need re-admitting.)
+GATE_TOOLS = ("pnpm", "npm", "yarn", "bun", "node", "corepack", "uv", "poetry", "cargo")
 
-with tempfile.TemporaryDirectory(prefix="arsenal-gate-home-") as gate_home:
-    env = {
-        "PATH": safe_path,
-        "HOME": gate_home,
-        "PWD": os.getcwd(),
-        "LANG": os.environ.get("LANG", "C.UTF-8"),
-        "LC_ALL": os.environ.get("LC_ALL", "C.UTF-8"),
-        "TERM": os.environ.get("TERM", "dumb"),
-    }
-    # A repo pinning "packageManager" makes corepack resolve that version out of
-    # its own cache; keyed to HOME, a throwaway one re-downloads the package
-    # manager on every gate run and fails outright offline. Point it at the real
-    # cache — a package cache, not a credential store.
-    corepack_home = os.environ.get("COREPACK_HOME") or os.path.join(
-        real_home, ".cache", "node", "corepack"
-    )
-    if os.path.isdir(corepack_home):
-        env["COREPACK_HOME"] = corepack_home
-    rc = _run(env)
+with tempfile.TemporaryDirectory(prefix="arsenal-gate-bin-") as gate_bin:
+    for tool in GATE_TOOLS:
+        found = shutil.which(tool, path=os.environ.get("PATH", ""))
+        if not found:
+            continue
+        # Resolved from the real PATH, so this is the binary the host would have
+        # used — and re-admitted only when the strip is what removed it. Asking
+        # instead whether the NAME resolves on the hardened PATH would silently
+        # swap a $HOME toolchain for a system one of a different version.
+        if not _under_home(os.path.dirname(os.path.abspath(found))):
+            continue
+        try:
+            os.symlink(os.path.abspath(found), os.path.join(gate_bin, tool))
+        except OSError:
+            # A platform or filesystem without symlinks loses that toolchain,
+            # which is the old exit-127 problem for that one tool — not a reason
+            # to hand the gate a whole writable directory instead.
+            pass
+    if os.listdir(gate_bin):
+        safe_path = f"{gate_bin}{os.pathsep}{safe_path}" if safe_path else gate_bin
+
+    with tempfile.TemporaryDirectory(prefix="arsenal-gate-home-") as gate_home:
+        env = {
+            "PATH": safe_path,
+            "HOME": gate_home,
+            "PWD": os.getcwd(),
+            "LANG": os.environ.get("LANG", "C.UTF-8"),
+            "LC_ALL": os.environ.get("LC_ALL", "C.UTF-8"),
+            "TERM": os.environ.get("TERM", "dumb"),
+        }
+        # A repo pinning "packageManager" makes corepack resolve that version out of
+        # its own cache; keyed to HOME, a throwaway one re-downloads the package
+        # manager on every gate run and fails outright offline. Point it at the real
+        # cache — a package cache, not a credential store.
+        corepack_home = os.environ.get("COREPACK_HOME") or os.path.join(
+            real_home, ".cache", "node", "corepack"
+        )
+        if os.path.isdir(corepack_home):
+            env["COREPACK_HOME"] = corepack_home
+        rc = _run(env)
 _finish(rc)
 PY
