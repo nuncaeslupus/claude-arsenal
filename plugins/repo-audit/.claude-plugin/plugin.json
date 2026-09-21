@@ -1,6 +1,6 @@
 {
   "name": "repo-audit",
-  "version": "4.6.1",
-  "description": "Analyzes a repository end to end — how it actually works, what's undocumented, what's inconsistent or fragile — and produces a findings-backed write-up plus verified documentation fixes. General-purpose repo analysis, not specific to claude-arsenal's own engineering workflow.",
+  "version": "4.7.0",
+  "description": "Finds real problems in a repository and queues them as properly-gated work (repo-audit), then turns the results into human-facing documents — a pitch, a deep-dive, interview prep, onboarding, a status brief (explain-repo). General-purpose, not specific to claude-arsenal's own engineering workflow.",
   "author": { "name": "nuncaeslupus" }
 }

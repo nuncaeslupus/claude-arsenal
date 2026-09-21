@@ -180,13 +180,19 @@ Separately — not part of the engineering-workflow pitch above, its own tool
 in the same toolbox:
 
 ```text
-/plugin install repo-audit@claude-arsenal       # analyze & document any repo
+/plugin install repo-audit@claude-arsenal       # find problems, explain results
 ```
 
-Point it at any repository, not just this one, and it audits how the thing
-actually works, tries to falsify what it just found, and hands back a
-findings-backed write-up plus verified doc fixes:
+Point `repo-audit` at any repository, not just this one, and it hunts across
+a real checklist — correctness, security, concurrency, error handling,
+tests, docs — verifies every candidate, then queues confirmed findings as
+gated work instead of a list nobody acts on:
 [`plugins/repo-audit/skills/repo-audit/SKILL.md`](plugins/repo-audit/skills/repo-audit/SKILL.md).
+`explain-repo`, in the same plugin, turns those results into whichever
+human-facing document is actually needed — a pitch, a deep-dive, interview
+prep, an onboarding guide, a status brief — always for the person who asked,
+never committed to the repo:
+[`plugins/repo-audit/skills/explain-repo/SKILL.md`](plugins/repo-audit/skills/explain-repo/SKILL.md).
 
 ### Then vendor it — this is the part that matters
 

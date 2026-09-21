@@ -18,6 +18,31 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [4.7.0] - 2026-09-21
+
+### Added — `explain-repo`, and `repo-audit` gets a real bug hunt
+
+`repo-audit` grows a fifth pass: `references/issue-taxonomy.md` — correctness,
+concurrency, security (OWASP-informed), error handling, API design, dead
+code/performance, tests, conventions — dispatched one worker per group
+alongside the existing architecture-understanding pass, every candidate
+independently verified before it's trusted. A confirmed finding no longer
+just becomes a ledger row: `create_task.py` (duplicated from `queue-add`,
+kept in sync via `sync_duplicates.py`) queues it as a properly-gated arsenal
+task when the target repo has one, falling back to a GitHub issue or the
+ledger. Never an unrequested fix — queuing is the actionable-but-reviewable
+middle ground.
+
+New skill `explain-repo`, same plugin: turns a `repo-audit` analysis into
+whichever human document is actually needed — a pitch, a deep-dive,
+interview-prep Q&A, an onboarding guide, or a status brief — always for the
+person who asked, never committed to the target repo, and says so plainly.
+`create_artifact.py` moves from repo-audit-specific to shared infrastructure
+between the two skills (duplicated, kept in sync the same way).
+
+`/plugin install repo-audit@claude-arsenal` — unchanged install, two skills
+now.
+
 ## [4.6.1] - 2026-09-20
 
 ### Fixed — `make lint` now actually checks formatting
