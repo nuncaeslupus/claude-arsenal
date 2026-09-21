@@ -18,6 +18,21 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [4.13.2] - 2026-09-21
+
+### Fixed
+
+- `open_task_pr.sh` now documents why the task gate runs **before** the task
+  file is archived while the repo's `host-gate` runs **after** it. The practical
+  rule, new in `references/evidence-gates.md`: a task's acceptance gate must not
+  depend on state the archive produces — a gate asserting "every merged task is
+  archived", or one that simply reuses `host-gate`, is unsatisfiable there by
+  construction and fails as `the task gate failed`, pointing at the task instead
+  of at the ordering. Checks that need the final tree belong in `host-gate`.
+- Corrected a stale comment in `open_task_pr.sh` that still described the host
+  gate as running twice and called the surviving call a re-run. It has run once,
+  over the archived tree, since 3.3.0.
+
 ## [4.13.1] - 2026-09-21
 
 ### Fixed
