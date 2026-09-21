@@ -109,4 +109,37 @@ if calls > budget:
 print(f"PASS: the board resolves in {calls} issue matches for {len(issues)} issues")
 PY
 
+# --- 4: work on GitHub that is on no board is named, not hidden ---------------
+#     Every other issue fetch in the system is filtered to the task label, so an
+#     issue carrying neither that nor the import label was invisible to every
+#     check the queue has. The board read `open 0` while three real findings sat
+#     open, and a session reported "nothing pending" from it.
+printf '[{"number":391,"title":"dead config keys"},{"number":392,"title":"a doc claim"}]' \
+    > "${tmp}/stray.json"
+python3 "${QS}" --tasks-dir "${tasks}" --no-remote-check --open-issues "${tmp}/stray.json" \
+    >/dev/null 2>"${tmp}/stray.err"
+grep -q "on neither the board nor the import path" "${tmp}/stray.err" \
+    || fail "issues outside the board were not reported: $(cat "${tmp}/stray.err")"
+grep -q "#391" "${tmp}/stray.err" || fail "the note must name the issues, not just count them"
+
+# An empty list is silence — there is nothing to say, and saying it every session
+# would be the noise that gets a check ignored.
+printf '[]' > "${tmp}/none.json"
+python3 "${QS}" --tasks-dir "${tasks}" --no-remote-check --open-issues "${tmp}/none.json" \
+    >/dev/null 2>"${tmp}/none.err"
+grep -q "on neither the board" "${tmp}/none.err" \
+    && fail "an empty list must say nothing: $(cat "${tmp}/none.err")"
+
+# ...and omitting the fetch says the check did not run, rather than passing for it.
+python3 "${QS}" --tasks-dir "${tasks}" --no-remote-check >/dev/null 2>"${tmp}/skip.err"
+grep -q "does not mean nothing is outstanding" "${tmp}/skip.err" \
+    || fail "a skipped check must say so — an unasked question is not a clean answer"
+
+# The whole point of the earlier sections: a machine caller is told the same.
+python3 "${QS}" --tasks-dir "${tasks}" --no-remote-check --json \
+    --open-issues "${tmp}/stray.json" >/dev/null 2>"${tmp}/stray-json.err"
+diff -q "${tmp}/stray.err" "${tmp}/stray-json.err" >/dev/null \
+    || fail "--json hides the off-board issues that text mode reports"
+echo "PASS: open issues on no board are named, in both output formats"
+
 echo "PASS: query_status_report_test — all gates passed"

@@ -1,6 +1,6 @@
 # Claude Arsenal
 
-<!-- claude-arsenal v4.12.0 — imported via @claude-arsenal/AGENTS.md -->
+<!-- claude-arsenal v4.13.0 — imported via @claude-arsenal/AGENTS.md -->
 
 This file is imported by the host repo's `CLAUDE.md` via the session-protocol block
 that `/init` injects, so it sits in context on **every turn of every session**. It
@@ -62,9 +62,15 @@ At the start of every session (fresh start, context compaction, or cold restart)
    > pairs an issue to its task is its `arsenal-id:<id>` label, which is in `labels`; a
    > 40-issue board costs ~9k tokens with bodies and ~1.2k without, every session. MCP:
    > the `fields` argument. `gh`: `--json number,title,state,labels,assignees`.
+   > Also list **open** issues carrying neither `arsenal:task` nor `arsenal:queue`
+   > (`gh issue list --state open --search "-label:arsenal:task -label:arsenal:queue"
+   > --json number,title`) and pass it as `--open-issues`. Every other fetch here is
+   > label-filtered, so without it work can sit open on GitHub while the board reads
+   > `open 0`.
 
 3. **Read the board** — `git fetch --quiet origin`, then
-   `python3 claude-arsenal/scripts/query_status.py --issues /tmp/arsenal-issues.json`.
+   `python3 claude-arsenal/scripts/query_status.py --issues /tmp/arsenal-issues.json \
+   --open-issues /tmp/arsenal-unfiled.json`.
    Report anything it flags: a task with no fenced gate block, a task file with no issue
    handle, a dep that no task file declares, or a working tree behind the remote.
    > The issues are fetched fresh; the task files are as old as your last pull, and a
