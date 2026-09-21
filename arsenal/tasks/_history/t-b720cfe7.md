@@ -3,6 +3,7 @@ id: t-b720cfe7
 title: "Gate evaluation produces false PASSes on three different inputs"
 priority: 5
 tags: [gates, correctness]
+status: merged
 ---
 
 Three ways a gate that should fail reports PASS. All three matter because this
