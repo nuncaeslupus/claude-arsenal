@@ -73,11 +73,6 @@ DEFAULTS: dict[str, Any] = {
     #   required  refuse to open the PR without a CLEAR receipt for this tree.
     #   off       skip the check and write no line.
     "pre-pr-review": "warn",
-    # test-first writes a failing test before the change; test-after writes
-    # tests alongside it. Read by `execution`.
-    "test-discipline": "test-first",
-    # What /session-end writes when a session closes.
-    "session-end": "handoff",
     # The skills-listing character budget the auditor enforces. It is a real
     # constraint, but its value differs by surface and has changed over time,
     # so a consumer whose budget differs can set it here instead of being
@@ -170,8 +165,6 @@ ENUMS: dict[str, set[str]] = {
     # minutes, or no CI at all — can only choose between a policy that blocks
     # every merge indefinitely and one that everybody learns to wave through.
     "merge-policy": {"always", "after-review", "after-ci", "after-ci-and-review", "never"},
-    "test-discipline": {"test-first", "test-after"},
-    "session-end": {"handoff", "ticket", "none"},
     # open_task_pr.sh compares this against the literal "required", so anything
     # else — "Required", "requried", "on" — takes the warn path: the PR opens,
     # its body says no review ran, and the consumer who wrote the value believes
@@ -181,6 +174,44 @@ ENUMS: dict[str, set[str]] = {
 }
 
 CONFIG_RELPATH = "config.toml"
+
+# What reads each key, by path from the repository root. A key with no reader
+# is a setting that scaffolds, validates, round-trips through `--explain`, and
+# changes nothing — six shipped that way, and the worst of them was documented
+# in AGENTS.md as configurable, so a consumer who set it silently imported no
+# issues at all. `config_keys_test.sh` asserts this map covers DEFAULTS and
+# that each named file mentions its key, which is what makes adding a key
+# without wiring it a failing build rather than a discovery months later.
+READERS = {
+    "merge-policy": "plugins/core/skills/init/assets/bin/merge_ready.sh",
+    "host-gate": "plugins/core/skills/init/assets/bin/open_task_pr.sh",
+    "host-setup": "plugins/core/skills/init/assets/bin/host_setup.sh",
+    "pre-pr-review": "plugins/core/skills/init/assets/bin/open_task_pr.sh",
+    "listing-budget": "plugins/skill-workshop/skills/skill-workshop/scripts/audit_library.py",
+    "queue-automation": "plugins/core/skills/init/scripts/init.py",
+    "import-label": "plugins/core/skills/init/assets/scripts/issue_import.py",
+    "task-label": "plugins/core/skills/init/assets/scripts/queue_hooks.py",
+    "claim-prefix": "plugins/core/skills/init/assets/scripts/queue_hooks.py",
+    # `[skills]` is read as a table, so init.py never names a section: the names
+    # are data, and sections.json is where one is declared.
+    "skills.workflow": "plugins/core/skills/init/assets/sections.json",
+    "skills.python": "plugins/core/skills/init/assets/sections.json",
+    "context-window": "plugins/core/skills/init/scripts/init.py",
+    "models.orchestrator": "plugins/core/skills/init/assets/AGENTS.md",
+    "models.workers": "plugins/core/skills/init/assets/agents/worker.md",
+    "models.reviewers": "plugins/core/skills/init/assets/agents/reviewer.md",
+    # `home` is the exception, and the only one: it names the directory holding
+    # config.toml, so it cannot be read from config.toml. ARSENAL_HOME is the
+    # channel, and FILE_ONLY_REJECTS below refuses the key in the file rather
+    # than accepting it and relocating nothing.
+    "home": None,
+}
+
+# Keys that must not be set in the file. Accepting one there looks like it
+# works — `--explain` echoes it back — and does nothing at all.
+FILE_ONLY_REJECTS = {
+    "home": "ARSENAL_HOME (the file lives inside the directory this names)",
+}
 
 
 class ConfigError(Exception):
@@ -253,6 +284,10 @@ def load(repo_root: Path | None = None) -> tuple[dict[str, Any], dict[str, str]]
         except tomllib.TOMLDecodeError as exc:
             raise ConfigError(f"{path}: not valid TOML — {exc}") from exc
         for key, value in _flatten(raw).items():
+            if key in FILE_ONLY_REJECTS:
+                raise ConfigError(
+                    f"{path}: {key} cannot be set here — use {FILE_ONLY_REJECTS[key]}"
+                )
             if key not in DEFAULTS:
                 # Unknown keys are tolerated rather than fatal: a consumer on
                 # an older bundle should not break when a newer one adds a key,
@@ -321,6 +356,21 @@ def load(repo_root: Path | None = None) -> tuple[dict[str, Any], dict[str, str]]
             )
 
     return values, sources
+
+
+def setting(key: str, repo_root: Path | None = None) -> Any:
+    """One configured value, for a module that needs a single key.
+
+    Falls back to the shipped default when the config cannot be read, so a
+    module-level constant resolved through this cannot make a script fail to
+    import on a malformed file. An invalid config is still reported loudly
+    where a human is looking — `--explain` and `init.py` both call `load()`
+    directly and let ConfigError out.
+    """
+    try:
+        return load(repo_root)[0][key]
+    except (ConfigError, OSError, KeyError):
+        return DEFAULTS[key]
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -58,6 +58,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from arsenal_config import setting
 from queue_hooks import TASK_LABEL
 from task_select import (
     ID_LABEL_PREFIX,
@@ -68,7 +69,10 @@ from task_select import (
     task_id_from_issue,
 )
 
-DEFAULT_IMPORT_LABEL = "arsenal:queue"
+# AGENTS.md — resident in every session — documents `import-label` as what
+# changes this. It was a hardcoded string, so a consumer who set the key
+# imported nothing and was told nothing.
+DEFAULT_IMPORT_LABEL = setting("import-label")
 
 # The gate a seeded task cannot pass until a human writes one. `requires` is
 # already the selector's "not eligible here" mechanism, and no surface ever

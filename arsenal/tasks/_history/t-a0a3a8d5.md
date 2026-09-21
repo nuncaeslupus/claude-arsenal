@@ -3,6 +3,7 @@ id: t-a0a3a8d5
 title: "Six config.toml keys are validated and documented but nothing reads them"
 priority: 5
 tags: [config, api-design]
+status: merged
 ---
 
 arsenal_config.py scaffolds and validates keys that no consumer reads. A full
@@ -28,13 +29,8 @@ and a check exists that a key cannot be added without a reader.
 
 ## Acceptance gate
 
-<!-- Replace this with a fenced bash block. A gate that is only prose runs
-     nothing, and a gate that runs nothing passes everything — `task_select.py`
-     reports gate: false for a task with no block, so an unenforced gate is
-     visible rather than quietly inert. -->
-
 ```bash
-# arsenal:gate-placeholder — replace with the real check; it may land in this task's own PR
-# e.g. bash tests/surface_probe_test.sh
-false
+# Every key names the file that reads it, the three that were dead now
+# change what runs, and a key the file cannot set is refused.
+bash plugins/core/tests/config_keys_test.sh
 ```

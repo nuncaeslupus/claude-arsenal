@@ -107,12 +107,10 @@ host-setup = ""
 #   off       Do not check, write nothing in the body.
 pre-pr-review = "warn"
 
-# test-first writes a failing test before the change; test-after writes tests
-# alongside it.
-test-discipline = "test-first"
-
-# What /session-end leaves behind: handoff | ticket | none
-session-end = "handoff"
+# Test discipline and what /session-end leaves behind are set in this repo's
+# own CLAUDE.md, with an HTML comment marker — `<!-- test-discipline: test-after -->`
+# and `<!-- session-end: handoff=no -->`. They were listed here too, and
+# nothing read the copy.
 
 # The skills-listing character budget the auditor enforces. Raise it if your
 # surface's real budget differs, rather than deleting skills to fit a number

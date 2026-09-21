@@ -73,7 +73,7 @@ claude-arsenal/        ← upstream. /init refreshes what it ships and retires w
     gate_evidence.py
 
 arsenal/               ← yours. Scaffolded once, then never written by an upgrade
-  config.toml          ← merge-policy, test-discipline, listing budget…
+  config.toml          ← merge-policy, host-gate, listing budget…
   tasks/<id>.md        ← the tasks; their front matter is the DAG
   specs/ plans/        ← specifications and plans
   project/             ← workspace overview + per-workspace context
