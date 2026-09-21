@@ -18,6 +18,19 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [4.8.0] - 2026-09-21
+
+### Added — repo-audit asks which model runs its worker agents
+
+`repo-audit`'s Orient pass now asks once, per run (`AskUserQuestion`) which
+model — Sonnet, Opus, Haiku, or Fable — the Understand/Hunt/Verify fan-out
+workers should use, instead of silently assuming one. A wide fan-out is a
+real cost/thoroughness tradeoff; it's now the user's call every time, not a
+default baked into the skill. Falls back to Sonnet for an unattended run
+with no one to ask. The orchestrating model itself is unchanged — still
+whichever model the session is already running, set before invoking the
+skill, not something this flag touches.
+
 ## [4.7.0] - 2026-09-21
 
 ### Added — `explain-repo`, and `repo-audit` gets a real bug hunt
