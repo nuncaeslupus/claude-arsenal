@@ -18,6 +18,19 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [4.15.0] - 2026-09-21
+
+### Added
+
+- `references/evidence-gates.md` gains *Caching: inputs yes, outcomes no* — the
+  third lever for a slow suite, with the line that keeps it honest. Caching
+  inputs (dependencies, virtualenvs, compiled extensions, Docker layers) makes
+  setup cheaper and changes nothing about what ran. Caching **outcomes**
+  (`pytest --lf`, `testmon`, a "no relevant files changed" skip) changes the
+  gate's claim from *this tree passes* to *nothing I chose to run failed* — fine
+  in the edit loop, wrong in `host-gate`. Includes cache-key guidance: key on a
+  content hash, and make a miss cost time rather than coverage.
+
 ## [4.14.0] - 2026-09-21
 
 ### Added

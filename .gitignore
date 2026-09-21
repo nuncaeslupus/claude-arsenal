@@ -21,6 +21,8 @@ sdist/
 var/
 wheels/
 share/python-wheels/
+# A loose wheel in the repo root is always a stray `pip download`, never content.
+*.whl
 *.egg-info/
 .installed.cfg
 *.egg
