@@ -39,6 +39,7 @@ from task_select import (
     default_tasks_dir,
     effective_state,
     load_tasks,
+    read_issue_payload,
     state_from_issues,
     task_id_from_issue,
     title_index,
@@ -180,28 +181,11 @@ def main(argv: list[str] | None = None) -> int:
     handles_known = bool(args.issues)
     if handles_known:
         # Session-start step 3 runs this straight after the board fetch, so a
-        # truncated or unreadable fetch file is a realistic input. The sibling
-        # scripts (handle_sync, issue_for_task, issue_import) all return 2 here
-        # rather than letting a traceback escape a documented exit contract.
-        try:
-            payload = json.loads(args.issues.read_text(encoding="utf-8"))
-        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
-            print(f"query_status: cannot read --issues — {exc}", file=sys.stderr)
+        # truncated or unreadable fetch file is a realistic input.
+        maybe = read_issue_payload(args.issues, "query_status")
+        if maybe is None:
             return 2
-        if isinstance(payload, dict):
-            payload = payload.get("issues")
-        # The shape is checked before it is iterated: `null`, a bare scalar, and
-        # `{"issues": null}` are all valid JSON that a truncated or wrong-shaped
-        # fetch produces, and each raised a TypeError out of the comprehension
-        # below rather than saying what was wrong with the file.
-        if not isinstance(payload, list):
-            print(
-                f"query_status: --issues {args.issues} is not an issue list — expected a "
-                'JSON array, or an object with an "issues" array',
-                file=sys.stderr,
-            )
-            return 2
-        issues = [i for i in payload if isinstance(i, dict)]
+        issues = maybe
 
     tasks, warnings = load_tasks(args.tasks_dir)
     # Both readings, deliberately. `effective_state` lets a task file's terminal

@@ -3,6 +3,7 @@ id: t-28ff5cb0
 title: "_resolve_sections never adds a newly shipped section to an existing config"
 priority: 10
 tags: [vendoring]
+status: merged
 ---
 
 _resolve_sections returns early when a [skills] table is already recorded
@@ -23,13 +24,8 @@ that config on the next run, defaulted off.
 
 ## Acceptance gate
 
-<!-- Replace this with a fenced bash block. A gate that is only prose runs
-     nothing, and a gate that runs nothing passes everything — `task_select.py`
-     reports gate: false for a task with no block, so an unenforced gate is
-     visible rather than quietly inert. -->
-
 ```bash
-# arsenal:gate-placeholder — replace with the real check; it may land in this task's own PR
-# e.g. bash tests/surface_probe_test.sh
-false
+# A section shipped after a consumer's config was written appears in it
+# on the next run, still off, and an up-to-date table is not rewritten.
+bash plugins/core/tests/skill_sections_test.sh
 ```

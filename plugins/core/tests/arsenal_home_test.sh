@@ -40,13 +40,36 @@ echo "PASS: default_tasks_dir() honours ARSENAL_HOME and defaults to arsenal/tas
 # --- 2: nothing carries its own copy of the literal ---------------------------
 #     The defect was five identical defaults, so a fix to one would not have
 #     reached the others. This is the guard against a sixth being written.
-stragglers=$(grep -rln 'default=Path("arsenal/tasks")' "${SCRIPTS}" || true)
-[[ -z "${stragglers}" ]] \
-    || fail "these still hardcode the board path instead of default_tasks_dir():
-${stragglers}"
-users=$(grep -rl 'default=default_tasks_dir()' "${SCRIPTS}" | wc -l | tr -d ' ')
-[[ "${users}" -ge 5 ]] \
-    || fail "expected at least 5 readers on the shared default, found ${users}"
+#     Checked on the flag rather than on one spelling of the literal: the first
+#     version of this grep looked for `default=Path("arsenal/tasks")` and missed
+#     issue_for_task.py, which spelled its own resolution a third way — honouring
+#     ARSENAL_HOME but without the empty-value guard.
+bad=$(python3 - "${SCRIPTS}" <<'PY'
+import re, sys
+from pathlib import Path
+
+bad = []
+for path in sorted(Path(sys.argv[1]).glob("*.py")):
+    text = path.read_text(encoding="utf-8")
+    for m in re.finditer(r'"--tasks-dir"', text):
+        call = text.rfind("add_argument(", 0, m.start())
+        depth, i = 0, call + len("add_argument")
+        while i < len(text):
+            depth += (text[i] == "(") - (text[i] == ")")
+            i += 1
+            if depth == 0:
+                break
+        if "default_tasks_dir()" not in text[call:i]:
+            bad.append(f"{path.name}: {' '.join(text[call:i].split())}")
+print("\n".join(bad))
+PY
+)
+[[ -z "${bad}" ]] \
+    || fail "these --tasks-dir defaults do not resolve through default_tasks_dir():
+${bad}"
+users=$(grep -rl --include='*.py' 'default=default_tasks_dir()' "${SCRIPTS}" | wc -l | tr -d ' ')
+[[ "${users}" -ge 6 ]] \
+    || fail "expected at least 6 readers on the shared default, found ${users}"
 echo "PASS: every --tasks-dir default resolves through the one function"
 
 # --- 3: the readers the session protocol runs actually find a relocated board -
@@ -66,7 +89,7 @@ true
 ```
 TASK
 
-out=$(cd "${repo}" && ARSENAL_HOME=host python3 "${SCRIPTS}/query_status.py" 2>&1)
+out=$(cd "${repo}" && ARSENAL_HOME=host python3 "${SCRIPTS}/query_status.py" --no-remote-check 2>&1)
 grep -q "^tasks: 1" <<<"${out}" \
     || fail "query_status.py read a relocated board as empty: ${out}"
 
@@ -76,7 +99,7 @@ grep -q "t-relocated" <<<"${out}" \
 echo "PASS: the board readers follow ARSENAL_HOME"
 
 # ...and an explicit --tasks-dir still wins over it.
-out=$(cd "${repo}" && ARSENAL_HOME=host python3 "${SCRIPTS}/query_status.py" --tasks-dir nowhere 2>&1)
+out=$(cd "${repo}" && ARSENAL_HOME=host python3 "${SCRIPTS}/query_status.py" --no-remote-check --tasks-dir nowhere 2>&1)
 grep -q "^tasks: 0" <<<"${out}" \
     || fail "an explicit --tasks-dir must override ARSENAL_HOME: ${out}"
 echo "PASS: an explicit --tasks-dir still overrides ARSENAL_HOME"

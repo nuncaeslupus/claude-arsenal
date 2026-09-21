@@ -47,6 +47,7 @@ from task_select import (
     default_tasks_dir,
     load_tasks,
     loose_title_key,
+    read_issue_payload,
     task_id_from_body,
     task_id_from_issue,
     task_id_from_labels,
@@ -180,13 +181,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--label", default="arsenal:task")
     args = parser.parse_args(argv)
 
-    try:
-        payload = json.loads(args.issues.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        print(f"handle_sync: cannot read --issues — {exc}", file=sys.stderr)
+    payload = read_issue_payload(args.issues, "handle_sync")
+    if payload is None:
         return 2
-    if isinstance(payload, dict):
-        payload = payload.get("issues", [])
 
     tasks, warnings = load_tasks(args.tasks_dir)
     for warning in warnings:
