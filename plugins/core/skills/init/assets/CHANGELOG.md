@@ -18,6 +18,37 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [4.8.3] - 2026-09-21
+
+### Fixed — a gate can no longer pass by being misread
+
+Four ways the gate machinery reported the wrong answer about a number. The
+repository's central claim is that "done" means a script checked a value, so a
+gate that is misparsed is worse than no gate at all.
+
+- **The audit and the gate disagreed about the same line.** `run_gate.py` (the
+  advisory check `review` and `ship` run) and `gate_evidence.py` (the check that
+  blocks PR creation) each carried their own copy of the threshold grammar, and
+  the copies had drifted: one accepted scientific notation, the other did not.
+  `throughput >= 1e6` was a threshold of `1,000,000` to one and `1` to the
+  other, so a measured `5` passed the audit and was then refused by the gate.
+  They now share one grammar, and a test holds them to it.
+- **`1,000` was read as `1`.** Thousands separators are now read in full groups,
+  and a malformed one like `1,5` refuses to parse rather than silently becoming
+  `1`. A number matches whole or not at all.
+- **A Measured cell that wasn't a measurement became a verdict.** The parser
+  read the first number anywhere in the cell, so `2026-09-21: 0.85` scored as
+  `2026` and **passed** a `line_coverage >= 0.90` gate. The cell must now begin
+  with its number. A trailing unit still works as documented (`42ms` is 42), and
+  backticks and `**bold**` are stripped; anything else reads as `UNKNOWN`, never
+  as a pass.
+- **A trailing note could replace the gate.** In a `gate` block, any later line
+  containing an operator overwrote the real assertion — so a comment like
+  "previous target was >= 2.0" became the threshold actually enforced. The first
+  assertion wins.
+
+`gate-grammar.md` documents the separator, exponent and Measured-cell rules.
+
 ## [4.8.2] - 2026-09-21
 
 ### Fixed — the duplicate-drift detector now sees the duplicates
