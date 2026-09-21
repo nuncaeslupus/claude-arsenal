@@ -18,6 +18,30 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [4.12.0] - 2026-09-21
+
+### Fixed — `task_select.py` could hang forever on an inherited stdin
+
+It read state from stdin whenever stdin was not a terminal:
+`not sys.stdin.isatty()` then `sys.stdin.read()`. But "not a terminal" is not
+"data is waiting" — an open pipe whose writer never closes blocks forever, and
+that is exactly what a harness hands a subprocess whose stdin it inherited.
+`task_select.py` runs on the session-start path, so the failure mode was a
+session that never started, with nothing on any stream to say why.
+
+**Breaking, if you pipe state in without a flag.** `--state -` now means stdin,
+the spelling `issue_for_task.py` already used:
+
+```bash
+echo '{"t-abc123": "done"}' | task_select.py --state -   # was: no flag at all
+```
+
+Omitting the flag with a non-terminal stdin no longer reads it, and says so on
+stderr rather than quietly selecting as though every task were open. `--issues`
+and `--state <file>` are unaffected, and every invocation in `AGENTS.md` and the
+references uses one of those, so a session following the protocol sees no
+change.
+
 ## [4.11.0] - 2026-09-21
 
 ### Changed — the audit hunts for simplicity, and three files say their thing once

@@ -74,10 +74,10 @@ grep -q "lo-c9d2" "${REPO}/arsenal/tasks/_migrated-history.md" || fail "merged t
 grep -q "bash tests/thing_test.sh" "${REPO}/arsenal/tasks/lo-a3f8.md" || fail "gate block lost in migration"
 
 # --- 5: deps survive in a form the selector understands ---
-out=$(echo '{}' | python3 "${SELECT_PY}" --tasks-dir "${REPO}/arsenal/tasks" --capability surface:cli 2>/dev/null)
+out=$(echo '{}' | python3 "${SELECT_PY}" --state - --tasks-dir "${REPO}/arsenal/tasks" --capability surface:cli 2>/dev/null)
 id=$(python3 -c 'import sys,json;print(json.loads(sys.stdin.readline())["id"])' <<<"${out}")
 [[ "${id}" == "lo-a3f8" ]] || fail "expected lo-a3f8 first after migration, got '${id}'"
-out=$(echo '{"lo-a3f8":"done"}' | python3 "${SELECT_PY}" --tasks-dir "${REPO}/arsenal/tasks" 2>/dev/null)
+out=$(echo '{"lo-a3f8":"done"}' | python3 "${SELECT_PY}" --state - --tasks-dir "${REPO}/arsenal/tasks" 2>/dev/null)
 id=$(python3 -c 'import sys,json;print(json.loads(sys.stdin.readline())["id"])' <<<"${out}")
 [[ "${id}" == "lo-b2c1" ]] || fail "dep did not survive migration, got '${id}'"
 
@@ -156,7 +156,7 @@ true
 EOF
 
 python3 "${MIGRATE_PY}" --repo-root "${REPO2}" --apply >/dev/null
-out=$(echo '{}' | python3 "${SELECT_PY}" --tasks-dir "${REPO2}/arsenal/tasks" 2>"${tmpdir}/warn.txt")
+out=$(echo '{}' | python3 "${SELECT_PY}" --state - --tasks-dir "${REPO2}/arsenal/tasks" 2>"${tmpdir}/warn.txt")
 id=$(python3 -c 'import sys,json
 line=sys.stdin.readline().strip()
 print(json.loads(line)["id"] if line else "NONE")' <<<"${out}")
@@ -168,7 +168,7 @@ grep -q "unknown task" "${tmpdir}/warn.txt" && fail "a dep on migrated-terminal 
 grep -q "bash tests/done1_gate.sh" "${REPO2}/arsenal/tasks/_history/lo-done1.md" \
     || fail "the finished task's gate was dropped — a re-assertion check would find nothing"
 grep -q "^status: merged" "${REPO2}/arsenal/tasks/_history/lo-done1.md" || fail "no status recorded"
-out=$(echo '{}' | python3 "${SELECT_PY}" --tasks-dir "${REPO2}/arsenal/tasks" --max 9 2>/dev/null)
+out=$(echo '{}' | python3 "${SELECT_PY}" --state - --tasks-dir "${REPO2}/arsenal/tasks" --max 9 2>/dev/null)
 grep -q '"id":"lo-done1"' <<<"${out}" && fail "finished work must never be selected again"
 
 # --- a legacy row cannot read or write outside the queue (#302) -------------
