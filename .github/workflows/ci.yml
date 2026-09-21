@@ -53,6 +53,12 @@ jobs:
       - name: make sync-sections-check
         run: make sync-sections-check
 
+      # A security fix once landed in the canonical copy of a hook and never
+      # reached the copy /init vendors, and nothing failed for months because
+      # this check existed but ran nowhere.
+      - name: make sync-dupes
+        run: make sync-dupes
+
   test:
     name: core tests
     runs-on: ubuntu-22.04

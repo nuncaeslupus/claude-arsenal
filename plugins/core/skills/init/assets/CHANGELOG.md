@@ -18,6 +18,35 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [4.8.2] - 2026-09-21
+
+### Fixed — the duplicate-drift detector now sees the duplicates
+
+Some scripts ship in two places, because plugin hooks don't travel with
+vendored skills. `sync_duplicates.py` exists to catch the two copies going out
+of sync. It was missing most of them.
+
+- **The `.py` scan only looked inside one directory.** It scanned a single
+  `--library` path while the `.sh` scan already walked the whole repository, so
+  a Python pair spanning two plugins — or living outside a skill's `scripts/`
+  folder, like the hook scripts — was invisible to it. Both extensions are now
+  found in one repo-wide pass. In this repository that is the difference
+  between seeing 4 groups and seeing 7, and the three it could not see include
+  `gate_target.py`, the parser the skill-edit gate depends on.
+- **`--apply` claimed every sibling was missing.** It resolved the declared
+  paths against the wrong base, building a directory that cannot exist, so its
+  cross-check found nothing and said so — while looking at a tree where every
+  file was present. Alarming, and entirely false.
+- **Paths now print consistently** in a drift report: one file used to appear
+  absolute and its sibling relative, in the same three-line message.
+- **A placeholder header is no longer read as a real declaration.** The script
+  template's example header uses `<plugin>`-style placeholders; those are
+  examples, not paths.
+
+The check also now runs in CI. It existed but was wired into nothing, which is
+why a security fix that reached only one copy of a hook went unnoticed for
+months.
+
 ## [4.8.1] - 2026-09-21
 
 ### Fixed — the skill-edit gate, the quota guard, and a dependency that was silently dropped
