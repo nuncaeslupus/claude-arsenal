@@ -99,7 +99,13 @@ if [[ "${ATTEMPT}" != "1" ]]; then
     echo "warning: bypassing the base claim ${PREFIX}/${TASK_ID} (declared stale)" >&2
 fi
 
-body="$(printf '{"ref":"%s","sha":"%s"}' "${ref}" "${sha}")"
+# json.dumps, not printf: a task id carrying a quote or a backslash produced
+# malformed JSON here, while open_task_pr.sh already builds the equivalent
+# payload this way and adversarial_review.sh charset-checks the same TASK_ID.
+# Today's input is the agent's own task listing, so the exposure is narrow —
+# this was the one place in the project that did not guard the value.
+body="$(python3 -c 'import json,sys; print(json.dumps({"ref":sys.argv[1],"sha":sys.argv[2]}))' \
+    "${ref}" "${sha}")" || _fail "cannot build the claim payload for ${ref}"
 path="/repos/${slug}/git/refs"
 
 out="$(bash "${CHANNEL}" --api POST "${path}" "${body}" 2>/dev/null)"

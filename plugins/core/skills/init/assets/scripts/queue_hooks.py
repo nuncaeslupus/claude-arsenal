@@ -319,8 +319,11 @@ def plan_pr_closed(
 
 # `Closes #12`, `Fixes #12`, `Resolved #12` — GitHub's own closing vocabulary,
 # with the number captured so it can be checked against the task's own issue.
+# The colon form `Closes: #12` is GitHub's too, and requiring whitespace meant
+# keyword-guard failed a PR that would have closed the issue correctly. Either a
+# colon or whitespace, not neither: `Closes#12` closes nothing on GitHub either.
 CLOSING_REFERENCE = re.compile(
-    r"\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#(\d+)\b", re.IGNORECASE
+    r"\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)(?::\s*|\s+)#(\d+)\b", re.IGNORECASE
 )
 
 

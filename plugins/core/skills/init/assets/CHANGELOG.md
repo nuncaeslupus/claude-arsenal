@@ -18,6 +18,26 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [4.10.2] - 2026-09-21
+
+### Fixed — four small correctness defects
+
+- **`Closes: #42` now passes keyword-guard.** The colon form is GitHub's own,
+  and the guard required whitespace — so it failed a PR that would have closed
+  the issue correctly. (`Closes#42`, which closes nothing on GitHub either, is
+  still refused.)
+- **The skill validator enforces all four reserved words.** R-FM-2 reserves
+  `anthropic`, `claude`, `mcp` and `agent`; the validator checked the first two,
+  and its failure message named only those — so `mcp-bridge` passed, and an
+  author was told the rule was narrower than it is.
+- **`query_har.py --list-only` means something.** It was parsed and never read
+  (listing is the default), so it existed only to be ignored. It is now the
+  opposite of `--show`, and asking for both is refused instead of silently
+  resolved.
+- **`claim_task.sh` builds its ref payload with `json.dumps`.** A task id
+  carrying a quote or a backslash produced malformed JSON; every other payload
+  in the bundle was already built this way.
+
 ## [4.10.1] - 2026-09-21
 
 ### Fixed — `query_status.py --json` told a machine caller less than a human
