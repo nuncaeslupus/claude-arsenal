@@ -293,6 +293,7 @@ def _refresh_bundle(bundle: Path, target: Path, silent: bool = False) -> None:
     Files under a _SCAFFOLD_ONCE prefix are written only when absent and left
     untouched if they already exist (host-owned live data, not bundle content).
     """
+    previous = _read_manifest(target)
     for src in bundle.rglob("*"):
         if src.is_dir():
             continue
@@ -315,37 +316,85 @@ def _refresh_bundle(bundle: Path, target: Path, silent: bool = False) -> None:
             if _has_shebang(src):
                 dst.chmod(dst.stat().st_mode | 0o111)
             print(f"  refreshed:  {rel}")
-    _prune_bundle(bundle, target)
+    _prune_bundle(bundle, target, previous)
+    _write_manifest(bundle, target)
 
 
-# Directories the bundle owns outright: everything in them comes from upstream,
-# so a file there that upstream no longer ships is a leftover, not host data.
-# `references/` is swept for the same reason as the script dirs: a retired
+# Directories the bundle owns outright: everything upstream ships for them lands
+# there. `references/` is swept for the same reason as the script dirs: a retired
 # reference left behind is protocol the bundle no longer means, sitting in the
 # tree a session reads on demand.
 _PRUNABLE_DIRS = ("bin", "scripts", "references")
 
+# Every bundle-relative path this install wrote, read back by the next one.
+# It is what makes "upstream no longer ships it" distinguishable from "upstream
+# never shipped it": the sweep below deletes only files a previous install is on
+# record as having put there.
+_MANIFEST = ".arsenal-manifest"
+_RETIRED_DIR = ".retired"
 
-def _prune_bundle(bundle: Path, target: Path) -> None:
-    """Delete installed bundle files upstream no longer ships.
+
+def _bundle_files(bundle: Path) -> list[str]:
+    return sorted(p.relative_to(bundle).as_posix() for p in bundle.rglob("*") if p.is_file())
+
+
+def _read_manifest(target: Path) -> set[str] | None:
+    """What the previous install wrote, or None when there is no record of it."""
+    try:
+        text = (target / _MANIFEST).read_text(encoding="utf-8")
+    except OSError:
+        return None
+    return {line.strip() for line in text.splitlines() if line.strip()}
+
+
+def _write_manifest(bundle: Path, target: Path) -> None:
+    (target / _MANIFEST).write_text("\n".join(_bundle_files(bundle)) + "\n", encoding="utf-8")
+
+
+def _prune_bundle(bundle: Path, target: Path, previous: set[str] | None) -> None:
+    """Retire installed bundle files upstream no longer ships.
 
     Refreshing by checksum updates and adds, but never removed — so an upgrade
     left every retired script sitting in the bundle, still executable. Those are
     not inert leftovers: they are the previous architecture, and a session that
     finds `claim.sh` can still run it against a queue that is no longer the
-    board. Only the two upstream-owned directories are swept; host trees are
-    never touched.
+    board.
+
+    Inside a swept directory only files `previous` records are deleted. Nothing
+    marks `claude-arsenal/bin/` as upstream-owned, so a consumer putting their
+    own `my-helper.sh` there is doing the obvious thing — and the sweep used to
+    unlink it on the next `init.py --silent`, which is every session start. A
+    host file was never in the manifest, so it is now left alone.
+
+    `previous` is None only on the first upgrade from a release that wrote no
+    manifest. With no ownership record to consult, an unshipped file is MOVED to
+    `.retired/` rather than deleted: the old architecture stops being runnable
+    either way, and anything the old sweep would have destroyed is recoverable
+    at a named path. From the next run on, the manifest decides.
+
+    The walk is recursive. It used to `continue` on anything that was not a
+    file, so a retired script under `scripts/lib/` was skipped rather than
+    retired — the function's stated purpose silently not happening.
     """
     for dirname in _PRUNABLE_DIRS:
         src_dir, dst_dir = bundle / dirname, target / dirname
         if not dst_dir.is_dir():
             continue
-        shipped = {p.name for p in src_dir.iterdir() if p.is_file()} if src_dir.is_dir() else set()
-        for installed in sorted(dst_dir.iterdir()):
-            if not installed.is_file() or installed.name in shipped:
+        shipped = set(_bundle_files(src_dir)) if src_dir.is_dir() else set()
+        for installed in sorted(dst_dir.rglob("*")):
+            if not installed.is_file():
                 continue
-            installed.unlink()
-            print(f"  removed (no longer shipped): {dirname}/{installed.name}")
+            rel = installed.relative_to(dst_dir).as_posix()
+            if rel in shipped:
+                continue
+            if previous is None:
+                dest = target / _RETIRED_DIR / dirname / rel
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                shutil.move(str(installed), str(dest))
+                print(f"  retired to {_RETIRED_DIR}/ (no longer shipped): {dirname}/{rel}")
+            elif f"{dirname}/{rel}" in previous:
+                installed.unlink()
+                print(f"  removed (no longer shipped): {dirname}/{rel}")
 
 
 def _parse_version(text: str) -> tuple[int, ...] | None:

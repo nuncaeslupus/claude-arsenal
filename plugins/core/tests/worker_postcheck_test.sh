@@ -264,4 +264,52 @@ out=$(bash "${failbin}/worker_postcheck.sh" 2>/dev/null)
     || fail "a clean tree must still restore even with an unusable rescue script, got '${out}'"
 echo "PASS: a clean tree still restores — 'nothing to save' and 'could not save' stay distinct"
 
+# --- the destructive path is anchored to the repo root, not the caller's CWD ---
+#
+# `git clean -fdq` is CWD-scoped: run from a subdirectory it leaves untracked
+# files sitting at the root of the very tree it is restoring, and the invariant
+# check then reports a failure the script caused itself. The session sentinel —
+# which the selector reads to size the next batch — landed under the caller's
+# CWD for the same reason.
+set +e
+anchored="${tmp}/anchored"
+git init -q -b main "${anchored}"
+cd "${anchored}" || fail "cannot enter the anchoring fixture"
+git config user.email "test@arsenal.example"
+git config user.name "Arsenal Test"
+git config commit.gpgsign false
+echo "seed" > README
+printf 'arsenal/session/host_branch\narsenal/session/rescue_refs\narsenal/session/worktree_isolation\n' > .gitignore
+mkdir -p sub
+echo "tracked" > sub/tracked.txt
+git add -A && git commit -q -m "seed"
+
+echo "worker leftover" > untracked-at-root.txt
+echo "edited by the worker" > sub/tracked.txt
+out=$(cd sub && ARSENAL_WORKER_TOPLEVEL="/some/other/worktree" bash "${POSTCHECK}" 2>/dev/null)
+
+[[ "${out}" == "restored" ]] \
+    || fail "a dirty tree restored from a subdirectory should report 'restored', got '${out}'"
+[[ -e untracked-at-root.txt ]] \
+    && fail "clean -fdq ran from the caller's CWD — an untracked file survived at the repo root"
+[[ "$(cat sub/tracked.txt)" == "tracked" ]] \
+    || fail "the worker's edit was not discarded"
+[[ -d sub/arsenal ]] \
+    && fail "the session sentinel was written under the caller's CWD, where nothing reads it"
+[[ -f arsenal/session/host_branch ]] \
+    || fail "the session sentinel did not land at the repo root"
+echo "PASS: the restore is anchored to the repo root, not the caller's CWD"
+
+# ...and with no repository anywhere above the CWD there is no tree to restore.
+# Saying so beats reaching for one: `reset --hard` used to run regardless.
+outside="${tmp}/outside"
+mkdir -p "${outside}"
+err=$(cd "${outside}" && GIT_CEILING_DIRECTORIES="${tmp}" bash "${POSTCHECK}" 2>&1 >/dev/null)
+code=$?
+[[ ${code} -eq 2 ]] || fail "a call from outside any repository must exit 2, got ${code}"
+grep -q "not inside a git repository" <<<"${err}" \
+    || fail "the refusal must say why: ${err}"
+echo "PASS: a call from outside any repository is refused, not guessed at"
+set -e
+
 echo "PASS: worker_postcheck_test — all gates passed"

@@ -16,6 +16,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INIT_PY="${SCRIPT_DIR}/../skills/init/scripts/init.py"
 BUNDLE="${SCRIPT_DIR}/../skills/init/assets"
 [[ -f "${INIT_PY}" ]] || { echo "SKIP: ${INIT_PY} not found" >&2; exit 0; }
+# Read from init.py, so the fixture cannot drift from the name it writes.
+MANIFEST_NAME=$(sed -n 's/^_MANIFEST = "\(.*\)"$/\1/p' "${INIT_PY}")
+[[ -n "${MANIFEST_NAME}" ]] || { echo "FAIL: no _MANIFEST in ${INIT_PY}" >&2; exit 1; }
 
 tmpdir=$(mktemp -d)
 trap 'rm -rf "${tmpdir}"' EXIT
@@ -212,5 +215,38 @@ out=$(python3 "${INIT_PY}" --repo-path "${bad_encoding_repo}" --bundle-dir "${ba
 grep -q "Upgrading claude-arsenal bundle: 1.0.0 → 1.1.0" <<<"${out}" \
     || fail "upgrade banner missing when CHANGELOG.md is not valid UTF-8: ${out}"
 echo "PASS: a CHANGELOG.md that is not valid UTF-8 does not crash init.py"
+
+# --- 8: the sweep retires upstream's files and leaves the host's alone -------
+#     `claude-arsenal/bin/` is where every bundle script lives and nothing marks
+#     it as upstream-owned, so a consumer's own helper goes there. The sweep
+#     unlinked it — on `--silent`, which is every session start, with no rescue
+#     ref and one line of output. It also skipped anything that was not a plain
+#     file, so a retired script one directory down was never retired at all.
+manifest="${REPO}/claude-arsenal/${MANIFEST_NAME}"
+[[ -f "${manifest}" ]] || fail "no ${MANIFEST_NAME} written — the sweep has no ownership record to read"
+
+host_file="${REPO}/claude-arsenal/bin/my-helper.sh"
+printf '#!/usr/bin/env bash\necho "the consumer wrote this"\n' > "${host_file}"
+mkdir -p "${REPO}/claude-arsenal/scripts/lib"
+retired_nested="${REPO}/claude-arsenal/scripts/lib/retired.py"
+printf '# shipped by a previous release\n' > "${retired_nested}"
+# ...and it is on record as upstream's, which is the whole distinction.
+echo "scripts/lib/retired.py" >> "${manifest}"
+
+out=$(python3 "${INIT_PY}" --repo-path "${REPO}" --bundle-dir "${BUNDLE}" --silent 2>&1)
+[[ -f "${host_file}" ]] \
+    || fail "a host-authored file in a swept directory was deleted by the upgrade: ${out}"
+grep -q "the consumer wrote this" "${host_file}" || fail "the host file survived but was rewritten"
+[[ -e "${retired_nested}" ]] \
+    && fail "a retired file under scripts/lib/ was not swept — the walk still skips directories"
+echo "PASS: the sweep deletes what upstream shipped and leaves host files alone"
+
+# --- 8b: with no ownership record, an unshipped file is moved, never deleted --
+#     A consumer upgrading from a release that wrote no manifest has nothing to
+#     consult. Retiring the old architecture still has to happen, so it happens
+#     the recoverable way.
+[[ -f "${REPO}/claude-arsenal/.retired/bin/claim.sh" ]] \
+    || fail "the first sweep destroyed a file it could not prove ownership of"
+echo "PASS: the pre-manifest sweep retires to .retired/ rather than deleting"
 
 echo "PASS: init_upgrade_test — all gates passed"

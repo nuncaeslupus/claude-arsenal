@@ -18,6 +18,33 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [4.9.0] - 2026-09-21
+
+### Fixed — two destructive operations aimed at the wrong files
+
+- **`/init` no longer deletes your own scripts out of `claude-arsenal/`.** Every
+  bundle script lives in `claude-arsenal/bin/`, nothing marked the directory as
+  upstream-owned, and the upgrade sweep unlinked anything it did not ship —
+  on `--silent`, which runs at every session start. A `bin/my-helper.sh` you
+  wrote and committed was deleted, with one line of output and no way back.
+  The install now records what it wrote in `claude-arsenal/.arsenal-manifest`
+  and retires only files that record covers; a file you put there is left
+  alone. Upgrading from a release that wrote no manifest, there is nothing to
+  consult, so an unshipped file is **moved to `claude-arsenal/.retired/`**
+  rather than deleted — check that directory once after this upgrade and
+  restore anything of yours from it. Commit `.arsenal-manifest`: the next
+  upgrade reads it.
+- **The sweep now recurses.** It skipped anything that was not a plain file at
+  the top level, so a retired script under `scripts/lib/` stayed installed and
+  runnable.
+- **`worker_postcheck.sh` anchors to the repository root.** It ran `git reset
+  --hard` and `git clean -fdq` from whatever directory the caller happened to
+  be in: run from a subdirectory, `clean -fdq` left untracked files at the repo
+  root, the restore then reported a failure it had caused itself, and the
+  worktree-isolation sentinel — which the selector reads to size the next batch
+  — was written where nothing reads it. Called from outside any repository it
+  now refuses (exit 2) instead of reaching for whatever tree is nearest.
+
 ## [4.8.3] - 2026-09-21
 
 ### Fixed — a gate can no longer pass by being misread

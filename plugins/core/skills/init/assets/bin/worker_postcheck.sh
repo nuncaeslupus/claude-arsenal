@@ -47,13 +47,34 @@
 #         no `branch:` and no `toplevel:` is refused (exit 4) instead of recorded.
 # Stderr: `worker_postcheck: rescued uncommitted changes to <ref> …` when a
 #         restore had work to save.
-# Exit:   0 invariant holds (possibly after restore); 2 could not restore;
+# Exit:   0 invariant holds (possibly after restore); 2 could not restore, or
+#           the call was not made from inside a git repository — in that case
+#           nothing ran and nothing was touched;
 #         3 the tree was dirty and could not be snapshotted, so NOTHING was
 #           discarded and the restore did not run.
 
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd 2>/dev/null || echo .)"
+
+# Anchor to the repository root before anything reads or writes a path.
+#
+# Everything below resolves from the CWD: `git reset --hard` and `git clean -fdq`
+# act on whichever tree the caller is standing in, and the isolation verdict is
+# measured from that same root and then written into the sentinel the selector
+# reads to decide how wide to fan out. A call from a subdirectory or a sibling
+# checkout got both wrong. open_task_pr.sh took this anchor after #239/#244;
+# this script kept the assumption its own restore comment concedes. Refusing
+# when there is no root is the only honest answer — there is no tree to restore.
+_repo_root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+[[ -n "${_repo_root}" ]] || {
+    echo "worker_postcheck: not inside a git repository (git rev-parse --show-toplevel failed) — run this from the tree the worker returned to. Nothing was touched." >&2
+    exit 2
+}
+cd "${_repo_root}" || {
+    echo "worker_postcheck: cannot enter the repository root ${_repo_root} — nothing was touched." >&2
+    exit 2
+}
 
 # Snapshot the working tree to a rescue ref before a destructive restore, and
 # tell the operator where it went. The ref lands in RESCUED_REF for
