@@ -8,6 +8,7 @@ numeric threshold has no number behind it yet.
 - [The fence is what makes a gate mechanical](#the-fence-is-what-makes-a-gate-mechanical)
 - [Gate blocks run verbatim](#gate-blocks-run-verbatim)
 - [The gate is fixed for the life of the task](#the-gate-is-fixed-for-the-life-of-the-task)
+- [The task gate measures the pre-archive tree](#the-task-gate-measures-the-pre-archive-tree)
 - [Evidence gates (numeric acceptance)](#evidence-gates-numeric-acceptance)
 - [Parallel test execution in host-gate](#parallel-test-execution-in-host-gate)
 - [Unmeasured — the third outcome](#unmeasured--the-third-outcome)
@@ -84,6 +85,26 @@ diverged.
 `gate_run.sh` says which file it read on every run, and says explicitly when a
 working-copy gate exists and was not used. Read that line before looking for a
 bug in the implementation.
+
+---
+
+## The task gate measures the pre-archive tree
+
+`open_task_pr.sh` runs two gates on opposite sides of archiving the task file
+into `tasks/_history/`: the task's own gate **before**, the repo's `host-gate`
+**after**. Both orderings are load-bearing. The host gate runs last because the
+archived tree is the one the PR ships. The task gate runs first because
+`gate_run.sh` needs the working copy of the task file on disk to resolve which
+copy to read — after the archive, a task that is not on the default branch yet
+(one added by its own PR) has none, and the gate exits 2.
+
+The consequence is a rule for gate authors: **a task gate must not depend on
+state the archive produces.** A gate that asserts "every task marked merged is
+archived", or one that just reuses the repo's `host-gate` — written for the
+post-archive tree — is unsatisfiable by construction. It fails on a tree that is
+correct, and `open_task_pr.sh` reports it as `the task gate failed`, which points
+at the task rather than at the ordering. If a check needs the final tree, it
+belongs in `host-gate`, not in a task's gate block.
 
 ---
 

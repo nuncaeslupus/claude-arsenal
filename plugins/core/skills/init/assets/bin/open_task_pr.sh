@@ -319,6 +319,21 @@ fi
 
 # 3. The task's own mechanical gate — the precondition AGENTS.md already claims
 #    this script enforces.
+#
+#    This one runs BEFORE the archive, unlike the host gate above, and that
+#    asymmetry is deliberate rather than an oversight left over from #220.
+#    `gate_run.sh` only prefers the default branch's copy of the task file when
+#    a working copy is also on disk; once `_archive_task_file` has moved it to
+#    `tasks/_history/`, a task that is not on the default branch yet — one added
+#    by this very PR — has no copy left to read and the gate exits 2. Running it
+#    here keeps that bootstrap case working.
+#
+#    The cost is the mirror of the host gate's: this gate measures the
+#    PRE-archive tree, so a task gate must not depend on archive-dependent
+#    state. A gate that transitively asserts "every merged task is archived" —
+#    or reuses the host gate, which is written for the post-archive tree — is
+#    unsatisfiable here by construction, and the failure reads as the task's
+#    fault rather than the ordering's. See references/evidence-gates.md.
 if [[ -f "${SCRIPT_DIR}/gate_run.sh" ]]; then
     # Gate chatter goes to stderr: this script's stdout is a contract that
     # callers parse (`branch:…`, the PR URL), and a `gate: passed` line in it
@@ -741,14 +756,16 @@ if ! _archive_task_file; then
     exit 1
 fi
 
-# The host gate ran at the top, over a tree that did not yet contain the
-# archive. Then the archive moved a tracked file — so the gate certified one
-# tree and the commit carries another. Any host measurement over the repo's own
-# files (a file count, a coverage denominator, a lint sweep) is then stale by
-# exactly that file, and the host's next run fails on a branch whose gate had
-# just passed (#220). Re-run it here, where the tree is final: a gate that
-# regenerates its evidence writes the right numbers into this commit, and one
-# that only checks confirms the tree being committed is the certified one.
+# The host gate runs HERE and nowhere else — once, over the final tree. It used
+# to run at the top as well, over a tree that did not yet contain the archive,
+# and then the archive moved a tracked file: the gate certified one tree and the
+# commit carried another. Any host measurement over the repo's own files (a file
+# count, a coverage denominator, a lint sweep) was stale by exactly that file,
+# and the host's next run failed on a branch whose gate had just passed (#220).
+# So the early call was removed, not duplicated. Running it here, where the tree
+# is final: a gate that regenerates its evidence writes the right numbers into
+# this commit, and one that only checks confirms the tree being committed is the
+# certified one.
 # Not conditional on the archive: `_ARCHIVED_DEST` is empty for an unlinked PR
 # and for a task worked from a payload elsewhere, and gating on it would leave
 # those two cases running no host gate at all — a skip, in the one check the
