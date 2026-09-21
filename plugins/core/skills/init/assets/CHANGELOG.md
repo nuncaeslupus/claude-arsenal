@@ -18,6 +18,33 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [4.13.0] - 2026-09-21
+
+### Fixed — a green board no longer means "nothing is outstanding"
+
+Every issue fetch in the queue was filtered to the task label — the session-start
+protocol's step 2, and the queue doctor. So `query_status.py`'s consistency check
+only ever ran in one direction: it verified that each task file has an issue
+handle, and could not see an issue that had no task file. An issue carrying
+neither `arsenal:task` nor `arsenal:queue` was invisible to every check the queue
+has, and the board reported `open 0` while real work sat open on GitHub. That is
+how three findings in this repo went unnoticed for a day.
+
+`query_status.py` takes `--open-issues <file>` — a narrow fetch of open issues
+carrying neither label — and names them:
+
+```
+query_status: 2 open issue(s) are on neither the board nor the import path:
+  #391, #392 — label one `arsenal:queue` to import it as a task, or
+  `arsenal:task` if it already has a task file.
+```
+
+A **note**, not a problem: an issue is allowed to live outside the queue, so this
+does not fail `--fail-on-problems`. But omitting the fetch now says so too —
+`no --open-issues file — issues outside the board were not checked, so 'open 0'
+here does not mean nothing is outstanding` — because an unasked question is not a
+clean answer. Session-start step 2 in `AGENTS.md` carries the extra fetch.
+
 ## [4.12.0] - 2026-09-21
 
 ### Fixed — `task_select.py` could hang forever on an inherited stdin

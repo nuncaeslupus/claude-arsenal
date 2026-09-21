@@ -14,6 +14,7 @@ AUDIT_DRIFT := $(SC_SCRIPTS)/audit_rule_drift.py
 SKILL_SEVERITY ?= warn
 SYNC_DUPES := $(SC_SCRIPTS)/sync_duplicates.py
 SMOKE_SH := plugins/skill-workshop/skills/skill-workshop/tests/skills_smoke.sh
+ARSENAL_CONFIG := plugins/core/skills/init/assets/scripts/arsenal_config.py
 
 # The ALWAYS-INSTALLED tier — AGENTS.md plus the core section's listing entries
 # — is what every consumer pays on every turn before any work happens, with no
@@ -138,21 +139,33 @@ queue-doctor:  ## dogfood: audit this repo's own task files (arsenal/tasks) the 
 	@# Fetch the board's issues when a channel exists, so the handle check is a real
 	@# check rather than a skipped one. Without them query_status reports what it can
 	@# and says so — it cannot tell a missing handle from an unasked question.
-	@set -e; issues=""; \
+	@# The second fetch is the one that stops a green board from meaning nothing is
+	@# outstanding: every other issue read here is filtered to the task label, so an
+	@# issue carrying neither that nor the import label was invisible to every check.
+	@# Label names come from the config keys that control them, not from a copy.
+	@set -e; issues=""; stray=""; \
 	if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then \
-		issues="$$(mktemp)"; \
-		trap 'rm -f "$$issues"' EXIT INT TERM; \
-		if ! gh issue list --label arsenal:task --state all --limit 200 \
+		task_label="$$(uv run python $(ARSENAL_CONFIG) --get task-label)"; \
+		import_label="$$(uv run python $(ARSENAL_CONFIG) --get import-label)"; \
+		issues="$$(mktemp)"; stray="$$(mktemp)"; \
+		trap 'rm -f "$$issues" "$$stray"' EXIT INT TERM; \
+		if ! gh issue list --label "$$task_label" --state all --limit 200 \
 			--json number,title,state,labels,assignees > "$$issues"; then \
 			echo "queue-doctor: the issue fetch failed on an authenticated channel." >&2; \
 			echo "  Not treating that as 'no channel' — that would skip the handle check" >&2; \
 			echo "  and let this pass on a board whose tasks have no issues at all." >&2; \
 			exit 2; \
 		fi; \
+		if ! gh issue list --state open --limit 200 \
+			--search "-label:$$task_label -label:$$import_label" \
+			--json number,title > "$$stray"; then \
+			echo "queue-doctor: could not list issues outside the board." >&2; \
+			exit 2; \
+		fi; \
 	fi; \
 	uv run python plugins/core/skills/init/assets/scripts/query_status.py \
 		--tasks-dir arsenal/tasks --detail --fail-on-problems \
-		$${issues:+--issues "$$issues"} $(QUEUE_DOCTOR_FLAGS)
+		$${issues:+--issues "$$issues"} $${stray:+--open-issues "$$stray"} $(QUEUE_DOCTOR_FLAGS)
 
 sync-dupes:  ## sync_duplicates.py --check across every declared duplicate group
 	uv run python $(SYNC_DUPES) --check

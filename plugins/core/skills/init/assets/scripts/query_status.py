@@ -34,6 +34,11 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from issue_for_task import issue_numbers_by_task
+
+# The labels themselves, from the modules that own them — both resolve through
+# arsenal/config.toml, so a repo that renamed either gets its own names here.
+from issue_import import DEFAULT_IMPORT_LABEL as IMPORT_LABEL
+from queue_hooks import TASK_LABEL
 from task_select import (
     TERMINAL,
     default_tasks_dir,
@@ -162,6 +167,13 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--tasks-dir", type=Path, default=default_tasks_dir())
     parser.add_argument("--issues", type=Path, help="JSON array of arsenal:task issues")
+    parser.add_argument(
+        "--open-issues",
+        type=Path,
+        metavar="FILE",
+        help="JSON array of OPEN issues carrying neither the task nor the import label — "
+        "work that exists but is on no board. Omit it and the check is skipped, and says so.",
+    )
     parser.add_argument("--detail", action="store_true")
     parser.add_argument(
         "--json",
@@ -237,9 +249,32 @@ def main(argv: list[str] | None = None) -> int:
     # Resolved once, for the whole board. Both sites below used to rescan
     # every issue per task.
     handle_numbers = issue_numbers_by_task(issues, titles=titles)
+
     counts = {"open": 0, "claimed": 0, "done": 0, "cancelled": 0, "blocked": 0}
     problems: list[str] = []
     notes: list[str] = []
+    # Work that exists on GitHub and on no board. Every other issue read in this
+    # file is filtered to the task label, so an issue carrying neither that nor
+    # the import label was invisible to every check the queue has: the board
+    # could report `open 0` while real findings sat open, and it did. A note
+    # rather than a problem — an issue is allowed to live outside the queue —
+    # but never silence, because silence is what let three of them sit.
+    if args.open_issues:
+        stray = read_issue_payload(args.open_issues, "query_status")
+        if stray is None:
+            return 2
+        if stray:
+            listed = ", ".join(f"#{i['number']}" for i in stray if isinstance(i.get("number"), int))
+            notes.append(
+                f"{len(stray)} open issue(s) are on neither the board nor the import "
+                f"path: {listed} — label one `{IMPORT_LABEL}` to import it as a task, "
+                f"or `{TASK_LABEL}` if it already has a task file."
+            )
+    else:
+        notes.append(
+            "no --open-issues file — issues outside the board were not checked, so "
+            "`open 0` here does not mean nothing is outstanding"
+        )
     known_ids = {t["id"] for t in tasks}
     for task in tasks:
         current = state.get(task["id"], "open")
