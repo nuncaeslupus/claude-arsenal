@@ -247,19 +247,33 @@ matter because they are paid on completely different schedules:
 
 The listing is billed **per install**, not per repo: the report resolves each
 skill's `section:` through `init.py`'s own profiles and prints one row per
-install a consumer can reach — `minimal`, `general` (what `/init` gives you),
-`python` and `all`. A default-off section costs nothing to anyone who did not
-enable it, and a plugin `/init` never vendors (`skill-workshop`) costs nothing
-to anybody. Read the `general` row to see what a change did to everyone, and
-the `all` row to see what it did to the person who opted in.
+install a consumer can reach — `minimal` (core alone, the capped row),
+`general` (what `/init` gives you), `python` and `all`. A default-off section
+costs nothing to anyone who did not enable it, and a plugin `/init` never
+vendors (`skill-workshop`) costs nothing to anybody. Read the `general` row to
+see what a change did to everyone who took the default, and the `all` row to
+see what it did to the person who opted in.
 
-The resident tier is capped (`RESIDENT_TOKEN_BUDGET` in the Makefile, currently
-5000 tokens) and CI fails over it — applied to whichever row enables the most
-sections, which is the largest bill a consumer can choose. When a change pushes it over, move what grew
-behind a reference or into a script — **do not raise the cap.** The cap is the
-composite of two guards that already existed: `bundle_refs_test.sh` holds
-`AGENTS.md` to 250 lines, and `make audit` holds the skills index to 8000
-characters (see *Listing budget* below).
+**The cap applies to the always-installed tier only** — `AGENTS.md` plus the
+`core` section, the one section `/init` never switches off. That is the bill
+nobody chose and nobody can decline, so it is the one worth hard-failing a
+build over (`RESIDENT_TOKEN_BUDGET` in the Makefile, currently 5000 tokens).
+
+Every other section is opt-in: `workflow` ships on by default and can be turned
+off, `python` and `extract` ship off. Their cost is real and the report prints
+it — the `general` row for what a default `/init` gives, the widest row for what
+someone who enabled everything pays — but it is **not capped**, because a skill
+nobody is forced to install cannot make everyone's turn more expensive. Capping
+the sum made every default-off skill compete for a budget no single consumer
+necessarily pays, which is a ceiling on the marketplace rather than a guard on
+the resident tier.
+
+When a change pushes the always-installed tier over, move what grew behind a
+reference or into a script — **do not raise the cap.** If the new skill is
+genuinely optional, the other way out is a default-off section, which costs
+nobody who did not ask for it. The cap sits alongside two guards that already
+existed: `bundle_refs_test.sh` holds `AGENTS.md` to 250 lines, and `make audit`
+holds the skills index to 8000 characters (see *Listing budget* below).
 
 ### The four moves, in order of preference
 

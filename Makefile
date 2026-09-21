@@ -15,8 +15,10 @@ SKILL_SEVERITY ?= warn
 SYNC_DUPES := $(SC_SCRIPTS)/sync_duplicates.py
 SMOKE_SH := plugins/skill-workshop/skills/skill-workshop/tests/skills_smoke.sh
 
-# The resident tier — AGENTS.md plus every skill's listing entry — is what a
-# consumer pays on every turn before any work happens. See CLAUDE.md § Context budget.
+# The ALWAYS-INSTALLED tier — AGENTS.md plus the core section's listing entries
+# — is what every consumer pays on every turn before any work happens, with no
+# way to switch it off. Opt-in sections are reported but not capped. See
+# CLAUDE.md § Context budget.
 RESIDENT_TOKEN_BUDGET := 5000
 
 help:  ## list available targets
@@ -56,7 +58,7 @@ else
 	uv run python $(AUDIT_LIB) $(PLUGIN_SKILL_LIBS) --by-plugin --severity $(SKILL_SEVERITY)
 endif
 
-context-budget:  ## report what this marketplace costs a consumer's context, and cap the resident tier
+context-budget:  ## report what this marketplace costs a consumer's context, and cap the always-installed tier
 	uv run python scripts/context_budget.py --fail-over $(RESIDENT_TOKEN_BUDGET)
 
 audit-rule-drift:  ## diff rule IDs in references/skill-rules.md vs docs/research/claude-skill-system_v1.17.md

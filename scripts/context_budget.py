@@ -40,7 +40,9 @@ a reference?" — do not turn on the third significant figure.
 
 Usage:
     context_budget.py                    # report every tier
-    context_budget.py --fail-over 5000   # non-zero exit when the widest install exceeds it
+    context_budget.py --fail-over 5000   # non-zero exit when the ALWAYS-INSTALLED
+                                         # tier (core) exceeds it; opt-in sections
+                                         # are reported, never capped
 
 Exit: 0 within budget, 1 over it (with --fail-over), 2 on a layout problem.
 """
@@ -133,8 +135,8 @@ def installs(init: Any, sections: set[str]) -> list[tuple[str, str, set[str]]]:
     the first one is what a consumer gets: `_PROFILES` is built from
     `_SECTION_DEFAULTS`, which does not list a section that exists only as
     `section:` frontmatter, so reading it makes `--profile all` look narrower
-    than it is and understates the bill the cap is applied to. A report that
-    gets the widest install wrong is worse than no report.
+    than it is. That row is reported rather than capped now, but understating
+    it still hides a real cost from the person who opted into it.
     """
     core = init._CORE_SECTION
     return [
@@ -208,6 +210,7 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 external.append(skill)
 
+    widest_total: int | None = None
     print("RESIDENT — every turn, every session")
     print(f"  {'AGENTS.md (vendored, @-imported)':<44} {agents_tokens:>6}")
 
@@ -216,12 +219,28 @@ def main(argv: list[str] | None = None) -> int:
         default_on = {name for name, on in init._SECTION_DEFAULTS.items() if on}
         default_install = {init._CORE_SECTION} | default_on
         rows = installs(init, shipped)
-        # Whichever row enables the most sections is the largest bill a consumer
-        # can choose, and so the one the cap applies to. Computed rather than
-        # assumed to be the last row: the cap must follow the widest install
-        # even if the profile table is reordered or another profile is added.
+        # The cap applies to the CORE row — what every consumer gets without
+        # choosing anything, because `core` is the one section `/init` never
+        # switches off. It used to apply to the widest install, which made a
+        # default-off skill compete for a budget no single consumer necessarily
+        # pays: `python` and `extract` are opt-in, so their cost is a choice
+        # their installer made, and capping the sum turned the guard on the
+        # involuntary bill into a ceiling on the whole marketplace. A skill
+        # nobody is forced to install cannot make everyone's turn more
+        # expensive, so it should not be able to fail the build.
+        #
+        # Found by section set rather than by label, so renaming a profile
+        # cannot move the cap somewhere else quietly.
+        core_row = next((row for row in rows if row[2] == {init._CORE_SECTION}), None)
+        if core_row is None:
+            print(
+                "context_budget: no install row enables core alone — cannot tell what "
+                "every consumer pays, so there is nothing honest to cap.",
+                file=sys.stderr,
+            )
+            return 2
+        capped = core_row[2]
         widest = max(rows, key=lambda row: len(row[2]))
-        capped = widest[2]
 
         print("\n  skill listing, by what the consumer installed")
         print(
@@ -249,6 +268,7 @@ def main(argv: list[str] | None = None) -> int:
         )
 
         listing_tokens = sum(entries[s] for s in vendored if vendored[s] in capped)
+        widest_total = agents_tokens + sum(entries[s] for s in vendored if vendored[s] in widest[2])
         if external:
             cost = sum(entries[s] for s in external)
             names = ", ".join(sorted(s.parent.name for s in external))
@@ -260,7 +280,12 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  {f'skill listing ({len(skills)} skills)':<44} {listing_tokens:>6}")
 
     resident = agents_tokens + listing_tokens
-    print(f"\n  {'resident total (widest install)':<44} {resident:>6}")
+    print(f"\n  {'resident total (always installed)':<44} {resident:>6}")
+    if widest_total is not None and widest_total != resident:
+        # Reported, not capped: an opt-in section's cost is real, and whoever
+        # turned it on should be able to see it — but they chose it, and a
+        # choice nobody else pays for is not a reason to fail this build.
+        print(f"  {'widest opt-in install (not capped)':<44} {widest_total:>6}")
 
     print("\n  worst offenders in the listing")
     for skill, tokens in sorted(entries.items(), key=lambda e: -e[1])[:5]:
@@ -289,11 +314,15 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.fail_over is not None and resident > args.fail_over:
         print(
-            f"\ncontext_budget: resident tier is {resident} tokens, over the "
-            f"{args.fail_over} budget.\n"
-            "  Every consumer pays this on every turn before doing any work. Move what "
-            "grew behind\n  a reference (paid on demand) or into a script (paid in "
-            "output, not in context)\n  rather than raising the cap.",
+            f"\ncontext_budget: the always-installed tier is {resident} tokens, over "
+            f"the {args.fail_over} budget.\n"
+            "  This is core plus AGENTS.md — every consumer pays it on every turn, "
+            "and no one\n  can switch it off.\n"
+            "  Move what grew behind a reference (paid on demand) or into a script\n"
+            "  (paid in output, not in context), rather than raising the cap.\n"
+            "  If the new skill is genuinely optional, give it a default-off section "
+            "instead:\n  an opt-in section is reported here, never capped, because it "
+            "costs nobody who\n  did not ask for it.",
             file=sys.stderr,
         )
         return 1

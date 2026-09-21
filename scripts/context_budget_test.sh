@@ -37,6 +37,10 @@ out=$(python3 "${BUDGET_PY}" --root "${REPO_ROOT}" --fail-over 1 2>&1)
 grep -q "over the 1 budget" <<<"${out}" || fail "an exceeded budget must say so: ${out}"
 grep -q "rather than raising the cap" <<<"${out}" \
     || fail "the failure must point at moving content, not at raising the cap"
+grep -q "default-off section" <<<"${out}" \
+    || fail "the failure must name the other way out: an opt-in section costs nobody who declined it"
+grep -q "always-installed tier" <<<"${out}" \
+    || fail "the failure must say WHICH tier is over, now that only one of them is capped"
 
 # Reporting without a cap is not a failure — that is the exploratory mode.
 python3 "${BUDGET_PY}" --root "${REPO_ROOT}" >/dev/null 2>&1 \
@@ -117,17 +121,14 @@ for needed in ("minimal", "general", "all"):
         print(f"report has no {needed} row", file=sys.stderr)
         raise SystemExit(1)
 
-# The capped install must reach every skill `/init` can vendor. `--profile all`
-# is resolved by `_resolve_sections` as *every known section*, which includes a
-# section that exists only as `section:` frontmatter — reading `_PROFILES["all"]`
-# instead silently drops those and understates the bill the cap is applied to.
-# This row is what makes that drift visible; without it the report was wrong by
-# a whole section and still looked orderly.
+# The cap must sit on the NARROWEST install — core alone, the one section /init
+# never switches off. It used to sit on the widest, which made an opt-in skill
+# compete for a budget no single consumer necessarily pays, turning the guard on
+# the involuntary bill into a ceiling on the whole marketplace.
 #
-# Read the row the report itself marks `<- capped`, not the one with the most
-# skills. The script picks the capped row by *section* count, and checking a
-# row chosen by a different measure would pass while the cap sat somewhere else
-# — the assertion has to be about the row the budget is actually enforced on.
+# Read the row the report itself marks `<- capped`, not the one this test would
+# pick: an assertion about a row chosen by a different measure passes while the
+# cap sits somewhere else.
 capped = re.search(r"^\s{4}(\w+)\s+.*<- capped", sys.argv[1], re.M)
 if not capped:
     print("report marks no row as capped", file=sys.stderr)
@@ -135,11 +136,26 @@ if not capped:
 if capped[1] not in rows:
     print(f"capped row {capped[1]!r} is not one of {sorted(rows)}", file=sys.stderr)
     raise SystemExit(1)
-widest = rows[capped[1]][0]
-if widest != int(sys.argv[2]):
+narrowest = min(rows, key=lambda name: rows[name][0])
+if capped[1] != narrowest:
     print(
-        f"capped install lists {widest} skills but /init can vendor {sys.argv[2]} — "
-        f"a section is missing from the capped row: {rows}",
+        f"the cap sits on {capped[1]!r} ({rows[capped[1]][0]} skills), not on the "
+        f"always-installed row {narrowest!r} ({rows[narrowest][0]}): an opt-in "
+        f"section is failing a build for consumers who never install it",
+        file=sys.stderr,
+    )
+    raise SystemExit(1)
+
+# The WIDEST row still has to reach every skill /init can vendor. It is reported
+# rather than capped now, but understating it hides a real cost from whoever
+# opted in — and `--profile all` is resolved by `_resolve_sections` as every
+# *known* section, which includes one that exists only as `section:`
+# frontmatter. Reading `_PROFILES["all"]` instead silently drops those; this is
+# what makes that drift visible.
+if rows["all"][0] != int(sys.argv[2]):
+    print(
+        f"the all row lists {rows['all'][0]} skills but /init can vendor "
+        f"{sys.argv[2]} — a section is missing from the report: {rows}",
         file=sys.stderr,
     )
     raise SystemExit(1)
