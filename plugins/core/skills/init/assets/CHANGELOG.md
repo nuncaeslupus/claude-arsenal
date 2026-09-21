@@ -18,6 +18,20 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [4.14.0] - 2026-09-21
+
+### Added
+
+- Guidance for keeping a parallel test suite fast once `-n auto` stops paying:
+  under `--dist loadfile` the slowest single file sets the suite's wall clock,
+  so no worker count gets past it. `references/evidence-gates.md` gains *When one
+  file is the long pole* — how to measure which file it is, where to split it
+  (along the expensive fixture boundary, not across it), when `--dist load` is
+  the better answer, and why a slow-by-nature test belongs in its own file.
+- `execution` now says where a new test should live, not just what it should
+  assert: adding to the suite's slowest file slows every future run for
+  everyone.
+
 ## [4.13.2] - 2026-09-21
 
 ### Fixed

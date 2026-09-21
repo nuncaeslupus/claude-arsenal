@@ -11,6 +11,7 @@ numeric threshold has no number behind it yet.
 - [The task gate measures the pre-archive tree](#the-task-gate-measures-the-pre-archive-tree)
 - [Evidence gates (numeric acceptance)](#evidence-gates-numeric-acceptance)
 - [Parallel test execution in host-gate](#parallel-test-execution-in-host-gate)
+- [When one file is the long pole](#when-one-file-is-the-long-pole)
 - [Unmeasured — the third outcome](#unmeasured--the-third-outcome)
 - [The placeholder, and the first PR that replaces it](#the-placeholder-and-the-first-pr-that-replaces-it)
 
@@ -185,6 +186,52 @@ repo's fix (`nuncaeslupus/integral-job-search@9cf4965e`, PR #490) found two
 tests that independently touched the live working tree's untracked-file
 listing interleaving across workers once they ran concurrently. A repo
 enabling this should expect to find and fix genuine shared-state races.
+
+---
+
+## When one file is the long pole
+
+Parallelism stops paying at the slowest single file. `--dist loadfile` sends
+every test in a file to one worker, so a suite's wall clock can never fall below
+the longest file's own runtime however many workers are added — a 6-minute
+`test_api.py` keeps the suite at 6 minutes on 2 workers and on 32. This is the
+wall the section above runs into next, and adding `-n` is not what gets past it.
+
+Measure before splitting; the long pole is rarely the file anyone suspects:
+
+```bash
+pytest --durations=25          # slowest individual tests
+pytest --collect-only -q       # what is in the suspect file
+```
+
+Per-**file** totals are what matter here, not the per-test ranking `--durations`
+prints — one file of two hundred fast tests outruns a file with a single slow
+one.
+
+Then split the long pole into sibling files (`test_api_auth.py`,
+`test_api_upload.py`) along seams that already exist — per class, per subsystem,
+per fixture. Each part becomes independently schedulable and the floor drops to
+the longest part. Two things decide whether that trade is worth taking:
+
+- **Split where the expensive fixture boundary already is.** `loadfile` exists
+  because tests in one file usually share a module-scoped fixture — a container,
+  a migrated database, a compiled artifact. Splitting across that boundary makes
+  each part pay the setup again, so wall clock falls while total CPU rises, and
+  a suite billed by the minute can come out behind. Splitting *along* it costs
+  nothing.
+- **Give a slow-by-nature test its own file.** A test that is legitimately slow —
+  a network round trip, a build, a long simulation — is a scheduling unit that
+  wants to start early rather than tail behind a queue of fast ones.
+
+`--dist load` removes the file floor outright by scheduling per test, and is the
+right answer for a suite with no shared module state. It is not the default
+recommendation because it breaks exactly the module- and class-scoped fixtures
+`loadfile` was chosen to protect: reach for it only once the suite is known to
+be free of them.
+
+The same shape applies to any runner whose unit of parallel scheduling is the
+file rather than the test — check which one the repo's runner uses before
+assuming a split is needed.
 
 ---
 
