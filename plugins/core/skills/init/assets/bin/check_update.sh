@@ -397,8 +397,15 @@ fi
 # one, and nothing fails.
 now_installed="$(cat "${VERSION_FILE}" 2>/dev/null || echo "0.0.0")"
 if [[ "${now_installed}" != "${latest}" ]]; then
-    _warn "subtree merged to v${latest} but ${VERSION_FILE} still reads ${now_installed} — the bundle was NOT upgraded. Re-vendor the skills and re-run init.py:
-    bash ${PREFIX}/scripts/vendor-skills.sh --src ${PREFIX} --dest .claude/skills --plugins all
+    # The remedy has to match the layout. `vendor-skills.sh` was the separate
+    # vendoring step before v2.0.0 and is not shipped any more — printing it
+    # unconditionally sent every modern install after a file that is not there,
+    # and the real remedy (init.py, which vendors) read like an afterthought to
+    # it. So name it only where the find above actually located one.
+    _revendor=""
+    [[ -n "${vendor_sh}" ]] && _revendor="
+    bash ${vendor_sh} --src ${PREFIX} --dest .claude/skills --plugins all"
+    _warn "subtree merged to v${latest} but ${VERSION_FILE} still reads ${now_installed} — the bundle was NOT upgraded. Re-vendor the skills and re-run init.py:${_revendor}
     python3 .claude/skills/init/scripts/init.py --repo-path . --silent"
     exit 0
 fi

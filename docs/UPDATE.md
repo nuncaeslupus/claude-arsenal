@@ -240,14 +240,73 @@ committed to the consumer's own tree.
 
 ## Rolling back
 
-Marketplace install does not pin a version — `/plugin update` always
-fetches the tip of `main`. If a fresh update breaks something:
+Whether you can roll back at all depends on which install you have — the table
+under *Which install do you have?* splits them. **Two of the three pin a ref and
+roll back cleanly. The plugin install does not.**
 
-```text
-/plugin marketplace remove claude-arsenal
-/plugin marketplace add github:nuncaeslupus/claude-arsenal
+**Clone-based install.** Re-clone upstream at the older tag and re-run its
+installer against your project — the same command as a forward update, with
+`--branch` pointing backwards:
+
+```bash
+git clone --depth 1 --branch v4.12.0 \
+    https://github.com/nuncaeslupus/claude-arsenal.git /tmp/arsenal-rollback
+python3 /tmp/arsenal-rollback/plugins/core/skills/init/scripts/init.py --repo-path .
 ```
 
-If that does not help, file an issue against
-`nuncaeslupus/claude-arsenal` with the commit SHA the cache currently
-holds (`git -C ~/.claude/plugins/cache/claude-arsenal rev-parse HEAD`).
+**Subtree install.** Both halves of the install are in your own history, so
+this is a path restore and nothing more — no merge to unpick, no script to run.
+Restore them together:
+
+```bash
+git log --oneline -- claude-arsenal | head   # pick the commit before the bad update
+git checkout <sha> -- claude-arsenal .claude/skills
+git commit -m "chore: roll claude-arsenal back to v4.12.0"
+```
+
+**Both paths, not just `claude-arsenal/`.** The subtree carries the bundle —
+`AGENTS.md`, `bin/`, `scripts/`, `workflows/` — and nothing else; the skills a
+session loads were vendored into `.claude/skills/` and are versioned there. Re-running
+`init.py` will not fix a half-restore either: a vendored `init.py` vendors *from*
+`.claude/skills/`, so pointed at itself it is a no-op.
+
+If you keep a fork of a vendored skill under `.claude/skills/` (§ *Customising a
+vendored skill*), name the vendored subdirectories instead of the whole tree —
+the restore does not know which ones are yours.
+
+Reverting the merge commit works too, but `check_update.sh` merges with
+`--squash`, so the history holds a squash commit *and* a merge of it and
+`git revert -m 1` fails on the wrong one. The path restore sidesteps that.
+
+`check_update.sh` will offer the newest tag again on the next session. That is
+correct — it compares against the newest tag, not against what you chose — and
+it is your cue to pin deliberately rather than merge on sight.
+
+**Plugin install — there is no self-service rollback.** `/plugin update` fetches
+the tip of `main`, and so does removing and re-adding the marketplace: both
+rebuild the cache from the same commit, so the remove/add pair this page used to
+recommend restored nothing at all. Nothing in the marketplace manifest takes a
+version, so there is no older release to ask for.
+
+What you can actually do, in order:
+
+1. **Check the cache for the tag.** The cache is a git clone, so if the tag is
+   there you can sit on the old bundle until the next update:
+
+   ```bash
+   cd ~/.claude/plugins/cache/claude-arsenal
+   git tag -l 'v*' | tail -5          # a shallow clone may list none
+   git checkout v4.12.0               # then re-run /init to re-vendor
+   ```
+
+   This is a stopgap, not a pin: the next `/plugin update` wipes the cache and
+   takes the checkout with it.
+
+2. **Move to the clone-based install**, which takes `--branch` and therefore
+   rolls back properly. `docs/INSTALL.md` has the route; it is the same one CI
+   and fresh containers use.
+
+3. **File an issue** against `nuncaeslupus/claude-arsenal` with the commit SHA
+   the cache holds (`git -C ~/.claude/plugins/cache/claude-arsenal rev-parse
+   HEAD`) and the version you were on before. A bad release is worth a fix
+   forward, which every install gets on its normal update route.

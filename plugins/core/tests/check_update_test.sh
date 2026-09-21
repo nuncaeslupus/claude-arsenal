@@ -213,6 +213,48 @@ if grep -q "updated to v" <<<"${out}"; then
         || fail "must not report a completed update while the bundle version is unchanged: ${out}"
 fi
 
+echo "PASS: 'updated' is not printed while the bundle version did not move"
+
+# --- 9b: the half-upgrade warning prints a remedy that can actually run ------
+#     Gate 9 above never reaches that warning: with no remote it stops at the
+#     INERT branch, so its assertion sits inside an `if` that is always false —
+#     it has been passing without testing anything. This gate drives the real
+#     path, which needs a remote, a subtree trailer, a newer tag, and a bundle
+#     dir SEPARATE from the subtree prefix so the merge cannot move the version.
+#
+#     What it pins: `vendor-skills.sh` was the pre-v2.0.0 vendoring step and has
+#     not shipped since, but the warning named it unconditionally — so the one
+#     message a half-upgraded consumer reads opened with a command that does not
+#     exist, and the remedy that does work read like its afterthought.
+half="${tmp}/half"
+mkdir -p "${half}/claude-arsenal" "${half}/bin"
+git init -q -b main "${half}"
+git -C "${half}" config user.email "test@arsenal.example"
+git -C "${half}" config user.name "Arsenal Test"
+git -C "${half}" config commit.gpgsign false
+echo "0.20.5" > "${half}/claude-arsenal/.bundle-version"
+cp "${CHECK}" "${half}/bin/check_update.sh"
+git -C "${half}" add -A
+git -C "${half}" commit -q -m "chore: assemble bundle at claude-arsenal/"
+git -C "${half}" remote add arsenal "${market}"
+git -C "${half}" fetch -q arsenal --tags
+# A real `git subtree add --squash`, not a hand-written trailer: the squash
+# records a split hash the next merge rev-parses, and a placeholder one aborts
+# the merge before the version check this gate is about.
+git -C "${half}" subtree add -q --prefix=vendor/claude-arsenal \
+    "v0.20.5^{commit}" --squash >/dev/null 2>&1 \
+    || fail "could not build the split-layout subtree fixture"
+
+out=$( (cd "${half}" && ARSENAL_BUNDLE_DIR=claude-arsenal \
+        ARSENAL_PREFIX=vendor/claude-arsenal bash bin/check_update.sh 2>&1) || true)
+grep -q "still reads" <<<"${out}" \
+    || fail "9b did not reach the half-upgrade warning, so its checks would be vacuous: ${out}"
+grep -q "vendor-skills.sh" <<<"${out}" \
+    && fail "the half-upgrade remedy names vendor-skills.sh, which is not installed here: ${out}"
+grep -q "init.py --repo-path . --silent" <<<"${out}" \
+    || fail "the half-upgrade remedy does not name the step that actually re-vendors: ${out}"
+echo "PASS: the half-upgrade remedy names only steps that exist"
+
 # --- 10: a vendored init skill OLDER than the bundle is reported --------------
 #     init.py's downgrade refusal ships inside the skill, so a host vendored at
 #     2.4.0 has a copy that predates it: step 0(b) rewrites twelve bundle files
