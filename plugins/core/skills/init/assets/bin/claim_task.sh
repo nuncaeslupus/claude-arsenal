@@ -49,7 +49,15 @@ ATTEMPT="${2:-1}"
 [[ -n "${TASK_ID}" ]] || { echo "error: claim_task.sh requires <task-id>" >&2; exit 2; }
 
 REMOTE="${ARSENAL_QUEUE_REMOTE:-origin}"
-PREFIX="${ARSENAL_CLAIM_PREFIX:-arsenal/claims}"
+# env, then arsenal/config.toml, then the shipped default. `claim-prefix` was a
+# documented, validated setting that nothing read: this line was the hardcoded
+# string it was supposed to control. queue_hooks.py, which prunes these refs,
+# resolves it the same way — the two must agree or a claim outlives its task.
+PREFIX="${ARSENAL_CLAIM_PREFIX:-}"
+if [[ -z "${PREFIX}" ]]; then
+    PREFIX="$(python3 "${SCRIPT_DIR}/../scripts/arsenal_config.py" --get claim-prefix 2>/dev/null || true)"
+fi
+PREFIX="${PREFIX:-arsenal/claims}"
 
 _fail() { echo "error: $1" >&2; exit 2; }
 

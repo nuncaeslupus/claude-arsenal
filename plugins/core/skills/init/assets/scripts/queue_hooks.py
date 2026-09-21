@@ -53,6 +53,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from arsenal_config import setting
 from handle_sync import missing_handles
 from issue_for_task import issue_number_for
 from task_select import (
@@ -66,10 +67,14 @@ from task_select import (
 )
 
 CLAIMED_LABEL = "arsenal:claimed"
-TASK_LABEL = "arsenal:task"
+# `task-label` and `claim-prefix` were validated and documented settings that
+# nothing read — these two lines were the hardcoded strings they were supposed
+# to control.
+TASK_LABEL = setting("task-label")
 API_ROOT = "https://api.github.com"
-# Same default and same env knob as claim_task.sh, which is what writes them.
-DEFAULT_CLAIM_PREFIX = os.environ.get("ARSENAL_CLAIM_PREFIX", "").strip() or "arsenal/claims"
+# Same precedence as claim_task.sh, which is what writes them: env, then the
+# config file, then the shipped default.
+DEFAULT_CLAIM_PREFIX = os.environ.get("ARSENAL_CLAIM_PREFIX", "").strip() or setting("claim-prefix")
 # `<id>.a2` is attempt 2 on `<id>` — the same task, so the same prune decision.
 CLAIM_ATTEMPT_RE = re.compile(r"\.a\d+$")
 

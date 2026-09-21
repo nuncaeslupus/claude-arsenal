@@ -18,6 +18,33 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [4.10.0] - 2026-09-21
+
+### Fixed — three settings that did nothing now work; two that did nothing are gone
+
+Six `arsenal/config.toml` keys scaffolded, validated and round-tripped through
+`--explain` while nothing read them.
+
+- **`import-label`, `task-label` and `claim-prefix` now change what runs.**
+  `issue_import.py`, `queue_hooks.py` and `bin/claim_task.sh` each carried the
+  hardcoded string the key was supposed to control. `import-label` is the one
+  to check: `AGENTS.md` — resident in every session — documents it as what
+  changes the import label, so a consumer who set it imported no issues and was
+  told nothing. `claim-prefix` keeps its precedence: `ARSENAL_CLAIM_PREFIX`,
+  then the config file, then the default.
+- **`home` in the file is now refused**, naming `ARSENAL_HOME` instead. It
+  names the directory that *holds* `config.toml`, so the file could never set
+  it — but `--explain` echoed it back, which looked like it worked.
+- **`test-discipline` and `session-end` are removed.** Both duplicated a
+  `CLAUDE.md` marker that the `execution` and `session-end` skills already
+  read, with different vocabulary in the `session-end` case. Setting either in
+  `config.toml` never did anything; set the marker in your `CLAUDE.md` as those
+  skills document. Unknown keys are ignored, so a config that still lists them
+  keeps working.
+
+Every key now names the file that reads it, and a test fails the build if a new
+key arrives without one.
+
 ## [4.9.3] - 2026-09-21
 
 ### Fixed — a gate no longer picks up whatever else is installed next to `node`

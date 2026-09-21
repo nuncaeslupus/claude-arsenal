@@ -124,7 +124,7 @@ printf 'merge-policy = "always"\n' > "${tmpdir}/arsenal/config.toml"
 out=$(python3 "${CONFIG_PY}" --repo-root "${tmpdir}" --explain)
 grep -q 'merge-policy.*always.*config.toml' <<<"${out}" \
     || fail "--explain should show where merge-policy came from"
-grep -q 'test-discipline.*default' <<<"${out}" \
+grep -q 'listing-budget.*default' <<<"${out}" \
     || fail "--explain should mark unset keys as default"
 
 # --- 12: state derived from GitHub issues, the way a session actually gets it ---
