@@ -241,37 +241,69 @@ assuming a split is needed.
 Caching is the other half of a fast suite, and the line that matters runs
 straight through this document's subject — what the gate actually certifies.
 
-**Cache inputs freely.** Resolved dependencies, virtualenvs, compiled
-extensions, Docker layers, a built frontend bundle, a migrated schema template:
-all of it feeds the same tests the same way, so a hit makes setup cheaper and
-changes nothing about what ran. On a suite whose gate is a full `make host-gate`
-per worker per review round, dependency install is often the larger half of the
-clock, and it is the cheapest thing on this page to fix.
-
-**Do not cache outcomes in `host-gate`.** Tooling that skips tests it believes a
+**Never cache outcomes in `host-gate`.** Tooling that skips tests it believes a
 change could not affect — `pytest --lf`, `--ff`, `testmon`, a bare "no relevant
 files changed, skipping" branch in CI — converts the gate's claim from *this
 tree passes* into *nothing I chose to run failed*. Those are not the same
 sentence, and the second one is the failure this bundle keeps naming: green on a
 tree nobody verified, with no signal that the check narrowed. The
 change-detection is where the correctness moved, and it is not something the
-green tick reports on.
+green tick reports on. Outcome caching belongs in the edit loop, where a human
+is about to re-run everything anyway and a wrong skip costs one re-run.
 
-The split follows the audience:
+**Caching inputs is the safe half — but "input" covers two different things,**
+and only the first gets a free pass.
 
-- **The edit loop** is where outcome caching belongs. `pytest --lf` between two
-  keystrokes is exactly right — a human is about to run the whole thing anyway,
-  and a wrong skip costs one re-run.
-- **The gate** runs the full suite over the tree being shipped. Let it be slow
-  honestly, and take the time back from parallelism, from splitting the long
-  pole, and from input caching — none of which change what was verified.
+### Immutable inputs — cache them, key them on content
 
-If a cache key is ever wrong, prefer the failure that re-runs work to the one
-that skips it: key on a content hash (a lockfile digest, a source tree digest),
-never on a branch name or a bare date, and make a miss cost time rather than
-coverage.
+Resolved dependencies, virtualenvs, compiled extensions, Docker layers, a built
+frontend bundle. These are produced from a manifest and do not change while the
+suite runs, so a hit makes setup cheaper and changes nothing about what ran. On
+a suite whose gate is a full `make host-gate` per worker per review round,
+dependency install is often the larger half of the clock, and this is the
+cheapest thing on the page to fix.
 
----
+Key on a **content hash** of what produced them — a lockfile digest, a source
+tree digest — never on a branch name or a bare date. A wrong content key misses
+and costs time; a wrong lifetime key hits and costs correctness.
+
+### Inputs derived from the tree under test — cache them carefully
+
+An analysis of the repo's own working state: an untracked-file listing, a `git
+status` read, a scan of the source tree, a snapshot of fixtures on disk. These
+are expensive enough to be worth computing once, and many tests read the same
+answer — so hoisting one into a shared fixture is a real and correct win.
+
+But this kind of input is **mutable, and it is the thing under test**. A
+snapshot taken once at session start goes stale the moment anything writes into
+the tree — a test that stages a file, a fixture that drops a temp artifact, a
+subprocess that runs a git command. A test then asserts against a tree that no
+longer exists and passes because the snapshot is old. That is not outcome
+caching, but it arrives at the same place: green on something nobody actually
+looked at.
+
+Two rules keep it honest:
+
+- **Cache it for the session only if nothing in the suite mutates the tree.**
+  That is an invariant somebody has to guarantee, not a default to assume. If a
+  single test writes into the repo, the free pass is gone.
+- **Otherwise key it on a tree digest**, so a mutation misses the cache and
+  recomputes rather than silently serving a stale read.
+
+### Fixture scope under parallel workers
+
+`session`-scoped does not mean once. Under `pytest-xdist` each worker is its own
+process running its own session, so a session-scoped fixture is computed **once
+per worker** — on `-n auto` across eight workers, eight times, not one. Still a
+large win over per-test, but size the benefit accordingly.
+
+This is also where caching meets the long-pole split above, and the two can work
+against each other. If a file's expensive setup costs `F` and its tests cost
+`T`, splitting it into `k` parts that land on `k` workers gives roughly
+`F + T/k` — every worker re-pays `F`. When `F` dominates, **splitting that file
+buys almost nothing**, and the fix is to make `F` cheaper or to share it across
+workers, not to cut the file up. Measure `F` before splitting; it is the
+concrete form of the fixture-boundary warning above.
 
 ## Unmeasured — the third outcome
 
