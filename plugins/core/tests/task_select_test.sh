@@ -55,7 +55,7 @@ EOF
 fail() { echo "FAIL: $1" >&2; exit 1; }
 
 # --- 1: a blocked task is not selected even though its priority is highest ---
-out=$(echo '{}' | python3 "${SELECT_PY}" --tasks-dir "${TASKS}" 2>/dev/null)
+out=$(echo '{}' | python3 "${SELECT_PY}" --state - --tasks-dir "${TASKS}" 2>/dev/null)
 id=$(python3 -c 'import sys,json;print(json.loads(sys.stdin.readline())["id"])' <<<"${out}")
 [[ "${id}" == "t-aaaa1111" ]] || fail "expected base task first, got '${id}'"
 
@@ -64,23 +64,23 @@ gate=$(python3 -c 'import sys,json;print(json.loads(sys.stdin.readline())["gate"
 [[ "${gate}" == "True" ]] || fail "expected gate=true for the base task, got '${gate}'"
 
 # --- 3: once the dep is done, the dependent outranks by priority ---
-out=$(echo '{"t-aaaa1111":"done"}' | python3 "${SELECT_PY}" --tasks-dir "${TASKS}" 2>/dev/null)
+out=$(echo '{"t-aaaa1111":"done"}' | python3 "${SELECT_PY}" --state - --tasks-dir "${TASKS}" 2>/dev/null)
 id=$(python3 -c 'import sys,json;print(json.loads(sys.stdin.readline())["id"])' <<<"${out}")
 [[ "${id}" == "t-bbbb2222" ]] || fail "expected dependent task after dep done, got '${id}'"
 
 # --- 4: `merged` also satisfies a dep (both are terminal) ---
-out=$(echo '{"t-aaaa1111":"merged"}' | python3 "${SELECT_PY}" --tasks-dir "${TASKS}" 2>/dev/null)
+out=$(echo '{"t-aaaa1111":"merged"}' | python3 "${SELECT_PY}" --state - --tasks-dir "${TASKS}" 2>/dev/null)
 id=$(python3 -c 'import sys,json;print(json.loads(sys.stdin.readline())["id"])' <<<"${out}")
 [[ "${id}" == "t-bbbb2222" ]] || fail "merged dep should unblock, got '${id}'"
 
 # --- 5: a claimed task is not offered again ---
-out=$(echo '{"t-aaaa1111":"claimed"}' | python3 "${SELECT_PY}" --tasks-dir "${TASKS}" --max 5 2>/dev/null)
+out=$(echo '{"t-aaaa1111":"claimed"}' | python3 "${SELECT_PY}" --state - --tasks-dir "${TASKS}" --max 5 2>/dev/null)
 grep -q 't-aaaa1111' <<<"${out}" && fail "a claimed task must not be selected"
 
 # --- 6: capability filtering — surface:cli only when the surface offers it ---
-out=$(echo '{"t-aaaa1111":"done","t-bbbb2222":"done"}' | python3 "${SELECT_PY}" --tasks-dir "${TASKS}" 2>/dev/null)
+out=$(echo '{"t-aaaa1111":"done","t-bbbb2222":"done"}' | python3 "${SELECT_PY}" --state - --tasks-dir "${TASKS}" 2>/dev/null)
 [[ -z "${out}" ]] || fail "task requiring surface:cli must not be selected without the capability"
-out=$(echo '{"t-aaaa1111":"done","t-bbbb2222":"done"}' | python3 "${SELECT_PY}" \
+out=$(echo '{"t-aaaa1111":"done","t-bbbb2222":"done"}' | python3 "${SELECT_PY}" --state - \
         --tasks-dir "${TASKS}" --capability surface:cli 2>/dev/null)
 id=$(python3 -c 'import sys,json;print(json.loads(sys.stdin.readline())["id"])' <<<"${out}")
 [[ "${id}" == "t-cccc3333" ]] || fail "capability task should be selected when offered, got '${id}'"
@@ -94,13 +94,13 @@ priority: 99
 deps: [t-nonexistent]
 ---
 EOF
-out=$(echo '{}' | python3 "${SELECT_PY}" --tasks-dir "${TASKS}" --max 9 2>/dev/null)
+out=$(echo '{}' | python3 "${SELECT_PY}" --state - --tasks-dir "${TASKS}" --max 9 2>/dev/null)
 grep -q 't-dddd4444' <<<"${out}" && fail "unknown dep must block, not unblock"
 rm "${TASKS}/t-dddd4444.md"
 
 # --- 8: two agents reading the same graph rank it identically ---
-a=$(echo '{}' | python3 "${SELECT_PY}" --tasks-dir "${TASKS}" --max 9 2>/dev/null)
-b=$(echo '{}' | python3 "${SELECT_PY}" --tasks-dir "${TASKS}" --max 9 2>/dev/null)
+a=$(echo '{}' | python3 "${SELECT_PY}" --state - --tasks-dir "${TASKS}" --max 9 2>/dev/null)
+b=$(echo '{}' | python3 "${SELECT_PY}" --state - --tasks-dir "${TASKS}" --max 9 2>/dev/null)
 [[ "${a}" == "${b}" ]] || fail "selection must be deterministic across runs"
 
 # --- 9: config defaults apply with no file, and a file overrides them ---
@@ -232,7 +232,7 @@ priority: 20
 true
 ```
 EOF
-out=$(echo '{}' | python3 "${SELECT_PY}" --tasks-dir "${TASKS}" 2>/dev/null | head -1)
+out=$(echo '{}' | python3 "${SELECT_PY}" --state - --tasks-dir "${TASKS}" 2>/dev/null | head -1)
 python3 -c 'import sys,json
 t=json.loads(sys.stdin.readline())
 assert t["id"]=="t-dddd4444", t["id"]
@@ -701,5 +701,39 @@ assert ts.task_id_from_issue(two) == "t-bybody", "two id labels must not resolve
 assert ts.task_id_from_issue({"labels": ["arsenal-id:"]}) is None, "an empty id is not an id"
 PYCHK
 echo "PASS: an arsenal-id label resolves a handle with no body and a drifted title"
+
+# --- an inherited, never-closing stdin does not hang the selector ------------
+#     `--state` used to be inferred: `not sys.stdin.isatty()` then
+#     `sys.stdin.read()`. "Not a terminal" is not "data is waiting" — an open
+#     pipe whose writer never closes blocks forever, and that is exactly what a
+#     harness hands a subprocess whose stdin it inherited. This runs on the
+#     session-start path, so the failure was a session that never started, with
+#     nothing on any stream to say why. `make test` reproduced it.
+fifo="${tmpdir}/never-closes"
+mkfifo "${fifo}"
+( sleep 20 > "${fifo}" & ) 2>/dev/null
+timeout 10 python3 "${SELECT_PY}" --tasks-dir "${TASKS}" < "${fifo}" >/dev/null 2>&1
+code=$?
+rm -f "${fifo}"
+[[ ${code} -ne 124 ]] \
+    || fail "task_select.py hung on an inherited stdin that never closes"
+echo "PASS: an inherited stdin that never closes does not hang the selector"
+
+# ...and `-` still means stdin, the spelling issue_for_task.py already uses.
+out=$(echo '{"t-aaaa1111":"done"}' | python3 "${SELECT_PY}" --state - --tasks-dir "${TASKS}" --state - --all 2>&1)
+grep -q '"state":"done"' <<<"${out}" \
+    || fail "--state - must still read the state from stdin: ${out}"
+echo "PASS: --state - reads stdin explicitly"
+
+# ...and nothing in the repo relies on the implicit spelling any more. Three
+# test files did, which is how the hang stayed invisible: they all ran under a
+# harness whose stdin happened to close.
+implicit=$(grep -rn "| *python3 [^|]*task_select\.py\|{SELECT_PY}" \
+    --include="*.sh" --include="*.md" "${SCRIPT_DIR}/../../.." 2>/dev/null \
+    | grep "| *python3" | grep -v -- "--state" || true)
+[[ -z "${implicit}" ]] \
+    || fail "these pipe state into task_select.py without \`--state -\`, which reads nothing now:
+${implicit}"
+echo "PASS: no caller relies on the implicit stdin spelling"
 
 echo "PASS: task_select_test — all gates passed"

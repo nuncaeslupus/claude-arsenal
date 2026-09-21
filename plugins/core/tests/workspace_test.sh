@@ -60,7 +60,7 @@ ID_FE=$(python3 "${ADD_PY}" --title "FE task" --priority 10 --workspace FRONTEND
 ID_BE=$(python3 "${ADD_PY}" --title "BE task" --priority 10 --workspace BACKEND --tasks-dir arsenal/tasks 2>/dev/null)
 
 # Gate 6: a workspace-scoped selection returns only that workspace's task.
-FE_RESULT=$(echo '{}' | python3 "${SELECT_PY}" --tasks-dir arsenal/tasks --workspace FRONTEND 2>/dev/null)
+FE_RESULT=$(echo '{}' | python3 "${SELECT_PY}" --state - --tasks-dir arsenal/tasks --workspace FRONTEND 2>/dev/null)
 if ! grep -q "${ID_FE}" <<<"${FE_RESULT}"; then
     echo "FAIL: FRONTEND scope should return ${ID_FE}; got: ${FE_RESULT}" >&2; exit 1
 fi
@@ -68,7 +68,7 @@ if grep -q "${ID_BE}" <<<"${FE_RESULT}"; then
     echo "FAIL: FRONTEND scope leaked the BACKEND task" >&2; exit 1
 fi
 
-BE_RESULT=$(echo '{}' | python3 "${SELECT_PY}" --tasks-dir arsenal/tasks --workspace BACKEND 2>/dev/null)
+BE_RESULT=$(echo '{}' | python3 "${SELECT_PY}" --state - --tasks-dir arsenal/tasks --workspace BACKEND 2>/dev/null)
 if ! grep -q "${ID_BE}" <<<"${BE_RESULT}"; then
     echo "FAIL: BACKEND scope should return ${ID_BE}; got: ${BE_RESULT}" >&2; exit 1
 fi

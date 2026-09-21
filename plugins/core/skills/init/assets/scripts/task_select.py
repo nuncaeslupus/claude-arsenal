@@ -626,9 +626,7 @@ def main(argv: list[str] | None = None) -> int:
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument("--tasks-dir", type=Path, default=default_tasks_dir())
-    parser.add_argument(
-        "--state", type=Path, help="JSON file of {task_id: state}; omit to read stdin"
-    )
+    parser.add_argument("--state", type=Path, help="JSON file of {task_id: state}, or - for stdin")
     parser.add_argument(
         "--issues",
         type=Path,
@@ -686,9 +684,31 @@ def main(argv: list[str] | None = None) -> int:
     else:
         raw_state = ""
         if args.state:
-            raw_state = args.state.read_text(encoding="utf-8")
+            # `-` means stdin, the spelling `issue_for_task.py` and
+            # `read_issue_payload` already use. It used to be inferred instead:
+            # `not sys.stdin.isatty()` then `sys.stdin.read()`. But "not a
+            # terminal" is not "data is waiting" — an open pipe with no writer
+            # closing it blocks forever, and that is what a harness hands a
+            # subprocess whose stdin it inherited. `task_select.py` runs on the
+            # session-start path, so the failure was a session that never
+            # started, with nothing on any stream to say why.
+            raw_state = (
+                sys.stdin.read()
+                if str(args.state) == "-"
+                else args.state.read_text(encoding="utf-8")
+            )
         elif not sys.stdin.isatty():
-            raw_state = sys.stdin.read()
+            # Said, not silently dropped. A caller who was piping state in gets
+            # one line telling them the spelling, instead of a selection quietly
+            # computed as though every task were open. Only reachable when
+            # neither --issues nor --state was given, so the ordinary
+            # session-start invocation never sees it.
+            print(
+                "task_select: stdin is not a terminal and --state was not given. State "
+                "is no longer read from stdin implicitly — that blocked forever on an "
+                "inherited pipe. Pass `--state -` to read it from stdin.",
+                file=sys.stderr,
+            )
         try:
             state = json.loads(raw_state) if raw_state.strip() else {}
         except json.JSONDecodeError as exc:
