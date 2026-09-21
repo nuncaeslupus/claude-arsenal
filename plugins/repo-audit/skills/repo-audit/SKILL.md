@@ -30,8 +30,14 @@ the current one's check is satisfied.
 
 1. **Orient.** Read the README, the root memory file (`CLAUDE.md` /
    `AGENTS.md`), and the top-level directory listing directly — cheap, and it
-   shows what's worth delegating. *Check: name the repo's purpose and its
-   3–5 major subsystems before spawning anything.*
+   shows what's worth delegating. Ask the user (`AskUserQuestion`) which
+   model — Sonnet, Opus, Haiku, or Fable — the worker agents spawned below
+   should run on: a wide fan-out is a cost/thoroughness tradeoff that's the
+   user's call, not a default to assume. Skip the question and use Sonnet
+   when there's no one to ask (an unattended run). Pass the answer as every
+   worker's `model` from here on. *Check: name the repo's purpose and its
+   3–5 major subsystems, and have the worker model set, before spawning
+   anything.*
 2. **Understand.** One parallel research agent per major subsystem — see
    [Research categories](references/research-categories.md). *Check: every
    agent's report cites a real file path, not a paraphrase of another
@@ -96,6 +102,13 @@ the current one's check is satisfied.
   fact.** Both a numeric claim and a suspected bug have been wrong before in
   the same way a confident paraphrase goes wrong. The verify pass exists
   because of this, not as a formality; don't skip it under time pressure.
+- **The orchestrator's model isn't this skill's to set.** These steps run as
+  whatever model the current session already is — no tool call changes that
+  mid-run. Getting a specific model to orchestrate (deciding what to hunt
+  for, writing each worker's prompt, reading its report back) means
+  starting or switching the session to it *before* invoking repo-audit; only
+  the fan-out workers' model is a setting this skill can apply, via the
+  question in the Orient pass.
 - **"No documentation exists for X" is itself a finding.** Skip it and the
   audit undersells the repo: a subsystem that's real, tested, and shipped
   reads as though it doesn't exist, because nothing describes it outside

@@ -1,6 +1,6 @@
 {
   "name": "repo-audit",
-  "version": "4.7.0",
+  "version": "4.8.0",
   "description": "Finds real problems in a repository and queues them as properly-gated work (repo-audit), then turns the results into human-facing documents — a pitch, a deep-dive, interview prep, onboarding, a status brief (explain-repo). General-purpose, not specific to claude-arsenal's own engineering workflow.",
   "author": { "name": "nuncaeslupus" }
 }
