@@ -1,16 +1,27 @@
 name: tag-release
 
-# push: the normal path — tag as soon as a version bump lands on main.
-# schedule + workflow_dispatch: the recovery path. A push-only trigger fires
-# exactly once, so if Actions is unavailable at merge time (no runners, an
-# outage, a spending limit) the release ships UNTAGGED and stays that way —
-# nothing re-fires, and every consumer's tag-gated check_update.sh keeps
-# reporting the previous version as latest. That happened to v0.21.0 (and
-# v0.20.4 before it). The daily run re-derives the tag from .bundle-version and
-# creates it if missing, so a missed release self-heals once Actions recovers;
-# it is a no-op on every other day.
+# A tag is published only for a commit whose CI concluded successfully.
+#
+# workflow_run: the normal path — ci.yml finishing on main is what starts this,
+# so the conclusion is known rather than raced. The old `push` trigger fired
+# alongside ci.yml and tagged regardless of what it found: a merge whose
+# main-branch CI went red was still tagged, and consumers gate updates on
+# exactly the newest remote tag, so that red release became the one they were
+# offered and subtree-merged.
+#
+# schedule + workflow_dispatch: the recovery path. A trigger that fires once
+# leaves a release UNTAGGED if Actions is unavailable at merge time (no runners,
+# an outage, a spending limit) — nothing re-fires, and every consumer's
+# tag-gated check_update.sh keeps reporting the previous version as latest. That
+# happened to v0.21.0 (and v0.20.4 before it). The daily run re-derives the tag
+# from .bundle-version, and when no CI run exists for the commit at all — which
+# is what that outage looks like afterwards — it starts one, so the next day's
+# run can tag it. Refusing outright would reintroduce exactly the failure this
+# schedule was added to heal.
 on:
-  push:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
     branches: [main]
   schedule:
     - cron: "17 6 * * *"
@@ -18,6 +29,7 @@ on:
 
 permissions:
   contents: write
+  actions: write  # read ci.yml's conclusion, and start it on the recovery path
 
 # Serialize tag creation so two quick pushes to main can't race the same ref.
 concurrency:
@@ -31,8 +43,42 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          # The commit CI actually validated, not whatever main's head is by the
+          # time this runs — otherwise the version read below and the commit
+          # tagged can be two different changes.
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Require a green CI run on this commit
+        id: guard
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          sha=$(git rev-parse HEAD)
+          gh api --paginate \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs?head_sha=${sha}&per_page=100" \
+            > runs.json
+          verdict=$(bash scripts/tag_guard.sh runs.json)
+          echo "verdict=${verdict}" >> "${GITHUB_OUTPUT}"
+          echo "CI for ${sha}: ${verdict}"
+
+          case "${verdict}" in
+            tag) ;;
+            refuse)
+              echo "::error::CI did not pass on ${sha} — refusing to publish a tag for it." ; exit 1 ;;
+            pending)
+              echo "CI has not concluded on ${sha} yet; the scheduled run will tag it once it does." ;;
+            absent)
+              # No run at all: an Actions outage at merge time looks like this
+              # afterwards. Start CI for the commit so the next scheduled run has
+              # a conclusion to read, rather than leaving the release untagged.
+              echo "No CI run exists for ${sha}; starting one so the next scheduled run can tag it."
+              gh workflow run ci.yml --ref "${GITHUB_REF_NAME}" || \
+                echo "::warning::could not start ci.yml — run it by hand for ${sha}" ;;
+          esac
 
       - name: Create version tag from .bundle-version
+        if: steps.guard.outputs.verdict == 'tag'
         run: |
           set -euo pipefail
           vfile=plugins/core/skills/init/assets/.bundle-version
