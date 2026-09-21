@@ -3,6 +3,7 @@ id: t-d2ee8e49
 title: "Sync check_skill_workshop_loaded.sh \u2014 the two copies have drifted"
 priority: 10
 tags: [tooling, hooks]
+status: merged
 ---
 
 SECURITY REGRESSION IN SHIPPED CODE. This was originally filed as hash drift

@@ -3,6 +3,7 @@ id: t-f11abd15
 title: "Skill-edit gate is bypassed by a doubled slash or an unmodelled write tool"
 priority: 5
 tags: [security, hooks]
+status: merged
 ---
 
 gate_target.py decides what a Bash command writes so the PreToolUse hook can

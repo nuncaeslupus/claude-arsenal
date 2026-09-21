@@ -58,6 +58,7 @@ from issue_for_task import issue_number_for
 from task_select import (
     ID_LABEL_PREFIX,
     TERMINAL,
+    default_tasks_dir,
     load_tasks,
     task_id_from_body,
     task_id_from_issue,
@@ -867,7 +868,7 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="JSON array of commit messages, for keyword-guard instead of fetching",
     )
-    parser.add_argument("--tasks-dir", type=Path, default=Path("arsenal/tasks"))
+    parser.add_argument("--tasks-dir", type=Path, default=default_tasks_dir())
     parser.add_argument("--repo", default=os.environ.get("GITHUB_REPOSITORY", ""))
     parser.add_argument(
         "--event", type=Path, default=None, help="event JSON (default $GITHUB_EVENT_PATH)"

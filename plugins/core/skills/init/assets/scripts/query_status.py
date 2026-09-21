@@ -36,6 +36,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from issue_for_task import issue_number_for
 from task_select import (
     TERMINAL,
+    default_tasks_dir,
     effective_state,
     load_tasks,
     state_from_issues,
@@ -136,7 +137,7 @@ def staleness_warning(tasks_dir: Path, remote: str = "origin") -> str | None:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--tasks-dir", type=Path, default=Path("arsenal/tasks"))
+    parser.add_argument("--tasks-dir", type=Path, default=default_tasks_dir())
     parser.add_argument("--issues", type=Path, help="JSON array of arsenal:task issues")
     parser.add_argument("--detail", action="store_true")
     parser.add_argument(
