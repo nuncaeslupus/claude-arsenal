@@ -63,8 +63,18 @@ def _parse_header(text: str) -> list[tuple[str, bool]]:
         path = stripped.split(" ", 1)[0]
         if path.startswith("./"):
             path = path[2:]
+        # `<plugin>`/`<verb_noun>` is this repo's placeholder convention, so a
+        # header spelled that way is an example — assets/script.template.py
+        # carries one — not a declaration. Treating it as real reported a
+        # permanently incomplete group naming two files that cannot exist.
+        if "<" in path or ">" in path:
+            return []
         out.append((path, is_canon))
     return out
+
+
+# Trees a walk must not descend: large, generated, or not source.
+_PRUNE = {".git", ".venv", "node_modules", "__pycache__", ".claude", "build", "dist"}
 
 
 def _repo_root(start: Path) -> Path:
@@ -96,35 +106,25 @@ def _scan_files(paths: list[Path], groups: dict[frozenset[str], list[Path]]) -> 
 
 
 def discover(library_dir: Path) -> dict[frozenset[str], list[Path]]:
+    """Every declared duplicate group in the repository.
+
+    One walk, both extensions. The `.py` scan used to be scoped to a single
+    `--library` directory while `.sh` already walked the whole repo, so a
+    Python pair spanning two plugins — or living outside a skill's `scripts/`
+    dir, like the hook scripts — was invisible to the one tool whose entire job
+    is finding it. `gate_target.py` and `create_task.py` are both that shape.
+    Scanning from the repo root for both makes the tool see what it claims to.
+    """
     groups: dict[frozenset[str], list[Path]] = defaultdict(list)
-    # Primary scan: *.py files in skill scripts/ directories.
-    py_files: list[Path] = []
-    for skill_dir in sorted(library_dir.iterdir()):
-        scripts_dir = skill_dir / "scripts"
-        if not scripts_dir.is_dir():
-            continue
-        py_files.extend(sorted(scripts_dir.rglob("*.py")))
-    _scan_files(py_files, groups)
-
-    # Secondary scan: *.sh files anywhere under the repo root so that shell
-    # scripts carrying the DUPLICATED ACROSS SKILLS header are caught too.
-    # Use os.walk with directory pruning to skip .git, .venv, and other
-    # large/irrelevant trees that rglob would traverse.
-    root = _repo_root(library_dir)
-    _PRUNE = {".git", ".venv", "node_modules", "__pycache__", ".claude", "build", "dist"}
-    sh_files: list[Path] = []
-    for dirpath, dirnames, filenames in os.walk(root):
+    files: list[Path] = []
+    for dirpath, dirnames, filenames in os.walk(_repo_root(library_dir)):
         dirnames[:] = [d for d in dirnames if d not in _PRUNE and not d.startswith(".")]
-        for filename in filenames:
-            if filename.endswith(".sh"):
-                sh_files.append(Path(dirpath) / filename)
-    sh_files.sort()
-    _scan_files(sh_files, groups)
-
+        files.extend(Path(dirpath) / f for f in filenames if f.endswith((".py", ".sh")))
+    _scan_files(sorted(files), groups)
     return groups
 
 
-def report(groups: dict[frozenset[str], list[Path]], library_root: Path) -> bool:
+def report(groups: dict[frozenset[str], list[Path]], repo_root: Path) -> bool:
     any_drift = False
     if not groups:
         console.ok("no duplicate-script groups declared")
@@ -147,7 +147,7 @@ def report(groups: dict[frozenset[str], list[Path]], library_root: Path) -> bool
             console.warn(f"drift in group: {label}")
             for f, sha in shas.items():
                 try:
-                    rel = f.resolve().relative_to(library_root.parent.resolve()).as_posix()
+                    rel = f.resolve().relative_to(repo_root).as_posix()
                 except ValueError:
                     rel = str(f)
                 console.warn(f"  {sha[:12]}  {rel}")
@@ -155,15 +155,21 @@ def report(groups: dict[frozenset[str], list[Path]], library_root: Path) -> bool
 
 
 def apply_canonical(
-    canonical: Path, groups: dict[frozenset[str], list[Path]], library_root: Path
+    canonical: Path, groups: dict[frozenset[str], list[Path]], repo_root: Path
 ) -> int:
     canonical = canonical.resolve()
     if not canonical.exists():
         console.fail(f"canonical not found: {canonical}")
         return 2
     matched = None
+    # Declared paths in a DUPLICATED ACROSS SKILLS header are repo-root-relative,
+    # so they only resolve against the repo root. Resolving them against the
+    # library's parent built `plugins/skill-workshop/plugins/core/…` — a path
+    # that cannot exist — so the cross-check below found nothing, warned that
+    # every sibling was missing, and did it while looking at a tree where all of
+    # them were present.
     try:
-        canonical_rel = canonical.relative_to(library_root.parent.resolve()).as_posix()
+        canonical_rel = canonical.relative_to(repo_root).as_posix()
     except ValueError:
         canonical_rel = str(canonical)
     for key, files in groups.items():
@@ -179,7 +185,6 @@ def apply_canonical(
     key, files = matched
     targets = [f for f in files if f.resolve() != canonical]
     declared_paths = {p for p in key} - {canonical_rel}
-    repo_root = library_root.parent.resolve()
     for declared in declared_paths:
         target_path = (repo_root / declared).resolve()
         if not target_path.exists():
@@ -198,7 +203,9 @@ def apply_canonical(
 def main() -> int:
     parser = argparse.ArgumentParser(description="Detect and propagate duplicate-script drift.")
     parser.add_argument(
-        "--library", default="plugins/skill-workshop/skills", help="Skill library root"
+        "--library",
+        default="plugins/skill-workshop/skills",
+        help="Any directory inside the repository; the scan runs from its repo root",
     )
     parser.add_argument("--check", action="store_true", help="Report drift; exit 1 if any")
     parser.add_argument(
@@ -210,13 +217,14 @@ def main() -> int:
     if not library_dir.is_dir():
         console.fail(f"not a directory: {library_dir}")
         return 2
+    repo_root = _repo_root(library_dir)
     groups = discover(library_dir)
     if args.json:
         payload = {",".join(sorted(k)): {str(f): _sha256(f) for f in v} for k, v in groups.items()}
         print(json.dumps(payload))
     if args.apply:
-        return apply_canonical(Path(args.apply), groups, library_dir)
-    drift = report(groups, library_dir)
+        return apply_canonical(Path(args.apply), groups, repo_root)
+    drift = report(groups, repo_root)
     if args.check and drift:
         return 1
     return 0

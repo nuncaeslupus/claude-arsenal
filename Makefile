@@ -152,7 +152,7 @@ queue-doctor:  ## dogfood: audit this repo's own task files (arsenal/tasks) the 
 		--tasks-dir arsenal/tasks --detail --fail-on-problems \
 		$${issues:+--issues "$$issues"} $(QUEUE_DOCTOR_FLAGS)
 
-sync-dupes:  ## sync_duplicates.py --check across plugins/*/scripts/_shared/
+sync-dupes:  ## sync_duplicates.py --check across every declared duplicate group
 	uv run python $(SYNC_DUPES) --check
 
 lint:  ## ruff format --check + ruff check + mypy on plugins/*/scripts

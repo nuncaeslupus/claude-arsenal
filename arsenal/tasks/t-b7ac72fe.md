@@ -12,13 +12,13 @@ Suggested direction: give the primary scan the same repo-wide fallback the .sh s
 
 ## Acceptance gate
 
-<!-- Replace this with a fenced bash block. A gate that is only prose runs
-     nothing, and a gate that runs nothing passes everything — `task_select.py`
-     reports gate: false for a task with no block, so an unenforced gate is
-     visible rather than quietly inert. -->
-
 ```bash
-# arsenal:gate-placeholder — replace with the real check; it may land in this task's own PR
-# e.g. bash tests/surface_probe_test.sh
-false
+# The scan must see duplicate .py pairs that span plugins, and ones living
+# outside a skill's scripts/ dir. All three were invisible to the old
+# library-scoped scan.
+out=$(python3 plugins/skill-workshop/skills/skill-workshop/scripts/sync_duplicates.py --check 2>&1)
+echo "$out"
+for pair in gate_target.py create_task.py create_artifact.py; do
+  echo "$out" | grep -q "$pair" || { echo "scan is blind to $pair" >&2; exit 1; }
+done
 ```
