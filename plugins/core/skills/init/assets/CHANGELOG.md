@@ -18,6 +18,31 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [4.16.0] - 2026-09-21
+
+### Changed
+
+- The caching guidance in `references/evidence-gates.md` no longer treats "cache
+  inputs" as one unconditionally safe move. It now splits into **immutable
+  inputs** (dependencies, virtualenvs, layers — free pass, keyed on a content
+  hash) and **inputs derived from the tree under test** (an untracked-file
+  listing, a `git status` read, a source scan). The second kind is mutable and
+  is the thing being verified: a session-long snapshot goes stale the moment any
+  test writes into the tree, and the test then passes against a tree that no
+  longer exists. Cache it for the session only if nothing in the suite mutates
+  the tree; otherwise key it on a tree digest so a mutation misses instead of
+  serving a stale read.
+
+### Added
+
+- New subsection on fixture scope under parallel workers: a `session`-scoped
+  fixture is computed **once per worker** under `pytest-xdist`, not once — eight
+  workers means eight times. It also explains when caching and the long-pole
+  split work against each other: with setup cost `F` and test cost `T`,
+  splitting a file across `k` workers gives roughly `F + T/k`, so when `F`
+  dominates, splitting that file buys almost nothing and the fix is to make `F`
+  cheaper instead.
+
 ## [4.15.0] - 2026-09-21
 
 ### Added
