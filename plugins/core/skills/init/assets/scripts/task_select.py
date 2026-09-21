@@ -457,7 +457,6 @@ def load_tasks(tasks_dir: Path) -> tuple[list[dict[str, Any]], list[str]]:
             warnings.append(f"{path}: duplicate id {task_id} (also {seen[task_id]}) — skipped")
             continue
         seen[task_id] = path
-        deps = meta.get("deps") or []
         tasks.append(
             {
                 "id": task_id,
@@ -466,7 +465,13 @@ def load_tasks(tasks_dir: Path) -> tuple[list[dict[str, Any]], list[str]]:
                 "priority": meta.get("priority", 0)
                 if isinstance(meta.get("priority", 0), int)
                 else 0,
-                "deps": [str(d) for d in deps] if isinstance(deps, list) else [],
+                # `_as_list`, not an isinstance check: a bare `deps: t-aaaa1111`
+                # is valid front matter and the same single-value shape
+                # `requires` already accepts. Dropping it to [] read as "no
+                # dependencies", so the task was offered as unblocked and ran
+                # before its prerequisite — the one direction this must not
+                # fail in.
+                "deps": _as_list(meta.get("deps")),
                 "requires": _as_list(meta.get("requires")),
                 "workspace": meta.get("workspace"),
                 "tags": _as_list(meta.get("tags")),
@@ -509,6 +514,16 @@ def select(
             if dep not in known:
                 warnings.append(
                     f"{task['id']}: depends on unknown task {dep} — treated as blocking"
+                )
+            elif state.get(dep) == "cancelled":
+                # `cancelled` is not in TERMINAL, so this dep can never satisfy
+                # and the dependent is blocked for good. Every other blocking
+                # path here says why; without this one the task simply stops
+                # appearing, with nothing anywhere explaining it.
+                warnings.append(
+                    f"{task['id']}: depends on {dep}, which is cancelled — blocked "
+                    "permanently, since a cancelled task never becomes done. Drop "
+                    "the dep or reopen it."
                 )
 
     eligible: list[dict[str, Any]] = []
