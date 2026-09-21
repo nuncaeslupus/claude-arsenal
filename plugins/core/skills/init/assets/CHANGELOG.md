@@ -18,6 +18,26 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [4.10.3] - 2026-09-21
+
+### Fixed — the docs agree with what installs, and the doc checker stops crying wolf
+
+- **The `python` section has six skills, and both listings now say so.**
+  `pin-check` declares `section: python` and installs correctly, but
+  `docs/INSTALL.md`'s profile table and the scaffolded `arsenal/config.toml`
+  comment both named five — and the INSTALL walkthrough told you to expect 17
+  skill folders where `--profile python` produces 18. The walkthrough was
+  teaching you that a correct install was wrong.
+- **`ship`'s `<!-- ship: adversarial-review=skip -->` marker is documented.**
+  The flag registry in `CLAUDE.md` calls itself "the full registry of flags a
+  core skill honors" and did not list it.
+- **`validate_markdown.py` no longer flags `<word>` as an unfilled template
+  token.** `<word>` is how every CLI usage line, type parameter and HTML snippet
+  in a doc names a variable, so the check fired on documented, intentional text
+  — six times on the skill that ships it. `TODO`/`FIXME`/`TBD`/`XXX` are
+  unambiguous and stay. If you relied on the angle-bracket check, note that a
+  genuinely unfilled `<PLACEHOLDER>` in prose is no longer reported.
+
 ## [4.10.2] - 2026-09-21
 
 ### Fixed — four small correctness defects

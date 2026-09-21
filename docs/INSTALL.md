@@ -79,7 +79,7 @@ session from then on — whether or not it ever triggers.
 |---|---|
 | `minimal` | `core` — `init`, `queue-next`, `queue-add`, `queue-status`, `github`, `session-end` |
 | `general` | `core` + `workflow` (`specify`, `design`, `execution`, `review`, `ship`, `gate-check`) |
-| `python` | `core` + `workflow` + `python` (`python-bootstrap`, `pypi-release`, `coverage-gaps`, `dep-upgrade`, `mutmut-report`) |
+| `python` | `core` + `workflow` + `python` (`python-bootstrap`, `pypi-release`, `coverage-gaps`, `dep-upgrade`, `mutmut-report`, `pin-check`) |
 
 `core` is always installed: the vendored session protocol names those skills
 directly. To skip the question, pass it up front:
@@ -106,7 +106,7 @@ existed changes nothing: the sections already in use are detected and recorded.
 No plugin needed — the same script runs straight from a clone:
 
 ```bash
-git clone --depth 1 --branch v4.10.2 https://github.com/nuncaeslupus/claude-arsenal.git /tmp/arsenal
+git clone --depth 1 --branch v4.10.3 https://github.com/nuncaeslupus/claude-arsenal.git /tmp/arsenal
 python3 /tmp/arsenal/plugins/core/skills/init/scripts/init.py --repo-path .
 git add .claude claude-arsenal arsenal .github CLAUDE.md .gitignore && git commit -m "chore: add claude-arsenal"
 ```
@@ -141,7 +141,7 @@ updating one does not update the other.
 |---|---|
 | Type `Investigate why login is slow` | `specify` loads. |
 | Type `Set up the task queue in this repo` | `init` loads. |
-| `ls .claude/skills` | 17 skill folders, each with a `.arsenal-vendored` marker |
+| `ls .claude/skills` | 18 skill folders, each with a `.arsenal-vendored` marker |
 | Ask Claude to edit any `SKILL.md` without loading the meta-skill | **blocked** by the gate |
 | (local checkout) `make audit` | Per-plugin listing-budget breakdown; `PASS — under cap.` |
 

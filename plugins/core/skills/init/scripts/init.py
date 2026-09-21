@@ -144,7 +144,7 @@ context-window = 0
 #
 #   workflow  specify, design, execution, review, ship, gate-check
 #   python    python-bootstrap, pypi-release, coverage-gaps, dep-upgrade,
-#             mutmut-report
+#             mutmut-report, pin-check
 #
 # The core section — init, queue-next, queue-add, queue-status, github,
 # session-end — is always installed and is not listed: the vendored session
