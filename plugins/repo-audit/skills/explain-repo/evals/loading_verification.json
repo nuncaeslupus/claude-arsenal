@@ -1,0 +1,13 @@
+{
+  "skill": "explain-repo",
+  "canary": "explain-repo-loaded-2026-09-21-fb78d23e-409ac59f361f8f40",
+  "negative_control": "explain-repo only produces PDF output",
+  "load_prompts": [
+    "Can you write this project up for a job interview — a Q&A I can use to explain how it works?",
+    "I need an onboarding doc for this codebase for a new teammate."
+  ],
+  "no_load_prompts": [
+    "Can you audit this repo for bugs and security issues?",
+    "Fix the failing test in auth.py"
+  ]
+}

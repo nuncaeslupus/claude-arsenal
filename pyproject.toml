@@ -65,12 +65,19 @@ show_error_codes = true
 # travel with vendored skills. mypy refuses two modules of the same name; the
 # canonical copy under plugins/skill-workshop/hooks/ is the one type-checked,
 # and gate_bash_test.sh fails if the two ever drift.
-# Second pattern: test modules under plugins/*/tests/. A pytest function's
+# Same reason for the two other DUPLICATED-ACROSS-SKILLS pairs below:
+# repo-audit's create_artifact.py is duplicated into explain-repo (same
+# plugin, both skills render the same kind of artifact), and queue-add's
+# create_task.py is duplicated into repo-audit (cross-plugin, so a findings
+# ledger can be queued arsenal-style without repo-audit depending on core).
+# Each pair's canonical copy is the one type-checked; sync_duplicates.py
+# catches drift between them.
+# Last pattern: test modules under plugins/*/tests/. A pytest function's
 # signature is a list of fixture names whose types conftest decides, so holding
 # them to `disallow_untyped_defs` restates the fixtures rather than catching
 # anything. The shipped code they exercise is fully typed either way, and ruff
 # still lints them.
-exclude = "(^plugins/core/skills/init/assets/bin/gate_target\\.py$|^plugins/[^/]+/tests/.*\\.py$)"
+exclude = "(^plugins/core/skills/init/assets/bin/gate_target\\.py$|^plugins/repo-audit/skills/explain-repo/scripts/create_artifact\\.py$|^plugins/repo-audit/skills/repo-audit/scripts/create_task\\.py$|^plugins/[^/]+/tests/.*\\.py$)"
 
 [tool.pytest.ini_options]
 testpaths = ["plugins"]

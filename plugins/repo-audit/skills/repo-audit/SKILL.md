@@ -1,55 +1,61 @@
 ---
 name: repo-audit
-description: Use when the user wants to analyze, document, or improve a repository from the outside — how it works, what's undocumented or inconsistent, whether to trust or adopt it. Triggers — "audit this repo", "what would break here", "explain this codebase end to end". Runs a multi-pass audit (research fan-out, an adversarial pass on failure modes, independent re-verification of every number) and produces a findings-backed write-up plus a ledger of verified fixes versus items flagged for a maintainer's call. Owns scripts — create_artifact.py, validate_findings.py, validate_markdown.py. Do NOT use for reviewing a diff, debugging one failure, or implementing a feature — use `code-review` or `specify`.
+description: Use when the user wants to find real problems in a repository — bugs, security issues, missing edge cases or tests — across the repo or a subset. Triggers — "audit this repo for bugs", "find everything wrong with this". Hunts a checklist, verifies each candidate, queues confirmed findings as arsenal tasks or issues. For a human write-up, use `explain-repo`. Do NOT use for reviewing a diff or implementing a feature — use `code-review` or `specify`.
 ---
 
 # repo-audit
 
-Explains a repository the way its own author would have to, for someone who
-wasn't in on every decision — then tries to break every claim it just made,
-so the answers hold up under a real follow-up question. Works on any
-repository; interview prep, onboarding, and due diligence are use cases of
-the output, not the skill's identity.
+Reads a repository the way an experienced engineer doing a real audit would —
+understand it, then hunt across a real checklist for what's actually wrong,
+verify every candidate before trusting it, then turn each confirmed finding
+into properly-gated work instead of a list nobody acts on. Works on any
+repository, or a named subset of one; `explain-repo` handles turning the
+results into a human-facing document.
 
 CANARY: repo-audit-loaded-2026-09-20-fb78d23e-6a5b7d83932f7e55
 
 ## When to load
 
-Load this when the ask is about the repo as a whole — "explain how this
-works", "what would break here", "audit this and improve the docs", "should
-we adopt/fork this" — not when it's about one diff, one bug, or one feature.
-If the request is really "review this PR" or "fix this test", defer to
-`code-review` or `execution`; this skill stands back from the whole
-repository, not from a change to it.
+Load this when the ask is about the repo (or a real subset of it) as a
+whole — "audit this for bugs", "what would break here", "find everything
+wrong with this codebase" — not when it's about one diff, one bug, or one
+feature already in hand. If the request is really "review this PR" or "fix
+this test", defer to `code-review` or `execution`; this skill stands back
+from the whole repository, not from a change already made to it.
 
 ## How to use
 
-Four passes, in order. Each has its own check — don't start the next until
+Five passes, in order. Each has its own check — don't start the next until
 the current one's check is satisfied.
 
 1. **Orient.** Read the README, the root memory file (`CLAUDE.md` /
    `AGENTS.md`), and the top-level directory listing directly — cheap, and it
    shows what's worth delegating. *Check: name the repo's purpose and its
    3–5 major subsystems before spawning anything.*
-2. **Fan out.** One parallel research agent per major subsystem — see
-   [Research categories](references/research-categories.md) for the
-   checklist (coordination/sync, versioning and release, CI, observability,
-   cost/efficiency, quality gates, applied examples). Ask each agent for
-   concise, file:line-cited findings, not a transcript. *Check: every agent's
-   report cites a real file path, not a paraphrase of another agent's
-   report.*
-3. **Break it.** A second pass, adversarial on purpose — see
-   [Adversarial checklist](references/adversarial-checklist.md). Where the
-   first pass explains the design, this one tries to falsify it: what fails
-   on a different deployment surface, what happens with a dependency turned
-   off, what's configurable versus hardcoded, what's structurally missing.
-   *Check: at least one finding in this pass is a genuine inconsistency
-   between what a doc claims and what the code does, or an explicit
-   statement that none was found, backed by what was actually checked.*
-4. **Verify, then synthesize.** Before a numeric or countable claim goes into
-   the output, re-derive it directly (grep, `wc`, a one-off script) rather
-   than repeating a sub-agent's count. Build the findings ledger as
-   structured JSON and check it before writing prose:
+2. **Understand.** One parallel research agent per major subsystem — see
+   [Research categories](references/research-categories.md). *Check: every
+   agent's report cites a real file path, not a paraphrase of another
+   agent's report.*
+3. **Hunt.** One parallel research agent per checklist group in
+   [Issue taxonomy](references/issue-taxonomy.md) — correctness, concurrency,
+   security, error handling, API design, dead code/performance, tests,
+   conventions. Scope to whatever subset was asked for; skip what a linter
+   already configured in this repo would have caught. *Check: every
+   candidate finding names a file:line and a one-sentence failure scenario —
+   "input X causes Y" — not a general risk statement.*
+4. **Verify.** Every candidate from passes 2 and 3 — an architecture claim
+   as much as a suspected bug — gets checked independently before it's
+   trusted: reproduce it, read the actual code path, or run the check that
+   would confirm it. See
+   [Adversarial checklist](references/adversarial-checklist.md) for the
+   architecture side. *Check: each finding is marked CONFIRMED (reproduced
+   or directly verified) or DROPPED (didn't hold up) — nothing ships as
+   "probably".*
+5. **Act.** For each CONFIRMED finding, decide fix / queue / issue / ledger
+   — see [Output shape](references/output-shape.md) for the decision and
+   for how the write-up's own destination (repo vs. user-only) is decided.
+   Build the findings ledger as structured JSON and validate it before
+   writing anything:
 
    ```bash
    python3 "${CLAUDE_SKILL_DIR}/scripts/validate_findings.py" --input findings.json
@@ -62,48 +68,51 @@ the current one's check is satisfied.
    python3 "${CLAUDE_SKILL_DIR}/scripts/validate_markdown.py" --input-dir <path-to-changed-docs> --repo-root <target-repo>
    ```
 
-   Render the self-interview artifact's HTML from the same structured data —
-   see [Output shape](references/output-shape.md) for the input schema —
-   rather than hand-writing the page's CSS and markup from scratch:
+   To queue a finding as an arsenal task (only when the target repo has
+   `arsenal/tasks/`):
 
    ```bash
-   python3 "${CLAUDE_SKILL_DIR}/scripts/create_artifact.py" --input write-up.json --output write-up.html
+   python3 "${CLAUDE_SKILL_DIR}/scripts/create_task.py" --title "<finding, as a job>" --tag <category> --body "<failure scenario + suggested direction>" --tasks-dir <target-repo>/arsenal/tasks
    ```
 
    *Check: every number in the final output has the command that re-derived
    it sitting next to it in the working notes; both validators exit 0 before
-   the artifact is published or a doc fix is proposed.*
+   anything is published or proposed.*
 
 ## Gotchas
 
 - **The method is not the target repo's to keep.** The repo being audited
   gets verified documentation fixes and new reference material where
   something real is genuinely undocumented — never the audit methodology
-  itself, a findings scratch file, or the adversarial question bank. Those
-  belong in this skill, not in the repo under audit. Confirm with the user
-  if a request is ambiguous about which repo receives what.
-- **A sub-agent's count is a hypothesis, not a fact.** A parallel research
-  agent's numeric claim — rule counts, test counts, line counts — has been
-  wrong before in exactly the way a confident paraphrase goes wrong: right
-  method, off by a header row. Re-run the count yourself before it lands in
-  committed prose.
+  itself, a findings scratch file, or the checklist references. Confirm
+  with the user if a request is ambiguous about which repo receives what.
+- **"Fix arsenal-style" means queue it, not commit it unasked.** A
+  confirmed finding that needs real implementation work becomes a task —
+  title, category tag, failure scenario, and a concrete acceptance gate —
+  ready for a human or a future worker session to claim and execute. It is
+  not an army of agents editing the repo unsupervised; that trades one risk
+  (a bug ships) for a worse one (an unreviewed fleet of edits ships).
+- **A sub-agent's count — or a sub-agent's bug — is a hypothesis, not a
+  fact.** Both a numeric claim and a suspected bug have been wrong before in
+  the same way a confident paraphrase goes wrong. The verify pass exists
+  because of this, not as a formality; don't skip it under time pressure.
 - **"No documentation exists for X" is itself a finding.** Skip it and the
   audit undersells the repo: a subsystem that's real, tested, and shipped
   reads as though it doesn't exist, because nothing describes it outside
-  the code that implements it. Treat total silence about something real as
-  seriously as a doc that's actively wrong.
+  the code that implements it.
 - **Don't fix what needs a maintainer's judgment.** A stale number or a
   broken cross-link is safe to correct directly. A dead config key, a design
-  trade-off, or a missing feature is a finding to report — file it as an
-  issue or a ledger row, not a PR to open unasked. See
-  [Output shape](references/output-shape.md).
+  trade-off, or a missing feature is a finding to queue or report — never a
+  PR opened unasked. See [Output shape](references/output-shape.md).
 
 ## References — load on demand
 
-- [Research categories](references/research-categories.md) — load before the
-  fan-out pass, to scope what each agent investigates.
-- [Adversarial checklist](references/adversarial-checklist.md) — load before
-  the break-it pass.
-- [Output shape](references/output-shape.md) — load before synthesizing the
-  artifact and the findings ledger, or before running either validator
-  script.
+- [Research categories](references/research-categories.md) — load before
+  the understand pass, to scope what each agent investigates.
+- [Issue taxonomy](references/issue-taxonomy.md) — load before the hunt
+  pass, to scope one worker per checklist group.
+- [Adversarial checklist](references/adversarial-checklist.md) — load
+  before the verify pass, for the architecture-claim side of it.
+- [Output shape](references/output-shape.md) — load before the act pass —
+  the fix/queue/issue/ledger decision, the write-up's destination, and the
+  validator/task-creation scripts' exact contracts.

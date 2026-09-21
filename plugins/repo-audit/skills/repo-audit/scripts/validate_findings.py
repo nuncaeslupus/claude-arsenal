@@ -2,13 +2,14 @@
 """Check a repo-audit findings ledger for shape before it becomes prose.
 
 Catches the mistakes a findings list accumulates under its own weight: a
-row missing the field that makes it actionable, a status outside the
-three the ledger format defines, or the same finding logged twice under
+row missing the field that makes it actionable, a status outside the ones
+the ledger format defines, or the same finding logged twice under
 slightly different wording.
 
 Input JSON shape (a bare list):
 [
-  {"finding": "...", "where": "path/or/component", "status": "fixed" | "flagged" | "bug"}
+  {"finding": "...", "where": "path/or/component",
+   "status": "fixed" | "queued" | "issue" | "flagged"}
 ]
 
 Exit codes:
@@ -25,7 +26,7 @@ import json
 import sys
 from pathlib import Path
 
-ALLOWED_STATUS = {"fixed", "flagged", "bug"}
+ALLOWED_STATUS = {"fixed", "queued", "issue", "flagged"}
 REQUIRED_KEYS = {"finding", "where", "status"}
 
 
