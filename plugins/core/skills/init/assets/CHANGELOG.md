@@ -18,6 +18,23 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [4.9.1] - 2026-09-21
+
+### Fixed — `ARSENAL_HOME` now actually relocates the board
+
+`AGENTS.md` says a host that sets `ARSENAL_HOME` relocates the whole host-owned
+tree at once, and `/init` honours it. The board readers did not: `query_status.py`,
+`task_select.py`, `handle_sync.py`, `issue_import.py` and `queue_hooks.py` each
+carried their own `--tasks-dir` default of the literal `arsenal/tasks`, and every
+canonical invocation in `AGENTS.md` and `references/worker-loop.md` omits the
+flag — so the default is what runs. Set `ARSENAL_HOME=host` exactly as
+documented and every board read came back `tasks: 0 — open 0, claimed 0, done 0`:
+an existing queue reported as an empty one.
+
+All five now resolve through one function, next to the `_session_dir()` that
+already honoured `ARSENAL_HOME` in the same file. An explicit `--tasks-dir`
+still overrides it.
+
 ## [4.9.0] - 2026-09-21
 
 ### Fixed — two destructive operations aimed at the wrong files

@@ -59,7 +59,13 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from queue_hooks import TASK_LABEL
-from task_select import ID_LABEL_PREFIX, labels_of, load_tasks, task_id_from_issue
+from task_select import (
+    ID_LABEL_PREFIX,
+    default_tasks_dir,
+    labels_of,
+    load_tasks,
+    task_id_from_issue,
+)
 
 DEFAULT_IMPORT_LABEL = "arsenal:queue"
 
@@ -226,7 +232,7 @@ def _rollback(written: list[Path], reason: str) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--tasks-dir", type=Path, default=Path("arsenal/tasks"))
+    parser.add_argument("--tasks-dir", type=Path, default=default_tasks_dir())
     parser.add_argument("--issues", type=Path, required=True, help="JSON array of issues")
     parser.add_argument("--label", default=DEFAULT_IMPORT_LABEL)
     parser.add_argument("--apply", action="store_true", help="write the task files")

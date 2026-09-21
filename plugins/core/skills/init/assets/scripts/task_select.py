@@ -254,6 +254,22 @@ def _session_dir() -> Path:
     return Path(os.environ.get("ARSENAL_HOME", "").strip() or "arsenal") / "session"
 
 
+def default_tasks_dir() -> Path:
+    """The board, resolved the way `_session_dir` above resolves its own path.
+
+    Every `--tasks-dir` default in the bundle was the literal `arsenal/tasks`,
+    and every canonical invocation in AGENTS.md omits the flag — so on a host
+    that set ARSENAL_HOME, exactly as AGENTS.md says relocates the whole
+    host-owned tree, every board reader reported `tasks: 0 — open 0, problems
+    0`. Nothing errored and nothing warned: an existing queue read as an empty
+    one, which is the same output a healthy empty backlog produces.
+
+    Imported rather than repeated, because the four other readers each had
+    their own copy of the literal and a fix to one would not have reached them.
+    """
+    return Path(os.environ.get("ARSENAL_HOME", "").strip() or "arsenal") / "tasks"
+
+
 ISOLATION_SENTINEL = _session_dir() / "worktree_isolation"
 
 
@@ -573,7 +589,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    parser.add_argument("--tasks-dir", type=Path, default=Path("arsenal/tasks"))
+    parser.add_argument("--tasks-dir", type=Path, default=default_tasks_dir())
     parser.add_argument(
         "--state", type=Path, help="JSON file of {task_id: state}; omit to read stdin"
     )

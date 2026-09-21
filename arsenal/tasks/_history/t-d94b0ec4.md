@@ -3,6 +3,7 @@ id: t-d94b0ec4
 title: "ARSENAL_HOME is documented as relocating the tree but four scripts ignore it"
 priority: 10
 tags: [config, queue]
+status: merged
 ---
 
 arsenal_config.py documents ARSENAL_HOME as relocating the whole host-owned
@@ -23,11 +24,7 @@ init.py uses, or refuse to run when ARSENAL_HOME is set and they cannot honour i
 ## Acceptance gate
 
 ```bash
-# With ARSENAL_HOME set, the board must still be found.
-set -e
-T=$(mktemp -d); mkdir -p "$T/host/tasks"
-cp arsenal/tasks/*.md "$T/host/tasks/" 2>/dev/null || true
-n=$(cd "$T" && ARSENAL_HOME=host python3 "$OLDPWD/plugins/core/skills/init/assets/scripts/query_status.py" 2>&1 | grep -c '^tasks: 0' || true)
-rm -rf "$T"
-[ "$n" -eq 0 ] || { echo "ARSENAL_HOME ignored: board read as empty" >&2; exit 1; }
+# ARSENAL_HOME relocates the board for every reader, and no reader
+# carries its own copy of the default any more.
+bash plugins/core/tests/arsenal_home_test.sh
 ```

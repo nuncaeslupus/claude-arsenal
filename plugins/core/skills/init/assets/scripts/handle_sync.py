@@ -44,6 +44,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from task_select import (
     ID_LABEL_PREFIX,
     TERMINAL,
+    default_tasks_dir,
     load_tasks,
     loose_title_key,
     task_id_from_body,
@@ -174,7 +175,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    parser.add_argument("--tasks-dir", type=Path, default=Path("arsenal/tasks"))
+    parser.add_argument("--tasks-dir", type=Path, default=default_tasks_dir())
     parser.add_argument("--issues", type=Path, required=True, help="JSON array of issues")
     parser.add_argument("--label", default="arsenal:task")
     args = parser.parse_args(argv)
