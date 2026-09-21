@@ -42,11 +42,10 @@ the current one's check is satisfied.
    [Research categories](references/research-categories.md). *Check: every
    agent's report cites a real file path, not a paraphrase of another
    agent's report.*
-3. **Hunt.** One parallel research agent per checklist group in
-   [Issue taxonomy](references/issue-taxonomy.md) — correctness, concurrency,
-   security, error handling, API design, dead code/performance, tests,
-   conventions. Scope to whatever subset was asked for; skip what a linter
-   already configured in this repo would have caught. *Check: every
+3. **Hunt.** One parallel research agent per group in
+   [Issue taxonomy](references/issue-taxonomy.md), which names the nine and
+   what each one asks. Scope to whatever subset was asked for; skip what a
+   linter already configured in this repo would have caught. *Check: every
    candidate finding names a file:line and a one-sentence failure scenario —
    "input X causes Y" — not a general risk statement.*
 4. **Verify.** Every candidate from passes 2 and 3 — an architecture claim
@@ -87,17 +86,12 @@ the current one's check is satisfied.
 
 ## Gotchas
 
-- **The method is not the target repo's to keep.** The repo being audited
-  gets verified documentation fixes and new reference material where
-  something real is genuinely undocumented — never the audit methodology
-  itself, a findings scratch file, or the checklist references. Confirm
-  with the user if a request is ambiguous about which repo receives what.
-- **"Fix arsenal-style" means queue it, not commit it unasked.** A
-  confirmed finding that needs real implementation work becomes a task —
-  title, category tag, failure scenario, and a concrete acceptance gate —
-  ready for a human or a future worker session to claim and execute. It is
-  not an army of agents editing the repo unsupervised; that trades one risk
-  (a bug ships) for a worse one (an unreviewed fleet of edits ships).
+- **The method stays here, and a finding is queued rather than committed
+  unasked.** Both rules, in full, are in
+  [Output shape](references/output-shape.md) — what never goes into the
+  target repo, and the fix / queue / issue / ledger decision. Read it
+  before deciding where a finding lands; the condensed version above used
+  to read as complete, and a reader could miss the distinctions.
 - **A sub-agent's count — or a sub-agent's bug — is a hypothesis, not a
   fact.** Both a numeric claim and a suspected bug have been wrong before in
   the same way a confident paraphrase goes wrong. The verify pass exists
@@ -114,16 +108,15 @@ the current one's check is satisfied.
   reads as though it doesn't exist, because nothing describes it outside
   the code that implements it.
 - **Don't fix what needs a maintainer's judgment.** A stale number or a
-  broken cross-link is safe to correct directly. A dead config key, a design
-  trade-off, or a missing feature is a finding to queue or report — never a
-  PR opened unasked. See [Output shape](references/output-shape.md).
+  broken cross-link is safe to correct directly. Anything else is a finding
+  to queue or report — never a PR opened unasked.
 
 ## References — load on demand
 
 - [Research categories](references/research-categories.md) — load before
   the understand pass, to scope what each agent investigates.
 - [Issue taxonomy](references/issue-taxonomy.md) — load before the hunt
-  pass, to scope one worker per checklist group.
+  pass, to scope one worker per group.
 - [Adversarial checklist](references/adversarial-checklist.md) — load
   before the verify pass, for the architecture-claim side of it.
 - [Output shape](references/output-shape.md) — load before the act pass —

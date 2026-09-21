@@ -84,19 +84,15 @@ semantic pass entirely; the mechanical pass can still be enforced
 via a pre-commit hook or CI step calling `validate.py`. The semantic
 pass has no shell-only enforcement path — it requires LLM judgment.
 
-### Operational checklist applied at the gate
+### Also checked at the gate, beyond the two passes
 
-1. `validate.py <skill>` exits 0 for every touched skill.
-2. `audit_library.py <library-root>` is clean; listing-budget total
-   has not regressed.
-3. Both rubric walks completed (or the deferral choice is recorded).
-4. `loading_verification.json` has a unique canary phrase plus a
+1. `loading_verification.json` has a unique canary phrase plus a
    negative-control fact (for new or renamed skills).
-5. Description does not overlap a sibling skill (audit before merge).
-6. No `..` in any link from `SKILL.md` or its references.
-7. Cross-skill references use prose ("use the `<capability>` skill"),
+2. Description does not overlap a sibling skill (audit before merge).
+3. No `..` in any link from `SKILL.md` or its references.
+4. Cross-skill references use prose ("use the `<capability>` skill"),
    never markdown links to peer SKILL.md / scripts paths.
-8. Any duplicated script carries the sibling header listing every copy.
+5. Any duplicated script carries the sibling header listing every copy.
 
 If any check fails, fix the skill — don't widen the rule.
 
@@ -241,8 +237,6 @@ entry says *what* goes wrong AND *why*, not just the prohibition.
 The work-done gate above already covers the substantive checks. At
 commit time, only the lightweight final pass remains:
 
-- The gate's operational checklist passed (see "At work-done —
-  mandatory gate" above).
 - Staged paths are intentional — `git diff --cached` covers what was
   edited, nothing else.
 - `findings.md` is gitignored and was not staged.
