@@ -68,6 +68,7 @@ Before changing production code, write the check that proves the task meets its 
 - **New feature**: write a test that specifies the contract or acceptance criterion the task must satisfy. Run it and confirm it fails because the behavior does not exist yet.
 - **Metric gate**: wire the measurement the gate names (latency benchmark, coverage run, error-rate probe) and confirm the current value misses the threshold — a measured value short of the gate is the RED for a metric, just as a failing test is the RED for behavior.
 - **Coverage**: unit tests for new functions and logic branches; integration tests for new endpoints, queries, or inter-service calls; edge cases for null/empty inputs, boundary values, and error conditions.
+- **Placement**: add the test to a file that is not already the suite's slowest. Under per-file parallel scheduling the longest file sets the suite's wall clock, so growing it slows every future run for everyone; a new slow test — network, build, long simulation — starts its own file. The `evidence-gates.md` reference covers finding and splitting a long pole.
 
 Name each test with the convention `test_<what>_<condition>_<expected_result>`.
 
