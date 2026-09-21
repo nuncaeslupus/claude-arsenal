@@ -103,9 +103,12 @@ When a plan produces **N PRs that will be merged in sequence**, follow the stack
 
 Every PR that ships user-visible changes **must** bump
 `plugins/core/skills/init/assets/.bundle-version` before merging.
-The `tag-release` workflow reads this file on every push to `main` and
-creates a new git tag (`v<version>`) automatically if it does not already
-exist. Consumer projects pin to these tags to re-vendor the marketplace.
+The `tag-release` workflow reads this file when **`ci` finishes on `main`**
+and creates a new git tag (`v<version>`) automatically if it does not already
+exist — and only when that CI run concluded successfully. A red merge is not
+tagged, because consumers gate updates on exactly the newest remote tag, so a
+tag is an offer to subtree-merge that commit. Consumer projects pin to these
+tags to re-vendor the marketplace.
 
 The same PR must also add a `## [<version>] - <date>` entry to
 `plugins/core/skills/init/assets/CHANGELOG.md` describing the change from a
@@ -137,7 +140,12 @@ Two things now cover it:
 
 - `tag-release.yml` also runs on a daily `schedule` and on `workflow_dispatch`,
   so a tag missed during an outage is created automatically once Actions
-  recovers. It is a no-op when the tag already exists.
+  recovers. It is a no-op when the tag already exists. When the commit has no
+  CI run at all — what an outage at merge time leaves behind — it starts one
+  (`ci.yml` carries a `workflow_dispatch` for exactly this) so the next
+  scheduled run has a conclusion to read, rather than refusing forever.
+  `scripts/tag_guard.sh` holds the decision and `scripts/tag_guard_test.sh`
+  exercises it, so the release gate can be run without cutting a release.
 - `make tag` from `main` remains the immediate fallback (creates+pushes
   `v<.bundle-version>`, skips if it exists, refuses a version lower than the
   latest tag, mirroring the workflow).
