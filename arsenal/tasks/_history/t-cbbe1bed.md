@@ -3,6 +3,7 @@ id: t-cbbe1bed
 title: "Resident context budget has 37 tokens of headroom against a CI-enforced cap"
 priority: 10
 tags: [context-budget]
+status: merged
 ---
 
 `make context-budget` reports the widest install at 4963 of 5000 resident
@@ -24,7 +25,10 @@ content out of the resident tier, with the cap untouched.
 ## Acceptance gate
 
 ```bash
-# Restore real headroom, without raising the cap.
+# Real headroom on the tier that is actually involuntary, with the cap
+# untouched and sitting on the always-installed row.
+set -e
+bash scripts/context_budget_test.sh
 out=$(make context-budget 2>&1) || { echo "$out" >&2; exit 1; }
 head=$(echo "$out" | sed -n 's/.*(\([0-9]*\) headroom).*/\1/p' | tail -1)
 [ -n "$head" ] || { echo "could not read headroom from make context-budget" >&2; exit 1; }
