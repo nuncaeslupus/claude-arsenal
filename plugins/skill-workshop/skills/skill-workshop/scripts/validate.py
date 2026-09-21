@@ -52,6 +52,11 @@ FRONTMATTER_KEYS = {
 }
 
 NAME_REGEX = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
+
+# R-FM-2 reserves all four of these. The validator checked the first two and
+# enumerated only those in its failure message, so `mcp-bridge` and
+# `agent-runner` passed the rule the validator exists to enforce.
+RESERVED_NAME_WORDS = ("anthropic", "claude", "mcp", "agent")
 TRIGGER_REGEX = re.compile(
     r"\b(When the user|Triggered by|whenever)\b",
     re.IGNORECASE,
@@ -609,13 +614,12 @@ def check_frontmatter(skill_dir: Path, profile: str, result: Result) -> dict | N
     elif (
         not NAME_REGEX.match(name)
         or len(name) > 64
-        or "anthropic" in name.lower()
-        or "claude" in name.lower()
+        or any(word in name.lower() for word in RESERVED_NAME_WORDS)
     ):
         result.fail(
             "frontmatter.name",
-            f"frontmatter.name must match {NAME_REGEX.pattern}, ≤64 chars, "
-            f"and not contain 'anthropic' or 'claude' (got {name!r})",
+            f"frontmatter.name must match {NAME_REGEX.pattern}, ≤64 chars, and not contain "
+            f"{', '.join(repr(w) for w in RESERVED_NAME_WORDS)} (got {name!r})",
             skill_md,
         )
     if not isinstance(description, str) or not description.strip():

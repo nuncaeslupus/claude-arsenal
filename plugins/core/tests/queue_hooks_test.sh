@@ -464,6 +464,13 @@ out=$(guard "Closes #99" '[]') && fail "a PR closing an UNRELATED issue must not
 grep -q '#10' <<<"${out}" || fail "the refusal must name the right issue: ${out}"
 grep -q '#99' <<<"${out}" || fail "the refusal must name what was referenced instead: ${out}"
 
+# GitHub's own colon form. Requiring whitespace failed a PR that would have
+# closed the issue correctly — the guard refusing a correct PR, which is the
+# expensive direction: it stops work that was right.
+guard "Closes: #10" '[]' >/dev/null || fail "GitHub's 'Closes: #N' colon form must pass the guard"
+guard "closes:#10" '[]' >/dev/null || fail "'closes:#N' must pass the guard"
+out=$(guard "Closes#10" '[]') && fail "'Closes#N' closes nothing on GitHub and must not pass"
+
 out=$(guard "no keyword here" '[]') && fail "a PR with no closing keyword must not pass"
 grep -q 'Closes #10' <<<"${out}" || fail "the refusal must say what to add: ${out}"
 

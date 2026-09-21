@@ -252,8 +252,14 @@ def main(argv: list[str] | None = None) -> int:
     add_selection_args(parser)
 
     show = parser.add_argument_group("output")
-    show.add_argument("--list-only", action="store_true", help="one line per entry (default)")
-    show.add_argument("--show", type=int, metavar="IDX", help="one entry in full")
+    # `--list-only` was parsed and never read: listing is already the default, so
+    # the flag existed only to be ignored by a caller who expected it to mean
+    # something. Paired with `--show` it has the job it reads as — asking for
+    # both is a contradiction, and argparse now says so instead of silently
+    # showing one entry in full.
+    form = show.add_mutually_exclusive_group()
+    form.add_argument("--list-only", action="store_true", help="one line per entry (default)")
+    form.add_argument("--show", type=int, metavar="IDX", help="one entry in full")
     show.add_argument("--json", action="store_true", dest="as_json", help="machine-readable")
     show.add_argument("--fields", metavar="A,B", help="restrict --json to these row fields")
     show.add_argument("--limit", type=int, default=20, help="row cap; 0 removes both caps")

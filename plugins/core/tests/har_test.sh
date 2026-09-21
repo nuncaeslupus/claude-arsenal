@@ -350,4 +350,14 @@ for script in "$scripts"/*.py; do
 done
 echo "PASS: every shipped script answers --help"
 
+# --- --list-only contradicts --show, instead of being ignored ---------------
+#     The flag was parsed and never read: listing is the default, so it existed
+#     only to be ignored by a caller who expected it to mean something.
+out=$(py "$scripts/query_har.py" --input "$tmp/basic.har" --list-only --show 0 2>&1) && \
+    fail "--list-only with --show must be refused, not silently resolved: ${out}"
+grep -q "not allowed with" <<<"${out}" || fail "the refusal must say why: ${out}"
+py "$scripts/query_har.py" --input "$tmp/basic.har" --list-only >/dev/null 2>&1 \
+    || fail "--list-only on its own must still list"
+echo "PASS: --list-only and --show are mutually exclusive"
+
 echo "PASS: har_test.sh (stage ${stage})"

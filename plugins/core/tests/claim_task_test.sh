@@ -34,7 +34,8 @@ cat > "${STUB}" <<'EOF'
 case "${1:-}" in
     --slug)   echo "o/r" ;;
     --detect) echo "rest" ;;
-    --api)    echo '{"message":"Reference already exists"}'; exit 3 ;;
+    --api)    printf '%s' "${4:-}" > "${CLAIM_STUB_PAYLOAD:-/dev/null}"
+              echo '{"message":"Reference already exists"}'; exit 3 ;;
 esac
 EOF
 chmod +x "${STUB}"
@@ -64,5 +65,17 @@ grep -qi "stale" <<<"${out}" || fail "the refusal should say what to establish f
 out=$(ARSENAL_CLAIM_STALE_OK=1 ARSENAL_DEFAULT_BRANCH=main \
         bash "${CLAIM}" t-lock1 2 2>&1)
 grep -qi "bypassing the base claim" <<<"${out}" || fail "the bypass should announce itself: ${out}"
+
+# --- the ref payload is JSON, whatever the task id contains -----------------
+#     Built with `printf '{"ref":"%s",...}'`, an id carrying a quote or a
+#     backslash produced malformed JSON. open_task_pr.sh already builds the
+#     equivalent payload with json.dumps and adversarial_review.sh charset-checks
+#     the same TASK_ID, so this was the one place that did not guard the value.
+payload="${tmpdir}/payload.json"
+CLAIM_STUB_PAYLOAD="${payload}" run 't-quo"te' >/dev/null 2>&1
+python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); sys.exit(0 if "quo\"te" in d["ref"] else 1)' \
+    "${payload}" \
+    || fail "the ref payload is not valid JSON carrying the id: $(cat "${payload}" 2>/dev/null)"
+echo "PASS: the claim payload survives a task id with a quote in it"
 
 echo "PASS: claim_task_test — all gates passed"
