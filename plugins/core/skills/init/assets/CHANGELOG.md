@@ -18,6 +18,34 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [4.13.1] - 2026-09-21
+
+### Fixed
+
+- **The half-upgrade remedy pointed at a script that has not shipped since
+  v2.0.0.** When a subtree merge lands the bundle without refreshing the
+  vendored skills, `check_update.sh` prints the steps to finish the job — and
+  it opened with the `vendor-skills.sh` step, removed in v2.0.0. On any install from v2.0.0 on that file
+  does not exist, so the one message a half-upgraded consumer reads started
+  with a command that could not run, and `init.py` — which does the vendoring
+  now, and is the whole remedy — read like its afterthought. The warning now
+  names `vendor-skills.sh` only on a layout that actually has one.
+- **`references/github-automation.md` promised a repair that nothing performs.**
+  It said that without `.github/workflows/arsenal-queue.yml`, "the next session
+  repairs stale claims and unhandled task files itself before starting". No
+  step of the session protocol sweeps anything. A claim left by a session that
+  died between claiming and opening its PR stays until a person removes it, and
+  `query_status` — which has no PR data — counts it `claimed`, indistinguishable
+  from work in progress. The reference now says so and gives the
+  `queue_hooks.py sweep-claims` command to run by hand.
+- **`docs/UPDATE.md` § Rolling back recommended a rollback that rolls nothing
+  back.** It correctly noted that a marketplace install does not pin a version,
+  then offered `/plugin marketplace remove` + `add` — which rebuilds the cache
+  from the same tip of `main`. The section now splits by install: the
+  clone-based and subtree installs roll back properly (with the commands), and
+  the plugin install has no self-service rollback, with the stopgaps that do
+  exist listed in order.
+
 ## [4.13.0] - 2026-09-21
 
 ### Fixed — a green board no longer means "nothing is outstanding"

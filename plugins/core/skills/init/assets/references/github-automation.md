@@ -96,9 +96,23 @@ stop, a crash, or a closed window, leaves the queue correct anyway.
 transition will ever release, because there is no PR. What repairs it is the
 `sweep-claims` job — `queue_hooks.py sweep-claims --max-age-hours 24` on the
 daily cron — so the queue is self-correcting there rather than immediately
-correct, and the task is unavailable until the sweep runs. Without
-`.github/workflows/arsenal-queue.yml` installed, nothing sweeps at all: the next
-session repairs stale claims and unhandled task files itself before starting.
+correct, and the task is unavailable until the sweep runs.
+
+Without `.github/workflows/arsenal-queue.yml` installed, nothing sweeps at all,
+and **nothing in the session protocol sweeps either** — session start reads the
+board, it does not repair it. The claim ref stays until a person removes it, so
+the task is unavailable indefinitely rather than for a day. Worse, it is not
+visibly broken: `query_status` has no PR data, so it counts the task `claimed`,
+which reads exactly like a task a session is working on right now. Recovering it
+is a deliberate step somebody has to take:
+
+```bash
+python3 claude-arsenal/scripts/queue_hooks.py sweep-claims \
+    --repo <owner>/<name> --dry-run     # then drop --dry-run to apply
+```
+
+It needs `GH_TOKEN` or `GITHUB_TOKEN` in the environment to read the issues and
+open PRs it compares; without one it says so and does nothing.
 
 That is the property the whole design is aiming at, and it is worth stating as a
 rule for anything added later:
@@ -241,7 +255,9 @@ behaves. Deleting the file opts out for good: `/init` records `queue-automation 
 `arsenal/config.toml` rather than reinstalling it on the next session start.
 
 A repo without the workflow still works — the merge path is unchanged — but a session there
-has to expect stale claims and unhandled task files, and fix them before starting.
+has to expect stale claims and unhandled task files, and fix them **by hand**: nothing
+sweeps them, not the workflow that is absent and not the session protocol. The sweep
+command is under § Ending a session is reporting, not repair, above.
 
 So the session-start protocol's job is genuinely to read the board and pick up work. If
 step 3 or 4 reports problems in a repo that has the workflow, that is a signal something
