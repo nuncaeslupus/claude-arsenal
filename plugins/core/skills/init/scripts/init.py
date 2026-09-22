@@ -8,6 +8,7 @@ import json
 import os
 import re
 import shutil
+import subprocess
 import sys
 import tomllib
 from pathlib import Path
@@ -262,8 +263,16 @@ def _bundle_dir(override: Path | None = None) -> Path:
     return path
 
 
-def _sha256(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+def _content_sha(path: Path) -> str:
+    """SHA-256 of a file's content, with newlines normalised to LF.
+
+    Not a byte hash: on Windows with `core.autocrlf=true` — the Git for Windows
+    default — the working copy holds CRLF where the bundle ships LF, so a byte
+    comparison calls every vendored file stale. One consumer's 4.4.0 -> 4.16.0
+    update reported 95 files refreshed of which 38 had no content change at all,
+    which is exactly the report a consumer reads to tell a real update from noise.
+    """
+    return hashlib.sha256(path.read_bytes().replace(b"\r\n", b"\n")).hexdigest()
 
 
 def _has_shebang(path: Path) -> bool:
@@ -293,7 +302,7 @@ def _refresh_bundle(bundle: Path, target: Path, silent: bool = False) -> None:
     """
     previous = _read_manifest(target)
     for src in bundle.rglob("*"):
-        if src.is_dir():
+        if src.is_dir() or "__pycache__" in src.parts:
             continue
         rel = src.relative_to(bundle)
         dst = target / rel
@@ -302,7 +311,7 @@ def _refresh_bundle(bundle: Path, target: Path, silent: bool = False) -> None:
                 print(f"  preserved (host-owned): {rel}")
             continue
         dst.parent.mkdir(parents=True, exist_ok=True)
-        if dst.exists() and _sha256(src) == _sha256(dst):
+        if dst.exists() and _content_sha(src) == _content_sha(dst):
             if not silent:
                 print(f"  up to date: {rel}")
         else:
@@ -333,7 +342,59 @@ _RETIRED_DIR = ".retired"
 
 
 def _bundle_files(bundle: Path) -> list[str]:
-    return sorted(p.relative_to(bundle).as_posix() for p in bundle.rglob("*") if p.is_file())
+    return sorted(
+        p.relative_to(bundle).as_posix()
+        for p in bundle.rglob("*")
+        if p.is_file() and "__pycache__" not in p.parts
+    )
+
+
+# Prefix of the manifest's provenance line. A `#` comment so the path list stays
+# readable by anything that only knows how to read paths.
+_SOURCE_PREFIX = "# source: "
+
+
+def _bundle_source_url(bundle: Path) -> str | None:
+    """Where this bundle came from, or None when nothing on disk says.
+
+    A NON-SUBTREE install leaves no `arsenal` remote by definition, and until
+    this was written nothing else in the vendored tree named upstream either --
+    no URL in AGENTS.md, in .bundle-version, or in any vendored script. A
+    consumer who fell twelve minor versions behind had no way to start the
+    update from inside their own repo; the URL had to be asked for.
+
+    Two routes, because there are two ways to install:
+
+      * the clone route (docs/INSTALL.md, cloud/CI) runs init.py from a checkout
+        of the marketplace, so the checkout's own `origin` is the answer;
+      * the CLI plugin route runs it from `~/.claude/plugins/cache/<market>/...`,
+        which is a plain copy -- but `~/.claude/plugins/marketplaces/<market>`
+        beside it is the git clone that copy was made from.
+    """
+
+    def _origin(repo: Path) -> str | None:
+        try:
+            out = subprocess.run(
+                ["git", "-C", str(repo), "remote", "get-url", "origin"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        except OSError:
+            return None
+        url = out.stdout.strip()
+        return url if out.returncode == 0 and url else None
+
+    if url := _origin(bundle):
+        return url
+
+    parts = bundle.resolve().parts
+    if "plugins" in parts:
+        i = len(parts) - 1 - parts[::-1].index("plugins")
+        if parts[i + 1 : i + 2] == ("cache",) and len(parts) > i + 2:
+            marketplace = Path(*parts[: i + 1]) / "marketplaces" / parts[i + 2]
+            return _origin(marketplace)
+    return None
 
 
 def _read_manifest(target: Path) -> set[str] | None:
@@ -342,11 +403,30 @@ def _read_manifest(target: Path) -> set[str] | None:
         text = (target / _MANIFEST).read_text(encoding="utf-8")
     except OSError:
         return None
-    return {line.strip() for line in text.splitlines() if line.strip()}
+    return {line.strip() for line in text.splitlines() if line.strip() and not line.startswith("#")}
+
+
+def manifest_source_url(target: Path) -> str | None:
+    """The upstream URL a previous install recorded, if it recorded one."""
+    try:
+        text = (target / _MANIFEST).read_text(encoding="utf-8")
+    except OSError:
+        return None
+    for line in text.splitlines():
+        if line.startswith(_SOURCE_PREFIX):
+            return line[len(_SOURCE_PREFIX) :].strip() or None
+    return None
 
 
 def _write_manifest(bundle: Path, target: Path) -> None:
-    (target / _MANIFEST).write_text("\n".join(_bundle_files(bundle)) + "\n", encoding="utf-8")
+    lines = _bundle_files(bundle)
+    # Keep whatever a previous install recorded when this one cannot tell: a
+    # cache copy with no git beside it should not erase a URL a clone install
+    # already wrote.
+    url = _bundle_source_url(bundle) or manifest_source_url(target)
+    if url:
+        lines = [_SOURCE_PREFIX + url, *lines]
+    (target / _MANIFEST).write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def _prune_bundle(bundle: Path, target: Path, previous: set[str] | None) -> None:
@@ -1491,7 +1571,7 @@ def _install_queue_workflow(repo_path: Path, arsenal: Path, silent: bool = False
     if target.exists():
         if setting is None:
             _record_queue_automation(config, "true")
-        if _sha256(source) == _sha256(target):
+        if _content_sha(source) == _content_sha(target):
             if not silent:
                 print(f"  .github/workflows/{_QUEUE_WORKFLOW}: up to date")
         else:
@@ -1853,4 +1933,9 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    # Windows consoles default to a legacy codepage (cp1252 and friends);
+    # a non-ASCII line must degrade to "?", never take the process down.
+    for _stream in (sys.stdout, sys.stderr):
+        if hasattr(_stream, "reconfigure"):
+            _stream.reconfigure(encoding="utf-8", errors="replace")
     main()

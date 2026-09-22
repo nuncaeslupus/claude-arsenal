@@ -162,6 +162,19 @@ READ_ONLY_USES = re.compile(
               | resolve | glob | rglob | iterdir )  \s* \(
       | Path \s* \( \s* {_QUOTED_SKILL_PATH} \s* \) \s* \. \s*
             open \s* \( \s* (?: ['"][rbtU]+['"] \s* )? \)
+      # The os/glob spellings of the three Path arms above. A tree scan --
+      # "open every file under this folder and look at it" -- is the most
+      # common read-only reason to name a skill folder at all, and `os.walk`
+      # was the one spelling of it with no entry here, so it was refused.
+      # Only terminal forms: `os.path.join` and friends RETURN a path, so
+      # allowing them would erase the skill path from a write that is still
+      # coming. `walk`/`listdir`/`scandir`/`glob` yield paths the same way the
+      # already-listed `rglob`/`iterdir` do, and are no weaker than those.
+      | (?: os \s* \. \s* (?: walk | listdir | scandir )
+          | (?: glob \s* \. \s* )? (?: glob | iglob )
+          | os \s* \. \s* path \s* \. \s*
+                (?: exists | isfile | isdir | islink | getsize | getmtime )
+        ) \s* \( \s* {_QUOTED_SKILL_PATH}
     )""",
     re.VERBOSE,
 )
@@ -520,4 +533,9 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    # Windows consoles default to a legacy codepage (cp1252 and friends);
+    # a non-ASCII line must degrade to "?", never take the process down.
+    for _stream in (sys.stdout, sys.stderr):
+        if hasattr(_stream, "reconfigure"):
+            _stream.reconfigure(encoding="utf-8", errors="replace")
     sys.exit(main())

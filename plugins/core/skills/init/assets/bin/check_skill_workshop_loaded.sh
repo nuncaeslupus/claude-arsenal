@@ -29,6 +29,10 @@ set -euo pipefail
 
 payload="$(cat)"
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Git Bash: a native python.exe cannot open a `/c/...` path, and MSYS rewrites
+# one it is handed into a wrong `C:\c\...`. Resolve to `C:/...` once, here, so
+# every path built from here below works for both shells. Identity elsewhere.
+command -v cygpath >/dev/null 2>&1 && here="$(cygpath -m "${here}")"
 # `|| true` used to swallow the exit status here, so ANY crash inside
 # gate_target.py — a NameError, a missing interpreter, a syntax error from a
 # half-applied edit — produced an empty target, which the next line reads as
