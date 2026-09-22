@@ -18,6 +18,33 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [4.22.0] - 2026-09-23
+
+- **The timing report now says which part of a task-PR run cost the time.** A
+  consumer's measured `task-pr` was 13m26s with 13m25s of it in a single event
+  with no internal structure, so the report could say the loop was slow and not
+  which step — the question it exists to answer. `open_task_pr.sh` now records
+  ten phases (`review`, `task-gate`, `fetch`, `issue`, `branch`, `archive`,
+  `host-gate`, `commit`, `push`, `pr`) as `task-pr:<phase>` rows, and the phase
+  that was running when a refused run exits carries its exit code, so the table
+  says where the loop stops as well as that it did. Nothing changed in the TSV
+  schema and no new file is written.
+- **Your own Makefile can record its sub-targets into the same table.**
+  `host-gate` is the host's command and the bundle cannot know it is four make
+  targets, so `arsenal_timing_record <event>:<target> "" <ms> <rc>` is now a
+  documented entry point — `references/performance-tuning.md` § Phases has the
+  three-line recipe. A `host-gate:test` row then sits in the p50/p95 table
+  beside everything else, with no hand-instrumentation to redo next time.
+- `references/evidence-gates.md` gains the measurement behind a common evidence
+  sweep: one `python -m <module>` per module spent **6.22s** over five modules
+  against **2.16s** for the same five in one process, about two thirds of it
+  interpreter startup — and it scales with the module count, which parallelism
+  cannot reach.
+- `references/pre-pr-review.md` now says to scope the suite while mutating. One
+  test file per mutation, the full suite once at the end: against a
+  seven-minute suite, thirty mutations run full is three and a half hours to
+  learn what four minutes would have said.
+
 ## [4.21.2] - 2026-09-22
 
 - `arsenal_timings.py` and `references/performance-tuning.md` disagreed about

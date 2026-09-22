@@ -391,4 +391,46 @@ grep -qi "not inside a git repository" <<<"${out}" \
 cd "${REPO}"
 echo "PASS: outside a repository the helper refuses before running any gate"
 
+# --- 10: the phases account for the whole run -------------------------------
+#     One `task-pr` row said the loop cost 13m26s and could not say which step
+#     spent it: 13m25s sat in the parent with no internal structure. The phases
+#     fix that only while they are CONTIGUOUS — a step added later and left
+#     uninstrumented disappears back into the parent, and the report is then
+#     wrong rather than merely incomplete.
+#
+#     So the assertion is the closed rule, not a list of expected names: the
+#     `task-pr:*` rows must sum to the `task-pr` row. Adding a phase satisfies
+#     it; adding a step without one does not.
+if [[ -z "${EPOCHREALTIME:-}" ]]; then
+    echo "  (skipping phase-coverage check: no sub-second clock on this bash)"
+else
+    write_task t-phases "true"
+    printf 'host-gate = "exit 9"\n' > arsenal/config.toml
+    rm -f tmp/arsenal-metrics/metrics.tsv
+    ARSENAL_TASK_ISSUE=99 ARSENAL_ALLOW_SHARED_ADD=1 ARSENAL_COAUTHOR="" \
+        bash "${HELPER}" t-phases "Phases" >/dev/null 2>&1
+    metrics="tmp/arsenal-metrics/metrics.tsv"
+    [[ -s "${metrics}" ]] || fail "the run recorded no timings at ${metrics}"
+    read -r parent kids n < <(awk -F'\t' '
+        $2 == "task-pr"      { p += $4 }
+        $2 ~ /^task-pr:/     { k += $4; n += 1 }
+        END { printf "%d %d %d\n", p, k, n }' "${metrics}")
+    (( n >= 5 )) || fail "only ${n} phases recorded for a run that reached the host gate"
+    (( parent > 0 )) || fail "no task-pr parent row was recorded"
+    gap=$(( parent - kids )); (( gap < 0 )) && gap=$(( -gap ))
+    (( gap <= 2000 )) \
+        || fail "phases sum to ${kids}ms of a ${parent}ms task-pr — ${gap}ms is in no phase, so a step is uninstrumented"
+    grep -q $'\ttask-pr:host-gate\t' "${metrics}" \
+        || fail "the host gate — the step that motivated this — has no phase row"
+    #     The exit code on a phase is the SCRIPT's, attributed to whichever phase
+    #     was open when it died — not the inner command's. That is the useful
+    #     half: it says where the run stopped.
+    awk -F'\t' '$2 == "task-pr:host-gate" && $5 == 0 { exit 1 }' "${metrics}" \
+        || fail "the run died in the host gate but its phase recorded a clean exit"
+    awk -F'\t' '$2 == "task-pr:task-gate" && $5 != 0 { exit 1 }' "${metrics}" \
+        || fail "a phase that completed fine recorded a failure"
+    git checkout -q main 2>/dev/null
+    echo "PASS: every millisecond of a task-pr run is inside a named phase"
+fi
+
 echo "PASS: open_task_pr_gates_test — all gates passed"

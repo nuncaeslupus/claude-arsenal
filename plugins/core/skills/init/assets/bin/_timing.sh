@@ -138,3 +138,55 @@ arsenal_timing_end() {
     _ARSENAL_T_START=""   # idempotent: a chained trap must not record twice
     return 0
 }
+
+# arsenal_timing_phase [name] [exit_code] — close the open phase, open <name>.
+#
+# The five boundaries are whole-script, and one of them swallowed the answer: a
+# consumer's measured `task-pr` was 13m26s with 13m25s inside it and no internal
+# structure, while the one resolved boundary — the task's own gate — was 0.3% of
+# the cost. The report could say the loop was slow and not which part, which is
+# the only question it exists to answer.
+#
+# A phase is recorded as the event `<parent>:<name>`, so parentage is derived
+# from the name rather than carried in a new column: nothing changes in the
+# schema, and `arsenal_timings.py` already groups by event.
+#
+# Phases are CONTIGUOUS by construction — every call closes the previous one —
+# and that is what makes the rule closed rather than a list of names: the phases
+# under a parent must sum to the parent, so a step added later and left
+# uninstrumented shows as a gap instead of disappearing into the parent. Open
+# the first phase right after `arsenal_timing_begin` and close the last from the
+# same EXIT trap:
+#
+#     arsenal_timing_begin task-pr "${TASK_ID}" "${TASK_ID}"
+#     trap '_rc=$?; arsenal_timing_phase "" "${_rc}"; arsenal_timing_end "${_rc}"' EXIT
+#     arsenal_timing_phase review
+#     ...
+#
+# An empty name closes the open phase without opening another. The exit code
+# applies to the phase being CLOSED, so the trap attributes the failure to
+# whichever phase was running when the script died.
+#
+# A HOST records its own sub-targets through the same schema. `host-gate` is the
+# host's command and this bundle cannot know it is four make targets, so a
+# Makefile that wants the breakdown writes it:
+#
+#     source claude-arsenal/bin/_timing.sh
+#     s=$(date +%s); make test; rc=$?; e=$(date +%s)
+#     arsenal_timing_record host-gate:test "" "$(( (e - s) * 1000 ))" "${rc}"
+#
+# and `host-gate:test` appears in the p50/p95 table beside everything else, with
+# no hand-instrumentation to redo the next time the question comes up.
+arsenal_timing_phase() {
+    _arsenal_metrics_off && return 0
+    local now
+    now="$(_arsenal_now_ms)"
+    if [[ -n "${_ARSENAL_P_NAME:-}" ]]; then
+        arsenal_timing_record "${_ARSENAL_T_EVENT:-}:${_ARSENAL_P_NAME}" \
+            "${_ARSENAL_T_LABEL:-}" "$((now - _ARSENAL_P_START))" "${2:-0}" \
+            "${_ARSENAL_T_TASK:-}"
+    fi
+    _ARSENAL_P_NAME="${1-}"
+    _ARSENAL_P_START="${now}"
+    return 0
+}

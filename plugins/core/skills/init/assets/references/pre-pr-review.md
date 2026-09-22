@@ -252,6 +252,19 @@ The reviewer is told the section is author-assembled data, so it is entitled to
 distrust it — an all-green listing on a change whose tests do not cover the new
 path is a finding about the checks.
 
+### Scope the suite while mutating
+
+The other half of a round's cost is the reviewer's own method. Asking *would this
+test fail if the change were reverted* means mutating the code and running the
+tests — and the tests worth running are the ones covering the mutated line, not
+the whole suite. Against a suite that takes seven minutes, thirty mutations run
+full is three and a half hours to learn what about four minutes would have said.
+
+One test file per mutation; the full suite once, at the end. And restore between
+mutations rather than stacking them: a patch that did not apply reads exactly
+like a test that passed, so confirm the mutation is in the tree before believing
+what the run says about it.
+
 ### On the task-PR path, the ordering runs the other way
 
 `open_task_pr.sh` runs `check` **before** the repo's `host-gate`, deliberately:
