@@ -579,4 +579,32 @@ grep -q "review-max-rounds=1" <<<"${out}" || fail "the refusal should quote the 
 cd "${REPO}"
 echo "PASS: review-max-rounds is read from arsenal/config.toml"
 
+# --- 26: --checks records already-run commands as a fenced section ---
+# What makes a round expensive is the reviewer re-running what the author just
+# ran. What makes recording it safe is that exit codes are not the author's
+# account of the change — so the section is still fenced as data.
+rm -f arsenal/config.toml
+rm -rf tmp/arsenal-review
+echo "print('checks')" >> app.py
+printf '$ make test\nexit 0\n42 passed\n' > "${tmp}/checks.md"
+bash "${REVIEW}" emit --checks "${tmp}/checks.md" >/dev/null 2>&1 \
+    || fail "emit --checks should succeed"
+pk=$(cat tmp/arsenal-review/packet.md)
+grep -q "Checks the author already ran" <<<"${pk}" \
+    || fail "--checks must render its section, or the reviewer never learns the checks ran"
+grep -q "42 passed" <<<"${pk}" || fail "the section must carry the file's contents"
+nonce=$(sed -n 's/^----- BEGIN INTENT \(.*\) -----$/\1/p' tmp/arsenal-review/packet.md)
+[[ -n "${nonce}" ]] || fail "could not read the packet nonce"
+grep -q -- "----- BEGIN CHECKS ${nonce} -----" <<<"${pk}" \
+    || fail "the checks block must be fenced with this packet's nonce — it is author-assembled data"
+echo "PASS: --checks renders a nonce-fenced section of already-run checks"
+
+# --- 27: a --checks path that does not exist refuses rather than degrading ---
+# Degrading to "no checks recorded" would cost the reviewer the minutes this
+# option exists to save, silently, on every round.
+out=$(bash "${REVIEW}" emit --checks "${tmp}/no-such-file.md" 2>&1); st=$?
+(( st == 2 )) || fail "a missing --checks file must exit 2, got ${st}: ${out}"
+grep -q "does not exist" <<<"${out}" || fail "the refusal must name the problem: ${out}"
+echo "PASS: a missing --checks file refuses instead of emitting without it"
+
 echo "PASS: adversarial_review_test — all gates passed"

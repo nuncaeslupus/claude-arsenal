@@ -6,6 +6,7 @@ A session that never spawns a worker never needs this file.
 ## Contents
 
 - [Worker loop algorithm (parallel fan-out)](#worker-loop-algorithm-parallel-fan-out) — the loop itself, steps 0–6
+- [What to run while editing](#what-to-run-while-editing) — the touched suite now, the whole gate once
 - [Per-task PRs](#per-task-prs) — what a worker opens, and the web caveat
 - [Reading a precedent](#reading-a-precedent--shape-first-prose-on-demand) — how to follow an existing module without paying for all of it
 - [Credit guards](#credit-guards--set-before-any-task-tool-dispatch) — env to set before any Task-tool dispatch
@@ -246,6 +247,33 @@ docstring that records why a design was chosen. Those docstrings are the reason
 a reviewer can tell a real gate from a decorative one, so they are worth reading
 when the design is the question. They are simply not worth reading to copy a
 function signature.
+
+---
+
+## What to run while editing
+
+**While editing, run only the suite covering what you touched. Run the whole
+gate once, before opening the PR.**
+
+A worker's natural reading of "the gate is the bar" is to keep checking against
+the gate, and the loop above does nothing to discourage it. But only the last
+run decides anything — `open_task_pr.sh` runs the gate itself, and refuses on
+its failure, so a gate run five edits earlier bought information that the final
+one re-buys. On one measured task that was three whole-gate runs after edits to
+one language's files, against seconds of verification that would have told
+anyone the same thing.
+
+This costs nothing and weakens nothing: the run that gates is still the full
+one. It is the cheapest saving available to a worker, and the one nothing in the
+tooling will make for you.
+
+**Do not make the gate skip suites based on what changed.** The selectivity
+belongs here, in the editing loop, where being wrong costs a re-run and
+certifies nothing. A host that wants every run to be the whole gate just keeps
+running it — there is no knob to set, and nothing in the bundle runs a suite on
+your behalf while you edit. See `references/evidence-gates.md` § How often to
+run the whole gate for the reasoning and for what makes a gate slow in the first
+place.
 
 ---
 
