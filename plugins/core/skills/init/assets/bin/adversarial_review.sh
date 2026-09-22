@@ -130,6 +130,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd 2>/dev/null || echo .)"
 # one it is handed into a wrong `C:\c\...`. Resolve to `C:/...` once, here, so
 # every path built from SCRIPT_DIR below works for both shells. Identity elsewhere.
 command -v cygpath >/dev/null 2>&1 && SCRIPT_DIR="$(cygpath -m "${SCRIPT_DIR}")"
+# Boundary timing. Sourced, not run: it only defines functions, and does
+# nothing at all under ARSENAL_METRICS=off. See bin/_timing.sh.
+# shellcheck source=/dev/null
+[[ -f "${SCRIPT_DIR}/_timing.sh" ]] && source "${SCRIPT_DIR}/_timing.sh"
 RUBRIC_FILE="${SCRIPT_DIR}/../agents/reviewer.md"
 CONFIG_PY="${SCRIPT_DIR}/../scripts/arsenal_config.py"
 
@@ -714,7 +718,15 @@ cmd_emit() {
       printf 'intent=%s\n' "${intent:-none}"
       printf 'round=%s\n' "${round}"
       printf 'tree=%s\n' "${cur_tree}"
-      printf 'emitted=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"; } > "${META}" || die "could not write ${META}"
+      printf 'emitted=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+      # A round's wall time spans two invocations — this `emit` and a later
+      # `verdict` — so no single process can measure it with a trap. The one
+      # thing they share is this file, so the start goes in it and `verdict`
+      # does the subtraction. Milliseconds, not the ISO stamp above: that one is
+      # for a human reading the packet, and parsing it back portably is a worse
+      # trade than one more line.
+      printf 'emitted_ms=%s\n' "$(command -v _arsenal_now_ms >/dev/null 2>&1 && _arsenal_now_ms || echo 0)"; } \
+        > "${META}" || die "could not write ${META}"
 
     # A new packet retires the previous answer — BOTH halves of it. Deleting
     # only the receipt left round one's reply sitting at the default path, so if
@@ -801,6 +813,19 @@ cmd_verdict() {
       printf 'base=%s\n' "${base}"
       printf 'reason=%s\n' "${reason}"
       printf 'recorded=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"; } > "${RECEIPT}" || die "could not write ${RECEIPT}"
+
+    # One row per CLOSED round, which is the count that matters: rounds are what
+    # multiply the cost of a review, and a round only closes here (see below).
+    # The task id is the grouping key, so `arsenal_timings.py` can report
+    # rounds-per-change without this script counting anything itself.
+    if command -v arsenal_timing_record >/dev/null 2>&1; then
+        local started
+        started="$(sed -n 's/^emitted_ms=//p' "${META}")"
+        if [[ "${started}" =~ ^[0-9]+$ ]] && (( started > 0 )); then
+            arsenal_timing_record review-round "${verdict}" \
+                "$(( $(_arsenal_now_ms) - started ))" 0 "${TASK_ID}"
+        fi
+    fi
 
     # A round closes HERE, not at `emit`, and that ordering is the whole
     # guarantee. A reviewer that never answered, answered without a verdict

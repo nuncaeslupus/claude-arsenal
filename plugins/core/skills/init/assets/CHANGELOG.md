@@ -18,6 +18,31 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [4.21.0] - 2026-09-22
+
+- **The loop now records how long its expensive steps take.** `gate_run.sh`,
+  `open_task_pr.sh`, `adversarial_review.sh` and `merge_ready.sh` each append
+  one tab-separated row — timestamp, event, label, duration, exit code, task id
+  — to `tmp/arsenal-metrics/metrics.tsv`. No paths, no file contents, no diff,
+  no network: the file is local, self-ignoring (`git add -A` cannot pick it up)
+  and never uploaded anywhere.
+
+- **`claude-arsenal/scripts/arsenal_timings.py` reads it back.** p50/p95/count
+  by boundary ordered by total time, review rounds per change, and the slowest
+  individual runs. Collection is always on and costs milliseconds; reading is
+  this script, so nothing enters a context window until you ask. Run it with
+  `python3 claude-arsenal/scripts/arsenal_timings.py` (`--days N`, `--days 0`
+  for everything).
+
+- **New reference: `claude-arsenal/references/performance-tuning.md`.** The
+  measurement-to-remedy map — which shape in that report means the gate is run
+  too often, which means one suite is the long pole, which means parallelism
+  cannot help, and which means the round count rather than the round cost is
+  the bill. It routes to the existing sections rather than restating them.
+
+- **Two new environment knobs.** `ARSENAL_METRICS=off` disables collection
+  entirely; `ARSENAL_METRICS_MAX_LINES` (default 5000) bounds the file.
+
 ## [4.20.0] - 2026-09-22
 
 - **New config key `review-bots`.** Which review bots the PR review loop waits

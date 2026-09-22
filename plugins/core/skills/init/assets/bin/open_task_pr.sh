@@ -144,6 +144,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd 2>/dev/null || echo .)"
 # one it is handed into a wrong `C:\c\...`. Resolve to `C:/...` once, here, so
 # every path built from SCRIPT_DIR below works for both shells. Identity elsewhere.
 command -v cygpath >/dev/null 2>&1 && SCRIPT_DIR="$(cygpath -m "${SCRIPT_DIR}")"
+# Boundary timing. Sourced, not run: it only defines functions, and does
+# nothing at all under ARSENAL_METRICS=off. See bin/_timing.sh.
+# shellcheck source=/dev/null
+[[ -f "${SCRIPT_DIR}/_timing.sh" ]] && source "${SCRIPT_DIR}/_timing.sh"
 BUNDLE_SCRIPTS="${SCRIPT_DIR}/../scripts"
 ARSENAL_HOME="${ARSENAL_HOME:-arsenal}"
 
@@ -170,6 +174,13 @@ _repo_root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
 cd "${_repo_root}" || {
     echo "open_task_pr: cannot enter the repository root ${_repo_root}" >&2
     exit 1
+}
+
+# End to end: task claimed -> PR open, gates and review included. Started only
+# after the root is resolved, because everything before it is argument parsing.
+command -v arsenal_timing_begin >/dev/null 2>&1 && {
+    arsenal_timing_begin task-pr "${TASK_ID}" "${TASK_ID}"
+    trap 'arsenal_timing_end $?' EXIT
 }
 
 # ---------------------------------------------------------------------------
