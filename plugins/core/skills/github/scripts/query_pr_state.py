@@ -25,9 +25,39 @@ import shutil
 import subprocess
 import sys
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 DEFAULT_BOTS = ["gemini-code-assist[bot]", "coderabbitai[bot]", "claude[bot]"]
+
+
+def _resolve_watch_bots(flag: str | None, repo_root: Path | None = None) -> list[str]:
+    """Bot usernames to watch. Precedence: flag, arsenal config, shipped default.
+
+    `--watch-bots ""` and `review-bots = []` both mean the same thing and are
+    both honoured: no bot is watched, so the loop is CI-only. That is why the
+    flag defaults to None rather than to the list — empty has to stay
+    distinguishable from absent.
+
+    Read out of the file directly rather than through arsenal_config.py: this
+    script vendors to `.claude/skills/github/scripts/`, which has no import
+    path to the bundle's `scripts/` folder.
+    """
+    if flag is not None:
+        return [b.strip() for b in flag.split(",") if b.strip()]
+
+    config = (repo_root or Path.cwd()) / "arsenal" / "config.toml"
+    if config.is_file():
+        try:
+            import tomllib
+
+            value = tomllib.loads(config.read_text(encoding="utf-8")).get("review-bots")
+            if isinstance(value, list) and all(isinstance(b, str) for b in value):
+                return [b.strip() for b in value if b.strip()]
+        except (OSError, ValueError):
+            pass
+
+    return list(DEFAULT_BOTS)
 
 
 def _norm_user(name: str | None) -> str:
@@ -356,8 +386,11 @@ def main() -> int:
     p.add_argument("--repo", help="owner/name (defaults to current repo)")
     p.add_argument(
         "--watch-bots",
-        default=",".join(DEFAULT_BOTS),
-        help="comma-separated bot usernames; empty disables bot tracking",
+        help=(
+            "comma-separated bot usernames; empty disables bot tracking. "
+            "Defaults to `review-bots` in arsenal/config.toml, else "
+            f"{','.join(DEFAULT_BOTS)}"
+        ),
     )
     p.add_argument(
         "--min-quiet-seconds",
@@ -376,7 +409,7 @@ def main() -> int:
         ),
     )
     args = p.parse_args()
-    args.watch_bots = [b.strip() for b in args.watch_bots.split(",") if b.strip()]
+    args.watch_bots = _resolve_watch_bots(args.watch_bots)
 
     repo = args.repo or _default_repo()
     owner, name = repo.split("/", 1)

@@ -89,6 +89,21 @@ DEFAULTS: dict[str, Any] = {
     # The counter is bound to the review's base commit, so rebasing or splitting
     # the change resets it — which is exactly the move a stuck review needs.
     "review-max-rounds": 3,
+    # Which review bots the PR review loop waits on, by GitHub username. Read
+    # by the github skill's query_pr_state.py, which watches for their :eyes:,
+    # their line comments and their approval before a PR is callable.
+    #
+    # The three shipped here are a starting value, not a claim about your repo:
+    # they are the ones this bundle was exercised against. A repo running a
+    # different reviewer had no way to say so short of passing --watch-bots at
+    # every call, and a repo running none at all had the loop wait for a signal
+    # that was never coming.
+    #
+    # An empty list is the documented way to say "no review bot here": the loop
+    # then runs CI-only, and `ready_to_merge` rests on green CI alone. That is
+    # the weaker gate, which is why it is opt-in rather than the default — a
+    # host that has a bot should not lose it by upgrading.
+    "review-bots": ["gemini-code-assist[bot]", "coderabbitai[bot]", "claude[bot]"],
     # The skills-listing character budget the auditor enforces. It is a real
     # constraint, but its value differs by surface and has changed over time,
     # so a consumer whose budget differs can set it here instead of being
@@ -204,6 +219,7 @@ READERS = {
     "host-setup": "plugins/core/skills/init/assets/bin/host_setup.sh",
     "pre-pr-review": "plugins/core/skills/init/assets/bin/open_task_pr.sh",
     "review-max-rounds": "plugins/core/skills/init/assets/bin/adversarial_review.sh",
+    "review-bots": "plugins/core/skills/github/scripts/query_pr_state.py",
     "listing-budget": "plugins/skill-workshop/skills/skill-workshop/scripts/audit_library.py",
     "queue-automation": "plugins/core/skills/init/scripts/init.py",
     "import-label": "plugins/core/skills/init/assets/scripts/issue_import.py",
@@ -346,6 +362,15 @@ def load(repo_root: Path | None = None) -> tuple[dict[str, Any], dict[str, str]]
             f"review-max-rounds must be an integer >= 1, got "
             f"{values['review-max-rounds']!r} (from {sources['review-max-rounds']})"
         )
+    # A list, because that is what it is — and a bare string here would be a
+    # comma-separated list nobody told the consumer about. Empty is legal and
+    # means "no review bot in this repo"; the reader below documents what that
+    # costs.
+    bots = values["review-bots"]
+    if not isinstance(bots, list) or not all(isinstance(b, str) for b in bots):
+        raise ConfigError(
+            f"review-bots must be a list of usernames, got {bots!r} (from {sources['review-bots']})"
+        )
     # Same `type(...) is int` guard and the same reason as listing-budget above.
     # The bounds are Claude Code's own for `autoCompactWindow`; a value outside
     # them is rejected here rather than written into settings.json, because a
@@ -417,7 +442,10 @@ def main(argv: list[str] | None = None) -> int:
         if args.get not in values:
             print(f"arsenal_config: unknown key {args.get!r}", file=sys.stderr)
             return 2
-        print(values[args.get])
+        value = values[args.get]
+        # Bare output is meant to be substituted into a command. A list's repr
+        # is not: it is the comma-separated form the flags reading it take.
+        print(",".join(value) if isinstance(value, list) else value)
         return 0
 
     if args.explain:

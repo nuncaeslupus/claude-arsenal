@@ -34,7 +34,10 @@ hand between ticks is. Read the comments, not the check.
 
 **Silent approval requires a positive signal.** A bot that commented and then went silent is NOT silent approval. Silent approval requires either a `:+1:` / `:rocket:` reaction, an `APPROVED` review submission, OR — under `--unresolved-only` — every comment the bot wrote being addressed (replied to + filtered out). If none of those hold, the state stays `waiting` indefinitely. This is intentional: ambiguous silence should not auto-merge.
 
-## Default watched bots
+## Which bots are watched
+
+Three are shipped as the starting value — the ones this bundle was exercised
+against, not a claim about your repo:
 
 ```text
 gemini-code-assist[bot]
@@ -42,7 +45,26 @@ coderabbitai[bot]
 claude[bot]
 ```
 
-Override with `--watch-bots gemini-code-assist[bot],custom-bot[bot]`. Empty list → no bots watched (CI-only mode).
+Say otherwise once, in `arsenal/config.toml`:
+
+```toml
+review-bots = ["reviewer[bot]"]
+```
+
+`--watch-bots reviewer[bot],custom-bot[bot]` still overrides it per call.
+
+**A repo with no review bot at all sets `review-bots = []`.** Leaving the
+default in place there is the expensive failure: every tick waits for a signal
+nothing will ever send, and the loop sits at `waiting` until someone reads the
+JSON and works out why. An empty list is the same CI-only mode as
+`--watch-bots ""` — green CI plus the quiet window is enough to reach
+`ready_to_merge`, and nothing ever reports `bot_commented`.
+
+Know what that costs before setting it: the bot half of the gate is the half
+that reads the diff. With it off, `ready_to_merge` means the machines agree and
+nobody looked. If the repo has a human reviewer instead, `merge-policy =
+"after-ci-and-review"` is where that goes — this key only governs what the loop
+waits on, not what the merge requires.
 
 ## Comment-handling rubric
 

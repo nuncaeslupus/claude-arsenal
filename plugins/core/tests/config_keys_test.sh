@@ -96,6 +96,32 @@ grep -q 'arsenal_config.py" --get claim-prefix' "${REPO_ROOT}/plugins/core/skill
     || fail "claim_task.sh does not consult the config, so it can write refs queue_hooks.py will not prune"
 echo "PASS: import-label, task-label and claim-prefix change what runs"
 
+# --- 2b: review-bots reaches the loop that waits on them --------------------
+#     The three bots were a hardcoded constant, so a repo watching a different
+#     reviewer — or none — could only say so by passing --watch-bots at every
+#     call. The flag still wins, and an empty one still means CI-only: that is
+#     the distinction the resolver has to keep, so it is the one checked here.
+PR_STATE="${REPO_ROOT}/plugins/core/skills/github/scripts/query_pr_state.py"
+printf 'review-bots = ["reviewer[bot]"]\n' > "${tmp}/arsenal/config.toml"
+
+resolve() {  # resolve <python expression for the flag argument>
+    (cd "${tmp}" && python3 -c "
+import sys; sys.path.insert(0, '$(dirname "${PR_STATE}")')
+import query_pr_state as q
+print(','.join(q._resolve_watch_bots($1)))")
+}
+[[ "$(resolve None)" == "reviewer[bot]" ]] \
+    || fail "review-bots is set in the config and query_pr_state.py still watches the shipped bots"
+[[ "$(resolve "'other[bot]'")" == "other[bot]" ]] \
+    || fail "--watch-bots no longer overrides the configured list"
+[[ -z "$(resolve "''")" ]] \
+    || fail "an empty --watch-bots must stay distinguishable from an absent one (CI-only mode)"
+
+printf 'review-bots = []\n' > "${tmp}/arsenal/config.toml"
+[[ -z "$(resolve None)" ]] \
+    || fail "review-bots = [] must mean 'no review bot here', not 'use the defaults'"
+echo "PASS: review-bots is configurable and an empty list means CI-only"
+
 # --- 3: a key that cannot work from the file is refused, not ignored --------
 #     `home` names the directory holding config.toml, so the file cannot set
 #     it. Accepting it looked like it worked and relocated nothing.

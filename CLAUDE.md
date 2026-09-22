@@ -212,6 +212,41 @@ reviewer should request it before merging.
 
 ---
 
+## Everything shipped is generic
+
+This marketplace is installed into arbitrary repos by arbitrary people, so
+anything it ships has to be true for *any* project and *any* toolchain.
+Examples, defaults and prose must not name a specific project, a specific
+person's repo, or a specific third-party vendor as though the reader has it.
+Naming the substrate this bundle itself runs on — Python, `uv`, `ruff`, `git`,
+`gh` — is fine; that is what the scripts are written in.
+
+**The line is provenance versus convention, and it is the whole rule.**
+
+- **Provenance is fine.** "A consumer's review found this in 3.6.3", "measured
+  on one host repo's board" — that is history explaining where a claim came
+  from, and stripping it would make the claim weaker, not more generic. Keep
+  the pointer reachable, though: a private SHA proves nothing to a reader who
+  cannot open it, so describe the finding instead of citing a ref they will
+  get a 404 from.
+- **Convention is not.** A worked example, a default value, or an instruction
+  that names a specific project teaches the reader a norm that is not theirs.
+  The `har` skill shipped a `--ua-suffix` example naming one private repo:
+  copy it and your crawler identifies itself as somebody else's project.
+  `query_pr_state.py` shipped three named review bots as a hardcoded constant,
+  so a repo with none of them waited forever for a signal nobody would send
+  (#446).
+
+When an example needs a name, use a placeholder — `yourproject`, `example.com`
+— consistent with whatever is already beside it. When a default is a real
+choice this repo made rather than a universal truth, make it configurable and
+say in its comment that it is a starting value.
+
+`plugins/core/tests/generic_examples_test.sh` greps the shipped tree for the
+private names already known to have leaked. It catches the recurrence, not the
+first occurrence of the next name — that one is a review question, and this
+section is what a reviewer cites.
+
 ## Cite form
 
 When referencing a skill or its reference, use the marketplace-namespaced
