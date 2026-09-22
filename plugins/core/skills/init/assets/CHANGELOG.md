@@ -18,6 +18,16 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [4.21.1] - 2026-09-22
+
+- `/init` now gitignores `.claude/skills/*/findings.md`. That file is
+  skill-workshop's per-skill alignment report — author-local by design, pinned
+  to `file:line` in whichever version of the skill was on disk when it ran. A
+  re-vendor moves those lines, so a repo that ran the workshop once carried a
+  stale untracked report per skill from then on. Existing repos get the entry
+  on their next `/init`; nothing is deleted, and re-running the workshop
+  overwrites the report in place.
+
 ## [4.21.0] - 2026-09-22
 
 - **The loop now records how long its expensive steps take.** `gate_run.sh`,

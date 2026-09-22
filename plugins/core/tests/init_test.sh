@@ -91,6 +91,14 @@ if ! grep -q "arsenal/session/surface_profile.json" "${tmpdir}/.gitignore" 2>/de
     echo "FAIL: .gitignore missing surface_profile.json entry" >&2; exit 1
 fi
 
+# Gate 6b: .gitignore also covers skill-workshop's per-skill findings.md.
+# Unlike the entries above it is NOT derived from ARSENAL_HOME — the report is
+# written beside the skill it audited, and `.claude/skills/` does not move.
+if ! grep -q '\.claude/skills/\*/findings\.md' "${tmpdir}/.gitignore" 2>/dev/null; then
+    echo "FAIL: .gitignore missing the skill-workshop findings.md entry" >&2; exit 1
+fi
+echo "PASS: .gitignore covers per-skill findings.md"
+
 # Gate 7: ARSENAL_HOME relocates the host tree, and the config it writes is the
 # config the readers read. Every runtime script resolves the host tree that way
 # — `arsenal_config.py` included — while init hardcoded `arsenal/`, so a
