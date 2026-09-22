@@ -184,6 +184,35 @@ stop: that state is precisely why `after-review` exists, and the fix is the host
 one line in `arsenal/config.toml`, not an agent deciding at merge time that today the gate
 did not mean anything.
 
+**A conflicting PR produces no run either, and that one is not an outage.** A
+workflow triggered `on: pull_request` builds `refs/pull/<n>/merge` — the commit GitHub
+makes by merging the head into the base. When the PR conflicts, that ref cannot be
+computed, so **no run is created at all**: nothing in `gh run list`, no check on the head,
+no commit status. Looking at runs cannot separate this from the outage above, because
+there is no run to look at — a job that died in seconds at least leaves a row. Measured on
+one consumer PR: three consecutive pushes over five hours, each a real commit with a
+locally-green gate, and not one workflow run for any of them. The branch had gone
+`CONFLICTING` while untouched, because something else merged. So ask before concluding CI
+is unavailable:
+
+```bash
+gh pr view <n> --json mergeable,mergeStateStatus
+# {"mergeable":"CONFLICTING","mergeStateStatus":"DIRTY"}
+```
+
+Unlike the three causes above, waiting does not help and `after-review` is not the escape
+hatch: the branch is stale, the remedy is to merge the base and resolve, and switching
+policy would drop the CI half for a PR whose CI is fine. `pr_audit.py` and
+`merge_ready.sh` already read `mergeable` and say so — this is about not reading their
+blank CI column as an outage.
+
+**Resolve the conflict last, not on discovery.** Merging the base moves the head, and
+every piece of evidence on this PR is bound to a head: `claim_review.sh` claims per SHA,
+and `pr_audit.py` reads checks as evidence about the SHA they ran on. So on a PR under
+review the order is: reader reports, fix the findings, *then* resolve the conflict, then
+one gate run and one re-read on the final head. Resolving the moment you notice it throws
+away a verdict you already paid for and buys the same one again.
+
 **The same shape shows up on the review side.** A review-bot vendor that caps how many
 reviews it runs per hour is a second, independent kind of platform quota — not a defect in
 the PR, just an external usage limit, same as the CI case above but affecting the review

@@ -101,6 +101,10 @@ grep -qi 'counts as a review' <<<"${policy}" \
     || note "github-automation.md never says what satisfies 'after-review'"
 grep -qi 'cannot report' <<<"${policy}" \
     || note "github-automation.md never says what to do when CI cannot report at all"
+# A conflicting PR is the one absent-CI cause where waiting is the wrong answer, and
+# the one the absent-run reasoning above cannot tell apart from an outage on its own.
+grep -q 'mergeStateStatus' <<<"${policy}" \
+    || note "github-automation.md never names the check that separates a conflict from an outage"
 
 # --- 4: end to end — the command in the prose actually returns a value ---
 tmp=$(mktemp -d)
