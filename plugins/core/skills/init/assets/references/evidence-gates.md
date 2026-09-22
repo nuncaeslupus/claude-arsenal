@@ -12,6 +12,8 @@ numeric threshold has no number behind it yet.
 - [Evidence gates (numeric acceptance)](#evidence-gates-numeric-acceptance)
 - [Parallel test execution in host-gate](#parallel-test-execution-in-host-gate)
 - [When one file is the long pole](#when-one-file-is-the-long-pole)
+- [When parallelism is not the lever](#when-parallelism-is-not-the-lever) — spawn-bound and deliberately-slow suites
+- [How often to run the whole gate](#how-often-to-run-the-whole-gate)
 - [Caching: inputs yes, outcomes no](#caching-inputs-yes-outcomes-no)
 - [Unmeasured — the third outcome](#unmeasured--the-third-outcome)
 - [The placeholder, and the first PR that replaces it](#the-placeholder-and-the-first-pr-that-replaces-it)
@@ -183,10 +185,10 @@ percentage, since three points do not support one).
 
 **Expect parallelism to expose real cross-worker races**, not just move a
 config flag — that is a cost of turning this on, not a reason not to. One host
-repo's fix (`nuncaeslupus/integral-job-search@9cf4965e`, PR #490) found two
-tests that independently touched the live working tree's untracked-file
-listing interleaving across workers once they ran concurrently. A repo
-enabling this should expect to find and fix genuine shared-state races.
+repo turning it on found two tests that each touched the live working tree's
+untracked-file listing; they had never overlapped serially and interleaved
+immediately once they ran concurrently. A repo enabling this should expect to
+find and fix genuine shared-state races.
 
 ---
 
@@ -233,6 +235,71 @@ be free of them.
 The same shape applies to any runner whose unit of parallel scheduling is the
 file rather than the test — check which one the repo's runner uses before
 assuming a split is needed.
+
+---
+
+## When parallelism is not the lever
+
+`-n auto` is the right default for a **CPU-bound** suite and does almost nothing
+for two shapes that are common in real gates. Both sections above are about the
+first shape; read this one before concluding the advice is wrong.
+
+### Process-spawn-bound suites have a throughput ceiling
+
+A suite that shells out once per case — a hook harness, a CLI's integration
+tests, anything driving a real shell or interpreter per assertion — is limited
+by how fast the operating system can start processes, not by cores. Measured on
+one such suite, spawns per second stayed flat from 8 workers to 32; the wall
+clock is the process count times the spawn cost, and no scheduling change
+touches it. Three hundred spawns was thirty seconds at every worker count tried.
+
+The lever there is the **number of spawns**, or how often the suite runs — not
+the worker count. Collapsing the per-case spawn is usually the wrong trade,
+because spawning per case is typically how the thing under test runs in
+production, and a faster gate that no longer exercises the real path has bought
+speed with fidelity. Say which one you chose.
+
+The diagnostic is one measurement: raise the worker count and re-time. Flat
+means spawn-bound, and every further minute spent on parallelism is wasted.
+
+### Deliberately slow work is a cost, not a defect
+
+Key derivation, password hashing and envelope encryption are slow **on purpose**,
+and a test at test-only cost factors proves nothing about the parameters that
+ship. Twelve such tests were 28 seconds of one measured gate.
+
+Lowering the cost factor everywhere removes the only test that would notice a
+production parameter being weakened, which is the failure the tests exist to
+catch. The shape that keeps both: **one test at production parameters asserting
+the real constants**, and the rest sharing a derived-key fixture or running at
+reduced cost. The expensive one stays, once.
+
+---
+
+## How often to run the whole gate
+
+Run the full gate **once, before opening the PR**. While editing, run only the
+suite covering what you touched.
+
+This is worth more than every parallelism change in this document combined, and
+unlike them it costs nothing and weakens nothing, because the gate that gates is
+still the full one. Measured on one task: the full gate ran four times, three of
+them after edits to one language's files only — about five minutes, where the
+suite covering those files would have said the same thing in under a minute. The
+pre-PR run is what decides; the runs during editing decide nothing and cost the
+same.
+
+The natural reading of "the gate is the bar" is to keep checking against it, so
+this needs saying rather than assuming.
+
+**Do not make the gate itself skip suites based on what changed.** That is the
+obvious next step and it is wrong for the reason this whole document exists: a
+gate that verifies a subset verifies nothing in particular, and the selection
+logic becomes the least-tested code in the repo while holding the most
+authority. The selectivity belongs in the editing loop, where a human or an
+agent is choosing what to run next and can be wrong without anything being
+certified. A repo that wants every run to be the full gate simply keeps running
+it.
 
 ---
 
