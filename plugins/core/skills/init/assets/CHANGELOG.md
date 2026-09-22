@@ -18,6 +18,27 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [4.18.0] - 2026-09-22
+
+- `adversarial_review.sh emit` takes a new **`--checks <file>`** option. Point it
+  at a file holding the commands you already ran against this exact tree and
+  their real exit codes, and the packet carries them as a fenced section telling
+  the reviewer to read them instead of re-running them. Re-running what the
+  author just ran is most of what a review round costs. Nothing in the bundle
+  runs the commands or invents the file — which checks your repo has is your
+  repo's business. A `--checks` path that does not exist refuses (exit 2) rather
+  than quietly emitting without the section.
+- Guidance on what actually makes a gate slow: `-n auto` is for CPU-bound
+  suites and does nothing for a suite bound by process spawns (measured flat
+  from 8 to 32 workers); deliberately-slow key-derivation tests are a cost to
+  budget rather than a defect to fix, and the shape that keeps both speed and
+  meaning is one test at production parameters with the rest reduced.
+- The rule that pays for all of it: **while editing, run only the suite covering
+  what you touched; run the whole gate once, before opening the PR.** With the
+  caveat that the gate itself must not learn to skip suites — the selectivity
+  belongs in the editing loop, where being wrong costs a re-run and certifies
+  nothing.
+
 ## [4.17.0] - 2026-09-22
 
 - The pre-PR adversarial review is now **bounded**. Round 1 is the cold read it

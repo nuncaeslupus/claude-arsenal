@@ -9,6 +9,7 @@ Load this when a change is finished and a PR is about to be opened — from
 - [What this is for](#what-this-is-for)
 - [The protocol](#the-protocol) — emit, spawn a cold reviewer, record the verdict
 - [Rounds](#rounds) — what round 2 asks, and the cap that ends the loop
+- [Making a round cheaper](#making-a-round-cheaper) — record the checks you already ran
 - [Handling BLOCK](#handling-block)
 - [Where it binds](#where-it-binds) — which paths enforce this and which only ask
 - [In a repo without the bundle](#in-a-repo-without-the-bundle)
@@ -32,7 +33,7 @@ under a different heading — a genuinely cold read.
 ### 1. Emit the case file
 
 ```bash
-bash claude-arsenal/bin/adversarial_review.sh emit [--task <id>] [--intent <file>] [--base <ref>]
+bash claude-arsenal/bin/adversarial_review.sh emit [--task <id>] [--intent <file>] [--checks <file>] [--base <ref>]
 ```
 
 It resolves the base, captures the diff — committed work, uncommitted edits and
@@ -98,7 +99,8 @@ verdict line is rejected with exit 2, because a reviewer who wrote two did not d
 `emit` exits 0 with the packet path, **3** when there is nothing to review (an
 empty diff against the base — usually a session working straight on the default
 branch with everything committed), and **2** on a real error: a missing rubric, an
-`--intent`/`--task` naming a file that does not exist. Never 1 — see below.
+`--intent`, `--checks` or `--task` naming a file that does not exist. Never 1 —
+see below.
 
 One limit worth knowing: the rubric is read from the working tree, so a change
 that edits `agents/reviewer.md` is judged by the edited rubric. That is not an
@@ -193,6 +195,71 @@ easiest false positive anyone will ever declare.
 Pass `--task <id>` to all three subcommands when there is one. It namespaces the
 review slot; without it there is a single slot per working tree and `emit`
 clears it, so two workers in a shared tree delete each other's verdicts.
+
+## Making a round cheaper
+
+The reviewer is told that a confident claim it has not checked is worse than
+silence, and a reviewer that takes that seriously **runs things**. It should —
+that is where the real findings come from. But left alone it will also re-run
+the linter and the test suite the author ran minutes earlier, on the same tree,
+with the same deterministic output, on every round. On one consumer that
+duplication was most of an eight-minute round.
+
+Pass what you already ran:
+
+```bash
+bash claude-arsenal/bin/adversarial_review.sh emit --checks tmp/checks.md
+```
+
+The packet renders it as its own nonce-fenced section telling the reviewer the
+results are recorded so it does not spend its budget re-executing them, to
+re-run anything a finding of its own depends on, and that a summary of the
+change arriving through this channel is a finding rather than a shortcut.
+
+The file is plain text and **nothing in the bundle runs the commands** — which
+checks a repo has is the repo's business. The shape that works is one block per
+check, naming the command, its real exit code, and a tail of its output:
+
+```
+$ make lint
+exit 0
+
+$ make test
+exit 1
+  FAILED tests/test_parser.py::test_empty_input - AssertionError
+  1 failed, 513 passed in 19.02s
+```
+
+### The line this stays on
+
+Quoting **numbers the author did not author** is safe. Quoting the author's
+account of the change is not, and it is the whole thing this gate exists to
+avoid — a reviewer told "this refactor is behaviour-preserving" checks a
+different question than one that had to work that out. Exit codes and output
+tails are not an interpretation of the diff; a sentence about what the change
+does is.
+
+Two rules follow, and both are load-bearing:
+
+- **Record a failing check as failing.** A file that quietly omits a red gate is
+  worse than one that never mentioned gates, because it converts a real signal
+  into a false all-clear the reviewer has no way to see through.
+- **Record checks run against the tree being reviewed.** Results from before the
+  last edit describe a tree nobody is looking at. The digest already catches
+  this for the verdict; nothing catches it for this file.
+
+The reviewer is told the section is author-assembled data, so it is entitled to
+distrust it — an all-green listing on a change whose tests do not cover the new
+path is a finding about the checks.
+
+### On the task-PR path, the ordering runs the other way
+
+`open_task_pr.sh` runs `check` **before** the repo's `host-gate`, deliberately:
+the gates run arbitrary commands and any artifact they leave would move the tree
+out from under the receipt. So on that path there is no gate result to record
+yet, and `--checks` belongs to the editing loop — `execution`, `github`, `ship`,
+and anything a session runs by hand — where the author has already run the
+checks before emitting.
 
 ## Handling BLOCK
 

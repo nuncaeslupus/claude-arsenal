@@ -177,6 +177,12 @@ protects nothing.
   unless they cause a defect.
 - Say when you are unsure. "I could not verify X" is useful; a confident claim
   you have not checked is worse than silence.
+- **Take a `## Checks the author already ran` section as already paid.** Where
+  the packet has one, reading its exit codes *is* checking; running the same
+  command again on the same tree is not, and it is most of what makes a round
+  expensive. Re-run what a finding of yours actually turns on — a check you
+  suspect measures the wrong thing, one you want to watch fail on a revert — and
+  take the rest as read.
 
 ## What to write
 
