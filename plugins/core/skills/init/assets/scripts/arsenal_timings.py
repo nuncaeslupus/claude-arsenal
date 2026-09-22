@@ -15,10 +15,11 @@ it.
 
 ## What it prints, and why in that order
 
-**By event, p95 first.** p50 says what a typical run costs and p95 says what the
-loop actually feels, because the slow tail is what a person sits through. They
-are ordered by total time, not by p95 alone: a 90-second step that runs once a
-day is not the bottleneck a 9-second one that runs 200 times is.
+**By event, ordered by total time.** A 90-second step that runs once a day is
+not the bottleneck a 9-second one that runs 200 times is, so total is the column
+to read first. Then p50 against p95: p50 says what a typical run costs and p95
+says what the loop actually feels, because the slow tail is what a person sits
+through.
 
 **Rounds per change.** The round count is the multiplier. A review round that
 takes four minutes is fine; four of them on one change is most of an hour, and
