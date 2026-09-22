@@ -18,6 +18,21 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [4.19.1] - 2026-09-22
+
+- `references/github-automation.md` now names a fourth reason CI reports
+  nothing at all: a PR that conflicts with its base produces **no workflow
+  run**, because `on: pull_request` builds `refs/pull/<n>/merge` and that ref
+  cannot be computed. The three causes already documented are outages, where
+  waiting is right; this one is a stale branch, where waiting is wrong and
+  switching `merge-policy` to `after-review` would drop the CI half for a PR
+  whose CI is fine. One `gh pr view <n> --json mergeable,mergeStateStatus`
+  separates them, and the section says to run it before concluding CI is
+  unavailable.
+- Same section: resolve a conflict **last**, not on discovery. Merging the base
+  moves the head, and every verdict and review claim on the PR is bound to a
+  head — so resolving early throws away a gate run you already paid for.
+
 ## [4.19.0] - 2026-09-22
 
 Windows + Git Bash works. Five separate faults made the merge step unreachable
