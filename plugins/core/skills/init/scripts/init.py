@@ -1720,6 +1720,17 @@ def init_base(
     ):
         _add_gitignore_entry(repo_path, f"{session.as_posix()}/{entry}")
 
+    # skill-workshop's per-skill alignment report, written beside the skill it
+    # audited. Author-local by design: it records what one validator run found
+    # and whether each finding was fixed, dismissed or deferred, pinned to
+    # file:line in whichever version of the skill was on disk that day. A
+    # re-vendor moves those lines and leaves the report untracked and stale.
+    # Upstream ignores the same filename; consumers never inherited the rule,
+    # so a repo that ran the workshop once carried the noise from then on.
+    # Not derived from `home`: the report lives beside the skill, and
+    # `.claude/skills/` does not move when ARSENAL_HOME relocates the host tree.
+    _add_gitignore_entry(repo_path, ".claude/skills/*/findings.md")
+
     # GitHub-side queue upkeep (see the function's docstring for why by default)
     _install_queue_workflow(repo_path, arsenal, silent=silent)
 
