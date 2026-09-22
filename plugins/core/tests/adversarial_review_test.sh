@@ -243,6 +243,8 @@ echo "PASS: the review slot is namespaced per task, and a traversing id is refus
 # worker_postcheck.sh's `git clean -fdq` has no -x, so an ignored slot survives.
 bash "${REVIEW}" emit >/dev/null 2>&1 \
     || fail "an unscoped emit must still work after a task-scoped one; three of the four wired paths use the root"
+echo "# slot check" >> app.py   # t-alpha already has a verdict for the old tree,
+                               # and emit refuses to re-review an unchanged one
 bash "${REVIEW}" emit --task t-alpha >/dev/null 2>&1 \
     || fail "and a task-scoped emit must still work after an unscoped one"
 notmine="${tmp}/notmine"; mkdir -p "${notmine}"; echo other > "${notmine}/file.txt"
@@ -465,5 +467,116 @@ grep -q "ROOT_LEVEL_CANARY" "${sub}/tmp/arsenal-review/packet.md" \
     && fail "the default review directory must be repo-root relative, not cwd relative"
 cd "${REPO}"
 echo "PASS: a review taken from a subdirectory covers the whole worktree"
+
+# ------------------------------------------------------------------ rounds --
+# A review that starts from nothing every time cannot converge: each round is a
+# cold read of a surface the last round's fixes just grew. These assert the
+# bound — the counter, the follow-up shape, and the two refusals that keep a
+# loop from being re-entered by deleting state or by asking the same question
+# twice.
+RR="${tmp}/rounds"
+mkdir -p "${RR}/status"; cd "${RR}"
+git init -q -b main .
+git config user.email t@e.x; git config user.name T; git config commit.gpgsign false
+echo "print('hi')" > app.py
+printf '# Spec\n\nMake the app say bye.\n' > status/specification.md
+git add -A; git commit -qm init
+echo "print('bye')" >> app.py
+
+_block() {   # record a BLOCK verdict for the packet currently emitted
+    printf 'BLOCKER | app.py:2 — %s\n  Trigger: t\n\nVERDICT: BLOCK — %s\n' "$1" "$1" \
+        > tmp/arsenal-review/verdict.md
+    bash "${REVIEW}" verdict 2>&1
+}
+
+# --- 19: round 1 is a plain cold read and verdict closes it ---
+bash "${REVIEW}" emit >/dev/null 2>&1 || fail "round 1 emit should succeed"
+grep -qE '^\*\*Follow-up round' tmp/arsenal-review/packet.md \
+    && fail "round 1 must not be shaped as a follow-up — there is nothing to follow up on"
+out=$(_block CANARY_ONE)
+grep -q "round 1 of 3" <<<"${out}" || fail "verdict should report which round closed: ${out}"
+[[ -f tmp/arsenal-review/rounds/round-1.md ]] \
+    || fail "verdict must keep the reply — the next round is built from it"
+echo "PASS: round 1 is a cold read, and verdict closes and keeps it"
+
+# --- 20: re-emitting an unchanged tree is refused, not answered again ---
+# Without this, the cheapest way past a BLOCK is to ask the same question until
+# a differently-disposed reviewer says yes. That is verdict shopping, and it is
+# indistinguishable from a second opinion at the exit code.
+out=$(bash "${REVIEW}" emit 2>&1); st=$?
+(( st == 2 )) || fail "an unchanged tree must exit 2, got ${st}: ${out}"
+grep -qi "nothing has changed" <<<"${out}" || fail "the refusal should say why: ${out}"
+echo "PASS: re-emitting an unchanged tree is refused"
+
+# --- 21: round 2 carries the prior findings and the delta, not the whole diff ---
+echo "print('fixed')" >> app.py
+bash "${REVIEW}" emit >/dev/null 2>&1 || fail "round 2 emit should succeed after a change"
+pk=$(cat tmp/arsenal-review/packet.md)
+grep -q "Follow-up round 2 of 3" <<<"${pk}" || fail "round 2 must announce itself as a follow-up"
+grep -q "CANARY_ONE" <<<"${pk}" || fail "a follow-up must carry the previous round's reply verbatim"
+grep -q "BEGIN PRIOR FINDINGS" <<<"${pk}" || fail "the prior reply must be fenced as data, like every other untrusted block"
+grep -q "BEGIN DELTA" <<<"${pk}" || fail "a follow-up must carry the delta since the tree the last round read"
+grep -q "print('fixed')" <<<"${pk}" || fail "the delta must contain what actually changed"
+grep -q "BEGIN DIFF" <<<"${pk}" \
+    && fail "a follow-up must NOT inline the full diff — re-reading everything costs what round 1 cost, which is the loop"
+grep -q "^+print('bye')" <<<"${pk}" \
+    && fail "the round-1 change must not reappear as an addition — it is context in the delta at most"
+echo "PASS: a follow-up carries prior findings plus the delta, and not the full diff"
+
+# --- 22: a round with no usable verdict costs no budget ---
+# The counter advances in `verdict`, not `emit`, so a reviewer that never
+# answers does not spend a round the author never got the benefit of.
+echo "print('again')" >> app.py
+bash "${REVIEW}" emit >/dev/null 2>&1 || fail "emit should succeed"
+: > tmp/arsenal-review/verdict.md                   # reviewer wrote nothing usable
+bash "${REVIEW}" verdict >/dev/null 2>&1
+[[ "$(sed -n 's/^round=//p' tmp/arsenal-review/round.env)" == "1" ]] \
+    || fail "a reply with no VERDICT: line must not advance the round counter"
+echo "PASS: a round that produced no usable verdict costs no budget"
+
+# --- 23: the cap refuses, and deleting the rounds directory does not reset it ---
+bash "${REVIEW}" emit >/dev/null 2>&1 || fail "emit should succeed"
+out=$(_block CANARY_TWO); grep -q "round 2 of 3" <<<"${out}" || fail "expected round 2: ${out}"
+echo "print('r3')" >> app.py
+bash "${REVIEW}" emit >/dev/null 2>&1 || fail "round 3 emit should succeed"
+rm -rf tmp/arsenal-review/rounds                    # the previous reply is now gone
+out=$(_block CANARY_THREE)
+grep -q "round 3 of 3" <<<"${out}" || fail "a missing prior reply must still count as a round: ${out}"
+echo "print('r4')" >> app.py
+out=$(bash "${REVIEW}" emit 2>&1); st=$?
+(( st == 2 )) || fail "exceeding review-max-rounds must exit 2, got ${st}: ${out}"
+grep -q "review-max-rounds=3" <<<"${out}" || fail "the refusal should name the budget it spent: ${out}"
+grep -q "split" <<<"${out}" || fail "the refusal must name the ways out, or it is a dead end: ${out}"
+echo "PASS: the round cap refuses, and losing the rounds directory does not refund it"
+
+# --- 24: the counter is bound to the base, so moving the base resets it ---
+# Splitting or rebasing is one of the three documented exits from a spent
+# budget; it only works if it actually gives the change a fresh read.
+git add -A; git commit -qm "land round 1-3 work"
+bash "${REVIEW}" emit >/dev/null 2>&1; st=$?
+(( st == 3 )) || fail "with everything committed on the default branch there is nothing to review, got ${st}"
+git checkout -q -b feat/next
+echo "print('new work')" >> app.py
+bash "${REVIEW}" emit >/dev/null 2>&1 || fail "a new base must get a fresh budget"
+grep -qE '^\*\*Follow-up round' tmp/arsenal-review/packet.md \
+    && fail "a change against a different base is a first round, not a continuation"
+out=$(_block CANARY_FOUR)
+grep -q "round 1 of 3" <<<"${out}" || fail "moving the base must reset the counter: ${out}"
+echo "PASS: the round counter is bound to the base and resets when it moves"
+
+# --- 25: review-max-rounds is honoured from arsenal/config.toml ---
+mkdir -p arsenal; printf 'review-max-rounds = 1\n' > arsenal/config.toml
+rm -rf tmp/arsenal-review          # the documented outright clear
+echo "print('cfg')" >> app.py
+bash "${REVIEW}" emit >/dev/null 2>&1 || fail "emit should succeed under a configured cap"
+out=$(_block CANARY_FIVE)
+grep -q "round 2 of 1" <<<"${out}" && fail "a configured cap of 1 should not promise a round 2: ${out}"
+grep -q "the last one" <<<"${out}" || fail "the final round should say it is the last: ${out}"
+echo "print('cfg2')" >> app.py
+out=$(bash "${REVIEW}" emit 2>&1); st=$?
+(( st == 2 )) || fail "a configured cap of 1 must refuse round 2, got ${st}: ${out}"
+grep -q "review-max-rounds=1" <<<"${out}" || fail "the refusal should quote the configured value: ${out}"
+cd "${REPO}"
+echo "PASS: review-max-rounds is read from arsenal/config.toml"
 
 echo "PASS: adversarial_review_test — all gates passed"

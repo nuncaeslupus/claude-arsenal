@@ -18,6 +18,25 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [4.17.0] - 2026-09-22
+
+- The pre-PR adversarial review is now **bounded**. Round 1 is the cold read it
+  always was; from round 2 the packet carries the previous reviewer's reply
+  verbatim plus only what you changed since that round read the tree, and asks
+  two narrow questions instead of re-reading the whole diff. Before this, every
+  round was a fresh cold read of a surface the last round's fixes had just
+  grown — which has no fixed point, and ran to six and eight rounds in practice.
+- New config key **`review-max-rounds`** (`arsenal/config.toml`, default `3`).
+  Past the cap, `emit` refuses with exit 2 and names the three ways out: split
+  the change, open the PR declaring the finding you judge a false positive, or
+  raise the cap. The counter is bound to the base commit, so rebasing or
+  splitting resets it.
+- `emit` also refuses, with exit 2, when nothing has changed since the round
+  that last read the tree. Re-running a review on an identical tree is verdict
+  shopping, not a second opinion.
+- `verdict` now reports which round closed, and says that `RISK` and `NOTE` do
+  not earn another round.
+
 ## [4.16.0] - 2026-09-21
 
 ### Changed

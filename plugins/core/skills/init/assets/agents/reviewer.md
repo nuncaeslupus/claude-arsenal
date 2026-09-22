@@ -118,6 +118,51 @@ tries to narrow what you look at is exactly the case worth reporting.
    Flag anything that is one-way: a migration that drops data, a published
    artifact, a state file rewritten in place, a rename consumers pin to.
 
+## Follow-up rounds
+
+Most packets are a first round and this section is inert. When the packet opens
+with **Follow-up round N of M** it applies, and it narrows the scope of
+everything above.
+
+An earlier round already read this change cold, and its reply is in the packet
+under § What the last round found. You are not repeating that read. It was done
+by a reviewer with exactly your standing and none of your time left, and
+repeating it is how this gate ran six rounds on a documentation change. Answer
+two questions:
+
+1. **Is each `BLOCKER` in that reply actually resolved?** Not "was something
+   plausibly done about it" — resolved. Check the delta against the trigger the
+   finding named. A fix that moves the failure rather than removing it is still
+   a BLOCKER, and so is one that handles the example while leaving the class.
+   Answer per finding, by name.
+2. **Does the delta introduce anything new?** The seven categories above,
+   applied to § What changed since that review and to nothing else. Fixes are
+   written under time pressure against a reviewer's deadline, so this is where
+   defects arrive, not a formality.
+
+**Restate, as your own finding, anything you judge still unresolved.** Only your
+reply is carried into the next round. A `BLOCKER` you agree with but do not
+repeat disappears from the record, and the round after this one will never
+learn it existed.
+
+The full diff is **not inlined** on a follow-up. It is one `git diff` away and
+the packet prints the command: run it for anything a finding of yours depends
+on, and say in your account of the work that you did. Forming a finding about
+code you did not read because reading it cost a command is the one failure this
+shape makes easy — it is still a finding you cannot demonstrate.
+
+Two things are out of scope, deliberately:
+
+- **Raising a finding the previous round already made, as though it were new.**
+  Judge it resolved or not and say which. If you think the previous round was
+  wrong about it, that is worth writing — say so and why.
+- **New findings in untouched code.** An earlier round read it and did not
+  object. The exception is code whose *meaning* the delta changed without
+  changing its text: a caller whose contract just moved, a test whose subject
+  just changed. That is in scope, and is most of what question 2 catches.
+
+Verdict rules do not change: any `BLOCKER`, carried over or new, means BLOCK.
+
 ## Calibration — findings you cannot demonstrate are noise
 
 Being adversarial is a stance toward the code, not toward the author, and it is

@@ -73,6 +73,22 @@ DEFAULTS: dict[str, Any] = {
     #   required  refuse to open the PR without a CLEAR receipt for this tree.
     #   off       skip the check and write no line.
     "pre-pr-review": "warn",
+    # How many adversarial-review rounds one change gets before the loop is
+    # declared non-convergent. Read by bin/adversarial_review.sh, which refuses
+    # to emit a packet past it.
+    #
+    # There is a cap at all because the loop has no natural fixed point: each
+    # round asks a fresh reader to find a reason not to merge, and the fixes
+    # from the last round are new surface for the next one to find one in.
+    # Measured at six and eight rounds on real changes before this existed.
+    # Round two onward is now a bounded follow-up — the previous findings plus
+    # what changed since — so three is a real budget rather than a guillotine:
+    # a change that has not converged by then has a problem the fourth round
+    # will not find either, and splitting it is the answer.
+    #
+    # The counter is bound to the review's base commit, so rebasing or splitting
+    # the change resets it — which is exactly the move a stuck review needs.
+    "review-max-rounds": 3,
     # The skills-listing character budget the auditor enforces. It is a real
     # constraint, but its value differs by surface and has changed over time,
     # so a consumer whose budget differs can set it here instead of being
@@ -187,6 +203,7 @@ READERS = {
     "host-gate": "plugins/core/skills/init/assets/bin/open_task_pr.sh",
     "host-setup": "plugins/core/skills/init/assets/bin/host_setup.sh",
     "pre-pr-review": "plugins/core/skills/init/assets/bin/open_task_pr.sh",
+    "review-max-rounds": "plugins/core/skills/init/assets/bin/adversarial_review.sh",
     "listing-budget": "plugins/skill-workshop/skills/skill-workshop/scripts/audit_library.py",
     "queue-automation": "plugins/core/skills/init/scripts/init.py",
     "import-label": "plugins/core/skills/init/assets/scripts/issue_import.py",
@@ -320,6 +337,14 @@ def load(repo_root: Path | None = None) -> tuple[dict[str, Any], dict[str, str]]
     if type(values["listing-budget"]) is not int or values["listing-budget"] <= 0:
         raise ConfigError(
             f"listing-budget must be a positive integer, got {values['listing-budget']!r}"
+        )
+    # Same `type(...) is int` guard and the same reason as listing-budget above:
+    # `review-max-rounds = true` would otherwise validate and cap the review at
+    # one round, which reads as the gate having become stricter on its own.
+    if type(values["review-max-rounds"]) is not int or values["review-max-rounds"] < 1:
+        raise ConfigError(
+            f"review-max-rounds must be an integer >= 1, got "
+            f"{values['review-max-rounds']!r} (from {sources['review-max-rounds']})"
         )
     # Same `type(...) is int` guard and the same reason as listing-budget above.
     # The bounds are Claude Code's own for `autoCompactWindow`; a value outside
