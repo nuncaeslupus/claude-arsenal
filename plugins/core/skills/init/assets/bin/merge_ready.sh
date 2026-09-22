@@ -30,6 +30,10 @@
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Git Bash: a native python.exe cannot open a `/c/...` path, and MSYS rewrites
+# one it is handed into a wrong `C:\c\...`. Resolve to `C:/...` once, here, so
+# every path built from SCRIPT_DIR below works for both shells. Identity elsewhere.
+command -v cygpath >/dev/null 2>&1 && SCRIPT_DIR="$(cygpath -m "${SCRIPT_DIR}")"
 CHANNEL="${SCRIPT_DIR}/github_channel.sh"
 PR_AUDIT="${SCRIPT_DIR}/../scripts/pr_audit.py"
 

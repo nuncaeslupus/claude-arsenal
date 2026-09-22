@@ -140,7 +140,11 @@ if [[ -n "${BODY_FILE}" && ! -f "${BODY_FILE}" ]]; then
     echo "open_task_pr: --body-file ${BODY_FILE} does not exist" >&2; exit 1
 fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd 2>/dev/null || echo .)"
-BUNDLE_SCRIPTS="$(cd "${SCRIPT_DIR}/../scripts" && pwd 2>/dev/null || echo "${SCRIPT_DIR}/../scripts")"
+# Git Bash: a native python.exe cannot open a `/c/...` path, and MSYS rewrites
+# one it is handed into a wrong `C:\c\...`. Resolve to `C:/...` once, here, so
+# every path built from SCRIPT_DIR below works for both shells. Identity elsewhere.
+command -v cygpath >/dev/null 2>&1 && SCRIPT_DIR="$(cygpath -m "${SCRIPT_DIR}")"
+BUNDLE_SCRIPTS="${SCRIPT_DIR}/../scripts"
 ARSENAL_HOME="${ARSENAL_HOME:-arsenal}"
 
 # Every path this script handles is repo-root-relative by contract: ARSENAL_HOME,

@@ -140,7 +140,11 @@ WORKING_PAYLOAD=""
 # A declared evidence gate can never pass vacuously (CA-12): a missing evidence
 # file or a measurement that violates the threshold fails the gate right here,
 # before the prose/bash-block path can let it through.
-GATE_EVIDENCE_PY="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../scripts/gate_evidence.py"
+GATE_EVIDENCE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Git Bash: a native python.exe cannot open a `/c/...` path. Resolve to `C:/...`
+# here; identity on every other platform.
+command -v cygpath >/dev/null 2>&1 && GATE_EVIDENCE_DIR="$(cygpath -m "${GATE_EVIDENCE_DIR}")"
+GATE_EVIDENCE_PY="${GATE_EVIDENCE_DIR}/../scripts/gate_evidence.py"
 if [[ -f "${GATE_EVIDENCE_PY}" ]]; then
     # `|| _ev=$?`, not a bare call followed by `$?`: under `set -e` a non-zero
     # exit from a simple command ends the script right there, so every line

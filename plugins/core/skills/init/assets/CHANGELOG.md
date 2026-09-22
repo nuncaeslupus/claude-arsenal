@@ -18,6 +18,33 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [4.19.0] - 2026-09-22
+
+Windows + Git Bash works. Five separate faults made the merge step unreachable
+there and two of the three session-start steps crash; all five are fixed.
+
+- **A legacy console codepage no longer kills a script.** Every shipped Python
+  entry point now reconfigures stdout/stderr to UTF-8 with `errors="replace"`.
+  On a cp1252 console (the default on a Spanish Windows) `→` had no encoding, so
+  `init.py --silent` died on the one run that mattered — the upgrade — and
+  `--list-sections` died every time. A progress line now degrades to `?`.
+- **`github_channel.sh --api` works under Git Bash.** The `gh` endpoint is passed
+  without its leading slash, which MSYS was rewriting into a Windows path. The
+  curl channel is unchanged.
+- **Bundle scripts hand `python3` a path it can open.** Each resolves its own
+  directory through `cygpath -m` when one exists — the identity everywhere else.
+  A python.org interpreter reads `/c/Users/...` as relative to the drive root.
+- **`init.py`'s refresh report no longer counts line endings as changes.** With
+  `core.autocrlf=true` a byte comparison called every vendored file stale; one
+  update reported 95 files refreshed of which 38 had no content change at all.
+- **A vendored tree now records where it came from.** `.arsenal-manifest` carries
+  a `# source: <url>` line, and `check_update.sh`'s INERT report prints that URL
+  instead of `<marketplace-url>`. A non-subtree install has no `arsenal` remote
+  by definition, and nothing else in the tree named upstream.
+- **The skill-workshop gate stops refusing read-only tree scans.** `os.walk`,
+  `os.listdir`, `os.scandir` and `glob.glob` over a skill folder join the
+  `Path.rglob` forms already allowed. Writes are still refused.
+
 ## [4.18.0] - 2026-09-22
 
 - `adversarial_review.sh emit` takes a new **`--checks <file>`** option. Point it
