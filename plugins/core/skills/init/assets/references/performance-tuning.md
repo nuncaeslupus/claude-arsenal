@@ -13,6 +13,7 @@ which one applies. `bin/_timing.sh` records that number, this file routes it.
 - [Get the numbers first](#get-the-numbers-first) — the report, and what it is reading
 - [Read the table in this order](#read-the-table-in-this-order) — total, then p95, then n
 - [The shapes, and where the remedy is written](#the-shapes-and-where-the-remedy-is-written)
+- [Phases: reading an `a:b` row](#phases-reading-an-ab-row) — what is inside a boundary, and recording your own
 - [What these numbers cannot tell you](#what-these-numbers-cannot-tell-you) — and how to get the rest
 
 ---
@@ -76,24 +77,57 @@ look at rather than a distribution to reason about.
 | `review rounds per change` median > 1 | The round count, not the round cost, is the bill | `references/pre-pr-review.md` § Rounds, and § The cap, and the three ways out |
 | `merge-ready` n very high | The loop is waiting on CI, not on anything local | `references/github-automation.md` § Merge policy |
 | `task-pr` total far exceeds its parts | The time is between the boundaries, not inside them | § What these numbers cannot tell you, below |
+| One `task-pr:<phase>` row is most of the `task-pr` row | That phase is the bill, and the rest of the loop is noise beside it | The section that owns the phase — `host-gate` and `task-gate` → `references/evidence-gates.md`; `review` → `references/pre-pr-review.md` |
+| A gate step sweeps many modules, one process each | Interpreter startup is being paid once per module, and parallelism cannot reach it | `references/evidence-gates.md` § One process per module pays interpreter startup per module |
+| `review-round` p50 high and the reviewer re-runs the whole suite per mutation | The suite's scope during the mutate-restore cycle, not the round count | `references/pre-pr-review.md` § Scope the suite while mutating |
 
 A row with a non-zero `fail` count is worth reading before any of this. A gate
 that fails fast and gets re-run is cheap per call and expensive per change, and
 the timing table shows it as a fast step rather than as the problem it is.
 
+## Phases: reading an `a:b` row
+
+A row named `a:b` is a **phase inside** `a`, not time on top of it. The phases
+under a parent are contiguous and sum to it, so `task-pr` 13m26s with a
+`task-pr:host-gate` of 13m25s is one thirteen-minute wait whose cause is now
+named — not two.
+
+`open_task_pr.sh` reports ten: `review`, `task-gate`, `fetch`, `issue`,
+`branch`, `archive`, `host-gate`, `commit`, `push`, `pr`. Whichever one was
+running when a refused run exited carries its non-zero exit code, so the `fail`
+column says *where* the loop stops, not only that it did.
+
+**A host can record its own sub-targets the same way.** `host-gate` is the
+host's command, and this bundle cannot know it is four make targets — so a
+Makefile that wants the breakdown writes it, through the same entry point and
+into the same file:
+
+```bash
+source claude-arsenal/bin/_timing.sh
+s=$(date +%s); make test; rc=$?; e=$(date +%s)
+arsenal_timing_record host-gate:test "" "$(( (e - s) * 1000 ))" "${rc}"
+```
+
+`host-gate:test` then appears in the table beside everything else. That is the
+difference between a report that says the gate is slow and one that says which
+target inside it is — and it is the part nobody should have to hand-instrument
+twice.
+
 ## What these numbers cannot tell you
 
-**There is no per-suite breakdown.** A gate block is one command from the
-bundle's side: `gate_run.sh` measures the block, not the suites inside it, and
-it cannot see into a `make test` that runs three of them. If the table says the
-gate is the bottleneck and you need to know which suite, time them inside the
-gate block itself — the same instrumentation the reports that motivated this
-were built from — and the answer is one run away.
+**There is no per-suite breakdown, unless you record one.** A gate block is one
+command from the bundle's side: `gate_run.sh` measures the block, not the suites
+inside it, and it cannot see into a `make test` that runs three of them. If the
+table says the gate is the bottleneck and you need to know which suite, record
+them yourself — § Phases above is the entry point, and the answer is one run
+away.
 
 **Time outside a bundle script is unmeasured.** Reading files, writing the
 change, thinking: none of it runs through a boundary arsenal owns, so none of it
 appears here. A `task-pr` row much larger than the `gate` and `review-round`
 rows under the same task id is that gap, and it is not evidence of a slow gate.
+The phases narrow it to what happens inside one script; they say nothing about
+the session that ran before it.
 
 **Nothing is comparable across repos.** The file is local, per-repo, and stays
 that way. A p95 here means something about this machine and this suite, and

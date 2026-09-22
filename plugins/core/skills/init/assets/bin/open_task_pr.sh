@@ -180,8 +180,17 @@ cd "${_repo_root}" || {
 # after the root is resolved, because everything before it is argument parsing.
 command -v arsenal_timing_begin >/dev/null 2>&1 && {
     arsenal_timing_begin task-pr "${TASK_ID}" "${TASK_ID}"
-    trap 'arsenal_timing_end $?' EXIT
+    trap '_rc=$?; arsenal_timing_phase "" "${_rc}"; arsenal_timing_end "${_rc}"' EXIT
 }
+# One `task-pr` row said the loop cost 13m26s and could not say which of the
+# eight steps below spent it — 13m25s of it sat in the parent with no internal
+# structure, and the only resolved boundary was the 2.2s task gate. So each step
+# closes the one before it. `_phase` is a no-op when the helper is not sourced,
+# and never fails: `arsenal_timing_phase` returns 0 on every path, but an
+# unsourced `command -v` returning 1 as this function's last status would make
+# the call site's exit code the metric's, not the step's.
+_phase() { command -v arsenal_timing_phase >/dev/null 2>&1 && arsenal_timing_phase "$@"; return 0; }
+_phase review
 
 # ---------------------------------------------------------------------------
 # Gates, before anything touches git.
@@ -349,6 +358,7 @@ fi
 #    or reuses the host gate, which is written for the post-archive tree — is
 #    unsatisfiable here by construction, and the failure reads as the task's
 #    fault rather than the ordering's. See references/evidence-gates.md.
+_phase task-gate
 if [[ -f "${SCRIPT_DIR}/gate_run.sh" ]]; then
     # Gate chatter goes to stderr: this script's stdout is a contract that
     # callers parse (`branch:…`, the PR URL), and a `gate: passed` line in it
@@ -438,6 +448,7 @@ slug="$(export LC_ALL=C; printf '%s' "${TITLE}" | tr -d '\n\r' \
 [[ -z "${slug}" ]] && slug="task"
 BRANCH="arsenal/${TASK_ID}-${slug}"
 
+_phase fetch
 # Resolve the host default branch from the remote's published HEAD symref, then
 # fetch it so we branch off its real tip. NEVER fall back to the current HEAD:
 # the worker may run in the orchestrator's tree, and branching off it would drag the entire
@@ -578,6 +589,7 @@ _resolve_issue() {
     return 1
 }
 
+_phase issue
 ISSUE=""
 if ! ISSUE="$(_resolve_issue)" || [[ -z "${ISSUE}" ]]; then
     if [[ "${ARSENAL_ALLOW_UNLINKED_PR:-}" == "1" ]]; then
@@ -603,6 +615,7 @@ fi
 # on a refusal is that nothing was committed and the tree is as it was. Leaving
 # the caller on a branch they did not ask to be on is the same class of stray
 # side effect the archive rollback exists to prevent.
+_phase branch
 _ENTRY_BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
 current="${_ENTRY_BRANCH}"
 if [[ "${current}" != "${BRANCH}" ]]; then
@@ -751,6 +764,7 @@ PY
     fi
     echo "open_task_pr: archived ${live} -> ${dest} (status: merged)" >&2
 }
+_phase archive
 if ! _archive_task_file; then
     # The undo belongs here, not at each `return 1` inside the function. Two of
     # those fire after `git mv` has already succeeded — the stamp, and the
@@ -785,6 +799,7 @@ fi
 # and for a task worked from a payload elsewhere, and gating on it would leave
 # those two cases running no host gate at all — a skip, in the one check the
 # script says has deliberately no way to skip it.
+_phase host-gate
 if [[ -n "${host_gate}" ]]; then
     echo "open_task_pr: running host gate over the tree being committed: ${host_gate}" >&2
     if ! bash -c "${host_gate}" >&2; then
@@ -820,6 +835,7 @@ fi
 # file moved into `tasks/_history/` with `status: merged` — which the selector
 # reads as finished work — and `_unarchive_task_file` had nothing to restore
 # from. That is exactly what the rollback above exists to prevent.
+_phase commit
 git add -A
 
 # `Closes #<issue>` goes in the commit message as well as the PR body. The body
@@ -860,6 +876,7 @@ fi
 # The commit holds the archive now, so the backup has nothing left to protect.
 [[ -n "${_ARCHIVED_BACKUP}" ]] && rm -f "${_ARCHIVED_BACKUP}"
 
+_phase push
 # Push with exponential backoff (network-transient retry only).
 delay=1
 pushed=0
@@ -873,6 +890,7 @@ if [[ "${pushed}" -ne 1 ]]; then
     exit 1
 fi
 
+_phase pr
 # The PR body. `Closes #<issue>` is the first line of the summary rather than a
 # trailer, because a squash merge that truncates the body still keeps the top.
 closes_line=""

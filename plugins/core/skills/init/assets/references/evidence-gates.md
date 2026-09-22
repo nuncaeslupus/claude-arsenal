@@ -262,6 +262,22 @@ speed with fidelity. Say which one you chose.
 The diagnostic is one measurement: raise the worker count and re-time. Flat
 means spawn-bound, and every further minute spent on parallelism is wasted.
 
+### One process per module pays interpreter startup per module
+
+An evidence sweep written as a loop over `python -m <module>` — one invocation
+per module, which is the obvious shape and the one a Makefile falls into — spends
+most of its wall clock starting interpreters. Measured over five modules:
+**6.22s** as five separate `python -m` invocations against **2.16s** importing and
+running the same five in one process. About two thirds of the slice was startup,
+and it scales with the module count, so a repo sweeping a hundred modules pays it
+a hundred times.
+
+The lever is the **process count**, not the module. Parallelism does not reach it
+either: there is still one interpreter per module, and the diagnostic in the
+section above — raise the worker count, re-time, see it stay flat — says so.
+Collapse the sweep into a single process that imports each module and calls it,
+and keep the per-module invocation as the way to run one by hand.
+
 ### Deliberately slow work is a cost, not a defect
 
 Key derivation, password hashing and envelope encryption are slow **on purpose**,
