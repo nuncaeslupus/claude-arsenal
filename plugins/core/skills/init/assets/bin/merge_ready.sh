@@ -34,6 +34,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # one it is handed into a wrong `C:\c\...`. Resolve to `C:/...` once, here, so
 # every path built from SCRIPT_DIR below works for both shells. Identity elsewhere.
 command -v cygpath >/dev/null 2>&1 && SCRIPT_DIR="$(cygpath -m "${SCRIPT_DIR}")"
+# Boundary timing. Sourced, not run: it only defines functions, and does
+# nothing at all under ARSENAL_METRICS=off. See bin/_timing.sh.
+# shellcheck source=/dev/null
+[[ -f "${SCRIPT_DIR}/_timing.sh" ]] && source "${SCRIPT_DIR}/_timing.sh"
 CHANNEL="${SCRIPT_DIR}/github_channel.sh"
 PR_AUDIT="${SCRIPT_DIR}/../scripts/pr_audit.py"
 
@@ -54,6 +58,13 @@ _fail() { echo "error: $1" >&2; exit 2; }
 [[ -n "${PR}" ]] || { echo "usage: merge_ready.sh <pr> [--body] [--json]" >&2; exit 2; }
 [[ "${PR}" =~ ^[0-9]+$ ]] || _fail "pr must be a number, got '${PR}'"
 [[ -f "${PR_AUDIT}" ]] || _fail "pr_audit.py not found at ${PR_AUDIT}"
+
+# One call is one check of the gate, not the whole wait — the loop that polls
+# this is what blocks, and the report divides by PR to show that.
+command -v arsenal_timing_begin >/dev/null 2>&1 && {
+    arsenal_timing_begin merge-ready "pr-${PR}"
+    trap 'arsenal_timing_end $?' EXIT
+}
 
 slug="$(bash "${CHANNEL}" --slug)" || _fail "cannot determine owner/repo from the git remote"
 

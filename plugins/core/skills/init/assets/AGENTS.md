@@ -1,6 +1,6 @@
 # Claude Arsenal
 
-<!-- claude-arsenal v4.20.0 — imported via @claude-arsenal/AGENTS.md -->
+<!-- claude-arsenal v4.21.0 — imported via @claude-arsenal/AGENTS.md -->
 
 This file is imported by the host repo's `CLAUDE.md` via the session-protocol block
 that `/init` injects, so it sits in context on **every turn of every session**. It
@@ -231,6 +231,7 @@ Each is a plain file to open, not an import. Nothing below is in context until y
 | `references/github-automation.md` | Completion: what `merge-policy` requires, the five transitions GitHub runs, opting out |
 | `references/quota-governance.md` | The loop stopped before dispatch: quota windows, fail-open, the round cap |
 | `references/pre-pr-review.md` | About to open a PR: the cold-start adversarial review, its verdicts, `pre-pr-review` modes |
+| `references/performance-tuning.md` | The loop feels slow: reading the recorded timings, and which shape routes to which remedy |
 | `references/state-layout.md` | A lookup: where a file lives, what a task state means |
 | `references/annotatable-reader.md` | Handing over a spec or plan: which documents need a reader, and why the work that consumes them waits for the annotations |
 | `references/capability-map.md` | A task looks like something a skill would do: what the map says, when to volunteer an uninstalled section, and when not to |
