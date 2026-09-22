@@ -75,7 +75,7 @@ look at rather than a distribution to reason about.
 | `review-round` p50 high | Each round is re-running checks the session already ran | `references/pre-pr-review.md` § Making a round cheaper |
 | `review rounds per change` median > 1 | The round count, not the round cost, is the bill | `references/pre-pr-review.md` § Rounds, and § The cap, and the three ways out |
 | `merge-ready` n very high | The loop is waiting on CI, not on anything local | `references/github-automation.md` § Merge policy |
-| `task-pr` total far exceeds its parts | The time is between the boundaries, not inside them — see below |
+| `task-pr` total far exceeds its parts | The time is between the boundaries, not inside them | § What these numbers cannot tell you, below |
 
 A row with a non-zero `fail` count is worth reading before any of this. A gate
 that fails fast and gets re-run is cheap per call and expensive per change, and

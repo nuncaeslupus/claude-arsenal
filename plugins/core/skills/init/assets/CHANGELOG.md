@@ -18,6 +18,17 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [4.21.2] - 2026-09-22
+
+- `arsenal_timings.py` and `references/performance-tuning.md` disagreed about
+  how to read the timing table: the script's header led with p95, the reference
+  led with total. Total is right — a 90-second step that runs once a day is not
+  the bottleneck a 9-second one running 200 times is — and both now say so in
+  the same order.
+- The last row of the shapes table in `references/performance-tuning.md` was
+  missing its `Read` cell, so the one shape that routes to a different section
+  rendered as a row with nowhere to go.
+
 ## [4.21.1] - 2026-09-22
 
 - `/init` now gitignores `.claude/skills/*/findings.md`. That file is
