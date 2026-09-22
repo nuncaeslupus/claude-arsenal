@@ -4,6 +4,17 @@ Load this when a change is finished and a PR is about to be opened — from
 `execution` before its Create-PR step, from `github` before `gh pr create`, from
 `ship` at its adversarial gate, or from a worker before `open_task_pr.sh`.
 
+## Contents
+
+- [What this is for](#what-this-is-for)
+- [The protocol](#the-protocol) — emit, spawn a cold reviewer, record the verdict
+- [Rounds](#rounds) — what round 2 asks, and the cap that ends the loop
+- [Handling BLOCK](#handling-block)
+- [Where it binds](#where-it-binds) — which paths enforce this and which only ask
+- [In a repo without the bundle](#in-a-repo-without-the-bundle)
+
+---
+
 ## What this is for
 
 Every other check before a PR is run by the session that wrote the code. Lint
@@ -99,13 +110,79 @@ Review edits to the rubric with that in mind.
 | Exit | Meaning | Do |
 |---|---|---|
 | 0 | CLEAR | Open the PR. |
-| 1 | BLOCK | Show the findings **verbatim**, fix them, then start again at step 1. |
-| 2 | No usable verdict — no `VERDICT:` line, no reply file at all, or an unreadable tree | Not a pass, and **not a BLOCK**. Ask the reviewer again. |
+| 1 | BLOCK | Show the findings **verbatim**, fix them, then re-emit — the next round is a follow-up, not a second cold read. See § Rounds. |
+| 2 | No usable verdict — no `VERDICT:` line, no reply file at all, an unreadable tree; or `emit` refusing a round (nothing changed since the last one, or the round cap is spent) | Not a pass, and **not a BLOCK**. For a missing verdict, ask the reviewer again; for a refused round, read what `emit` printed — it says which case it is. |
 | 3 | Stale — the tree moved during the review | Re-emit and review the tree you actually have. |
 
 A second round starts from step 1, not step 2: `emit` retires the previous
 receipt, because a CLEAR for the tree before the fix says nothing about the tree
-after it.
+after it. What it emits is not the same packet again — see below.
+
+## Rounds
+
+A BLOCK is answered by fixing and re-emitting, and that is where this gate used
+to lose its afternoon. Every round was a fresh cold read of a diff that had
+just grown by the size of the last round's fixes, asked of a reviewer with no
+memory of what the last one already cleared. There is no fixed point in that:
+new eyes on a bigger surface find new things, indefinitely. Measured at six and
+eight rounds before the shape below existed.
+
+So round 1 is the cold read this page describes, and round 2 onward is a
+different, bounded question.
+
+### What a follow-up packet contains
+
+`emit` counts the round itself; nothing extra to pass. From round 2 the packet
+carries, in place of the full diff:
+
+- **the previous round's reply, verbatim** — it is another cold reader's output,
+  not your account of the change, so it does not transplant the author blind
+  spot this gate exists to escape;
+- **the delta** — `git diff-tree -p` between the tree the previous round read
+  and the tree now, and nothing else;
+- **a narrowed brief** — is each prior `BLOCKER` actually resolved, and does the
+  delta introduce anything new. `agents/reviewer.md` § Follow-up rounds has it.
+
+The full diff is deliberately **not** inlined; the packet prints the `git diff`
+commands to pull any of it. A follow-up that re-reads everything costs what
+round 1 cost, which is the loop.
+
+A round is counted when `verdict` records it, not when `emit` writes the packet.
+A reviewer that never answers, or answers with no `VERDICT:` line, costs you
+nothing but the time.
+
+### Level discipline
+
+`RISK` and `NOTE` do not earn another round. They are, by the reviewer's own
+rubric, things that should not block. Fix what is cheap and say the rest in the
+PR body — a round spent on a `NOTE` costs the same as a round spent on a
+`BLOCKER` and buys a great deal less.
+
+### The cap, and the three ways out
+
+`review-max-rounds` in `arsenal/config.toml` (default **3**) bounds it. Past
+that, `emit` refuses with exit 2.
+
+Read the refusal as a finding about the *change*, not about the reviewer:
+three bounded rounds that did not converge means the change is carrying more
+disagreement than one PR can settle. There are three honest exits, and
+re-running is not among them:
+
+| Exit | What it looks like |
+|---|---|
+| **split** | Drop the disputed part, open the rest, file the remainder as its own task. Usually the right one. |
+| **override** | Open the PR, naming in its body which finding you judge a false positive, what you checked, and why. |
+| **raise** | Set `review-max-rounds` higher, if this change genuinely needs it. |
+
+The counter is bound to the base commit, so rebasing or splitting resets it on
+its own. `rm -rf tmp/arsenal-review` clears it outright — which is available to
+anyone, and is the point: this is a budget that makes the cost visible, not a
+lock.
+
+`emit` also refuses, with the same exit 2, when **nothing has changed** since
+the round that last read the tree. Re-running a review on an identical tree is
+shopping for a verdict rather than getting a second opinion, and the two differ
+only in whether the reviewer happens to be feeling generous.
 
 Exit **1 means a reviewer said BLOCK, and nothing else.** Every other way the
 step fails to produce a verdict exits 2. The distinction matters because `ship`
@@ -167,6 +244,9 @@ workflow and do not read this key:
 | `required` | No clearing verdict for the author's tree, no task PR. |
 | `off` | Not checked, no line written in the body. |
 
+`review-max-rounds` is read on every path, not only this one — it belongs to
+`emit`, which every caller runs. See § Rounds.
+
 Note the interaction with the worker protocol: `worker.md` tells a worker that
 cannot spawn a subagent to skip the review and report it, rather than reviewing
 its own work. Under `warn` that skip is recorded in the PR body and the queue
@@ -212,4 +292,7 @@ with the rubric from this bundle's `agents/reviewer.md` — the short form being
 with the concrete trigger; report no style; end with `VERDICT: BLOCK — reason`
 or `VERDICT: CLEAR — reason`* — and apply the same decision table above. The
 digest-freshness guarantee is what you lose, so re-run the review after any
-further edit.
+further edit. The round bookkeeping goes with it: nothing counts rounds or
+builds the follow-up packet for you, so § Rounds becomes a discipline rather
+than a mechanism — keep the previous reply, diff against the tree it read, and
+stop at three.
