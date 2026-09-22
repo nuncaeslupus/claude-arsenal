@@ -18,6 +18,32 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [4.20.0] - 2026-09-22
+
+- **New config key `review-bots`.** Which review bots the PR review loop waits
+  on is now set in `arsenal/config.toml` instead of being three vendor names
+  hardcoded in `query_pr_state.py`:
+
+  ```toml
+  review-bots = ["reviewer[bot]"]
+  ```
+
+  The three that shipped before (`gemini-code-assist[bot]`,
+  `coderabbitai[bot]`, `claude[bot]`) remain the default, so nothing changes
+  for a repo already running one of them. `--watch-bots` still overrides per
+  call.
+
+- **A repo with no review bot should set `review-bots = []`.** Before this,
+  the loop waited for a signal that was never coming and sat at `waiting`
+  until someone read the JSON and worked out why. An empty list is the same
+  CI-only mode as `--watch-bots ""`: green CI plus the quiet window reaches
+  `ready_to_merge`, and nothing ever reports `bot_commented`. The `github`
+  skill's `references/pr-review-loop.md` says what that trades away.
+
+- The `har` skill's `--ua-suffix` worked example now uses a `yourproject/0.1`
+  placeholder instead of naming a specific downstream project — copying it no
+  longer makes your crawler identify itself as somebody else's.
+
 ## [4.19.1] - 2026-09-22
 
 - `references/github-automation.md` now names a fourth reason CI reports

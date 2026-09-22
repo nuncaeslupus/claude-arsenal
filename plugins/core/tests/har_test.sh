@@ -314,8 +314,8 @@ ua="$(capture default)"
 [ "$ua" = "StubBrowser/1.0 claude-arsenal-har/1.0" ] \
     || fail "the default suffix is no longer appended to the real UA: '$ua'"
 
-ua="$(capture mine --ua-suffix " integral-job-search/0.1")"
-[ "$ua" = "StubBrowser/1.0 integral-job-search/0.1" ] \
+ua="$(capture mine --ua-suffix " yourproject/0.1")"
+[ "$ua" = "StubBrowser/1.0 yourproject/0.1" ] \
     || fail "--ua-suffix did not reach the recording context: '$ua'"
 
 # An empty suffix is an answer, not a missing one. `default=` plus a falsy
