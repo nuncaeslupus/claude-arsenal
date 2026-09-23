@@ -18,6 +18,35 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [4.23.0] - 2026-09-23
+
+- **`open_task_pr.sh <task-id> --preflight` asks whether the run would refuse,
+  without paying for it.** It runs everything the real command does before its
+  expensive step — the review receipt, the task gate, the shared-checkout
+  guard, the issue handle, the archive — then puts the tree back and prints
+  `preflight:ok`. It opens no PR, cuts no branch, writes no commit, and needs
+  no `<title>`. On one measured run that was 305ms of archive plus a 2.2s task
+  gate against a `host-gate` of 13m25s below it, so a refusal that used to
+  arrive thirteen minutes in now arrives in seconds. It cannot tell you the
+  host gate *passes* — running it is the cost being avoided — so it checks only
+  that the gate's first word resolves on this machine, which is the failure a
+  fresh worktree actually hits, and reports that as a note rather than a
+  refusal.
+- **New `preflight-gate` key in `arsenal/config.toml`.** Empty by default. A
+  repo can name its own cheap check, run only under `--preflight` and on the
+  same side of the archive as `host-gate` — which is the only place a gate that
+  measures the repo's own task files can be checked at all. Name something that
+  takes seconds; anything worth minutes belongs in `host-gate`.
+- **A `Ctrl-C` during the host gate no longer strands the task file.** The
+  archive moves the task into `tasks/_history/` stamped `status: merged`, which
+  the selector reads as finished work. Every refusal undid that; a signal took
+  none of those paths, so an interrupt during the longest step in the run left
+  the task out of the queue with nothing merged. `open_task_pr.sh` now restores
+  it on `INT` and `TERM`, on the real path as well as under `--preflight`.
+- **Timing reports record `preflight` as its own event**, not as a short
+  `task-pr`, so runs that stop before the expensive half by design do not pull
+  down the p50 of the runs that open a PR.
+
 ## [4.22.0] - 2026-09-23
 
 - **The timing report now says which part of a task-PR run cost the time.** A

@@ -52,6 +52,20 @@ DEFAULTS: dict[str, Any] = {
     # named `make lint` as its example, so a repo whose real gate is five
     # commands had four of them enforced by nobody.
     "host-gate": "",
+    # The cheap counterpart, run by `open_task_pr.sh <task> --preflight` over
+    # the archived tree and nowhere else. Empty by default: the honest default
+    # is that this bundle cannot see inside `make test`, so preflight without
+    # it checks only that the gates RESOLVE.
+    #
+    # It exists for the one failure resolution cannot reach. The host gate runs
+    # after the task file is archived into `tasks/_history/`, so a gate that
+    # measures the repo's own files reads a different tree than the one the
+    # worker tested — and the worker learns that from a refusal at the end of
+    # the run (#220 is that failure, with the archive as the difference).
+    # Declare the slice of the gate that touches those files here and preflight
+    # finds it in seconds.
+    #   preflight-gate = "make verify-gates"
+    "preflight-gate": "",
     # Shell command run by bin/host_setup.sh in a fresh worktree, before the
     # first gate. Empty by default. A worktree carries tracked files and nothing
     # an install produces, so the first gate in one fails on a missing tool
@@ -216,6 +230,7 @@ CONFIG_RELPATH = "config.toml"
 READERS = {
     "merge-policy": "plugins/core/skills/init/assets/bin/merge_ready.sh",
     "host-gate": "plugins/core/skills/init/assets/bin/open_task_pr.sh",
+    "preflight-gate": "plugins/core/skills/init/assets/bin/open_task_pr.sh",
     "host-setup": "plugins/core/skills/init/assets/bin/host_setup.sh",
     "pre-pr-review": "plugins/core/skills/init/assets/bin/open_task_pr.sh",
     "review-max-rounds": "plugins/core/skills/init/assets/bin/adversarial_review.sh",

@@ -266,6 +266,7 @@ disappears the next time that skill is refreshed.
 ```toml
 merge-policy    = "after-ci"   # always | after-review | after-ci | after-ci-and-review | never
 host-gate       = ""           # shell command; non-zero means no task PR is opened
+preflight-gate  = ""           # shell command; the cheap check `--preflight` runs
 host-setup      = ""           # shell command; installs deps in a fresh worktree
 pre-pr-review   = "warn"       # warn | required | off — the pre-PR adversarial review
 test-discipline = "test-first" # or test-after
@@ -315,6 +316,27 @@ failures invisible in a diff.
 
 There is no way to skip it. An escape hatch would be reached for precisely the
 situation the refusal exists for — a red repo with a PR to open.
+
+### Asking first
+
+`open_task_pr.sh <task-id> --preflight` runs everything the real command does
+*before* the host gate — the task gate, the issue handle, the archive — puts the
+tree back, and prints `preflight:ok`. It opens no PR, cuts no branch, needs no
+title. It is a question, not a step.
+
+That is the answer to the slow failure above without an escape hatch: the same
+refusals, seconds instead of minutes, and nothing to clean up afterwards. It
+cannot tell you the host gate *passes* — running it is the cost being avoided —
+so it checks only that the gate's first word resolves on this machine, which is
+the failure that actually happens in a fresh worktree, and reports that as a
+note rather than a refusal.
+
+`preflight-gate` is the repo's own cheap answer, run only under `--preflight`
+and on the same side of the archive as `host-gate`. Name something that takes
+seconds and depends on the archived tree — `make verify-gates`, a board
+consistency check — because that is the class of failure resolution alone cannot
+see. Anything worth minutes belongs in `host-gate`, where the real run pays for
+it once.
 
 ### The setup step
 

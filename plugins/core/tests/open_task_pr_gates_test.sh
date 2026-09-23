@@ -433,4 +433,110 @@ else
     echo "PASS: every millisecond of a task-pr run is inside a named phase"
 fi
 
+# --- 11: --preflight answers the question and changes nothing ---------------
+#     The whole premise is that a caller can ask whether the run would get past
+#     its gates without paying for the expensive half. That is only true if the
+#     answer costs nothing to undo: a preflight that leaves a branch, a commit,
+#     or a moved task file behind is a step, and the caller has to clean up
+#     after a question (#459).
+git checkout -q main 2>/dev/null || true
+write_task t-pre "true"
+printf 'host-gate = "make lint"\n' > arsenal/config.toml
+git add -A && git commit -q -m "preflight fixture"
+git update-ref refs/remotes/origin/main HEAD
+touch work.txt
+before_status="$(git status --porcelain)"
+before_index="$(git ls-files -s)"
+before_branches="$(git for-each-ref --format='%(refname)' refs/heads)"
+before_head="$(git rev-parse HEAD)"
+rm -f tmp/arsenal-metrics/metrics.tsv
+out=$(ARSENAL_TASK_ISSUE=61 ARSENAL_ALLOW_SHARED_ADD=1 ARSENAL_COAUTHOR="" \
+    bash "${HELPER}" t-pre --preflight 2>/dev/null); rc=$?
+[[ ${rc} -eq 0 ]] || fail "a preflight over a green repo must succeed, got ${rc}"
+[[ "${out}" == "preflight:ok" ]] || fail "preflight's stdout contract is one line: got '${out}'"
+[[ "$(git status --porcelain)" == "${before_status}" ]] \
+    || fail "preflight changed the working tree: $(git status --porcelain)"
+[[ "$(git ls-files -s)" == "${before_index}" ]] || fail "preflight changed the index"
+[[ "$(git for-each-ref --format='%(refname)' refs/heads)" == "${before_branches}" ]] \
+    || fail "preflight cut a branch: $(git for-each-ref --format='%(refname)' refs/heads)"
+[[ "$(git rev-parse HEAD)" == "${before_head}" ]] || fail "preflight committed something"
+[[ -f "arsenal/tasks/t-pre.md" ]] || fail "preflight left the task file archived"
+#     Its own event, not a short `task-pr`. Folded in, every question would drag
+#     the p50 of the runs that actually open a PR down.
+metrics="tmp/arsenal-metrics/metrics.tsv"
+if [[ -s "${metrics}" ]]; then
+    grep -q $'\tpreflight\t' "${metrics}" || fail "the preflight recorded no timing of its own"
+    grep -q $'\ttask-pr\t' "${metrics}" \
+        && fail "the preflight recorded itself as a task-pr, which skews that event's p50"
+fi
+echo "PASS: --preflight reports and leaves the tree exactly as it found it"
+
+# --- 12: a declared preflight-gate runs over the ARCHIVED tree --------------
+#     Resolution alone cannot catch the #220 shape: a host gate that measures
+#     the repo's own files fails only once the archive has moved one. So the
+#     host gets to name a cheap command, and it must run at the same point the
+#     real host gate does — after the archive, not before it.
+printf 'host-gate = "make lint"\npreflight-gate = "test ! -e arsenal/tasks/t-pre.md"\n' \
+    > arsenal/config.toml
+out=$(ARSENAL_TASK_ISSUE=61 ARSENAL_ALLOW_SHARED_ADD=1 ARSENAL_COAUTHOR="" \
+    bash "${HELPER}" t-pre --preflight 2>&1); rc=$?
+[[ ${rc} -eq 0 ]] \
+    || fail "the preflight gate saw the pre-archive tree, so it ran too early: ${out}"
+#     ...and a failing one is a refusal that still puts the tree back.
+printf 'preflight-gate = "exit 5"\n' > arsenal/config.toml
+before_status="$(git status --porcelain)"
+out=$(ARSENAL_TASK_ISSUE=61 ARSENAL_ALLOW_SHARED_ADD=1 ARSENAL_COAUTHOR="" \
+    bash "${HELPER}" t-pre --preflight 2>&1); rc=$?
+[[ ${rc} -ne 0 ]] || fail "a failing preflight gate must not report ok: ${out}"
+grep -q "preflight FAILED" <<<"${out}" || fail "the refusal should name itself: ${out}"
+[[ -f "arsenal/tasks/t-pre.md" ]] \
+    || fail "a failed preflight gate left the task file in _history/"
+[[ "$(git status --porcelain)" == "${before_status}" ]] \
+    || fail "a failed preflight left the tree changed: $(git status --porcelain)"
+echo "PASS: a declared preflight-gate runs post-archive, and failing it still restores"
+
+# --- 13: a signal mid-cycle restores the tree -------------------------------
+#     Archive-and-restore is the risky part, and a preflight that archives and
+#     fails to restore is worse than no preflight. Every refusal path undoes the
+#     archive by hand; a SIGNAL takes none of them, so without a trap Ctrl-C
+#     during the gate leaves the task file in `_history/` stamped
+#     `status: merged` — out of the queue, with nothing merged.
+#
+#     The same hole was in the real path, where the window is the host gate: the
+#     longest step in the run and the one a person is most likely to interrupt.
+#     One trap covers both, which is why this case is the evidence for both.
+printf 'preflight-gate = "sleep 30"\n' > arsenal/config.toml
+before_status="$(git status --porcelain)"
+ARSENAL_TASK_ISSUE=61 ARSENAL_ALLOW_SHARED_ADD=1 ARSENAL_COAUTHOR="" \
+    bash "${HELPER}" t-pre --preflight >/dev/null 2>&1 &
+pre_pid=$!
+#     Wait for the gate to be RUNNING, not merely for the archive to exist: a
+#     kill aimed at the archive lands in whatever window precedes the gate and
+#     the case stops testing the thing it names.
+for _ in $(seq 1 200); do
+    pgrep -P "${pre_pid}" -f 'sleep 30' >/dev/null 2>&1 && break
+    sleep 0.1
+done
+if pgrep -P "${pre_pid}" -f 'sleep 30' >/dev/null 2>&1; then
+    [[ -f "arsenal/tasks/_history/t-pre.md" ]] \
+        || fail "fixture error: the task file is not archived while the gate runs"
+    gate_kids="$(pgrep -P "${pre_pid}" || true)"
+    kill -TERM "${pre_pid}"; wait "${pre_pid}"; rc=$?
+    #     Killing the script does not reap the gate it spawned, and a 30-second
+    #     orphan outlives this test by more than the test takes.
+    [[ -n "${gate_kids}" ]] && kill -TERM ${gate_kids} 2>/dev/null
+    [[ ${rc} -eq 143 ]] || fail "a TERM during the gate should exit 143, got ${rc}"
+    [[ -f "arsenal/tasks/t-pre.md" ]] \
+        || fail "a TERM mid-preflight left the task file in _history/ — the archive was not undone"
+    [[ -e "arsenal/tasks/_history/t-pre.md" ]] \
+        && fail "a TERM mid-preflight left the archived copy behind"
+    [[ "$(git status --porcelain)" == "${before_status}" ]] \
+        || fail "a TERM mid-preflight left the tree changed: $(git status --porcelain)"
+    echo "PASS: a signal mid-cycle puts the task file back"
+else
+    kill -TERM "${pre_pid}" 2>/dev/null; wait "${pre_pid}" 2>/dev/null
+    echo "  (skipping mid-cycle signal check: the gate never started)"
+fi
+rmdir arsenal/tasks/_history 2>/dev/null || true
+
 echo "PASS: open_task_pr_gates_test — all gates passed"
