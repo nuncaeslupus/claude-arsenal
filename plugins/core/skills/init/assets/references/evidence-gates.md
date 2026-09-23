@@ -9,6 +9,7 @@ numeric threshold has no number behind it yet.
 - [Gate blocks run verbatim](#gate-blocks-run-verbatim)
 - [The gate is fixed for the life of the task](#the-gate-is-fixed-for-the-life-of-the-task)
 - [The task gate measures the pre-archive tree](#the-task-gate-measures-the-pre-archive-tree)
+- [Asking whether the gates would run, without running them](#asking-whether-the-gates-would-run-without-running-them) — `--preflight`
 - [Evidence gates (numeric acceptance)](#evidence-gates-numeric-acceptance)
 - [Parallel test execution in host-gate](#parallel-test-execution-in-host-gate)
 - [When one file is the long pole](#when-one-file-is-the-long-pole)
@@ -109,6 +110,60 @@ post-archive tree — is unsatisfiable by construction. It fails on a tree that 
 correct, and `open_task_pr.sh` reports it as `the task gate failed`, which points
 at the task rather than at the ordering. If a check needs the final tree, it
 belongs in `host-gate`, not in a task's gate block.
+
+---
+
+## Asking whether the gates would run, without running them
+
+```bash
+bash claude-arsenal/bin/open_task_pr.sh <task-id> --preflight
+```
+
+Prints `preflight:ok` on stdout and exits 0 when everything the real run does
+*before* its expensive step succeeded. It needs no `<title>`, because it opens
+nothing: no branch, no commit, no issue edit, no PR. It is a question, not a
+step.
+
+What it actually does is the cheap half of the real run, in the real order — the
+review receipt, the task gate, the shared-checkout guard, the issue handle, the
+archive — and then it puts the tree back and stops. On one measured run that was
+305ms of archive plus a 2.2s task gate, against a `host-gate` below it of
+13m25s. So the answer to "would this refuse?" costs seconds instead of being
+learned from a refusal thirteen minutes in.
+
+It refuses at the **first** thing the real run would refuse at rather than
+collecting every finding. Each refusal already names its own cause and its own
+fix; a report restating all of them would be a second place to keep those
+messages true. Fix what it names and re-run — it is cheap by construction.
+
+**What it cannot tell you is whether `host-gate` passes.** Running it is the
+cost being avoided. Preflight only checks that the gate's first word resolves on
+this machine — which catches the failure that actually happens, a gate naming a
+tool a fresh worktree never installed — and says so as a note, never as a
+refusal: nothing here parses shell, so a gate opening with `FOO=1 …` or a `cd`
+is reported as unchecked rather than as broken.
+
+For the rest, a repo can declare its own cheap answer:
+
+```toml
+# arsenal/config.toml
+host-gate = "make lint test"
+preflight-gate = "make verify-gates"
+```
+
+`preflight-gate` runs only under `--preflight`, and it runs **after the
+archive** — the same side of it as `host-gate`. That is the point: a host gate
+that measures the repo's own task files is exactly the one the archive breaks,
+and a check run before the move cannot see it. Name something that takes
+seconds; anything worth minutes belongs in `host-gate`, where the real run pays
+for it once.
+
+The archive is the risky part of all this, so it is worth saying what holds it:
+preflight uses the same archive-and-restore the real path does, with no second
+implementation, and a signal during either — `Ctrl-C` during the host gate is
+the realistic one — restores the task file before exiting. Without that, an
+interrupt leaves the task in `tasks/_history/` stamped `status: merged`: out of
+the queue, with nothing merged.
 
 ---
 

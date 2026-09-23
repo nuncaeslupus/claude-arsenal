@@ -97,6 +97,12 @@ named — not two.
 running when a refused run exited carries its non-zero exit code, so the `fail`
 column says *where* the loop stops, not only that it did.
 
+A `--preflight` run records under `preflight`, not `task-pr`, and reports the
+subset it actually runs — `review`, `task-gate`, `fetch`, `issue`, `archive`,
+`gate-check`. Keeping it a separate event is what stops a question, which stops
+before the expensive half by design, from pulling down the p50 of the runs that
+open a PR.
+
 **A host can record its own sub-targets the same way.** `host-gate` is the
 host's command, and this bundle cannot know it is four make targets — so a
 Makefile that wants the breakdown writes it, through the same entry point and

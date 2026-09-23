@@ -155,6 +155,12 @@ Verify `pwd` at the start of the task if unsure.
    that decides anything; and when it passes you have paid for the repo's whole
    suite twice, on the step most likely to be the expensive one. Let the script
    run it, once, over the tree being committed.
+
+   When you want that answer before committing to the wait,
+   `open_task_pr.sh <task_id> --preflight` runs the cheap half — the task gate,
+   the issue handle, the archive — puts the tree back, and prints `preflight:ok`.
+   It opens nothing and needs no title. It cannot tell you the host gate
+   *passes*; that is the cost it exists to avoid.
    - **Gate fails** (host gate or `gate_run.sh` exit non-zero) → **open no PR.**
      Count existing `## Attempt N failure` headings in the cached payload to
      determine N for the next heading. Return outcome `open` to the orchestrator

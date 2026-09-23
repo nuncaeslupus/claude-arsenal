@@ -89,6 +89,15 @@ merge-policy = "after-ci"
 #   host-gate = "make lint test evidence"
 host-gate = ""
 
+# The cheap slice of the gate above, run by `open_task_pr.sh <task> --preflight`
+# and nowhere else. Empty = preflight only checks that the gates resolve, which
+# is all it can know on its own. Name the part that touches the repo's own files
+# (a file count, a coverage denominator, a gate-coverage sweep): those are what
+# the archive moves out from under the real host gate, and the only way to find
+# out today is to pay for the whole run first.
+#   preflight-gate = "make verify-gates"
+preflight-gate = ""
+
 # Shell command that installs this repo's dependencies, run once in a fresh
 # worktree before the first gate (claude-arsenal/bin/host_setup.sh). Empty = no
 # setup step. A worktree is a checkout: it carries tracked files and none of
