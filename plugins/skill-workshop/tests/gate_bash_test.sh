@@ -235,6 +235,17 @@ heredoc_read=$(printf 'python3 - <<%s\nprint(open("%s").read())\nPYEOF' "'PYEOF'
 [ "$(probe "$heredoc_read")" = allowed ] || fail "blocked a heredoc READ of a skill file"
 echo "PASS: interpreter reads, a script file argument and a heredoc read stay allowed"
 
+# #467: a heredoc edit of an unrelated file followed by RUNNING a skill script
+# read the script path as a write, because a heredoc sends the whole command
+# text through the interpreter-source scan. The program path is executed only.
+run_after_heredoc=$(printf 'python3 - <<%s\nopen("status/spec.md", "w").write("x")\nPYEOF\npython3 plugins/core/skills/specify/scripts/validate_spec.py --input status/spec.md' "'PYEOF'")
+[ "$(probe "$run_after_heredoc")" = allowed ] \
+    || fail "#467: running a skill script after a heredoc edit was blocked"
+write_then_run=$(printf 'python3 - <<%s\nopen("plugins/core/skills/specify/scripts/validate_spec.py", "w").write("x")\nPYEOF\npython3 plugins/core/skills/specify/scripts/validate_spec.py' "'PYEOF'")
+[ "$(probe "$write_then_run")" = blocked ] \
+    || fail "#467: a heredoc write to the script it then runs went through"
+echo "PASS: running a skill script after a heredoc is allowed; writing it is not"
+
 # --- with the marker present, writes are allowed ---------------------------
 mkdir -p "$CLAUDE_PLUGIN_DATA" && touch "${CLAUDE_PLUGIN_DATA}/loaded-${SESSION}"
 [ "$(probe "sed -i 's/a/b/' $SKILL")" = allowed ] || fail "still blocked after the skill loaded"
