@@ -151,6 +151,16 @@ question the file answers.
 | `after-ci-and-review` | Both rows above: green checks **and** a review whose comments are all addressed. What "wait for green, answer the bot, then merge" means. |
 | `never` | Never, by an agent. Report the PR as ready and stop; the human merges. |
 
+On a private repo whose Actions minutes are metered, or a repo with no CI, `after-ci`
+waits forever once checks stop reporting; the local-gates setting for that case, and its
+trade-off, is in `references/ci-minutes.md`.
+
+**Branch protection is the other half.** `merge-policy` governs what an agent waits for
+before merging a PR; it cannot stop a push that skips the PR altogether. `/init` protects
+the default branch on GitHub once (`scripts/branch_protection.py`, outcome recorded as
+`branch-protection`), requiring as checks only the ones that actually reported on recent
+PRs — so the two agree on what "required" means.
+
 **What counts as a review.** Whatever GitHub reports on the PR itself: a review submitted
 by a human collaborator, or by any review bot installed on the repo. Read the PR's
 reviews — do not match a name. A policy that names its reviewer in prose goes stale the

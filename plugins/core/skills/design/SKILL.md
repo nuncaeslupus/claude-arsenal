@@ -12,6 +12,17 @@ CANARY: design-loaded-2026-05-19-e08675ccb0a5c932
 
 Owns sections 5–6 of `status/specification.md` (contracts, risks) and creates `status/plan.md` (task split). Reads sections 1–4 of `status/specification.md` to understand what the spec already covers.
 
+**Before Step 1 — the spec must be approved.** The `specify` skill's validator answers it:
+
+```bash
+python3 "${CLAUDE_SKILL_DIR}/../specify/scripts/validate_spec.py" \
+    --input status/specification.md --require-approved
+```
+
+Anything but exit 0 means stop. The spec's `**Status**` must approve its current revision,
+backed by a committed notes file or an explicit `without annotations`; hand the annotated
+spec back instead of planning past it — a plan written before approval is built on a draft.
+
 ## Steps
 
 ### Step 1: Define the technical solution
@@ -78,6 +89,10 @@ python3 "${CLAUDE_SKILL_DIR}/scripts/validate_plan.py" --input status/plan.md
 
 It checks the plan has the required sections (Technical solution, Implementation tasks, Evidence log, Sign-off) and that the task table carries the required columns including the measurable Gate — shape only. The `gate-check` skill's `run_gate.py` then audits the gate values and evidence themselves (add `--strict` there to require a gate on every task).
 
+A plan that needs a picture — the architecture, a flow, a sequence of phases — draws it
+as a fenced `drawspec` block, never hand-drawn SVG or ASCII art:
+`claude-arsenal:core:init § references/diagrams.md`.
+
 ### Step 6: Publish the annotatable plan
 
 Generate the reader once the validator passes, and hand both files to the user in the same
@@ -97,11 +112,13 @@ when a workspace plan exists, or the reader lands back in `status/` beside a pla
 not render. Writes `plan-reader.html` and `plan-annotated.md` there and prints both paths;
 the step is done when those two paths exist and the user has been given the HTML. The
 reader keeps its notes under a namespace of its own, so plan annotations never overwrite
-the spec's, and its export is named `<project>-plan-notes-<date>.md`.
+the spec's, and its export is named `<project>-plan-notes-<date>-r<N>.md`.
 
-When a returned export arrives — a path in `~/Downloads`, an upload, a paste — move it
-into the plan's directory beside the reader and commit it. The annotations are the
-sign-off record for this plan; left in Downloads they are gone by the next session.
+The plan keeps the same review record as the spec (`**Revision**`, `**Status**`,
+`**Revision log**` — see the template). A returned export is moved beside the plan and
+committed in the same commit as the revision it drove; `validate_plan.py` fails on a notes
+file the header names that is not committed. Seeding tasks or starting `execution` waits
+for `validate_plan.py --input <plan> --require-approved` to pass.
 
 Full rules — which documents need one, the naming, and why the work that
 consumes the document waits for the annotations:

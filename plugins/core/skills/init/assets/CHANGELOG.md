@@ -18,6 +18,39 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [4.24.0] - 2026-09-29
+
+- **`/init` now checks the newest release.** A plugin cache frozen at an old
+  version used to report "up to date" because init only compared the repo
+  against itself. It now prints `ARSENAL OUTDATED: this init is X, the latest
+  release is Y` with the update commands, and **refuses to set up a new repo**
+  from a stale plugin unless you pass `--allow-stale`. On an existing repo it
+  only warns. The lookup is one `git ls-remote`, cached for six hours; offline
+  it is skipped, and `ARSENAL_UPSTREAM_CHECK=0` turns it off.
+- **Hooks keep working from a subdirectory.** The skill-edit gate, its markers
+  and the statusLine are now registered as
+  `bash "${CLAUDE_PROJECT_DIR:-.}"/claude-arsenal/bin/…`. The old relative form
+  failed on every Bash call once the session `cd`'d into a subfolder. Re-running
+  `/init` (or the session-start `init.py --silent`) upgrades the entries in place.
+- **The skill-edit gate no longer blocks running a skill script** in the same
+  command as a heredoc that edits an unrelated file, such as editing a spec and
+  then running `validate_spec.py` on it. Writing to the script is still gated.
+- **Every spec and plan gets its annotatable reader.** A new hook installed by `/init` fires whenever a spec or plan is written, by `specify`, `design` or another plugin's planning skill, and tells the session the reader is stale and how to rebuild it. `ship` treats `claude-arsenal/scripts/reader_check.py branch` failing (a spec/plan changed without a reader built from its current text) as No-Go; add it to `host-gate` to run it on every PR.
+- **Specs and plans are revisioned.** Headers carry `**Revision**`, `**Status**` and `**Revision log**`; notes exports are named `<project>-<spec|plan>-notes-<date>-r<N>.md`. `validate_spec.py` / `validate_plan.py` fail on a named notes file that isn't committed, and `--require-approved` must pass before `design` plans from a spec or a plan is seeded into tasks.
+- `query_status.py` warns when a notes export for this project sits uncommitted in a Downloads folder (including localized and XDG ones).
+- `AGENTS.md` and the CLAUDE.md block now say `specify`/`design` take precedence over other plugins' planning skills and where specs/plans live. `/init` no longer creates the unused `arsenal/specs/` and `arsenal/plans/` folders (existing ones are left alone).
+- **Diagrams via drawspec.** Specs, plans and docs draw diagrams as fenced ```` ```drawspec ```` blocks (JSON describing what the diagram means); `create_reader.py` validates each and inlines it as SVG that follows the page's colours. A broken diagram fails the run and names the block. Documents without a drawspec fence don't need drawspec. `ARSENAL_DRAWSPEC` picks the command; otherwise `drawspec` on PATH, then `uvx --from git+https://github.com/nuncaeslupus/drawspec drawspec`. See `claude-arsenal/references/diagrams.md`.
+- **`/init` protects your default branch.** On first run it applies GitHub branch protection: PRs required, admins included, and only checks that actually report on your PRs made required (a review bot that skips is never required). Existing protection is left alone; the result is recorded as `branch-protection` in `arsenal/config.toml`; `--no-branch-protection` opts out. It fails soft (no `gh`, no login, a plan without protection) and prints the manual steps.
+- **`host-gate` and `merge-policy` are a deliberate choice.** `/init` prints `HOST-GATE UNSET` with a command suggested from your tooling and flags a `merge-policy` your CI can't satisfy; the session asks you. `host-gate = "none"` records "no gate" explicitly.
+- The session protocol now says every change goes through a PR, ad hoc requests included, not only claimed queue tasks.
+- `create_reader.py` names the reader of any document other than `spec.md` / `specification.md` / `plan.md` after the document (`<stem>-reader.html`, `<stem>-annotated.md`), so design docs sharing a `docs/**/specs/` folder no longer overwrite each other's reader.
+- **Local gates carry CI.** New `claude-arsenal/bin/fast_gate.sh`: `preflight-gate` (fast, scoped to changed files via `$ARSENAL_CHANGED_FILES`) for every review round; `--full` (`host-gate`) once before the PR and once before merge. Review rounds no longer re-run the full suite per push. `/init` asks for a `preflight-gate`, and for a private or CI-less repo recommends `merge-policy = "always"` with a real `host-gate` and `pre-pr-review = "required"` (advice only). See `references/ci-minutes.md`, which includes a once-per-PR CI trigger block.
+- **`arsenal-queue.yml` bills fewer minutes:** the keyword check skips drafts and runs on `ready_for_review`, a newer push cancels the older check, and every job has a timeout. `/init` leaves a modified installed workflow alone, so diff `.github/workflows/arsenal-queue.yml` against `claude-arsenal/workflows/arsenal-queue.yml` to pick this up.
+- New `usage_report.py --actions` estimates this month's billed Actions minutes per repo and workflow (needs `gh`).
+- **New `explore-idea` skill** (workflow section): talks a new or vague idea into shape before any spec exists — sizes it out loud (spike / bounded / architectural), asks one multiple-choice question at a time with pros, cons and a recommendation, drafts a research prompt instead of guessing, keeps a D-1…D-N decisions log, and hands off to `specify` only after an explicit yes. `AGENTS.md` routes idea work to it ahead of other plugins' brainstorming skills.
+- `specify` takes that decisions log as input and self-reviews the spec before the reader is generated: no placeholders, contradictions or ambiguous requirements, scope fits one plan, nothing from the conversation dropped. Several skill descriptions were shortened to stay in the listing budget; their triggers are unchanged.
+
+
 ## [4.23.0] - 2026-09-23
 
 - **`open_task_pr.sh <task-id> --preflight` asks whether the run would refuse,

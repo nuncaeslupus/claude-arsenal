@@ -1,8 +1,30 @@
 # The annotatable reader — a gate, not a final flourish
 
-Loaded by `specify` and `design`. Both produce a document somebody has to
-review, and the rules for handing it over are the same, so they live here rather
-than in two skill bodies that would drift apart on the next edit.
+Loaded by `specify` and `design`, and by anything else that writes a spec or
+plan. The rules for handing one over are the same whoever wrote it, so they live
+here rather than in skill bodies that would drift apart on the next edit.
+
+## Whichever skill wrote it
+
+A brainstorming or planning skill from another plugin is not an exemption. In an
+arsenal repo spec work goes through `specify` and plan work through `design`;
+when another skill runs anyway, its output goes to `status/specification.md` /
+`status/plan.md` (a workspace's `arsenal/project/<ws>/spec.md` / `plan.md`) and
+gets a reader like any other. No plan is written before the annotated spec is
+approved.
+
+Two mechanisms make this hold without anyone remembering it:
+
+- **A PostToolUse hook** (`claude-arsenal/bin/reader_hook.sh`, registered by
+  `/init`) fires on every Write/Edit to `status/specification.md`,
+  `status/plan.md`, `arsenal/project/*/{spec,plan}.md`, `docs/**/specs/*.md` or
+  `docs/**/plans/*.md` and tells the session the reader is stale, with the
+  command that regenerates it.
+- **A gate** — `python3 claude-arsenal/scripts/reader_check.py branch` exits 1
+  when any of those documents changed on the branch without a reader generated
+  from its current content (the reader embeds a digest of what it rendered).
+  `ship` treats that as No-Go; a host that wants it on every PR adds it to
+  `host-gate` in `arsenal/config.toml`.
 
 ## Any document that specifies or plans work gets a reader
 
@@ -21,10 +43,10 @@ raw file — does not satisfy this. The reader exists so notes attach to the
 section they are about; a substitute that drops that property is not a
 substitute.
 
-Rename its `spec-reader.html` / `spec-annotated.md` output to match the document
-(`0007-thing-reader.html`) whenever more than one such document can share a
-directory — the generated names are fixed, so two design docs would otherwise
-overwrite each other's readers.
+A document not named `spec.md`, `specification.md` or `plan.md` gets readers
+named for it (`0007-thing.md` → `0007-thing-reader.html` / `0007-thing-annotated.md`),
+so design docs sharing a directory never overwrite each other's readers. Do not
+rename the output — `reader_check.py` looks for exactly that name.
 
 ## Work that consumes the document waits for the annotations
 
@@ -40,8 +62,24 @@ it is their call to make, not an assumption to act on while waiting.
 
 ## The returned export is review history
 
-When one arrives — a path in `~/Downloads`, an upload, a paste — move it into the
-document's directory beside the reader and commit it. Left in Downloads it is
-gone by the next session. To re-seed a rebuilt reader with previous notes, pass
-`--notes <the returned file>`; the export carries its own note data, so hand back
-the file the reviewer sent, unrenamed.
+The export is named `<project>-<spec|plan>-notes-<date>-r<N>.md`, N being the
+document's `**Revision**` header line. When one arrives — a path in
+`~/Downloads`, an upload, a paste — move it into the document's directory beside
+the reader. Applying it makes the next revision: bump `**Revision**`, add a
+`**Revision log**` line naming the export, regenerate the reader, and commit the
+export **in the same commit** as that revision. Left in Downloads it is gone by
+the next session; `query_status.py` names any export of this project's still
+sitting in a Downloads folder (`~/Downloads`, `~/Descargas`, the XDG download
+dir, …) that the repo does not track.
+
+Approval is recorded in the header, not in chat:
+`**Status**: approved (<date>, revision N)`, backed by a committed notes file
+named for that revision or an explicit `— without annotations`.
+`validate_spec.py` / `validate_plan.py` fail on a named notes file that is not
+committed, and with `--require-approved` on a missing or unbacked approval —
+`design` runs that on the spec before planning, and seeding or `execution` runs
+it on the plan.
+
+To re-seed a rebuilt reader with previous notes, pass `--notes <the returned
+file>`; the export carries its own note data, so hand back the file the reviewer
+sent, unrenamed.

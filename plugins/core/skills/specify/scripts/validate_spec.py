@@ -10,14 +10,23 @@ This is a shallow check: it confirms required `## ` sections exist, are not
 empty or placeholder-only, and that the Success criteria block is present. It
 cannot judge whether the prose is any good.
 
+It also reads the review record in the header (see _review_record.py): a notes
+file the header names must be committed beside the spec. `--require-approved`
+additionally demands a **Status** approving the current revision — `design`
+runs it before starting.
+
 Human-readable on stdout; problems on stderr. Exit 0 = well-formed, 1 = missing
-or unfilled required sections, 2 = usage error (file missing).
+or unfilled required sections, a notes file not in the repo, or (with
+--require-approved) no backed approval, 2 = usage error (file missing).
 """
 
 import argparse
 import re
 import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import _review_record as review_record
 
 SECTION_RE = re.compile(r"^##\s+(\d+)\.\s+(.*\S)\s*$")
 # A placeholder line, allowing a leading list/blockquote/ordinal marker: `- <x>`, `> <x>`, `1. <x>`.
@@ -110,6 +119,12 @@ def main() -> int:
         default="status/specification.md",
         help="specification file to check (default: status/specification.md)",
     )
+    parser.add_argument(
+        "--require-approved",
+        action="store_true",
+        help="also fail unless **Status** approves the current revision, backed by a "
+        "committed notes file or an explicit `without annotations`",
+    )
     args = parser.parse_args()
 
     path = Path(args.input)
@@ -123,6 +138,11 @@ def main() -> int:
         return 2
 
     problems, notes = lint(text)
+    problems += review_record.notes_problems(text, path)
+    if review_record.revision(text) is None:
+        notes.append("no **Revision** header line yet — see the template's header block")
+    if args.require_approved:
+        problems += review_record.approval_problems(text, path)
     for note in notes:
         print(f"  · {note}")
     if problems:

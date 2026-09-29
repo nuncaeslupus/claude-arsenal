@@ -7,15 +7,27 @@ Auto-discovers spec source(s):
   3. auto (no flags): looks for arsenal/project/*/spec.md,
                       then falls back to status/specification.md
 
-Outputs are named for the document the input stem names — a `plan.md` input writes
-plan-reader.html / plan-annotated.md, anything else writes spec-*. (--output-dir,
+Outputs are named for the input stem — `plan.md` writes plan-reader.html /
+plan-annotated.md, `spec.md` / `specification.md` write spec-*, and any other
+`<stem>.md` writes <stem>-reader.html / <stem>-annotated.md, so documents sharing a
+directory keep separate readers. (--output-dir,
 default: directory of the single input, or docs/spec-reader/ in workspace mode):
   <doc>-reader.html     self-contained HTML reader with per-section note fields
                         (notes auto-save in browser; Export button saves a Markdown file)
   <doc>-annotated.md    same document as Markdown with a note slot per section
 
-The Export button names its download for the reader title and document kind
-(`<project>-<doc>-notes-<date>.md`) so it stays findable in a Downloads folder.
+The Export button names its download for the reader title, document kind and
+revision (`<project>-<doc>-notes-<date>-r<N>.md`, N read from the document's
+`**Revision**:` header line; no `-r<N>` when it has none) so it stays findable in
+a Downloads folder and says which revision it annotates.
+A fenced ```drawspec block (a drawspec JSON document) is validated and rendered to
+inline SVG in the HTML; the annotated Markdown keeps the JSON source. The command is
+$ARSENAL_DRAWSPEC when set, else `drawspec` on PATH, else `uvx --from
+git+https://github.com/nuncaeslupus/drawspec drawspec`. A diagram that fails
+validation, or no way to run drawspec, fails the run — nothing is written. A document
+with no drawspec fence never runs it.
+The HTML carries a digest of every source it rendered, which is how
+`reader_check.py` tells a current reader from a stale one.
 A returned export belongs in {output-dir} beside the reader — it is part of the
 project, not a scratch file. Seed a rebuilt reader from one with
 `--notes <that file>`; it is Markdown with the note data embedded in a trailing
@@ -38,7 +50,11 @@ Usage (run from repo root):
 import argparse
 import hashlib
 import json
+import os
 import re
+import shlex
+import shutil
+import subprocess
 import sys
 from datetime import date
 from pathlib import Path
@@ -78,9 +94,108 @@ def normalize_list_indent(text: str) -> str:
     return "\n".join(out)
 
 
-def render_md(text: str) -> str:
+# ---------------------------------------------------------------- drawspec diagrams
+
+# A spec or plan draws its pictures as drawspec documents — JSON that says what the
+# diagram means, laid out and rendered by the tool — rather than as hand-written SVG
+# or ASCII art. The HTML reader shows the render; the Markdown keeps the source.
+DRAWSPEC_ENV = "ARSENAL_DRAWSPEC"
+DRAWSPEC_REPO = "git+https://github.com/nuncaeslupus/drawspec"
+DRAWSPEC_OPEN_RE = re.compile(r"^(?P<ind>[ \t]*)(?P<fence>`{3,}|~{3,})[ \t]*drawspec[ \t]*$")
+_drawspec_cmd: list[str] | None = None
+
+
+class DrawspecError(Exception):
+    """A diagram that cannot be drawn: the run fails and writes nothing."""
+
+
+def drawspec_command() -> list[str]:
+    """$ARSENAL_DRAWSPEC, else `drawspec` on PATH, else uvx from the git repo."""
+    global _drawspec_cmd
+    if _drawspec_cmd is not None:
+        return _drawspec_cmd
+    override = os.environ.get(DRAWSPEC_ENV, "").strip()
+    if override:
+        cmd = shlex.split(override)
+        if not shutil.which(cmd[0]):
+            raise DrawspecError(f"${DRAWSPEC_ENV} is set to {override!r}, which is not runnable")
+    elif shutil.which("drawspec"):
+        cmd = ["drawspec"]
+    elif shutil.which("uvx"):
+        cmd = ["uvx", "--quiet", "--from", DRAWSPEC_REPO, "drawspec"]
+    else:
+        raise DrawspecError(
+            "this document has ```drawspec diagrams, and drawspec cannot be run here. "
+            f"Install uv (uvx runs it from {DRAWSPEC_REPO}), put `drawspec` on PATH, "
+            f"or set ${DRAWSPEC_ENV} to the command"
+        )
+    _drawspec_cmd = cmd
+    return cmd
+
+
+def run_drawspec(action: str, source: str, where: str) -> str:
+    """Run `drawspec <action> -` on source; stdout on success, DrawspecError otherwise."""
+    cmd = drawspec_command()
+    try:
+        proc = subprocess.run(
+            [*cmd, action, "-"],
+            input=source,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=600,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise DrawspecError(f"{where}: `{' '.join(cmd)} {action}` did not run — {exc}") from None
+    if proc.returncode != 0:
+        detail = (proc.stdout + proc.stderr).strip() or f"exit {proc.returncode}"
+        raise DrawspecError(f"{where}: drawspec {action} refused it —\n{detail}")
+    return proc.stdout
+
+
+def extract_drawspec(text: str) -> tuple[str, list[tuple[str, str]]]:
+    """Swap each ```drawspec fence for a placeholder line; return (text, [(token, json)])."""
+    lines = text.split("\n")
+    out: list[str] = []
+    blocks: list[tuple[str, str]] = []
+    i = 0
+    while i < len(lines):
+        m = DRAWSPEC_OPEN_RE.match(lines[i])
+        if not m:
+            out.append(lines[i])
+            i += 1
+            continue
+        fence = m.group("fence")
+        j = i + 1
+        while j < len(lines):
+            close = lines[j].strip()
+            if close and set(close) == {fence[0]} and len(close) >= len(fence):
+                break
+            j += 1
+        token = f"DRAWSPEC-FIGURE-{len(blocks)}-END"
+        body = [
+            ln[len(m.group("ind")) :] if ln.startswith(m.group("ind")) else ln
+            for ln in lines[i + 1 : j]
+        ]
+        blocks.append((token, "\n".join(body)))
+        out += ["", m.group("ind") + token, ""]
+        i = j + 1
+    return "\n".join(out), blocks
+
+
+def render_md(text: str, where: str = "") -> str:
+    text, diagrams = extract_drawspec(text)
     _md.reset()
-    return _md.convert(normalize_list_indent(text))
+    html = _md.convert(normalize_list_indent(text))
+    for n, (token, source) in enumerate(diagrams, 1):
+        label = f"{where}, drawspec block {n}" if where else f"drawspec block {n}"
+        run_drawspec("validate", source, label)
+        svg = run_drawspec("render", source, label).strip()
+        if not svg.startswith("<svg"):
+            raise DrawspecError(f"{label}: drawspec render produced no SVG")
+        figure = f'<figure class="drawspec">{svg}</figure>'
+        html = html.replace(f"<p>{token}</p>", figure).replace(token, figure)
+    return html
 
 
 def render_inline(text: str) -> str:
@@ -180,8 +295,9 @@ def parse_doc(raw: str) -> tuple[str, str, list[dict]]:
     return h1, intro_md, sections
 
 
-def build_part(file_md: str, code: str, part_label: str, title: str) -> dict:
+def build_part(file_md: str, code: str, part_label: str, title: str, source: str = "") -> dict:
     """Parse one document into a structured part with stable ids/labels."""
+    where = source or title
     h1, intro_md, sections = parse_doc(file_md)
     items: list[dict] = []
     used: set[str] = set()
@@ -206,7 +322,7 @@ def build_part(file_md: str, code: str, part_label: str, title: str) -> dict:
                 "title_html": "Preamble &amp; scope",
                 "label": "Preamble & scope",
                 "level": 2,
-                "body_html": render_md(intro_md),
+                "body_html": render_md(intro_md, f"{where} § preamble"),
                 "toc": "Preamble & scope",
                 "raw_body": intro_md,
             }
@@ -238,7 +354,7 @@ def build_part(file_md: str, code: str, part_label: str, title: str) -> dict:
                 "title_html": title_html,
                 "label": label,
                 "level": s["level"],
-                "body_html": render_md(s["body_md"]),
+                "body_html": render_md(s["body_md"], f"{where} § {strip_inline_md(heading)}"),
                 "toc": toc,
                 "raw_body": s["body_md"],
             }
@@ -258,7 +374,25 @@ def build_part(file_md: str, code: str, part_label: str, title: str) -> dict:
 # title. A plan and a spec want different badges and different output filenames, and
 # nothing else about the reader changes between them.
 DOC_KINDS = {"plan": ("PLAN", "Plan", "plan")}
+# The header line `specify` / `design` write, read only above the first section.
+REVISION_RE = re.compile(r"^\*\*Revision\*\*:\s*r?(\d+)\b", re.MULTILINE)
+
+
+def doc_revision(raw: str) -> int | None:
+    """The document's `**Revision**: N`, or None when its header has none."""
+    header = re.split(r"^## ", raw, maxsplit=1, flags=re.MULTILINE)[0]
+    m = REVISION_RE.search(header)
+    return int(m.group(1)) if m else None
+
+
+def source_digest(raw: str) -> str:
+    """What `reader_check.py` compares against: sha256 of the text as read."""
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
 DEFAULT_DOC_KIND = ("SPEC", "Specification", "spec")
+# Stems whose reader is `<kind>-reader.html`; any other stem gets `<stem>-reader.html`.
+CANONICAL_STEMS = {"spec", "specification", "plan"}
 
 
 def doc_kind(stem: str) -> tuple[str, str, str]:
@@ -270,7 +404,10 @@ def collect_parts_single(spec_path: Path) -> list[tuple[str, dict]]:
     """Single-file mode: one part from the document at spec_path."""
     code, label, basename = doc_kind(spec_path.stem)
     raw = spec_path.read_text(encoding="utf-8")
-    return [(basename, build_part(raw, code, label, spec_path.stem.replace("-", " ").title()))]
+    part = build_part(raw, code, label, spec_path.stem.replace("-", " ").title(), str(spec_path))
+    part["source_sha256"] = source_digest(raw)
+    part["revision"] = doc_revision(raw)
+    return [(basename, part)]
 
 
 def collect_parts_workspace(workspace_dir: Path) -> list[tuple[str, dict]]:
@@ -280,9 +417,9 @@ def collect_parts_workspace(workspace_dir: Path) -> list[tuple[str, dict]]:
         ws_name = spec_file.parent.name
         code = ws_name.upper()[:8]
         raw = spec_file.read_text(encoding="utf-8")
-        parts.append(
-            ("workspace", build_part(raw, code, "Workspace", ws_name.replace("-", " ").title()))
-        )
+        part = build_part(raw, code, "Workspace", ws_name.replace("-", " ").title(), str(spec_file))
+        part["source_sha256"] = source_digest(raw)
+        parts.append(("workspace", part))
     return parts
 
 
@@ -386,10 +523,14 @@ def build_html(
     seed_notes: dict | None = None,
     single_label: str = "Specification",
     doc_slug: str = "spec",
+    ns_key: str | None = None,
 ) -> str:
     seed_notes = seed_notes or {}
     total_sections = sum(len(p["items"]) for _, p in parts)
-    ls_ns = slug(title) + f"-{doc_slug}-v1:"
+    # `ns_key` is the output stem when it is not the kind: two design docs in
+    # one folder are two readers, and a namespace keyed on the kind alone let
+    # one's notes surface under the other's headings.
+    ls_ns = slug(title) + f"-{ns_key or doc_slug}-v1:"
 
     toc = ['<details class="toc" open><summary>Contents</summary>']
     for _kind, p in parts:
@@ -445,6 +586,9 @@ def build_html(
 
     page = HTML_TEMPLATE
     page = page.replace("__TITLE__", esc(title))
+    page = page.replace(
+        "__SOURCE_SHA__", " ".join(p["source_sha256"] for _, p in parts if "source_sha256" in p)
+    )
     page = page.replace("__GEN_DATE__", gen_date)
     page = page.replace("__TOTAL__", str(total_sections))
     page = page.replace("__TOC__", toc_html)
@@ -455,10 +599,14 @@ def build_html(
     # that week, so the filename carries the project as well as the document kind:
     # `my-project-spec-notes-2026-08-24.md`, not a bare `spec-notes-…`.
     file_slug = f"{slug(title)}-{doc_slug}"
+    # One document, one revision: a workspace reader renders several, so its
+    # export has no single revision to name.
+    revision = parts[0][1].get("revision") if len(parts) == 1 else None
     page = page.replace(
         "__JS__",
         JS.replace("__LS_NS__", ls_ns)
         .replace("__DOC_SLUG__", file_slug)
+        .replace("__REV_SUFFIX__", f"-r{revision}" if revision else "")
         .replace("__DOC_LABEL__", single_label),
     )
     page = page.replace(
@@ -610,6 +758,8 @@ h4.sec-h{font-size:16.5px;color:var(--fg)}
 .sec-body blockquote{margin:.7em 0;padding:.5em .9em;border-left:3px solid var(--accent2);
   background:var(--code);border-radius:0 8px 8px 0;color:var(--fg)}
 .sec-body blockquote p{margin:.3em 0}
+.sec-body figure.drawspec{margin:.8em 0;overflow-x:auto}
+.sec-body figure.drawspec svg{display:block;max-width:100%;height:auto;margin:0 auto}
 .sec-body table{border-collapse:collapse;width:100%;font-size:13.5px;margin:.6em 0;display:block;overflow-x:auto}
 .sec-body th,.sec-body td{border:1px solid var(--line);padding:6px 9px;text-align:left;vertical-align:top}
 .sec-body th{background:var(--chip);font-weight:700}
@@ -731,7 +881,7 @@ JS = r"""
   document.getElementById('btn-export').addEventListener('click',function(){
     var r=buildExport();
     if(r.n===0){toast('No notes yet — add some first.');return;}
-    var name='__DOC_SLUG__-notes-'+today()+'.md';
+    var name='__DOC_SLUG__-notes-'+today()+'__REV_SUFFIX__.md';
     var saved=download(name,r.text);openModal(r.text);
     if(navigator.clipboard){navigator.clipboard.writeText(r.text).then(function(){},function(){});}
     if(!saved){setState('⚠ Download blocked — copy the notes from this box','warn');
@@ -746,7 +896,7 @@ JS = r"""
     if(navigator.clipboard){navigator.clipboard.writeText(modalTa.value).then(function(){},function(){});ok=true;}
     toast(ok?'Copied to clipboard':'Select the text and copy');
   });
-  document.getElementById('modal-dl').addEventListener('click',function(){download('__DOC_SLUG__-notes-'+today()+'.md',modalTa.value);toast('Download started');});
+  document.getElementById('modal-dl').addEventListener('click',function(){download('__DOC_SLUG__-notes-'+today()+'__REV_SUFFIX__.md',modalTa.value);toast('Download started');});
   document.getElementById('modal-close').addEventListener('click',closeModal);
   modal.addEventListener('click',function(e){if(e.target===modal)closeModal();});
 
@@ -806,6 +956,7 @@ HTML_TEMPLATE = r"""<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
+<meta name="arsenal-source-sha256" content="__SOURCE_SHA__">
 <title>__TITLE__ — __DOC_LABEL__ (annotatable)</title>
 <style>__CSS__</style>
 </head>
@@ -871,6 +1022,16 @@ HTML_TEMPLATE = r"""<!doctype html>
 
 
 def main() -> int:
+    try:
+        return _main()
+    except DrawspecError as exc:
+        # Before anything is written: a reader missing its diagram, or showing a
+        # broken one, is not a reader to hand over.
+        print(f"✗ {exc}", file=sys.stderr)
+        return 1
+
+
+def _main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--input", metavar="FILE", help="single spec or plan Markdown file")
     parser.add_argument(
@@ -891,6 +1052,7 @@ def main() -> int:
 
     cwd = Path.cwd()
     single_label, doc_slug = DEFAULT_DOC_KIND[1], DEFAULT_DOC_KIND[2]
+    out_base = ""
 
     if args.input:
         spec_path = Path(args.input)
@@ -899,6 +1061,11 @@ def main() -> int:
             return 2
         parts = collect_parts_single(spec_path)
         _, single_label, doc_slug = doc_kind(spec_path.stem)
+        # A document that is not the canonical spec or plan names its own output:
+        # two design files in one `docs/**/specs/` folder would otherwise share
+        # one `spec-reader.html`, and each regeneration would stale the other.
+        if spec_path.stem.lower() not in CANONICAL_STEMS:
+            out_base = spec_path.stem
         default_out = spec_path.parent
     elif args.input_dir:
         ws_dir = Path(args.input_dir)
@@ -922,8 +1089,8 @@ def main() -> int:
 
     notes_path = Path(args.notes) if args.notes else out_dir / "notes.json"
     seed_notes: dict = {}
-    html_file = out_dir / f"{doc_slug}-reader.html"
-    md_file = out_dir / f"{doc_slug}-annotated.md"
+    html_file = out_dir / f"{out_base or doc_slug}-reader.html"
+    md_file = out_dir / f"{out_base or doc_slug}-annotated.md"
 
     if notes_path.exists():
         try:
@@ -950,7 +1117,9 @@ def main() -> int:
         print(f"✗ {notes_path} does not exist", file=sys.stderr)
         return 2
 
-    html_out = build_html(parts, title, gen_date, seed_notes, single_label, doc_slug)
+    html_out = build_html(
+        parts, title, gen_date, seed_notes, single_label, doc_slug, ns_key=out_base or None
+    )
     md_out = build_markdown(parts, title, gen_date, seed_notes, single_label)
 
     html_file.write_text(html_out, encoding="utf-8")

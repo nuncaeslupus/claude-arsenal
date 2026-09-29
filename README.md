@@ -25,7 +25,7 @@ with.
 
 | The failure | The answer here |
 |---|---|
-| The agent writes code before anyone agreed what the problem was | **Spec-driven**: `specify` → `design` → `execution` → `review` → `ship`, each with its own output document |
+| The agent writes code before anyone agreed what the problem was | **Spec-driven**: `explore-idea` → `specify` → `design` → `execution` → `review` → `ship`, each with its own output document |
 | "Done" means the agent said so | **Gates with numbers**: a task's acceptance gate is a fenced block a script runs, against a committed measurement |
 | Tests get written after the code, to fit it | **RED → GREEN → RECORD**: the check that proves the gate fails must fail first, for the expected reason |
 | Skills that sound useful but never load | **A rubric and a validator**: 146 checkable rows, a mechanical pass, and a hook that blocks unguarded edits |
@@ -75,10 +75,12 @@ traces to something that actually went wrong.
 ### 2. Spec-driven development, with documents you can hand to a human
 
 ```text
-specify  →  design  →  execution  →  review  →  ship
+explore-idea  →  specify  →  design  →  execution  →  review  →  ship
 ```
 
-Each stage owns one artifact and one validator. `specify` produces the
+`explore-idea` talks a vague idea into an agreed direction and a numbered
+decisions log, one question at a time, and hands that log to `specify`. From
+there each stage owns one artifact and one validator. `specify` produces the
 problem analysis and options; `design` produces contracts, the task split, the
 risk register, and the sequencing.
 
@@ -222,7 +224,7 @@ Without Claude Code on the machine, the same script runs from a clone — see
 
 | | |
 |---|---|
-| **Workflow** | `specify` · `design` · `execution` · `review` · `ship` |
+| **Workflow** | `explore-idea` · `specify` · `design` · `execution` · `review` · `ship` |
 | **Queue** | `init` · `queue-add` · `queue-status` · `queue-next` · `gate-check` · `pin-check` |
 | **Git / GitHub** | `github` (Conventional Commits, branch naming, the PR review loop) |
 | **Session** | `session-end` (handoff, retrospective, PR audit) |

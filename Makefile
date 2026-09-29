@@ -124,6 +124,15 @@ sync-sections:  ## regenerate the shipped capability map from the skills init ve
 sync-sections-check:  ## fail if sections.json has drifted from the shipped skills
 	uv run python scripts/sync_sections.py --check
 
+# Tests run init.py on fresh repos; a real upstream tag newer than the branch
+# under test would make every one refuse (#462). upstream_check_test.sh turns it
+# back on against a local fake upstream.
+export ARSENAL_UPSTREAM_CHECK := 0
+# Same for branch protection: init applies it on a first install, and a test run
+# must never reach a real repository's settings (GH_REPO in a dev shell would
+# point it at one). branch_protection_test.sh turns it back on against a fake gh.
+export ARSENAL_BRANCH_PROTECTION := 0
+
 test:  ## run every plugin's behaviour tests (plugins/*/tests/*.sh) + repo-tool tests (scripts/*_test.sh)
 	@set -e; for t in plugins/*/tests/*.sh scripts/*_test.sh; do \
 		[ -f "$$t" ] || continue; \

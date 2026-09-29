@@ -27,6 +27,13 @@ difference between the two cases:
   right workspace.
 - **Solo / single-workspace** — read `status/plan.md` and omit `--workspace`.
 
+Only an approved plan is seeded:
+`python3 .claude/skills/design/scripts/validate_plan.py --input <plan> --require-approved`
+must exit 0 first. A plan whose `**Status**` is still `draft` goes back to the
+reviewer as its reader (`references/annotatable-reader.md`), not onto the board.
+A plan with no `**Status**` line at all predates the review record — ask once
+whether it is approved and record the answer in its header.
+
 Everything below is the same either way. The table columns are:
 `T# | Description | Location | Size | Depends | Gate | Tests`
 

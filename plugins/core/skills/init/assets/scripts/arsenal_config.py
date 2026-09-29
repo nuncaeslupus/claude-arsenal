@@ -65,6 +65,12 @@ DEFAULTS: dict[str, Any] = {
     # Declare the slice of the gate that touches those files here and preflight
     # finds it in seconds.
     #   preflight-gate = "make verify-gates"
+    #
+    # It is also the fast gate level (#463): bin/fast_gate.sh runs it on every
+    # review round after the first, over ARSENAL_CHANGED_FILES, so the full
+    # host-gate is paid once before the PR opens and once before merge rather
+    # than once per push. Change-scoped lint/typecheck plus the tests the change
+    # selects is the usual shape.
     "preflight-gate": "",
     # Shell command run by bin/host_setup.sh in a fresh worktree, before the
     # first gate. Empty by default. A worktree carries tracked files and nothing
@@ -128,6 +134,12 @@ DEFAULTS: dict[str, Any] = {
     # so removing it is a real opt-out rather than something the next session's
     # `init --silent` quietly undoes.
     "queue-automation": True,
+    # What `/init` did about GitHub branch protection on the default branch,
+    # recorded so the API is asked once rather than on every run: applied,
+    # existing (a rule was already there and was left alone), unavailable
+    # (GitHub refused — a plan or permission limit), or off (--no-branch-protection).
+    # Empty = not yet attempted. Clear it to have the next `/init` try again.
+    "branch-protection": "",
     # The label an issue must carry before `issue_import.py` turns it into a
     # task. Opt-in on purpose: every open issue becoming claimable work means a
     # worker opens a PR against a question someone asked.
@@ -216,6 +228,7 @@ ENUMS: dict[str, set[str]] = {
     # a binding gate is in place. A misspelled opt-out fails the other way,
     # writing a line into the body of someone who switched the check off.
     "pre-pr-review": {"warn", "required", "off"},
+    "branch-protection": {"", "applied", "existing", "unavailable", "off"},
 }
 
 CONFIG_RELPATH = "config.toml"
@@ -237,6 +250,7 @@ READERS = {
     "review-bots": "plugins/core/skills/github/scripts/query_pr_state.py",
     "listing-budget": "plugins/skill-workshop/skills/skill-workshop/scripts/audit_library.py",
     "queue-automation": "plugins/core/skills/init/scripts/init.py",
+    "branch-protection": "plugins/core/skills/init/scripts/init.py",
     "import-label": "plugins/core/skills/init/assets/scripts/issue_import.py",
     "task-label": "plugins/core/skills/init/assets/scripts/queue_hooks.py",
     "claim-prefix": "plugins/core/skills/init/assets/scripts/queue_hooks.py",
@@ -343,6 +357,13 @@ def load(repo_root: Path | None = None) -> tuple[dict[str, Any], dict[str, str]]
                 continue
             values[key] = value
             sources[key] = str(path)
+
+    # `host-gate = "none"` is the recorded answer "this repo has no gate", as
+    # distinct from an empty value nobody chose — init nags about the second
+    # and not the first. Every reader runs a non-empty value as a command, so
+    # it is normalised here, once, rather than taught to each of them.
+    if isinstance(values["host-gate"], str) and values["host-gate"].strip().lower() == "none":
+        values["host-gate"] = ""
 
     for key, allowed in ENUMS.items():
         # The isinstance() guard comes first because TOML permits an array or a

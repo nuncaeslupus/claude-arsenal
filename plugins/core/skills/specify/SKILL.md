@@ -16,7 +16,9 @@ Owns sections 1–4 of `status/specification.md`: problem statement, affected sy
 
 ### Step 1: Understand the problem
 
-Clarify what is actually being asked. Separate symptoms from root causes.
+Clarify what is actually being asked. Separate symptoms from root causes. When the work
+started in the `explore-idea` skill, take its decisions log as input: each agreed decision is
+a constraint here, not a question to reopen.
 
 - **What is happening?** — Observable behavior, errors, or gaps
 - **What should be happening?** — Expected behavior or desired outcome
@@ -79,6 +81,7 @@ Output: a **comparison table** of options.
 - **Immediate next action**: first thing to do (e.g., "create branch, start with migration in service X")
 - **Gates check**: if the engineering-core skill is available, verify against its gates (objective, scope, impacted services, compatibility, risk, validation, release readiness)
 - **Open questions**: anything unresolved that needs input before starting
+- **Decisions log**: when the work came from `explore-idea`, carry its `D-N` rows here unchanged — superseded rows included
 
 Output: a clear **recommendation with action item**.
 
@@ -97,6 +100,18 @@ python3 "${CLAUDE_SKILL_DIR}/scripts/validate_spec.py" --input status/specificat
 ```
 
 It checks that the required sections (1–4) and the measurable Success criteria block are present and filled — shape only, not content quality. Sections 5–6 are reported as pending until `design` appends them. Exit 0 clean, 1 on a missing or unfilled required section.
+
+Then self-review the spec before the reader is generated, and fix what fails:
+
+- **No placeholders** — no `TBD`, `TODO`, `...` or template text left in any section.
+- **No contradictions** — the recommendation, the options and the success criteria agree.
+- **No ambiguous requirement** — each criterion reads one way; "fast" or "robust" gets a number or a stated judgment.
+- **Scope fits one plan** — independent subsystems become separate specs, not one spec `design` cannot split.
+- **Nothing dropped** — every decision and constraint from the source conversation, the decisions log included, is still in the spec. A rewrite is where tables silently disappear, so diff it against the conversation, not against the previous draft.
+
+When a section needs a picture, write it as a fenced `drawspec` block (JSON that
+drawspec lays out and the reader renders), never hand-drawn SVG or ASCII art:
+`claude-arsenal:core:init § references/diagrams.md`.
 
 ## Annotatable reader — required before the spec is merged or built on
 
@@ -120,15 +135,20 @@ those two paths exist and the user has been given the HTML, not merely told wher
 Add `--name "My Project"` to override the reader title.
 
 The HTML reader auto-saves notes in the browser and exports them as a Markdown file the
-reviewer sends back, named `<project>-spec-notes-<date>.md` so it stays findable among
-whatever else is in a Downloads folder. The Markdown copy has a `> ✎ Notes` slot after
+reviewer sends back, named `<project>-spec-notes-<date>-r<N>.md` — N is the spec's
+`**Revision**` — so it stays findable in a Downloads folder and says which revision it
+annotates. The Markdown copy has a `> ✎ Notes` slot after
 every section for annotation in any text editor. To re-seed a rebuilt reader with notes
 from a previous export, pass `--notes <the returned file>` — the export carries its own
 note data, so hand back the file the reviewer sent, unrenamed.
 
 When a returned export arrives — a path in `~/Downloads`, an upload, a paste — move it
-into the spec's directory beside the reader and commit it. The annotations are review
-history for this spec; left in Downloads they are gone by the next session.
+into the spec's directory beside the reader. Applying it is a new revision: bump
+`**Revision**`, add a `**Revision log**` line naming the export, regenerate the reader,
+and commit the export in the same commit as the revision it drove. When the reviewer
+approves, set `**Status**: approved (<date>, revision N)`, adding `— without annotations`
+when they sent none for that revision. `validate_spec.py` fails on a notes file the header
+names that is not committed; `--require-approved` is what `design` checks before it starts.
 
 Commit the generated files so reviewers can open the HTML directly from the repo.
 

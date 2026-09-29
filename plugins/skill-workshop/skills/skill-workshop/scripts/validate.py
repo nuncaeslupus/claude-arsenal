@@ -245,6 +245,13 @@ CANONICAL_ARGS = {
     "--sections",
     "--list-sections",
     "--allow-downgrade",
+    "--allow-stale",
+    # init: opt out of protecting the default branch on GitHub at install time
+    "--no-branch-protection",
+    # usage_report.py: the GitHub Actions minutes view (#463), beside the token one
+    "--actions",
+    # specify / design validators: a document's approval is a gate of its own
+    "--require-approved",
     # har skill — what a capture is read *for*. These are the nouns of a HAR
     # (entries, headers, cookies, redirects, websockets) and the ways one is
     # reduced to an answer; none has a canonical equivalent to defer to, and

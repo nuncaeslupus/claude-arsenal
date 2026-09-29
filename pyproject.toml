@@ -77,7 +77,7 @@ show_error_codes = true
 # them to `disallow_untyped_defs` restates the fixtures rather than catching
 # anything. The shipped code they exercise is fully typed either way, and ruff
 # still lints them.
-exclude = "(^plugins/core/skills/init/assets/bin/gate_target\\.py$|^plugins/repo-audit/skills/explain-repo/scripts/create_artifact\\.py$|^plugins/repo-audit/skills/repo-audit/scripts/create_task\\.py$|^plugins/[^/]+/tests/.*\\.py$)"
+exclude = "(^plugins/core/skills/init/assets/bin/gate_target\\.py$|^plugins/repo-audit/skills/explain-repo/scripts/create_artifact\\.py$|^plugins/repo-audit/skills/repo-audit/scripts/create_task\\.py$|^plugins/core/skills/design/scripts/_review_record\\.py$|^plugins/[^/]+/tests/.*\\.py$)"
 
 [tool.pytest.ini_options]
 testpaths = ["plugins"]

@@ -151,12 +151,17 @@ host-gate = "make lint test"
 preflight-gate = "make verify-gates"
 ```
 
-`preflight-gate` runs only under `--preflight`, and it runs **after the
+In `open_task_pr.sh`, `preflight-gate` runs only under `--preflight`, and **after the
 archive** — the same side of it as `host-gate`. That is the point: a host gate
 that measures the repo's own task files is exactly the one the archive breaks,
 and a check run before the move cannot see it. Name something that takes
 seconds; anything worth minutes belongs in `host-gate`, where the real run pays
 for it once.
+
+`preflight-gate` is also the fast gate every review round after the first runs,
+on the delta, through `bin/fast_gate.sh` — so the full `host-gate` runs once
+before the PR and once before merge, never per push. See
+`references/ci-minutes.md` § Two gate levels.
 
 The archive is the risky part of all this, so it is worth saying what holds it:
 preflight uses the same archive-and-restore the real path does, with no second

@@ -278,6 +278,28 @@ def _reads_stdin_source(util: str, rest: list[str]) -> bool:
     return True
 
 
+# An interpreter running a skill script as its program, at the start of a
+# command: `python3 .claude/skills/x/scripts/validate.py`. The whole-text scan
+# below reads every line of a command that has a heredoc in it, and without this
+# the NEXT line's `python3 <skill script>` — executed, never written — read as a
+# write (#467). Only the program path is dropped, and only where it stands as a
+# command: quoted inside source (`os.system("python3 …")`) it stays, and a
+# redirect on the same line is still judged by the per-command pass.
+SCRIPT_PROGRAM = re.compile(
+    r"(?m)((?:^|[;&|(])[ \t]*"
+    r"(?:(?:sudo|command|env|time|nice|uv\s+run|poetry\s+run|pdm\s+run)\s+)*"
+    r"(?:[\w./-]*/)?(?:python[\d.]*|node|nodejs|deno|bun|perl|ruby|php|sh|bash|zsh|dash)"
+    r"(?:[ \t]+-[A-Za-z]+)*[ \t]+)"
+    r"(?:[^\s'\";&|<>()]*/)?(?:\.claude/skills|plugins/[^/\s'\"]+/skills)/[^\s'\";&|<>()]+"
+    r"(?=[\s;&|)]|$)"
+)
+
+
+def _strip_script_programs(text: str) -> str:
+    """`text` with every skill script that is executed as a program removed."""
+    return SCRIPT_PROGRAM.sub(r"\1", text)
+
+
 def _inline_source_targets(text: str) -> list[str]:
     """Skill paths this interpreter source touches other than by reading."""
     return EMBEDDED_PATH.findall(READ_ONLY_USES.sub("", text))
@@ -506,7 +528,7 @@ def bash_target(command: str) -> str:
     if INTERPRETER_HEREDOC.search(command) or any(
         _reads_stdin_source(*_command_head(_redirect_targets(c)[1])) for c in cmds
     ):
-        for dest in _inline_source_targets(command):
+        for dest in _inline_source_targets(_strip_script_programs(command)):
             named = _names_skill_path(dest)
             if named:
                 return named

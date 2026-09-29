@@ -1,6 +1,6 @@
 ---
 name: dep-upgrade
-description: Use whenever a uv-managed Python project's dependencies need upgrading safely — the uv lock --upgrade, pip-audit, test-gate, classify-breakage runbook, splitting lockfile churn into direct vs transitive. Triggers — "upgrade the dependencies", "check for vulnerable dependencies". Do NOT use to add one dependency (just uv add), scaffold tooling (see python-bootstrap), or publish (see pypi-release).
+description: Use whenever a uv-managed Python project's dependencies need upgrading safely — runs uv lock --upgrade, pip-audit and the test gate, classifies breakage, splits direct from transitive churn. Triggers — "upgrade the dependencies", "check for vulnerable dependencies". Do NOT use to add one dependency (just uv add), scaffold tooling (see python-bootstrap), or publish (see pypi-release).
 argument-hint: "uv.lock.bak uv.lock"
 user-invocable: true
 metadata:

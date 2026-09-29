@@ -40,11 +40,24 @@ They also get their own line, because they are the only direct evidence of what
 model a dispatch actually ran as. `models.workers` says what should have been
 used; this says what was.
 
+## --actions: the other meter
+
+The same backward question for GitHub Actions minutes (#463), which a private
+repo on GitHub Free has 2,000 of a month and a busy review loop can spend in
+days. `--actions` lists this month's workflow runs through `gh api` and sums
+their jobs, each rounded up to a whole minute the way GitHub bills them, with
+the runner multiplier (Windows x2, macOS x10, self-hosted free). A skipped job
+never got a runner and counts zero. It is an estimate from job timings — the
+repository's billing page is the authority — but it names the workflow, which
+the billing page does not. Without `gh` it says so and exits 0.
+
 Usage:
     usage_report.py                          # every project, all time
     usage_report.py --since 2026-09-14       # one day
     usage_report.py --project claude-arsenal # one project dir (substring match)
     usage_report.py --json                   # same numbers, machine-readable
+    usage_report.py --actions                # Actions minutes, this repo, this month
+    usage_report.py --actions --repo o/r --repo o/s --since 2026-09-01
 
 Exit: 0 on success, 2 when the projects directory does not exist.
 """
@@ -53,7 +66,11 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
+import shutil
+import subprocess
 import sys
+import urllib.parse
 from collections import defaultdict
 from collections.abc import Iterator
 from datetime import UTC, datetime
@@ -333,6 +350,156 @@ def _bucket_json(bucket: Bucket) -> dict[str, Any]:
     }
 
 
+# --- --actions --------------------------------------------------------------
+
+# Pages of 100 runs per repo before the listing is called truncated. A month
+# that needs more than this has a trigger problem the table will already show.
+_ACTIONS_MAX_PAGES = 10
+
+
+class GhUnavailable(Exception):
+    """`gh` is missing, or a call failed; the message says which."""
+
+
+def _gh(path: str) -> Any:
+    if shutil.which("gh") is None:
+        raise GhUnavailable("`gh` is not installed")
+    try:
+        proc = subprocess.run(
+            ["gh", "api", path],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=60,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise GhUnavailable(str(exc)) from exc
+    if proc.returncode != 0:
+        lines = (proc.stderr or proc.stdout or "gh api failed").strip().splitlines()
+        raise GhUnavailable(lines[0] if lines else "gh api failed")
+    try:
+        return json.loads(proc.stdout or "{}")
+    except ValueError as exc:
+        raise GhUnavailable(f"gh api returned non-JSON for {path}") from exc
+
+
+def _current_repo() -> str:
+    if shutil.which("gh") is None:
+        raise GhUnavailable("`gh` is not installed")
+    proc = subprocess.run(
+        ["gh", "repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=60,
+    )
+    name = proc.stdout.strip()
+    if proc.returncode != 0 or not name:
+        raise GhUnavailable("no GitHub repository here — pass --repo OWNER/REPO")
+    return name
+
+
+def _ts(raw: Any) -> datetime | None:
+    if not isinstance(raw, str) or not raw:
+        return None
+    try:
+        return datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def _multiplier(labels: list[str]) -> int:
+    joined = " ".join(labels).lower()
+    if "self-hosted" in joined:
+        return 0
+    if "macos" in joined:
+        return 10
+    if "windows" in joined:
+        return 2
+    return 1
+
+
+def job_minutes(job: dict[str, Any]) -> int:
+    """Billed minutes for one job: whole minutes, rounded up, times the runner rate."""
+    if job.get("conclusion") == "skipped":
+        return 0
+    start, end = _ts(job.get("started_at")), _ts(job.get("completed_at"))
+    if start is None or end is None:
+        return 0
+    seconds = (end - start).total_seconds()
+    if seconds <= 0:
+        return 0
+    return math.ceil(seconds / 60) * _multiplier([str(x) for x in job.get("labels") or []])
+
+
+def actions_usage(repo: str, since: str) -> dict[str, Any]:
+    """Per-workflow run counts and estimated billed minutes for one repo."""
+    workflows: dict[str, dict[str, int]] = {}
+    created = urllib.parse.quote(f">={since}")
+    truncated = False
+    for page in range(1, _ACTIONS_MAX_PAGES + 1):
+        data = _gh(f"repos/{repo}/actions/runs?created={created}&per_page=100&page={page}")
+        runs = data.get("workflow_runs") or []
+        for run in runs:
+            name = str(run.get("name") or run.get("path") or "?")
+            row = workflows.setdefault(name, {"runs": 0, "billed_runs": 0, "minutes": 0})
+            row["runs"] += 1
+            jobs = _gh(f"repos/{repo}/actions/runs/{run.get('id')}/jobs?per_page=100")
+            minutes = sum(job_minutes(j) for j in jobs.get("jobs") or [])
+            row["minutes"] += minutes
+            row["billed_runs"] += 1 if minutes else 0
+        if len(runs) < 100:
+            break
+    else:
+        truncated = True
+    return {"repo": repo, "since": since, "truncated": truncated, "workflows": workflows}
+
+
+def render_actions(reports: list[dict[str, Any]]) -> str:
+    since = reports[0]["since"] if reports else ""
+    lines = [
+        f"actions usage since {since} — estimated billed minutes "
+        "(each job rounded up to a minute; skipped jobs are free)",
+        "",
+        f"{'repo':<28} {'workflow':<28} {'runs':>6} {'billed':>7} {'minutes':>8}",
+    ]
+    total = 0
+    for rep in reports:
+        rows = sorted(rep["workflows"].items(), key=lambda kv: -kv[1]["minutes"])
+        for name, row in rows:
+            total += row["minutes"]
+            lines.append(
+                f"{rep['repo'][:28]:<28} {name[:28]:<28} {row['runs']:>6} "
+                f"{row['billed_runs']:>7} {row['minutes']:>8}"
+            )
+        if rep["truncated"]:
+            lines.append(f"{rep['repo']}: more than {_ACTIONS_MAX_PAGES * 100} runs — truncated")
+    lines += ["", f"TOTAL  {total} minute(s). The repository's billing page is the authority."]
+    return "\n".join(lines) + "\n"
+
+
+def main_actions(repos: list[str], since: str, as_json: bool) -> int:
+    since = since or datetime.now(UTC).strftime("%Y-%m-01")
+    try:
+        targets = repos or [_current_repo()]
+    except GhUnavailable as exc:
+        print(f"usage_report: --actions needs gh: {exc}", file=sys.stderr)
+        return 0
+    reports = []
+    for repo in targets:
+        try:
+            reports.append(actions_usage(repo, since))
+        except GhUnavailable as exc:
+            print(f"usage_report: {repo}: {exc}", file=sys.stderr)
+    if as_json:
+        print(json.dumps(reports, separators=(",", ":"), sort_keys=True))
+    elif reports:
+        print(render_actions(reports), end="")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -342,7 +509,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--until", default="", metavar="YYYY-MM-DD", help="inclusive upper bound")
     parser.add_argument("--project", default="", help="only project dirs containing this substring")
     parser.add_argument("--json", action="store_true", help="machine-readable output")
+    parser.add_argument(
+        "--actions", action="store_true", help="GitHub Actions minutes per workflow, via gh"
+    )
+    parser.add_argument(
+        "--repo", action="append", default=[], help="OWNER/REPO for --actions (repeatable)"
+    )
     args = parser.parse_args(argv)
+
+    if args.actions:
+        return main_actions(args.repo, args.since, args.json)
 
     if not args.projects_dir.is_dir():
         print(f"usage_report: no such directory: {args.projects_dir}", file=sys.stderr)

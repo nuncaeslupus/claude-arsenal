@@ -102,5 +102,45 @@ python3 "${REPORT}" --projects-dir "${tmp}/nope" >/dev/null 2>&1
 [[ "$?" == "2" ]] || fail "a missing projects dir should exit 2"
 echo "PASS: missing projects directory exits 2"
 
+# --- --actions: billed minutes per workflow, from a fake gh (#463) ---
+# A skipped job never got a runner and bills nothing; a 61-second job bills two
+# minutes; a Windows job bills double. Those three are where a hand estimate of
+# the Actions bill goes wrong.
+mkdir -p "${tmp}/bin"
+cat > "${tmp}/bin/gh" <<'SH'
+#!/usr/bin/env bash
+[[ "$1" == "api" ]] || exit 1
+case "$2" in
+  repos/o/r/actions/runs\?*page=1)
+    echo '{"workflow_runs":[{"id":1,"name":"CI"},{"id":2,"name":"CI"},{"id":3,"name":"arsenal queue"}]}' ;;
+  repos/o/r/actions/runs/1/jobs*)
+    echo '{"jobs":[{"conclusion":"success","labels":["ubuntu-latest"],"started_at":"2026-09-02T10:00:00Z","completed_at":"2026-09-02T10:01:01Z"}]}' ;;
+  repos/o/r/actions/runs/2/jobs*)
+    echo '{"jobs":[{"conclusion":"success","labels":["windows-latest"],"started_at":"2026-09-02T10:00:00Z","completed_at":"2026-09-02T10:00:30Z"}]}' ;;
+  repos/o/r/actions/runs/3/jobs*)
+    echo '{"jobs":[{"conclusion":"skipped","labels":["ubuntu-latest"],"started_at":"2026-09-02T10:00:00Z","completed_at":"2026-09-02T10:00:00Z"}]}' ;;
+  *) echo "unexpected: $*" >&2; exit 1 ;;
+esac
+SH
+chmod +x "${tmp}/bin/gh"
+out=$(PATH="${tmp}/bin:${PATH}" python3 "${REPORT}" --actions --repo o/r --since 2026-09-01 --json) \
+    || fail "--actions should exit 0"
+got=$(python3 -c "
+import json,sys
+w=json.load(sys.stdin)[0]['workflows']
+print(w['CI']['minutes'], w['CI']['runs'], w['arsenal queue']['minutes'], w['arsenal queue']['billed_runs'])
+" <<<"${out}")
+[[ "${got}" == "4 2 0 0" ]] || fail "expected CI 4 min over 2 runs, queue 0 billed, got '${got}'"
+PATH="${tmp}/bin:${PATH}" python3 "${REPORT}" --actions --repo o/r | grep -q "TOTAL  4 minute" \
+    || fail "--actions table should total 4 minutes"
+echo "PASS: --actions rounds each job up, doubles Windows, bills skipped jobs nothing"
+
+nogh="${tmp}/nogh"; mkdir -p "${nogh}"
+ln -s "$(command -v python3)" "${nogh}/python3"
+out=$(PATH="${nogh}" python3 "${REPORT}" --actions --repo o/r 2>&1); rc=$?
+(( rc == 0 )) || fail "--actions without gh must exit 0, got ${rc}"
+[[ "${out}" == *"needs gh"* || "${out}" == *"not installed"* ]] || fail "no reason given: ${out}"
+echo "PASS: --actions without gh fails soft with a reason"
+
 echo "PASS: usage_report_test — per-session, per-model, and the dispatched half"
 exit 0

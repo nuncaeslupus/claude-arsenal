@@ -8,6 +8,17 @@
 **Date**: YYYY-MM-DD
 **Ticket / PR**: <id>
 **Author**: <name>
+**Revision**: 1
+**Status**: draft
+**Revision log**:
+- r1 — first draft
+
+> Review record. Each round of reviewer notes makes a new revision: bump
+> **Revision**, add a log line naming the export it applied
+> (``- r2 — applied `<project>-spec-notes-<date>-r1.md` ``), and commit that
+> export beside this file in the same commit. On approval set
+> **Status** to `approved (YYYY-MM-DD, revision N)` and, when the reviewer sent
+> no notes for that revision, add `— without annotations`.
 
 ---
 
@@ -77,6 +88,12 @@
 
 **Open questions**:
 - [ ] ...
+
+**Decisions log** (carried unchanged from `explore-idea`; delete this block when the spec did not start there):
+
+| ID | Decision | Status | Date |
+|----|----------|--------|------|
+| D-1 | <what was decided> | agreed / open / superseded by D-N | YYYY-MM-DD |
 
 ---
 

@@ -1,6 +1,6 @@
 # Claude Arsenal
 
-<!-- claude-arsenal v4.23.0 — imported via @claude-arsenal/AGENTS.md -->
+<!-- claude-arsenal v4.24.0 — imported via @claude-arsenal/AGENTS.md -->
 
 This file is imported by the host repo's `CLAUDE.md` via the session-protocol block
 that `/init` injects, so it sits in context on **every turn of every session**. It
@@ -198,6 +198,8 @@ After winning, mark the issue so a human can see who holds it: self-assign, add
 
 ## Completion — merging is the update
 
+**Every change reaches the default branch through a PR** — ad hoc conversational work too,
+not only claimed tasks; never push to it directly, even where nothing refuses the push.
 **No step in this protocol asks anyone to finish a task.** `open_task_pr.sh` resolves the
 task's issue number, writes `Closes #<issue>` into the PR body *and* the commit message,
 and moves the task file into `tasks/_history/` with `status: merged` inside the same diff.
@@ -217,6 +219,16 @@ the user a question the host already answered.
 
 ---
 
+## Specs and plans
+
+Idea work goes through `explore-idea`, spec work through `specify`, plan work through `design`;
+another plugin's brainstorming or planning skill does not replace them, and no plan is written
+before the annotated spec is approved. **Every spec or plan handed to the user goes through `create_reader.py` and the
+HTML is what is handed over**, whichever skill wrote the Markdown.
+A diagram in a spec, plan or doc is a ```drawspec fence, not hand-drawn SVG or ASCII art → `claude-arsenal/references/diagrams.md`.
+
+---
+
 ## References — read the one you need, when you need it
 
 Each is a plain file to open, not an import. Nothing below is in context until you read it.
@@ -228,7 +240,7 @@ Each is a plain file to open, not an import. Nothing below is in context until y
 | `references/queue-seeding.md` | The queue is empty: seeding from a plan table, importing filed issues, seeding a `D-N` divergence |
 | `references/evidence-gates.md` | Writing or trusting a gate: the fence rule, hardened execution, numeric evidence, `unmeasured` |
 | `references/claiming-internals.md` | A claim misbehaves: why ref creation is the lock, attempt refs, ref accumulation, `on: push` cost |
-| `references/github-automation.md` | Completion: what `merge-policy` requires, the five transitions GitHub runs, opting out |
+| `references/github-automation.md` | Completion: what `merge-policy` requires, the five transitions GitHub runs, opting out. Actions minutes short → `references/ci-minutes.md` |
 | `references/quota-governance.md` | The loop stopped before dispatch: quota windows, fail-open, the round cap |
 | `references/pre-pr-review.md` | About to open a PR: the cold-start adversarial review, its verdicts, `pre-pr-review` modes |
 | `references/performance-tuning.md` | The loop feels slow: reading the recorded timings, and which shape routes to which remedy |

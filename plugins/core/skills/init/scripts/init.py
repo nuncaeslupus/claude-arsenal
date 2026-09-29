@@ -10,6 +10,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 import tomllib
 from pathlib import Path
 from typing import Any
@@ -47,11 +48,16 @@ Otherwise, every session, without waiting to be asked:
    `bash claude-arsenal/bin/claim_task.sh <id>` takes it (see `@claude-arsenal/AGENTS.md`).
    - **Nothing returned + workspace plans exist** → seed tasks from each plan.
    - **Nothing at all** → ask what to work on.
-5. Open each task's PR with `Closes #<issue>` so merging it closes the task by itself.
+5. Every change goes through a PR, ad hoc requests included — never push to the default
+   branch. A task's PR carries `Closes #<issue>` so merging it closes the task by itself.
    Dispatching the work to another session instead? Pass the repository explicitly
    and pass `ARSENAL_TASK_ISSUE` — a spawned worker can resolve neither.
    → `claude-arsenal/references/orchestrator-tick.md`
 6. After any session with tasks: update `{home}/session/handover.md`.
+
+Specs and plans live at `status/specification.md` and `status/plan.md` (a workspace's at
+`{home}/project/<ws>/spec.md` / `plan.md`). A brainstorming or planning skill from another
+plugin writes its output there too, not to its own default location.
 
 @claude-arsenal/AGENTS.md
 <!-- /claude-arsenal: auto-managed -->"""
@@ -84,18 +90,21 @@ _CONFIG_TEMPLATE = """\
 merge-policy = "after-ci"
 
 # Shell command run before any task PR is opened; a non-zero exit means no PR.
-# Empty = no host gate. Point it at everything your repo actually checks, not
-# just lint — whatever is not named here is enforced by nobody.
+# Point it at everything your repo actually checks, not just lint — whatever is
+# not named here is enforced by nobody. `"none"` records that this repo has no
+# gate; empty means nobody has decided yet, and `/init` says so until someone does.
 #   host-gate = "make lint test evidence"
 host-gate = ""
 
-# The cheap slice of the gate above, run by `open_task_pr.sh <task> --preflight`
-# and nowhere else. Empty = preflight only checks that the gates resolve, which
-# is all it can know on its own. Name the part that touches the repo's own files
-# (a file count, a coverage denominator, a gate-coverage sweep): those are what
-# the archive moves out from under the real host gate, and the only way to find
-# out today is to pay for the whole run first.
-#   preflight-gate = "make verify-gates"
+# The fast, change-scoped slice of the gate above: lint/typecheck the changed
+# files, run the tests the change selects. `open_task_pr.sh <task> --preflight`
+# runs it, and so does every review round after the first
+# (claude-arsenal/bin/fast_gate.sh, which exports ARSENAL_CHANGED_FILES), so the
+# full host gate runs once before the PR and once before merge, not per push.
+# Empty = review rounds fall back to the full host gate. Include the part that
+# touches the repo's own files (a file count, a gate-coverage sweep): the
+# archive moves those out from under the real host gate.
+#   preflight-gate = 'make lint FILES="$ARSENAL_CHANGED_FILES" && make verify-gates'
 preflight-gate = ""
 
 # Shell command that installs this repo's dependencies, run once in a fresh
@@ -152,7 +161,8 @@ context-window = 0
 # the next `/init` (which the session protocol runs anyway) adds or prunes the
 # skills for that section.
 #
-#   workflow  specify, design, execution, review, ship, gate-check
+#   workflow  explore-idea, specify, design, execution, review, ship,
+#             gate-check
 #   python    python-bootstrap, pypi-release, coverage-gaps, dep-upgrade,
 #             mutmut-report, pin-check
 #
@@ -532,6 +542,94 @@ def _changelog_since(bundle: Path, installed_ver: str, bundle_ver: str) -> str:
     return "\n\n".join(f"## {ver}\n{body}" for _, ver, body in entries)
 
 
+# Where released versions are tagged. `_check_bundle_version` only compares the
+# host against THIS copy of init, so a plugin cache frozen at an old release
+# reported "up to date" forever: one host was bootstrapped from 2.5.0 while
+# upstream was at 4.23.0 (#462). Third-party marketplaces do not auto-update by
+# default, so nothing else would ever notice.
+_UPSTREAM_URL = "https://github.com/nuncaeslupus/claude-arsenal"
+_UPSTREAM_CACHE_TTL = 6 * 3600  # one `git ls-remote` per six hours, not per session
+# A failed lookup is cached too, for less time: offline or behind a proxy that
+# drops github.com, retrying on every session start would pay the timeout each time.
+_UPSTREAM_FAIL_TTL = 3600
+_UPDATE_COMMANDS = (
+    "claude plugin marketplace update claude-arsenal\n"
+    "    claude plugin update core@claude-arsenal\n"
+    "    claude plugin update skill-workshop@claude-arsenal\n"
+    "  then restart Claude Code and re-run /init."
+)
+
+
+def _latest_upstream_version() -> str | None:
+    """The newest `v*` tag upstream, or None when it cannot be learned.
+
+    Cached under ~/.cache so a session start pays for the network at most once
+    per TTL. Offline, a missing `git`, or `ARSENAL_UPSTREAM_CHECK=0` all answer
+    None — an unknown upstream is never a reason to block an install.
+    """
+    if os.environ.get("ARSENAL_UPSTREAM_CHECK", "1") == "0":
+        return None
+    url = os.environ.get("ARSENAL_UPSTREAM_URL", _UPSTREAM_URL)
+    cache = Path.home() / ".cache" / "claude-arsenal" / "upstream-latest"
+    try:
+        cached_url, cached_ver = cache.read_text(encoding="utf-8").split()
+        ttl = _UPSTREAM_FAIL_TTL if cached_ver == "-" else _UPSTREAM_CACHE_TTL
+        if cached_url == url and time.time() - cache.stat().st_mtime < ttl:
+            return None if cached_ver == "-" else cached_ver
+    except (OSError, ValueError):
+        pass
+    latest: str | None = None
+    try:
+        out = subprocess.run(
+            ["git", "ls-remote", "--tags", "--refs", url, "v*"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=True,
+        ).stdout
+    except (OSError, subprocess.SubprocessError):
+        out = ""
+    tags = [line.rsplit("refs/tags/v", 1)[-1] for line in out.splitlines() if "refs/tags/v" in line]
+    parsed = [(v, _parse_version(v)) for v in tags]
+    ranked = [(p, v) for v, p in parsed if p]
+    if ranked:
+        latest = max(ranked)[1]
+    try:
+        cache.parent.mkdir(parents=True, exist_ok=True)
+        cache.write_text(f"{url} {latest or '-'}\n", encoding="utf-8")
+    except OSError:
+        pass
+    return latest
+
+
+def _check_upstream(bundle: Path, first_install: bool, allow_stale: bool) -> bool:
+    """Warn when this init is older than the newest release; False = refuse.
+
+    A first install from a stale copy is refused unless `allow_stale`: that is
+    where a stale bundle does the most damage, seeding a new repo with behaviour
+    that has since been fixed. On an existing repo it is a banner only.
+    """
+    ver_path = bundle / ".bundle-version"
+    if not ver_path.exists():
+        return True
+    ours = ver_path.read_text(encoding="utf-8").strip()
+    latest = _latest_upstream_version()
+    ours_p, latest_p = _parse_version(ours), _parse_version(latest or "")
+    if not (ours_p and latest_p and latest_p > ours_p):
+        return True
+    print(
+        f"ARSENAL OUTDATED: this init is {ours}, the latest release is {latest}.\n"
+        f"  Update the plugin:\n    {_UPDATE_COMMANDS}"
+    )
+    if first_install and not allow_stale:
+        print(
+            f"init: refusing to bootstrap a new repo from {ours} — "
+            "pass --allow-stale to do it anyway."
+        )
+        return False
+    return True
+
+
 def _check_bundle_version(bundle: Path, arsenal: Path) -> tuple[str, str] | None:
     """Print an upgrade banner; REPORT a downgrade instead of performing one.
 
@@ -561,6 +659,9 @@ def _check_bundle_version(bundle: Path, arsenal: Path) -> tuple[str, str] | None
     return None
 
 
+_STATUSLINE_SCRIPT = "claude-arsenal/bin/statusline_capture.sh"
+
+
 def _register_statusline(repo_path: Path) -> None:
     """Register statusline_capture.sh as the host statusLine command.
 
@@ -571,8 +672,9 @@ def _register_statusline(repo_path: Path) -> None:
     settings_path = repo_path / ".claude" / "settings.json"
     block = {
         "type": "command",
-        "command": "bash claude-arsenal/bin/statusline_capture.sh",
+        "command": _hook_command(_STATUSLINE_SCRIPT),
     }
+    legacy = {**block, "command": _legacy_hook_command(_STATUSLINE_SCRIPT)}
     if settings_path.exists():
         try:
             settings = json.loads(settings_path.read_text(encoding="utf-8"))
@@ -581,7 +683,8 @@ def _register_statusline(repo_path: Path) -> None:
         except json.JSONDecodeError:
             print("  settings.json: unparseable — skipping statusLine registration")
             return
-        if "statusLine" in settings:
+        # A relative statusLine an earlier init wrote is ours to upgrade (#468).
+        if "statusLine" in settings and settings["statusLine"] != legacy:
             print("  settings.json: statusLine already set — skipping")
             return
         settings["statusLine"] = block
@@ -662,6 +765,26 @@ _VENDOR_MARKER = ".arsenal-vendored"
 _GATE_HOOK = "claude-arsenal/bin/check_skill_workshop_loaded.sh"
 _MARK_HOOK = "claude-arsenal/bin/mark_skill_workshop_loaded.sh"
 _MARK_PROMPT_HOOK = "claude-arsenal/bin/mark_skill_workshop_loaded_from_prompt.sh"
+# Not part of the skill-edit gate, registered beside it for the same reason: a
+# settings hook is the only kind that reaches a cloud session. It keys on the
+# path, so a spec or plan another plugin's skill wrote gets the reminder too.
+_READER_HOOK = "claude-arsenal/bin/reader_hook.sh"
+
+
+def _hook_command(script: str) -> str:
+    """The settings.json command that runs `script`, anchored at the project root.
+
+    A relative `bash claude-arsenal/bin/…` resolves against the session's cwd, so
+    once a session `cd`s into a subdirectory the hook fails — on every Bash call,
+    for the gate (#468). `$CLAUDE_PROJECT_DIR` is set for hooks; the `:-.`
+    fallback keeps a runner that does not set it where it was before.
+    """
+    return f'bash "${{CLAUDE_PROJECT_DIR:-.}}"/{script}'
+
+
+def _legacy_hook_command(script: str) -> str:
+    """The relative spelling init wrote before #468, migrated on the next run."""
+    return f"bash {script}"
 
 
 def _read_settings(settings_path: Path) -> dict | None:
@@ -1169,19 +1292,26 @@ def _register_gate_hook(repo_path: Path) -> None:
         print("  settings.json: unexpected 'hooks' value — skipping gate-hook registration")
         return
 
-    wanted = {
-        "PreToolUse": ("Edit|Write|MultiEdit|Bash", _GATE_HOOK),
-        "PostToolUse": ("Skill", _MARK_HOOK),
-        "UserPromptSubmit": (None, _MARK_PROMPT_HOOK),
-    }
+    wanted = [
+        ("PreToolUse", "Edit|Write|MultiEdit|Bash", _GATE_HOOK),
+        ("PostToolUse", "Skill", _MARK_HOOK),
+        ("PostToolUse", "Write|Edit|MultiEdit", _READER_HOOK),
+        ("UserPromptSubmit", None, _MARK_PROMPT_HOOK),
+    ]
     changed = False
-    for event, (matcher, command) in wanted.items():
+    for event, matcher, command in wanted:
         entries = hooks.setdefault(event, [])
         if not isinstance(entries, list):
             continue
+        # Upgrade the relative spelling an earlier init wrote (#468) in place.
+        for e in entries:
+            for h in e.get("hooks", []) if isinstance(e, dict) else []:
+                if isinstance(h, dict) and h.get("command") == _legacy_hook_command(command):
+                    h["command"] = _hook_command(command)
+                    changed = True
         if any(command in json.dumps(e) for e in entries):
             continue
-        entry: dict = {"hooks": [{"type": "command", "command": f"bash {command}"}]}
+        entry: dict = {"hooks": [{"type": "command", "command": _hook_command(command)}]}
         if matcher:
             entry["matcher"] = matcher
         entries.append(entry)
@@ -1190,7 +1320,7 @@ def _register_gate_hook(repo_path: Path) -> None:
     if changed:
         settings_path.parent.mkdir(parents=True, exist_ok=True)
         settings_path.write_text(json.dumps(settings, indent=2) + "\n", encoding="utf-8")
-        print("  settings.json: registered the skill-edit gate")
+        print("  settings.json: registered the skill-edit gate and the spec/plan reader hook")
 
 
 def _retire_plugin_declaration(repo_path: Path) -> None:
@@ -1620,6 +1750,170 @@ def _install_queue_workflow(repo_path: Path, arsenal: Path, silent: bool = False
     )
 
 
+# The recorded outcomes of branch_protection.py worth remembering. `skipped` is
+# not one: it means a local precondition was missing (no gh, no login, no GitHub
+# remote), which the next deliberate `/init` should look at again.
+_PROTECTION_RECORDED = {"applied", "existing", "unavailable"}
+
+
+def _config_value(config: Path, key: str) -> Any:
+    """One top-level key from arsenal/config.toml, or None when unset or unreadable."""
+    try:
+        return tomllib.loads(config.read_text(encoding="utf-8")).get(key)
+    except (OSError, tomllib.TOMLDecodeError):
+        return None
+
+
+def _setup_branch_protection(repo_path: Path, arsenal: Path, enabled: bool) -> bool:
+    """Protect the default branch once, and record what happened.
+
+    Never on `--silent`: that is every session start, and a GitHub API round
+    trip per session to re-learn a repository setting is the wrong price. The
+    outcome goes into `branch-protection` in arsenal/config.toml so a later
+    `/init` does not ask again; clearing the key asks again.
+
+    Returns whether the script saw a private repository — the one fact the
+    merge-policy advice needs that no local file can give it (#463).
+    """
+    config = _home(repo_path) / "config.toml"
+    if _config_value(config, "branch-protection"):
+        return False
+    if not enabled:
+        _upsert_bare_key(config, "branch-protection", '"off"')
+        print(
+            "  branch protection: off (--no-branch-protection) — recorded in arsenal/config.toml. "
+            "Nothing on GitHub stops a direct push to the default branch."
+        )
+        return False
+    if os.environ.get("ARSENAL_BRANCH_PROTECTION", "1") == "0":
+        return False
+    script = arsenal / "scripts" / "branch_protection.py"
+    if not script.is_file():
+        return False
+    try:
+        proc = subprocess.run(
+            [sys.executable, str(script), "--repo-root", str(repo_path)],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=180,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        print(f"  branch protection: not attempted ({exc}); run {script.name} by hand.")
+        return False
+    lines = proc.stdout.strip().splitlines()
+    outcome = lines[-1].removeprefix("outcome: ").strip() if lines else ""
+    for line in lines[:-1]:
+        print(f"  {line}")
+    if outcome in _PROTECTION_RECORDED:
+        _upsert_bare_key(config, "branch-protection", f'"{outcome}"')
+    return any("visibility: private" in line for line in lines)
+
+
+def _suggest_host_gate(repo_path: Path) -> str | None:
+    """A starting value for `host-gate`, from the tooling the repo visibly has."""
+    makefile = repo_path / "Makefile"
+    if makefile.is_file():
+        text = makefile.read_text(encoding="utf-8", errors="replace")
+        targets = [t for t in ("lint", "test") if re.search(rf"^{t}\s*:", text, re.MULTILINE)]
+        if targets:
+            return "make " + " ".join(targets)
+    package = repo_path / "package.json"
+    if package.is_file():
+        try:
+            scripts = json.loads(package.read_text(encoding="utf-8")).get("scripts") or {}
+        except (OSError, ValueError, AttributeError):
+            scripts = {}
+        steps = [f"npm run {s}" for s in ("lint",) if s in scripts]
+        steps += ["npm test"] if "test" in scripts else []
+        if steps:
+            return " && ".join(steps)
+    if (repo_path / "Cargo.toml").is_file():
+        return "cargo test"
+    if (repo_path / "go.mod").is_file():
+        return "go test ./..."
+    if (repo_path / "pyproject.toml").is_file() or (repo_path / "tests").is_dir():
+        return "uv run pytest" if (repo_path / "uv.lock").is_file() else "pytest"
+    return None
+
+
+def _suggest_preflight_gate(repo_path: Path) -> str | None:
+    """A starting value for `preflight-gate`: the fast slice, never the tests."""
+    makefile = repo_path / "Makefile"
+    if makefile.is_file():
+        text = makefile.read_text(encoding="utf-8", errors="replace")
+        for target in ("preflight", "check-fast", "lint"):
+            if re.search(rf"^{target}\s*:", text, re.MULTILINE):
+                return f"make {target}"
+    package = repo_path / "package.json"
+    if package.is_file():
+        try:
+            scripts = json.loads(package.read_text(encoding="utf-8")).get("scripts") or {}
+        except (OSError, ValueError, AttributeError):
+            scripts = {}
+        if "lint" in scripts:
+            return "npm run lint"
+    if (repo_path / "Cargo.toml").is_file():
+        return "cargo check"
+    if (repo_path / "go.mod").is_file():
+        return "go vet ./..."
+    return None
+
+
+def _report_gate_choices(repo_path: Path, private: bool = False) -> None:
+    """Say out loud that `host-gate` and `merge-policy` are undecided.
+
+    Both ship as template values, and a template value nobody looked at is a
+    decision nobody made: an empty host gate enforces nothing, and `after-ci`
+    in a repo with no CI waits on checks that will never report. init runs
+    non-interactively, so it cannot ask — it prints, and the init skill has the
+    session ask the user and write the answer (a command, or "none").
+
+    A private repo is the same trap on a timer (#463): its Actions minutes are
+    metered, and once they run out every check is absent, which `after-ci`
+    reads as "wait". So there the advice is the local gates as the bar. It is
+    advice only — an existing value is never rewritten.
+    """
+    config = _home(repo_path) / "config.toml"
+    gate = _config_value(config, "host-gate")
+    if isinstance(gate, str) and gate.strip():
+        return
+    suggestion = _suggest_host_gate(repo_path)
+    wf_dir = repo_path / ".github" / "workflows"
+    has_ci = wf_dir.is_dir() and any(
+        p.name != _QUEUE_WORKFLOW for p in [*wf_dir.glob("*.yml"), *wf_dir.glob("*.yaml")]
+    )
+    # `unavailable` is GitHub refusing branch protection — on a private repo,
+    # that is the Free plan, which is also the plan with the 2,000-minute cap.
+    private = private or _config_value(config, "branch-protection") == "unavailable"
+    policy = _config_value(config, "merge-policy") or "after-ci"
+    print(
+        "\n  HOST-GATE UNSET — nothing runs before a task PR opens. Ask the user and record "
+        'the answer as `host-gate` in arsenal/config.toml: a command, or "none".'
+        + (f" Suggested from this repo: `{suggestion}`." if suggestion else "")
+    )
+    fast = _config_value(config, "preflight-gate")
+    if not (isinstance(fast, str) and fast.strip()):
+        fast_hint = _suggest_preflight_gate(repo_path)
+        print(
+            "  PREFLIGHT-GATE UNSET — review rounds after the first re-run the FULL host gate. "
+            "Record a fast, change-scoped command as `preflight-gate` (it sees "
+            "$ARSENAL_CHANGED_FILES)." + (f" Suggested: `{fast_hint}`." if fast_hint else "")
+        )
+    if not has_ci or private:
+        why = "NO CI workflow found" if not has_ci else "private repo — Actions minutes are metered"
+        advice = (
+            f"{why}: `after-ci` waits forever once checks stop reporting. Recommended: "
+            '`always`, with a required local `host-gate` and `pre-pr-review = "required"` — '
+            "the local gates become the whole bar, and nothing independent re-runs them. "
+            "See claude-arsenal/references/ci-minutes.md"
+        )
+    else:
+        advice = "CI workflows found; `after-ci-and-review` if a review bot reports on PRs"
+    print(f"  MERGE-POLICY is `{policy}` — confirm it with the user ({advice}).")
+
+
 def init_base(
     repo_path: Path,
     bundle_override: Path | None = None,
@@ -1627,10 +1921,15 @@ def init_base(
     allow_downgrade: bool = False,
     skills_profile: str | None = None,
     sections: list[str] | None = None,
+    allow_stale: bool = False,
+    branch_protection: bool = True,
 ) -> bool:
-    """True when the install ran; False when it refused to downgrade (nothing written)."""
+    """True when the install ran; False when it refused (nothing written)."""
     bundle = _bundle_dir(bundle_override)
     arsenal = repo_path / "claude-arsenal"
+
+    if not _check_upstream(bundle, not (arsenal / ".bundle-version").exists(), allow_stale):
+        return False
 
     if not silent:
         print("Initializing claude-arsenal/...")
@@ -1671,7 +1970,13 @@ def init_base(
             "existing tasks and config where nothing reads them. Move it "
             f"(`mv {default_home} {home}`), or unset ARSENAL_HOME to keep using it."
         )
-    for d in ["tasks", "specs", "plans", "project", "session"]:
+    # No `specs/` or `plans/`: nothing ever wrote there. `specify` and `design`
+    # write `status/specification.md` / `status/plan.md`, or a workspace's
+    # `project/<ws>/spec.md` / `plan.md`, and every reader of a spec looks there.
+    # Two empty directories beside them read as the place specs go, which is
+    # how a planning skill from another plugin ended up writing where no
+    # validator, reader or gate would find its output. Existing ones are left.
+    for d in ["tasks", "project", "session"]:
         (home / d).mkdir(parents=True, exist_ok=True)
 
     # Refresh bundle files
@@ -1759,6 +2064,12 @@ def init_base(
     # CLAUDE.md
     _inject_claude_md(repo_path)
 
+    # The GitHub-side and config-side safety nets. Deliberate runs only: the
+    # session-start refresh is --silent and must stay cheap and offline.
+    if not silent:
+        private = _setup_branch_protection(repo_path, arsenal, branch_protection)
+        _report_gate_choices(repo_path, private=private)
+
     ver_path = arsenal / ".bundle-version"
     if silent:
         if ver_path.exists():
@@ -1778,6 +2089,8 @@ def init_workspace(
     allow_downgrade: bool = False,
     skills_profile: str | None = None,
     sections: list[str] | None = None,
+    allow_stale: bool = False,
+    branch_protection: bool = True,
 ) -> None:
     # The workspace name becomes a directory under arsenal/project/ — host-owned,
     # so a bundle upgrade never touches a workspace's spec, plan, or context.
@@ -1816,6 +2129,8 @@ def init_workspace(
         allow_downgrade=allow_downgrade,
         skills_profile=skills_profile,
         sections=sections,
+        allow_stale=allow_stale,
+        branch_protection=branch_protection,
     ):
         sys.exit("init: workspace not registered — the bundle refused to install (see above)")
 
@@ -1912,6 +2227,16 @@ def main() -> None:
         action="store_true",
         help="Overwrite a NEWER installed bundle with this skill's older copies.",
     )
+    p.add_argument(
+        "--allow-stale",
+        action="store_true",
+        help="Bootstrap a new repo even when this init is older than the latest release.",
+    )
+    p.add_argument(
+        "--no-branch-protection",
+        action="store_true",
+        help='Do not protect the default branch on GitHub; records branch-protection = "off".',
+    )
     args = p.parse_args()
 
     repo_path = Path(args.repo_path).resolve()
@@ -1940,6 +2265,8 @@ def main() -> None:
             allow_downgrade=args.allow_downgrade,
             skills_profile=args.profile,
             sections=_parse_sections(args.sections),
+            allow_stale=args.allow_stale,
+            branch_protection=not args.no_branch_protection,
         )
     else:
         init_base(
@@ -1949,6 +2276,8 @@ def main() -> None:
             allow_downgrade=args.allow_downgrade,
             skills_profile=args.profile,
             sections=_parse_sections(args.sections),
+            allow_stale=args.allow_stale,
+            branch_protection=not args.no_branch_protection,
         )
 
 

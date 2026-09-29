@@ -73,7 +73,7 @@ grep -q 'More host-owned content below the block' "${REPO}/CLAUDE.md" \
 #     standalone at the end. Matching the first occurrence cut the block in half
 #     and stranded steps 5 and 6 below the closing marker, where they read as
 #     host content and were duplicated on the next upgrade.
-for step in '5\. Open each task' '6\. After any session'; do
+for step in '5\. Every change goes through a PR' '6\. After any session'; do
     n=$(grep -c "^${step}" "${REPO}/CLAUDE.md")
     [[ "${n}" -eq 1 ]] || fail "protocol step matching /${step}/ appears ${n} times — the block was duplicated into host content"
 done
