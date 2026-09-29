@@ -18,6 +18,16 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [4.24.1] - 2026-09-29
+
+- **Queue workflow fixes now reach existing installs.** `/init` (and the
+  session-start refresh) used to leave `.github/workflows/arsenal-queue.yml`
+  alone whenever it differed from the shipped copy, which included every older
+  shipped version nobody had touched, so no upstream fix ever arrived. A copy
+  that matches any version arsenal has shipped is now refreshed, and init
+  prints `refreshed`; commit it with the bundle update. That delivers 4.24.0's
+  cheaper triggers without a manual diff. A copy you edited is still left alone.
+
 ## [4.24.0] - 2026-09-29
 
 - **`/init` now checks the newest release.** A plugin cache frozen at an old

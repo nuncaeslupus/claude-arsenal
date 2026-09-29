@@ -1670,6 +1670,15 @@ def _record_queue_automation(config: Path, value: str) -> None:
     _upsert_bare_key(config, "queue-automation", value)
 
 
+def _shipped_shas(source: Path) -> set[str]:
+    """Content hashes of every shipped version of `source`, from `<source>.shipped`."""
+    try:
+        lines = source.with_name(source.name + ".shipped").read_text(encoding="utf-8")
+    except OSError:
+        return set()
+    return {ln.strip() for ln in lines.splitlines() if ln.strip() and not ln.startswith("#")}
+
+
 def _install_queue_workflow(repo_path: Path, arsenal: Path, silent: bool = False) -> None:
     """Install .github/workflows/arsenal-queue.yml, and say plainly what it does.
 
@@ -1695,7 +1704,11 @@ def _install_queue_workflow(repo_path: Path, arsenal: Path, silent: bool = False
                        `true` to opt in again.
 
     A workflow the user has edited is left alone — clobbering local changes on
-    every session start is how vendored files lose people's trust.
+    every session start is how vendored files lose people's trust. "Differs from
+    the shipped copy" is not the test for that, though: an older shipped version
+    differs too, so every upstream fix used to stop at every existing install
+    (#470). A copy that matches a version listed in `<workflow>.shipped` is one
+    nobody edited, and is refreshed.
     """
     source = arsenal / "workflows" / _QUEUE_WORKFLOW
     if not source.is_file():
@@ -1710,9 +1723,16 @@ def _install_queue_workflow(repo_path: Path, arsenal: Path, silent: bool = False
     if target.exists():
         if setting is None:
             _record_queue_automation(config, "true")
-        if _content_sha(source) == _content_sha(target):
+        target_sha = _content_sha(target)
+        if _content_sha(source) == target_sha:
             if not silent:
                 print(f"  .github/workflows/{_QUEUE_WORKFLOW}: up to date")
+        elif target_sha in _shipped_shas(source):
+            shutil.copy2(source, target)
+            print(
+                f"  .github/workflows/{_QUEUE_WORKFLOW}: refreshed — it was an unedited "
+                "older shipped version. Commit it with the bundle update."
+            )
         else:
             print(
                 f"  .github/workflows/{_QUEUE_WORKFLOW}: differs from the shipped version "
