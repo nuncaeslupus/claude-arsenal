@@ -31,7 +31,9 @@ prefix: `.github/workflows/arsenal-queue.yml`. It is the queue's upkeep — clos
 a task whose merge did not close it, releasing the claim on a PR closed without
 merging, opening issue handles for new task files, and sweeping claims left by
 crashed sessions. `/init` prints what it installed and which permissions it asks
-GitHub for, and never overwrites a copy you have edited.
+GitHub for, and never overwrites a copy you have edited. A copy you have not
+edited is refreshed to the current version on the next run, so workflow fixes
+reach you without a manual diff.
 
 Delete it to opt out — `/init` records that choice as `queue-automation = false`
 in `arsenal/config.toml` and never reinstalls it (the session-start protocol runs
