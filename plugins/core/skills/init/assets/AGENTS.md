@@ -198,6 +198,8 @@ After winning, mark the issue so a human can see who holds it: self-assign, add
 
 ## Completion — merging is the update
 
+**Every change reaches the default branch through a PR** — ad hoc conversational work too,
+not only claimed tasks; never push to it directly, even where nothing refuses the push.
 **No step in this protocol asks anyone to finish a task.** `open_task_pr.sh` resolves the
 task's issue number, writes `Closes #<issue>` into the PR body *and* the commit message,
 and moves the task file into `tasks/_history/` with `status: merged` inside the same diff.

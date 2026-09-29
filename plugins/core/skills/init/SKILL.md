@@ -2,7 +2,7 @@
 name: init
 description: When the user needs claude-arsenal/ set up in a host repo, or wants to register a workspace via --workspace. Re-running is safe (refreshes stale bundle files only). Do NOT use to add tasks (see queue-add) or resume the worker loop (see queue-next).
 user-invocable: true
-argument-hint: "[--repo-path PATH] [--profile NAME] [--sections A,B] [--workspace NAME] [--root PATH] [--spec PATH] [--plan PATH]"
+argument-hint: "[--repo-path PATH] [--profile NAME] [--sections A,B] [--no-branch-protection] [--workspace NAME] [--root PATH] [--spec PATH] [--plan PATH]"
 ---
 
 # init
@@ -49,6 +49,26 @@ The chosen profile is written out as an editable `[skills]` table, so the answer
 is a starting point rather than a one-time decision. `--sections workflow,python`
 names sections directly instead, for a user who would rather skip the profiles.
 
+**After a first install — two answers init cannot give itself.** Init runs
+non-interactively, so it prints what is undecided and the session asks:
+
+- `HOST-GATE UNSET` — ask the user what must pass before a PR opens, offering the
+  suggestion init printed, and write it as `host-gate` in `arsenal/config.toml`.
+  "No gate" is a valid answer: record it as `host-gate = "none"`, never leave it
+  empty — empty means nobody decided, and init keeps asking.
+- `MERGE-POLICY is …` — confirm the value against the repo's real CI and review
+  tooling in the same question. A repo with no CI must not stay on `after-ci`.
+
+**Branch protection.** A deliberate (non-`--silent`) init protects the default
+branch on GitHub once: a PR before merging, admins included, and as required
+checks only those that actually reported on recent PRs — a bot that is installed
+but skips is never made required. Existing protection is left alone. The outcome
+is recorded as `branch-protection` in `arsenal/config.toml` so it is not retried;
+`--no-branch-protection` records `off`. When it cannot (no `gh`, no login, a plan
+without protection) it prints the reason and the manual step — pass that to the
+user. Re-run by hand with `branch_protection.py` (in `claude-arsenal/scripts/`):
+`--dry-run` previews, `--force` adds to an existing rule.
+
 **The capability map (read-only):**
 ```bash
 python3 "${CLAUDE_SKILL_DIR}/scripts/init.py" --repo-path . --list-sections
@@ -85,6 +105,7 @@ The script:
 7. Registers `statusline_capture.sh` as the host `statusLine` command (skipped if one already exists) so `budget_check.sh` can read quota.
 8. Injects the session-start protocol block + `@claude-arsenal/AGENTS.md` import into `CLAUDE.md`.
 9. Registers the skill-edit **gate hooks** in `.claude/settings.json` (`check_skill_workshop_loaded.sh` and its two marker hooks), plus `reader_hook.sh`, which reminds a session to regenerate the annotatable reader whenever a spec or plan is written — a plugin ships these as plugin hooks, but plugin hooks do not travel with a clone, and settings hooks do. It no longer writes a marketplace **declaration**: the web runtime never fetches a git marketplace, so the skills are **vendored** into `.claude/skills/` (item 4) where every surface reads them from the clone itself.
+10. On a deliberate run only (never `--silent`): applies branch protection once (above), then prints `HOST-GATE UNSET` / `MERGE-POLICY` when `host-gate` is still empty.
 
 **Retiring vendored skill copies:**
 ```bash

@@ -265,13 +265,14 @@ disappears the next time that skill is refreshed.
 
 ```toml
 merge-policy    = "after-ci"   # always | after-review | after-ci | after-ci-and-review | never
-host-gate       = ""           # shell command; non-zero means no task PR is opened
+host-gate       = ""           # shell command, or "none"; non-zero means no task PR is opened
 preflight-gate  = ""           # shell command; the cheap check `--preflight` runs
 host-setup      = ""           # shell command; installs deps in a fresh worktree
 pre-pr-review   = "warn"       # warn | required | off — the pre-PR adversarial review
 test-discipline = "test-first" # or test-after
 session-end     = "handoff"    # handoff | ticket | none
 listing-budget  = 8000         # the skills-listing budget the auditor enforces
+branch-protection = "applied"  # written by /init: applied | existing | unavailable | off
 ```
 
 `merge-policy` answers "what do you need before a task PR may merge?" You are
@@ -290,6 +291,24 @@ is red" — a repo out of runner minutes, or with no CI at all, has no run to wa
 for. Under `after-ci` that leaves two readings, both bad: nothing merges for as
 long as the outage lasts, or everyone learns to wave the gate through, which is
 the habit they keep on the day it starts meaning something again.
+
+### Deciding at `/init`, not by default
+
+`host-gate` and `merge-policy` both ship with template values, and a template value
+nobody looked at is a decision nobody made. So a deliberate `/init` prints
+`HOST-GATE UNSET` while `host-gate` is empty — with a suggestion from the repo's own
+tooling (`make lint test`, `npm test`, `pytest`, …) — and the current `merge-policy`
+beside what the repo's CI makes sensible; the init skill has the session ask and write
+the answer. `host-gate = "none"` records "no gate here" and reads as empty everywhere
+else; empty stays "not decided yet".
+
+The same run protects the default branch on GitHub, once: a PR before merging, admins
+included, and required checks limited to those that actually reported on recent PRs, so
+a review bot that is installed but skips never blocks a merge. Existing protection is
+left alone. The outcome is recorded as `branch-protection` so it is not retried — clear
+it to retry, or pass `--no-branch-protection` to record `off`. The rule matters because
+the task flow only covers claimed tasks; ad hoc work reaches the default branch through
+whatever nothing refuses.
 
 ### The host gate
 

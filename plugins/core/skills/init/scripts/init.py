@@ -48,7 +48,8 @@ Otherwise, every session, without waiting to be asked:
    `bash claude-arsenal/bin/claim_task.sh <id>` takes it (see `@claude-arsenal/AGENTS.md`).
    - **Nothing returned + workspace plans exist** → seed tasks from each plan.
    - **Nothing at all** → ask what to work on.
-5. Open each task's PR with `Closes #<issue>` so merging it closes the task by itself.
+5. Every change goes through a PR, ad hoc requests included — never push to the default
+   branch. A task's PR carries `Closes #<issue>` so merging it closes the task by itself.
    Dispatching the work to another session instead? Pass the repository explicitly
    and pass `ARSENAL_TASK_ISSUE` — a spawned worker can resolve neither.
    → `claude-arsenal/references/orchestrator-tick.md`
@@ -89,8 +90,9 @@ _CONFIG_TEMPLATE = """\
 merge-policy = "after-ci"
 
 # Shell command run before any task PR is opened; a non-zero exit means no PR.
-# Empty = no host gate. Point it at everything your repo actually checks, not
-# just lint — whatever is not named here is enforced by nobody.
+# Point it at everything your repo actually checks, not just lint — whatever is
+# not named here is enforced by nobody. `"none"` records that this repo has no
+# gate; empty means nobody has decided yet, and `/init` says so until someone does.
 #   host-gate = "make lint test evidence"
 host-gate = ""
 
@@ -1741,6 +1743,122 @@ def _install_queue_workflow(repo_path: Path, arsenal: Path, silent: bool = False
     )
 
 
+# The recorded outcomes of branch_protection.py worth remembering. `skipped` is
+# not one: it means a local precondition was missing (no gh, no login, no GitHub
+# remote), which the next deliberate `/init` should look at again.
+_PROTECTION_RECORDED = {"applied", "existing", "unavailable"}
+
+
+def _config_value(config: Path, key: str) -> Any:
+    """One top-level key from arsenal/config.toml, or None when unset or unreadable."""
+    try:
+        return tomllib.loads(config.read_text(encoding="utf-8")).get(key)
+    except (OSError, tomllib.TOMLDecodeError):
+        return None
+
+
+def _setup_branch_protection(repo_path: Path, arsenal: Path, enabled: bool) -> None:
+    """Protect the default branch once, and record what happened.
+
+    Never on `--silent`: that is every session start, and a GitHub API round
+    trip per session to re-learn a repository setting is the wrong price. The
+    outcome goes into `branch-protection` in arsenal/config.toml so a later
+    `/init` does not ask again; clearing the key asks again.
+    """
+    config = _home(repo_path) / "config.toml"
+    if _config_value(config, "branch-protection"):
+        return
+    if not enabled:
+        _upsert_bare_key(config, "branch-protection", '"off"')
+        print(
+            "  branch protection: off (--no-branch-protection) — recorded in arsenal/config.toml. "
+            "Nothing on GitHub stops a direct push to the default branch."
+        )
+        return
+    if os.environ.get("ARSENAL_BRANCH_PROTECTION", "1") == "0":
+        return
+    script = arsenal / "scripts" / "branch_protection.py"
+    if not script.is_file():
+        return
+    try:
+        proc = subprocess.run(
+            [sys.executable, str(script), "--repo-root", str(repo_path)],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=180,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        print(f"  branch protection: not attempted ({exc}); run {script.name} by hand.")
+        return
+    lines = proc.stdout.strip().splitlines()
+    outcome = lines[-1].removeprefix("outcome: ").strip() if lines else ""
+    for line in lines[:-1]:
+        print(f"  {line}")
+    if outcome in _PROTECTION_RECORDED:
+        _upsert_bare_key(config, "branch-protection", f'"{outcome}"')
+
+
+def _suggest_host_gate(repo_path: Path) -> str | None:
+    """A starting value for `host-gate`, from the tooling the repo visibly has."""
+    makefile = repo_path / "Makefile"
+    if makefile.is_file():
+        text = makefile.read_text(encoding="utf-8", errors="replace")
+        targets = [t for t in ("lint", "test") if re.search(rf"^{t}\s*:", text, re.MULTILINE)]
+        if targets:
+            return "make " + " ".join(targets)
+    package = repo_path / "package.json"
+    if package.is_file():
+        try:
+            scripts = json.loads(package.read_text(encoding="utf-8")).get("scripts") or {}
+        except (OSError, ValueError, AttributeError):
+            scripts = {}
+        steps = [f"npm run {s}" for s in ("lint",) if s in scripts]
+        steps += ["npm test"] if "test" in scripts else []
+        if steps:
+            return " && ".join(steps)
+    if (repo_path / "Cargo.toml").is_file():
+        return "cargo test"
+    if (repo_path / "go.mod").is_file():
+        return "go test ./..."
+    if (repo_path / "pyproject.toml").is_file() or (repo_path / "tests").is_dir():
+        return "uv run pytest" if (repo_path / "uv.lock").is_file() else "pytest"
+    return None
+
+
+def _report_gate_choices(repo_path: Path) -> None:
+    """Say out loud that `host-gate` and `merge-policy` are undecided.
+
+    Both ship as template values, and a template value nobody looked at is a
+    decision nobody made: an empty host gate enforces nothing, and `after-ci`
+    in a repo with no CI waits on checks that will never report. init runs
+    non-interactively, so it cannot ask — it prints, and the init skill has the
+    session ask the user and write the answer (a command, or "none").
+    """
+    config = _home(repo_path) / "config.toml"
+    gate = _config_value(config, "host-gate")
+    if isinstance(gate, str) and gate.strip():
+        return
+    suggestion = _suggest_host_gate(repo_path)
+    wf_dir = repo_path / ".github" / "workflows"
+    has_ci = wf_dir.is_dir() and any(
+        p.name != _QUEUE_WORKFLOW for p in [*wf_dir.glob("*.yml"), *wf_dir.glob("*.yaml")]
+    )
+    policy = _config_value(config, "merge-policy") or "after-ci"
+    print(
+        "\n  HOST-GATE UNSET — nothing runs before a task PR opens. Ask the user and record "
+        'the answer as `host-gate` in arsenal/config.toml: a command, or "none".'
+        + (f" Suggested from this repo: `{suggestion}`." if suggestion else "")
+    )
+    advice = (
+        "CI workflows found; `after-ci-and-review` if a review bot reports on PRs"
+        if has_ci
+        else "NO CI workflow found — `after-ci` would wait forever; `after-review` or `never`"
+    )
+    print(f"  MERGE-POLICY is `{policy}` — confirm it with the user ({advice}).")
+
+
 def init_base(
     repo_path: Path,
     bundle_override: Path | None = None,
@@ -1749,6 +1867,7 @@ def init_base(
     skills_profile: str | None = None,
     sections: list[str] | None = None,
     allow_stale: bool = False,
+    branch_protection: bool = True,
 ) -> bool:
     """True when the install ran; False when it refused (nothing written)."""
     bundle = _bundle_dir(bundle_override)
@@ -1889,6 +2008,12 @@ def init_base(
 
     # CLAUDE.md
     _inject_claude_md(repo_path)
+
+    # The GitHub-side and config-side safety nets. Deliberate runs only: the
+    # session-start refresh is --silent and must stay cheap and offline.
+    if not silent:
+        _setup_branch_protection(repo_path, arsenal, branch_protection)
+        _report_gate_choices(repo_path)
 
     ver_path = arsenal / ".bundle-version"
     if silent:
@@ -2048,6 +2173,11 @@ def main() -> None:
         action="store_true",
         help="Bootstrap a new repo even when this init is older than the latest release.",
     )
+    p.add_argument(
+        "--no-branch-protection",
+        action="store_true",
+        help='Do not protect the default branch on GitHub; records branch-protection = "off".',
+    )
     args = p.parse_args()
 
     repo_path = Path(args.repo_path).resolve()
@@ -2086,6 +2216,7 @@ def main() -> None:
             skills_profile=args.profile,
             sections=_parse_sections(args.sections),
             allow_stale=args.allow_stale,
+            branch_protection=not args.no_branch_protection,
         )
 
 
