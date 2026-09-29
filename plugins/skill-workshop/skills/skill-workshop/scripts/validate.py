@@ -245,6 +245,7 @@ CANONICAL_ARGS = {
     "--sections",
     "--list-sections",
     "--allow-downgrade",
+    "--allow-stale",
     # har skill — what a capture is read *for*. These are the nouns of a HAR
     # (entries, headers, cookies, redirects, websockets) and the ways one is
     # reduced to an answer; none has a canonical equivalent to defer to, and
