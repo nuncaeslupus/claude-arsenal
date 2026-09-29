@@ -10,6 +10,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 import tomllib
 from pathlib import Path
 from typing import Any
@@ -530,6 +531,90 @@ def _changelog_since(bundle: Path, installed_ver: str, bundle_ver: str) -> str:
             entries.append((version, parts[i], body))
     entries.sort(reverse=True)
     return "\n\n".join(f"## {ver}\n{body}" for _, ver, body in entries)
+
+
+# Where released versions are tagged. `_check_bundle_version` only compares the
+# host against THIS copy of init, so a plugin cache frozen at an old release
+# reported "up to date" forever: one host was bootstrapped from 2.5.0 while
+# upstream was at 4.23.0 (#462). Third-party marketplaces do not auto-update by
+# default, so nothing else would ever notice.
+_UPSTREAM_URL = "https://github.com/nuncaeslupus/claude-arsenal"
+_UPSTREAM_CACHE_TTL = 6 * 3600  # one `git ls-remote` per six hours, not per session
+_UPDATE_COMMANDS = (
+    "claude plugin marketplace update claude-arsenal\n"
+    "    claude plugin update core@claude-arsenal\n"
+    "    claude plugin update skill-workshop@claude-arsenal\n"
+    "  then restart Claude Code and re-run /init."
+)
+
+
+def _latest_upstream_version() -> str | None:
+    """The newest `v*` tag upstream, or None when it cannot be learned.
+
+    Cached under ~/.cache so a session start pays for the network at most once
+    per TTL. Offline, a missing `git`, or `ARSENAL_UPSTREAM_CHECK=0` all answer
+    None — an unknown upstream is never a reason to block an install.
+    """
+    if os.environ.get("ARSENAL_UPSTREAM_CHECK", "1") == "0":
+        return None
+    url = os.environ.get("ARSENAL_UPSTREAM_URL", _UPSTREAM_URL)
+    cache = Path.home() / ".cache" / "claude-arsenal" / "upstream-latest"
+    try:
+        cached_url, cached_ver = cache.read_text(encoding="utf-8").split()
+        if cached_url == url and time.time() - cache.stat().st_mtime < _UPSTREAM_CACHE_TTL:
+            return cached_ver
+    except (OSError, ValueError):
+        pass
+    try:
+        out = subprocess.run(
+            ["git", "ls-remote", "--tags", "--refs", url, "v*"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=True,
+        ).stdout
+    except (OSError, subprocess.SubprocessError):
+        return None
+    tags = [line.rsplit("refs/tags/v", 1)[-1] for line in out.splitlines() if "refs/tags/v" in line]
+    parsed = [(v, _parse_version(v)) for v in tags]
+    ranked = [(p, v) for v, p in parsed if p]
+    if not ranked:
+        return None
+    latest = max(ranked)[1]
+    try:
+        cache.parent.mkdir(parents=True, exist_ok=True)
+        cache.write_text(f"{url} {latest}\n", encoding="utf-8")
+    except OSError:
+        pass
+    return latest
+
+
+def _check_upstream(bundle: Path, first_install: bool, allow_stale: bool) -> bool:
+    """Warn when this init is older than the newest release; False = refuse.
+
+    A first install from a stale copy is refused unless `allow_stale`: that is
+    where a stale bundle does the most damage, seeding a new repo with behaviour
+    that has since been fixed. On an existing repo it is a banner only.
+    """
+    ver_path = bundle / ".bundle-version"
+    if not ver_path.exists():
+        return True
+    ours = ver_path.read_text(encoding="utf-8").strip()
+    latest = _latest_upstream_version()
+    ours_p, latest_p = _parse_version(ours), _parse_version(latest or "")
+    if not (ours_p and latest_p and latest_p > ours_p):
+        return True
+    print(
+        f"ARSENAL OUTDATED: this init is {ours}, the latest release is {latest}.\n"
+        f"  Update the plugin:\n    {_UPDATE_COMMANDS}"
+    )
+    if first_install and not allow_stale:
+        print(
+            f"init: refusing to bootstrap a new repo from {ours} — "
+            "pass --allow-stale to do it anyway."
+        )
+        return False
+    return True
 
 
 def _check_bundle_version(bundle: Path, arsenal: Path) -> tuple[str, str] | None:
@@ -1654,10 +1739,14 @@ def init_base(
     allow_downgrade: bool = False,
     skills_profile: str | None = None,
     sections: list[str] | None = None,
+    allow_stale: bool = False,
 ) -> bool:
-    """True when the install ran; False when it refused to downgrade (nothing written)."""
+    """True when the install ran; False when it refused (nothing written)."""
     bundle = _bundle_dir(bundle_override)
     arsenal = repo_path / "claude-arsenal"
+
+    if not _check_upstream(bundle, not (arsenal / ".bundle-version").exists(), allow_stale):
+        return False
 
     if not silent:
         print("Initializing claude-arsenal/...")
@@ -1939,6 +2028,11 @@ def main() -> None:
         action="store_true",
         help="Overwrite a NEWER installed bundle with this skill's older copies.",
     )
+    p.add_argument(
+        "--allow-stale",
+        action="store_true",
+        help="Bootstrap a new repo even when this init is older than the latest release.",
+    )
     args = p.parse_args()
 
     repo_path = Path(args.repo_path).resolve()
@@ -1976,6 +2070,7 @@ def main() -> None:
             allow_downgrade=args.allow_downgrade,
             skills_profile=args.profile,
             sections=_parse_sections(args.sections),
+            allow_stale=args.allow_stale,
         )
 
 

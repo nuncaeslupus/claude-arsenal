@@ -124,6 +124,11 @@ sync-sections:  ## regenerate the shipped capability map from the skills init ve
 sync-sections-check:  ## fail if sections.json has drifted from the shipped skills
 	uv run python scripts/sync_sections.py --check
 
+# Tests run init.py on fresh repos; a real upstream tag newer than the branch
+# under test would make every one refuse (#462). upstream_check_test.sh turns it
+# back on against a local fake upstream.
+export ARSENAL_UPSTREAM_CHECK := 0
+
 test:  ## run every plugin's behaviour tests (plugins/*/tests/*.sh) + repo-tool tests (scripts/*_test.sh)
 	@set -e; for t in plugins/*/tests/*.sh scripts/*_test.sh; do \
 		[ -f "$$t" ] || continue; \

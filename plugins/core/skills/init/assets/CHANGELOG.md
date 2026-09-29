@@ -18,6 +18,24 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [4.24.0] - 2026-09-29
+
+- **`/init` now checks the newest release.** A plugin cache frozen at an old
+  version used to report "up to date" because init only compared the repo
+  against itself. It now prints `ARSENAL OUTDATED: this init is X, the latest
+  release is Y` with the update commands, and **refuses to set up a new repo**
+  from a stale plugin unless you pass `--allow-stale`. On an existing repo it
+  only warns. The lookup is one `git ls-remote`, cached for six hours; offline
+  it is skipped, and `ARSENAL_UPSTREAM_CHECK=0` turns it off.
+- **Hooks keep working from a subdirectory.** The skill-edit gate, its markers
+  and the statusLine are now registered as
+  `bash "${CLAUDE_PROJECT_DIR:-.}"/claude-arsenal/bin/…`. The old relative form
+  failed on every Bash call once the session `cd`'d into a subfolder. Re-running
+  `/init` (or the session-start `init.py --silent`) upgrades the entries in place.
+- **The skill-edit gate no longer blocks running a skill script** in the same
+  command as a heredoc that edits an unrelated file, such as editing a spec and
+  then running `validate_spec.py` on it. Writing to the script is still gated.
+
 ## [4.23.0] - 2026-09-23
 
 - **`open_task_pr.sh <task-id> --preflight` asks whether the run would refuse,

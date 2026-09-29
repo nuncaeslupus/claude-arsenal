@@ -56,6 +56,21 @@ wires the skill-edit gate into `.claude/settings.json`, and creates the
 /plugin install core@claude-arsenal
 ```
 
+Claude Code does not auto-update third-party marketplaces by default, so a
+plugin installed once stays at that version. Turn auto-update on for
+`claude-arsenal` in `/plugin` → **Marketplaces**, or update by hand before
+running `/init` on a new repo:
+
+```bash
+claude plugin marketplace update claude-arsenal
+claude plugin update core@claude-arsenal
+claude plugin update skill-workshop@claude-arsenal
+```
+
+`/init` checks the newest release tag and prints `ARSENAL OUTDATED` when the
+plugin is behind; on a repo it has never set up, it refuses until you update
+(or pass `--allow-stale`). Set `ARSENAL_UPSTREAM_CHECK=0` to skip the check.
+
 Then, from the project you want set up:
 
 ```text
@@ -106,7 +121,7 @@ existed changes nothing: the sections already in use are detected and recorded.
 No plugin needed — the same script runs straight from a clone:
 
 ```bash
-git clone --depth 1 --branch v4.23.0 https://github.com/nuncaeslupus/claude-arsenal.git /tmp/arsenal
+git clone --depth 1 --branch v4.24.0 https://github.com/nuncaeslupus/claude-arsenal.git /tmp/arsenal
 python3 /tmp/arsenal/plugins/core/skills/init/scripts/init.py --repo-path .
 git add .claude claude-arsenal arsenal .github CLAUDE.md .gitignore && git commit -m "chore: add claude-arsenal"
 ```
