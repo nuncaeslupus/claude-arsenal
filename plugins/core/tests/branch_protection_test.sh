@@ -41,7 +41,7 @@ if [[ "$1" == "-X" ]]; then method="$2"; shift 2; fi
 path="$1"
 case "${method} ${path}" in
     "GET repos/o/r")
-        echo '{"default_branch":"trunk"}' ;;
+        echo '{"default_branch":"trunk","private":true}' ;;
     "GET repos/o/r/branches/trunk/protection")
         case "${FAKE_PROTECTION:-none}" in
             none) echo '{"message":"Branch not protected"}'
@@ -157,12 +157,19 @@ echo "PASS: workflow fallback names plain pull_request jobs only"
 rm -f "${FAKE_PUT}"
 echo "# t" > "${repo}/CLAUDE.md"
 printf 'lint:\n\ttrue\ntest:\n\ttrue\n' > "${repo}/Makefile"
+mkdir -p "${repo}/.github/workflows"; printf 'on: pull_request\n' > "${repo}/.github/workflows/ci.yml"
 out=$(python3 "${INIT_PY}" --repo-path "${repo}" --bundle-dir "${BUNDLE_DIR}" --profile minimal 2>&1) \
     || fail "init failed: ${out}"
 grep -q '^branch-protection = "applied"' "${repo}/arsenal/config.toml" || fail "outcome not recorded"
 [[ -e "${FAKE_PUT}" ]] || fail "init did not apply protection"
 [[ "${out}" == *"HOST-GATE UNSET"* && "${out}" == *'`make lint test`'* ]] || fail "no host-gate prompt: ${out}"
 [[ "${out}" == *"MERGE-POLICY is"* ]] || fail "no merge-policy prompt"
+# #463: a private repo's minutes are metered, so the advice is the local gates.
+[[ "${out}" == *"private repo"*'`always`'*'pre-pr-review = "required"'* ]] \
+    || fail "private repo did not get the local-gates merge-policy advice: ${out}"
+[[ "${out}" == *"PREFLIGHT-GATE UNSET"*'`make lint`'* ]] || fail "no preflight-gate prompt: ${out}"
+grep -q '^merge-policy = "after-ci"' "${repo}/arsenal/config.toml" \
+    || fail "the advice must not rewrite merge-policy"
 : > "${FAKE_LOG}"
 python3 "${INIT_PY}" --repo-path "${repo}" --bundle-dir "${BUNDLE_DIR}" >/dev/null 2>&1
 python3 "${INIT_PY}" --repo-path "${repo}" --bundle-dir "${BUNDLE_DIR}" --silent >/dev/null 2>&1

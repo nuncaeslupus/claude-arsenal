@@ -65,6 +65,12 @@ DEFAULTS: dict[str, Any] = {
     # Declare the slice of the gate that touches those files here and preflight
     # finds it in seconds.
     #   preflight-gate = "make verify-gates"
+    #
+    # It is also the fast gate level (#463): bin/fast_gate.sh runs it on every
+    # review round after the first, over ARSENAL_CHANGED_FILES, so the full
+    # host-gate is paid once before the PR opens and once before merge rather
+    # than once per push. Change-scoped lint/typecheck plus the tests the change
+    # selects is the usual shape.
     "preflight-gate": "",
     # Shell command run by bin/host_setup.sh in a fresh worktree, before the
     # first gate. Empty by default. A worktree carries tracked files and nothing

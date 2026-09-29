@@ -240,7 +240,7 @@ Each is a plain file to open, not an import. Nothing below is in context until y
 | `references/queue-seeding.md` | The queue is empty: seeding from a plan table, importing filed issues, seeding a `D-N` divergence |
 | `references/evidence-gates.md` | Writing or trusting a gate: the fence rule, hardened execution, numeric evidence, `unmeasured` |
 | `references/claiming-internals.md` | A claim misbehaves: why ref creation is the lock, attempt refs, ref accumulation, `on: push` cost |
-| `references/github-automation.md` | Completion: what `merge-policy` requires, the five transitions GitHub runs, opting out |
+| `references/github-automation.md` | Completion: what `merge-policy` requires, the five transitions GitHub runs, opting out. Actions minutes short → `references/ci-minutes.md` |
 | `references/quota-governance.md` | The loop stopped before dispatch: quota windows, fail-open, the round cap |
 | `references/pre-pr-review.md` | About to open a PR: the cold-start adversarial review, its verdicts, `pre-pr-review` modes |
 | `references/performance-tuning.md` | The loop feels slow: reading the recorded timings, and which shape routes to which remedy |

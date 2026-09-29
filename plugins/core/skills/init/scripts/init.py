@@ -96,13 +96,15 @@ merge-policy = "after-ci"
 #   host-gate = "make lint test evidence"
 host-gate = ""
 
-# The cheap slice of the gate above, run by `open_task_pr.sh <task> --preflight`
-# and nowhere else. Empty = preflight only checks that the gates resolve, which
-# is all it can know on its own. Name the part that touches the repo's own files
-# (a file count, a coverage denominator, a gate-coverage sweep): those are what
-# the archive moves out from under the real host gate, and the only way to find
-# out today is to pay for the whole run first.
-#   preflight-gate = "make verify-gates"
+# The fast, change-scoped slice of the gate above: lint/typecheck the changed
+# files, run the tests the change selects. `open_task_pr.sh <task> --preflight`
+# runs it, and so does every review round after the first
+# (claude-arsenal/bin/fast_gate.sh, which exports ARSENAL_CHANGED_FILES), so the
+# full host gate runs once before the PR and once before merge, not per push.
+# Empty = review rounds fall back to the full host gate. Include the part that
+# touches the repo's own files (a file count, a gate-coverage sweep): the
+# archive moves those out from under the real host gate.
+#   preflight-gate = 'make lint FILES="$ARSENAL_CHANGED_FILES" && make verify-gates'
 preflight-gate = ""
 
 # Shell command that installs this repo's dependencies, run once in a fresh
@@ -1757,29 +1759,32 @@ def _config_value(config: Path, key: str) -> Any:
         return None
 
 
-def _setup_branch_protection(repo_path: Path, arsenal: Path, enabled: bool) -> None:
+def _setup_branch_protection(repo_path: Path, arsenal: Path, enabled: bool) -> bool:
     """Protect the default branch once, and record what happened.
 
     Never on `--silent`: that is every session start, and a GitHub API round
     trip per session to re-learn a repository setting is the wrong price. The
     outcome goes into `branch-protection` in arsenal/config.toml so a later
     `/init` does not ask again; clearing the key asks again.
+
+    Returns whether the script saw a private repository — the one fact the
+    merge-policy advice needs that no local file can give it (#463).
     """
     config = _home(repo_path) / "config.toml"
     if _config_value(config, "branch-protection"):
-        return
+        return False
     if not enabled:
         _upsert_bare_key(config, "branch-protection", '"off"')
         print(
             "  branch protection: off (--no-branch-protection) — recorded in arsenal/config.toml. "
             "Nothing on GitHub stops a direct push to the default branch."
         )
-        return
+        return False
     if os.environ.get("ARSENAL_BRANCH_PROTECTION", "1") == "0":
-        return
+        return False
     script = arsenal / "scripts" / "branch_protection.py"
     if not script.is_file():
-        return
+        return False
     try:
         proc = subprocess.run(
             [sys.executable, str(script), "--repo-root", str(repo_path)],
@@ -1791,13 +1796,14 @@ def _setup_branch_protection(repo_path: Path, arsenal: Path, enabled: bool) -> N
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
         print(f"  branch protection: not attempted ({exc}); run {script.name} by hand.")
-        return
+        return False
     lines = proc.stdout.strip().splitlines()
     outcome = lines[-1].removeprefix("outcome: ").strip() if lines else ""
     for line in lines[:-1]:
         print(f"  {line}")
     if outcome in _PROTECTION_RECORDED:
         _upsert_bare_key(config, "branch-protection", f'"{outcome}"')
+    return any("visibility: private" in line for line in lines)
 
 
 def _suggest_host_gate(repo_path: Path) -> str | None:
@@ -1827,7 +1833,30 @@ def _suggest_host_gate(repo_path: Path) -> str | None:
     return None
 
 
-def _report_gate_choices(repo_path: Path) -> None:
+def _suggest_preflight_gate(repo_path: Path) -> str | None:
+    """A starting value for `preflight-gate`: the fast slice, never the tests."""
+    makefile = repo_path / "Makefile"
+    if makefile.is_file():
+        text = makefile.read_text(encoding="utf-8", errors="replace")
+        for target in ("preflight", "check-fast", "lint"):
+            if re.search(rf"^{target}\s*:", text, re.MULTILINE):
+                return f"make {target}"
+    package = repo_path / "package.json"
+    if package.is_file():
+        try:
+            scripts = json.loads(package.read_text(encoding="utf-8")).get("scripts") or {}
+        except (OSError, ValueError, AttributeError):
+            scripts = {}
+        if "lint" in scripts:
+            return "npm run lint"
+    if (repo_path / "Cargo.toml").is_file():
+        return "cargo check"
+    if (repo_path / "go.mod").is_file():
+        return "go vet ./..."
+    return None
+
+
+def _report_gate_choices(repo_path: Path, private: bool = False) -> None:
     """Say out loud that `host-gate` and `merge-policy` are undecided.
 
     Both ship as template values, and a template value nobody looked at is a
@@ -1835,6 +1864,11 @@ def _report_gate_choices(repo_path: Path) -> None:
     in a repo with no CI waits on checks that will never report. init runs
     non-interactively, so it cannot ask — it prints, and the init skill has the
     session ask the user and write the answer (a command, or "none").
+
+    A private repo is the same trap on a timer (#463): its Actions minutes are
+    metered, and once they run out every check is absent, which `after-ci`
+    reads as "wait". So there the advice is the local gates as the bar. It is
+    advice only — an existing value is never rewritten.
     """
     config = _home(repo_path) / "config.toml"
     gate = _config_value(config, "host-gate")
@@ -1845,17 +1879,33 @@ def _report_gate_choices(repo_path: Path) -> None:
     has_ci = wf_dir.is_dir() and any(
         p.name != _QUEUE_WORKFLOW for p in [*wf_dir.glob("*.yml"), *wf_dir.glob("*.yaml")]
     )
+    # `unavailable` is GitHub refusing branch protection — on a private repo,
+    # that is the Free plan, which is also the plan with the 2,000-minute cap.
+    private = private or _config_value(config, "branch-protection") == "unavailable"
     policy = _config_value(config, "merge-policy") or "after-ci"
     print(
         "\n  HOST-GATE UNSET — nothing runs before a task PR opens. Ask the user and record "
         'the answer as `host-gate` in arsenal/config.toml: a command, or "none".'
         + (f" Suggested from this repo: `{suggestion}`." if suggestion else "")
     )
-    advice = (
-        "CI workflows found; `after-ci-and-review` if a review bot reports on PRs"
-        if has_ci
-        else "NO CI workflow found — `after-ci` would wait forever; `after-review` or `never`"
-    )
+    fast = _config_value(config, "preflight-gate")
+    if not (isinstance(fast, str) and fast.strip()):
+        fast_hint = _suggest_preflight_gate(repo_path)
+        print(
+            "  PREFLIGHT-GATE UNSET — review rounds after the first re-run the FULL host gate. "
+            "Record a fast, change-scoped command as `preflight-gate` (it sees "
+            "$ARSENAL_CHANGED_FILES)." + (f" Suggested: `{fast_hint}`." if fast_hint else "")
+        )
+    if not has_ci or private:
+        why = "NO CI workflow found" if not has_ci else "private repo — Actions minutes are metered"
+        advice = (
+            f"{why}: `after-ci` waits forever once checks stop reporting. Recommended: "
+            '`always`, with a required local `host-gate` and `pre-pr-review = "required"` — '
+            "the local gates become the whole bar, and nothing independent re-runs them. "
+            "See claude-arsenal/references/ci-minutes.md"
+        )
+    else:
+        advice = "CI workflows found; `after-ci-and-review` if a review bot reports on PRs"
     print(f"  MERGE-POLICY is `{policy}` — confirm it with the user ({advice}).")
 
 
@@ -2012,8 +2062,8 @@ def init_base(
     # The GitHub-side and config-side safety nets. Deliberate runs only: the
     # session-start refresh is --silent and must stay cheap and offline.
     if not silent:
-        _setup_branch_protection(repo_path, arsenal, branch_protection)
-        _report_gate_choices(repo_path)
+        private = _setup_branch_protection(repo_path, arsenal, branch_protection)
+        _report_gate_choices(repo_path, private=private)
 
     ver_path = arsenal / ".bundle-version"
     if silent:

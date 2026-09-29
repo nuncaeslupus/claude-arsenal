@@ -56,8 +56,17 @@ non-interactively, so it prints what is undecided and the session asks:
   suggestion init printed, and write it as `host-gate` in `arsenal/config.toml`.
   "No gate" is a valid answer: record it as `host-gate = "none"`, never leave it
   empty — empty means nobody decided, and init keeps asking.
+- `PREFLIGHT-GATE UNSET` — ask for the fast, change-scoped slice (lint/typecheck the
+  changed files, the tests the change selects) and write it as `preflight-gate`.
+  Review rounds run it instead of the full `host-gate`; without it they pay for the
+  whole suite on every push.
 - `MERGE-POLICY is …` — confirm the value against the repo's real CI and review
-  tooling in the same question. A repo with no CI must not stay on `after-ci`.
+  tooling in the same question. A repo with no CI must not stay on `after-ci`. For a
+  private repo (metered Actions minutes) or one with no CI, init recommends `always`
+  with a real `host-gate` and `pre-pr-review = "required"` — say the trade-off:
+  nothing independent re-runs the local gates. It only advises; never change a
+  value the user did not confirm. Details, and the once-per-PR trigger block for the
+  host's own CI: `ci-minutes.md` in the bundle's references (vendored as `claude-arsenal/references/`).
 
 **Branch protection.** A deliberate (non-`--silent`) init protects the default
 branch on GitHub once: a PR before merging, admins included, and as required
@@ -105,7 +114,7 @@ The script:
 7. Registers `statusline_capture.sh` as the host `statusLine` command (skipped if one already exists) so `budget_check.sh` can read quota.
 8. Injects the session-start protocol block + `@claude-arsenal/AGENTS.md` import into `CLAUDE.md`.
 9. Registers the skill-edit **gate hooks** in `.claude/settings.json` (`check_skill_workshop_loaded.sh` and its two marker hooks), plus `reader_hook.sh`, which reminds a session to regenerate the annotatable reader whenever a spec or plan is written — a plugin ships these as plugin hooks, but plugin hooks do not travel with a clone, and settings hooks do. It no longer writes a marketplace **declaration**: the web runtime never fetches a git marketplace, so the skills are **vendored** into `.claude/skills/` (item 4) where every surface reads them from the clone itself.
-10. On a deliberate run only (never `--silent`): applies branch protection once (above), then prints `HOST-GATE UNSET` / `MERGE-POLICY` when `host-gate` is still empty.
+10. On a deliberate run only (never `--silent`): applies branch protection once (above), then prints `HOST-GATE UNSET` / `PREFLIGHT-GATE UNSET` / `MERGE-POLICY` when `host-gate` is still empty.
 
 **Retiring vendored skill copies:**
 ```bash

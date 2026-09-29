@@ -719,4 +719,39 @@ grep -q "sync-handles will open one" <<<"${out}" \
     || fail "the guard should fail open with its usual note here: ${out}"
 echo "PASS: keyword-guard reads issue-listing truncation, not the sticky flag"
 
+# --- the workflow's triggers stay narrow (#463) -------------------------------
+# A job that never gets a runner bills nothing; one that does bills a minute at
+# least. So the trigger block is pinned: every event a job needs is still there,
+# a draft does not run the guard, a newer push supersedes the older guard run,
+# and no job can hang for the six-hour default.
+WF="${SCRIPT_DIR}/../skills/init/assets/workflows/arsenal-queue.yml"
+wf_out=$(python3 - "${WF}" <<'PY'
+import re, sys
+text = open(sys.argv[1], encoding="utf-8").read()
+on = text.split("\non:\n", 1)[1].split("\nconcurrency:", 1)[0]
+jobs = text.split("\njobs:\n", 1)[1]
+problems = []
+for event in ("pull_request_target:", "pull_request:", "push:", "schedule:", "workflow_dispatch:"):
+    if f"\n  {event}" not in "\n" + on:
+        problems.append(f"trigger {event} dropped — a job still reads it")
+if "types: [closed]" not in on:
+    problems.append("pull_request_target must stay types: [closed]")
+if "ready_for_review" not in on:
+    problems.append("pull_request must include ready_for_review, or a draft's guard never runs")
+if "paths: ['arsenal/tasks/**']" not in on:
+    problems.append("push must stay path-filtered to task files")
+if "cancel-in-progress: ${{ github.event_name == 'pull_request' }}" not in text:
+    problems.append("only the read-only pull_request guard may be cancelled by a newer run")
+names = re.findall(r"^  ([a-z-]+):\n", jobs, re.MULTILINE)
+timed = re.findall(r"^    timeout-minutes: \d+$", jobs, re.MULTILINE)
+if len(timed) != len(names):
+    problems.append(f"{len(names)} jobs but {len(timed)} timeout-minutes")
+if "!github.event.pull_request.draft" not in jobs:
+    problems.append("keyword-guard must skip draft PRs")
+print("\n".join(problems) or "ok")
+PY
+)
+[[ "${wf_out}" == "ok" ]] || fail "arsenal-queue.yml triggers: ${wf_out}"
+echo "PASS: arsenal-queue.yml keeps every needed trigger and bills no idle run"
+
 echo "PASS: queue_hooks_test — all gates passed"

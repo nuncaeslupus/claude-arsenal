@@ -268,12 +268,17 @@ def run(repo_root: Path, repo: str | None, dry_run: bool, force: bool) -> str:
         return "skipped"
 
     try:
-        branch = _gh_api(f"repos/{slug}").get("default_branch") or "main"
+        info = _gh_api(f"repos/{slug}")
+        branch = info.get("default_branch") or "main"
     except GhError as exc:
         _say(f"cannot read {slug} ({exc}) — branch protection not applied.")
         _say(_manual(slug, "<default branch>", []))
         return "unavailable" if exc.status in (403, 404) else "skipped"
     _say(f"repository {slug}, default branch `{branch}`")
+    if info.get("private"):
+        # Read by init.py's merge-policy advice: a private repo's Actions minutes
+        # are metered, so CI that `after-ci` waits on may simply never run.
+        _say("visibility: private — Actions minutes are metered on this repo")
 
     existing: dict[str, Any] | None = None
     try:
