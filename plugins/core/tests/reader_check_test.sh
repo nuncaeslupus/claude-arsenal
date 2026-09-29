@@ -92,6 +92,10 @@ if [ ${#PY[@]} -gt 0 ]; then
     [ -f "$repo/$d/2026-01-01-a-design-reader.html" ] && [ -f "$repo/$d/2026-01-02-b-design-reader.html" ] \
         || fail "a non-canonical doc's reader is not named for its stem: $(ls "$repo/$d")"
     [ ! -e "$repo/$d/spec-reader.html" ] || fail "a non-canonical doc still writes spec-reader.html"
+    ns_a=$(grep -o "var NS = '[^']*'" "$repo/$d/2026-01-01-a-design-reader.html")
+    ns_b=$(grep -o "var NS = '[^']*'" "$repo/$d/2026-01-02-b-design-reader.html")
+    [ -n "$ns_a" ] && [ "$ns_a" != "$ns_b" ] \
+        || fail "two readers in one folder share a notes namespace: $ns_a"
     (cd "$repo" && python3 "$CHECK" branch --all >/dev/null 2>&1) \
         || fail "two specs sharing a folder cannot both have a current reader"
     rm -rf "$repo/docs"

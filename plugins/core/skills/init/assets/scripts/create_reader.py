@@ -523,10 +523,14 @@ def build_html(
     seed_notes: dict | None = None,
     single_label: str = "Specification",
     doc_slug: str = "spec",
+    ns_key: str | None = None,
 ) -> str:
     seed_notes = seed_notes or {}
     total_sections = sum(len(p["items"]) for _, p in parts)
-    ls_ns = slug(title) + f"-{doc_slug}-v1:"
+    # `ns_key` is the output stem when it is not the kind: two design docs in
+    # one folder are two readers, and a namespace keyed on the kind alone let
+    # one's notes surface under the other's headings.
+    ls_ns = slug(title) + f"-{ns_key or doc_slug}-v1:"
 
     toc = ['<details class="toc" open><summary>Contents</summary>']
     for _kind, p in parts:
@@ -1113,7 +1117,9 @@ def _main() -> int:
         print(f"✗ {notes_path} does not exist", file=sys.stderr)
         return 2
 
-    html_out = build_html(parts, title, gen_date, seed_notes, single_label, doc_slug)
+    html_out = build_html(
+        parts, title, gen_date, seed_notes, single_label, doc_slug, ns_key=out_base or None
+    )
     md_out = build_markdown(parts, title, gen_date, seed_notes, single_label)
 
     html_file.write_text(html_out, encoding="utf-8")
