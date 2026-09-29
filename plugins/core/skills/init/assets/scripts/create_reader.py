@@ -7,8 +7,10 @@ Auto-discovers spec source(s):
   3. auto (no flags): looks for arsenal/project/*/spec.md,
                       then falls back to status/specification.md
 
-Outputs are named for the document the input stem names — a `plan.md` input writes
-plan-reader.html / plan-annotated.md, anything else writes spec-*. (--output-dir,
+Outputs are named for the input stem — `plan.md` writes plan-reader.html /
+plan-annotated.md, `spec.md` / `specification.md` write spec-*, and any other
+`<stem>.md` writes <stem>-reader.html / <stem>-annotated.md, so documents sharing a
+directory keep separate readers. (--output-dir,
 default: directory of the single input, or docs/spec-reader/ in workspace mode):
   <doc>-reader.html     self-contained HTML reader with per-section note fields
                         (notes auto-save in browser; Export button saves a Markdown file)
@@ -389,6 +391,8 @@ def source_digest(raw: str) -> str:
 
 
 DEFAULT_DOC_KIND = ("SPEC", "Specification", "spec")
+# Stems whose reader is `<kind>-reader.html`; any other stem gets `<stem>-reader.html`.
+CANONICAL_STEMS = {"spec", "specification", "plan"}
 
 
 def doc_kind(stem: str) -> tuple[str, str, str]:
@@ -1044,6 +1048,7 @@ def _main() -> int:
 
     cwd = Path.cwd()
     single_label, doc_slug = DEFAULT_DOC_KIND[1], DEFAULT_DOC_KIND[2]
+    out_base = ""
 
     if args.input:
         spec_path = Path(args.input)
@@ -1052,6 +1057,11 @@ def _main() -> int:
             return 2
         parts = collect_parts_single(spec_path)
         _, single_label, doc_slug = doc_kind(spec_path.stem)
+        # A document that is not the canonical spec or plan names its own output:
+        # two design files in one `docs/**/specs/` folder would otherwise share
+        # one `spec-reader.html`, and each regeneration would stale the other.
+        if spec_path.stem.lower() not in CANONICAL_STEMS:
+            out_base = spec_path.stem
         default_out = spec_path.parent
     elif args.input_dir:
         ws_dir = Path(args.input_dir)
@@ -1075,8 +1085,8 @@ def _main() -> int:
 
     notes_path = Path(args.notes) if args.notes else out_dir / "notes.json"
     seed_notes: dict = {}
-    html_file = out_dir / f"{doc_slug}-reader.html"
-    md_file = out_dir / f"{doc_slug}-annotated.md"
+    html_file = out_dir / f"{out_base or doc_slug}-reader.html"
+    md_file = out_dir / f"{out_base or doc_slug}-annotated.md"
 
     if notes_path.exists():
         try:

@@ -78,6 +78,24 @@ if [ ${#PY[@]} -gt 0 ]; then
     grep -q "yourproject-plan-notes-'+today()+'-r1.md" "$repo/status/plan-reader.html" \
         || fail "#468: the export name does not carry the plan's revision"
     echo "PASS: create_reader's reader satisfies the gate and names its export -r<N>"
+
+    # Two design docs in one docs/**/specs/ folder each get their own reader;
+    # a shared spec-reader.html left one of them stale forever.
+    d="docs/brainstorm/specs"
+    mkdir -p "$repo/$d"
+    printf '# A\n\n## One\n\na\n' > "$repo/$d/2026-01-01-a-design.md"
+    printf '# B\n\n## One\n\nb\n' > "$repo/$d/2026-01-02-b-design.md"
+    for f in a b; do
+        (cd "$repo" && "${PY[@]}" "$assets/scripts/create_reader.py" --input "$d"/2026-*-"$f"-design.md \
+            --output-dir "$d" --name yourproject >/dev/null 2>&1) || fail "create_reader failed on $f"
+    done
+    [ -f "$repo/$d/2026-01-01-a-design-reader.html" ] && [ -f "$repo/$d/2026-01-02-b-design-reader.html" ] \
+        || fail "a non-canonical doc's reader is not named for its stem: $(ls "$repo/$d")"
+    [ ! -e "$repo/$d/spec-reader.html" ] || fail "a non-canonical doc still writes spec-reader.html"
+    (cd "$repo" && python3 "$CHECK" branch --all >/dev/null 2>&1) \
+        || fail "two specs sharing a folder cannot both have a current reader"
+    rm -rf "$repo/docs"
+    echo "PASS: design docs sharing a folder keep separate, current readers"
 fi
 
 # --- 3: validate_spec / validate_plan and the review record ---

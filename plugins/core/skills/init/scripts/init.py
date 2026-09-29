@@ -549,6 +549,9 @@ def _changelog_since(bundle: Path, installed_ver: str, bundle_ver: str) -> str:
 # default, so nothing else would ever notice.
 _UPSTREAM_URL = "https://github.com/nuncaeslupus/claude-arsenal"
 _UPSTREAM_CACHE_TTL = 6 * 3600  # one `git ls-remote` per six hours, not per session
+# A failed lookup is cached too, for less time: offline or behind a proxy that
+# drops github.com, retrying on every session start would pay the timeout each time.
+_UPSTREAM_FAIL_TTL = 3600
 _UPDATE_COMMANDS = (
     "claude plugin marketplace update claude-arsenal\n"
     "    claude plugin update core@claude-arsenal\n"
@@ -570,10 +573,12 @@ def _latest_upstream_version() -> str | None:
     cache = Path.home() / ".cache" / "claude-arsenal" / "upstream-latest"
     try:
         cached_url, cached_ver = cache.read_text(encoding="utf-8").split()
-        if cached_url == url and time.time() - cache.stat().st_mtime < _UPSTREAM_CACHE_TTL:
-            return cached_ver
+        ttl = _UPSTREAM_FAIL_TTL if cached_ver == "-" else _UPSTREAM_CACHE_TTL
+        if cached_url == url and time.time() - cache.stat().st_mtime < ttl:
+            return None if cached_ver == "-" else cached_ver
     except (OSError, ValueError):
         pass
+    latest: str | None = None
     try:
         out = subprocess.run(
             ["git", "ls-remote", "--tags", "--refs", url, "v*"],
@@ -583,16 +588,15 @@ def _latest_upstream_version() -> str | None:
             check=True,
         ).stdout
     except (OSError, subprocess.SubprocessError):
-        return None
+        out = ""
     tags = [line.rsplit("refs/tags/v", 1)[-1] for line in out.splitlines() if "refs/tags/v" in line]
     parsed = [(v, _parse_version(v)) for v in tags]
     ranked = [(p, v) for v, p in parsed if p]
-    if not ranked:
-        return None
-    latest = max(ranked)[1]
+    if ranked:
+        latest = max(ranked)[1]
     try:
         cache.parent.mkdir(parents=True, exist_ok=True)
-        cache.write_text(f"{url} {latest}\n", encoding="utf-8")
+        cache.write_text(f"{url} {latest or '-'}\n", encoding="utf-8")
     except OSError:
         pass
     return latest
@@ -2085,6 +2089,8 @@ def init_workspace(
     allow_downgrade: bool = False,
     skills_profile: str | None = None,
     sections: list[str] | None = None,
+    allow_stale: bool = False,
+    branch_protection: bool = True,
 ) -> None:
     # The workspace name becomes a directory under arsenal/project/ — host-owned,
     # so a bundle upgrade never touches a workspace's spec, plan, or context.
@@ -2123,6 +2129,8 @@ def init_workspace(
         allow_downgrade=allow_downgrade,
         skills_profile=skills_profile,
         sections=sections,
+        allow_stale=allow_stale,
+        branch_protection=branch_protection,
     ):
         sys.exit("init: workspace not registered — the bundle refused to install (see above)")
 
@@ -2257,6 +2265,8 @@ def main() -> None:
             allow_downgrade=args.allow_downgrade,
             skills_profile=args.profile,
             sections=_parse_sections(args.sections),
+            allow_stale=args.allow_stale,
+            branch_protection=not args.no_branch_protection,
         )
     else:
         init_base(

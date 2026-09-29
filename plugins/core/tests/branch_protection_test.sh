@@ -41,11 +41,14 @@ if [[ "$1" == "-X" ]]; then method="$2"; shift 2; fi
 path="$1"
 case "${method} ${path}" in
     "GET repos/o/r")
-        echo '{"default_branch":"trunk","private":true}' ;;
+        if [[ "${FAKE_REPO:-ok}" == missing ]]; then echo "gh: Not Found (HTTP 404)" >&2; exit 1; fi
+        echo '{"default_branch":"trunk","private":'"${FAKE_PRIVATE:-true}"'}' ;;
     "GET repos/o/r/branches/trunk/protection")
         case "${FAKE_PROTECTION:-none}" in
             none) echo '{"message":"Branch not protected"}'
                   echo "gh: Branch not protected (HTTP 404)" >&2; exit 1 ;;
+            nobranch) echo '{"message":"Branch not found"}'
+                  echo "gh: Branch not found (HTTP 404)" >&2; exit 1 ;;
             forbidden) echo '{"message":"Upgrade to GitHub Pro or make this repository public to enable this feature."}'
                   echo "gh: Upgrade to GitHub Pro or make this repository public to enable this feature. (HTTP 403)" >&2; exit 1 ;;
             exists) echo '{"required_status_checks":{"strict":true,"contexts":["legacy"]},"required_pull_request_reviews":{"required_approving_review_count":2}}' ;;
@@ -194,3 +197,35 @@ python3 "${INIT_PY}" --repo-path "${opt}" --bundle-dir "${BUNDLE_DIR}" --profile
 grep -q '^branch-protection = "off"' "${opt}/arsenal/config.toml" || fail "opt-out not recorded"
 [[ ! -s "${FAKE_LOG}" ]] || fail "--no-branch-protection still called gh"
 echo "PASS: --no-branch-protection records off and calls nothing"
+
+# --- 7: an empty or not-yet-created GitHub repo is retried, not "unavailable" ---
+# A first /init often runs before the first push: GitHub answers 404 "Branch not
+# found" (or 404 for the repo itself). Recording that as `unavailable` never
+# retried it, and the merge-policy advice then read it as a private Free-plan repo.
+out=$(FAKE_PROTECTION=nobranch bp); rc=$?
+[[ ${rc} -eq 0 && "${out}" == *"outcome: skipped"* ]] || fail "empty repo not skipped: ${out}"
+out=$(FAKE_REPO=missing bp); rc=$?
+[[ ${rc} -eq 0 && "${out}" == *"outcome: skipped"* ]] || fail "missing repo not skipped: ${out}"
+empty="${tmp}/empty"; mkdir -p "${empty}/.github/workflows"; git -C "${empty}" init -q
+git -C "${empty}" remote add origin https://github.com/o/r.git
+printf 'on: pull_request\n' > "${empty}/.github/workflows/ci.yml"
+out=$(FAKE_PROTECTION=nobranch FAKE_PRIVATE=false python3 "${INIT_PY}" --repo-path "${empty}" \
+    --bundle-dir "${BUNDLE_DIR}" --profile minimal 2>&1) || fail "init on an empty repo failed: ${out}"
+! grep -q '^branch-protection = ' "${empty}/arsenal/config.toml" \
+    || fail "a skipped outcome was recorded: $(grep branch-protection "${empty}/arsenal/config.toml")"
+[[ "${out}" != *"private repo"* ]] || fail "a skipped outcome was read as a private repo: ${out}"
+: > "${FAKE_LOG}"
+FAKE_PROTECTION=nobranch FAKE_PRIVATE=false python3 "${INIT_PY}" --repo-path "${empty}" \
+    --bundle-dir "${BUNDLE_DIR}" >/dev/null 2>&1
+grep -q 'branches/trunk/protection' "${FAKE_LOG}" || fail "the next deliberate /init did not retry"
+echo "PASS: an empty or missing GitHub repo is retried, never recorded as unavailable"
+
+# --- 8: --workspace forwards --no-branch-protection ------------------------------
+ws="${tmp}/ws"; mkdir -p "${ws}"; git -C "${ws}" init -q
+git -C "${ws}" remote add origin https://github.com/o/r.git
+: > "${FAKE_LOG}"
+python3 "${INIT_PY}" --repo-path "${ws}" --bundle-dir "${BUNDLE_DIR}" --profile minimal \
+    --workspace api --no-branch-protection >/dev/null 2>&1 || fail "init --workspace failed"
+grep -q '^branch-protection = "off"' "${ws}/arsenal/config.toml" || fail "--workspace dropped --no-branch-protection"
+[[ ! -s "${FAKE_LOG}" ]] || fail "--workspace --no-branch-protection still called gh: $(cat "${FAKE_LOG}")"
+echo "PASS: --workspace forwards --no-branch-protection"

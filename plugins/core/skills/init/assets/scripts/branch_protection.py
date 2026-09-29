@@ -273,7 +273,9 @@ def run(repo_root: Path, repo: str | None, dry_run: bool, force: bool) -> str:
     except GhError as exc:
         _say(f"cannot read {slug} ({exc}) — branch protection not applied.")
         _say(_manual(slug, "<default branch>", []))
-        return "unavailable" if exc.status in (403, 404) else "skipped"
+        # 404 here is a repo not created on GitHub yet (or not visible to this
+        # token): a state the next `/init` should look at again, so not recorded.
+        return "unavailable" if exc.status == 403 else "skipped"
     _say(f"repository {slug}, default branch `{branch}`")
     if info.get("private"):
         # Read by init.py's merge-policy advice: a private repo's Actions minutes
@@ -293,6 +295,12 @@ def run(repo_root: Path, repo: str | None, dry_run: bool, force: bool) -> str:
             return "unavailable"
         if exc.status != 404:
             _say(f"cannot read protection on `{branch}` ({exc}) — not applied.")
+            _say(_manual(slug, branch, []))
+            return "skipped"
+        if "branch not found" in str(exc).lower():
+            # An empty repository: the default branch has no commit yet. Nothing
+            # to protect today, and a push away from something to protect.
+            _say(f"`{branch}` does not exist on GitHub yet (nothing pushed) — not applied.")
             _say(_manual(slug, branch, []))
             return "skipped"
         if "not protected" not in str(exc).lower():

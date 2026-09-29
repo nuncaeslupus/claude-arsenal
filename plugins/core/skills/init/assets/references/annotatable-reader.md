@@ -43,10 +43,10 @@ raw file — does not satisfy this. The reader exists so notes attach to the
 section they are about; a substitute that drops that property is not a
 substitute.
 
-Rename its `spec-reader.html` / `spec-annotated.md` output to match the document
-(`0007-thing-reader.html`) whenever more than one such document can share a
-directory — the generated names are fixed, so two design docs would otherwise
-overwrite each other's readers.
+A document not named `spec.md`, `specification.md` or `plan.md` gets readers
+named for it (`0007-thing.md` → `0007-thing-reader.html` / `0007-thing-annotated.md`),
+so design docs sharing a directory never overwrite each other's readers. Do not
+rename the output — `reader_check.py` looks for exactly that name.
 
 ## Work that consumes the document waits for the annotations
 
