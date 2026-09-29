@@ -50,6 +50,31 @@ if printf '%s' "$payload" | (cd "$repo" && bash claude-arsenal/bin/check_skill_w
 fi
 echo "PASS: the vendored gate blocks a Bash skill edit — plugin hooks never travelled"
 
+# #468: the registered command, run as settings.json runs it, must still work
+# once the session's cwd has moved into a subdirectory.
+gate_cmd=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["hooks"]["PreToolUse"][0]["hooks"][0]["command"])' "$repo/.claude/settings.json")
+case "$gate_cmd" in *CLAUDE_PROJECT_DIR*) ;; *) fail "#468: gate hook is not anchored at \$CLAUDE_PROJECT_DIR: $gate_cmd" ;; esac
+allow='{"session_id":"s1","tool_name":"Bash","tool_input":{"command":"ls"}}'
+printf '%s' "$allow" | (cd "$repo/claude-arsenal/bin" && CLAUDE_PROJECT_DIR="$repo" bash -c "$gate_cmd") >/dev/null 2>&1 \
+    || fail "#468: the gate hook fails from a subdirectory"
+echo "PASS: the gate hook runs from a subdirectory of the project"
+
+# #468: an entry written relative by an earlier init is upgraded, not duplicated
+python3 - "$repo/.claude/settings.json" <<'PY'
+import json, sys
+p = sys.argv[1]; s = json.load(open(p))
+s["hooks"]["PreToolUse"][0]["hooks"][0]["command"] = "bash claude-arsenal/bin/check_skill_workshop_loaded.sh"
+json.dump(s, open(p, "w"))
+PY
+python3 "$init_py" --repo-path "$repo" >/dev/null 2>&1 || fail "re-run exited non-zero"
+python3 - "$repo/.claude/settings.json" <<'PY' || fail "#468: legacy relative gate hook was not upgraded in place"
+import json, sys
+pre = json.load(open(sys.argv[1]))["hooks"]["PreToolUse"]
+cmds = [h["command"] for e in pre for h in e["hooks"] if "check_skill_workshop_loaded" in h["command"]]
+assert len(cmds) == 1 and "CLAUDE_PROJECT_DIR" in cmds[0], cmds
+PY
+echo "PASS: a relative gate hook from an earlier init is upgraded in place"
+
 # re-running is idempotent, and prunes a skill we no longer ship
 mkdir -p "$repo/.claude/skills/retired" && touch "$repo/.claude/skills/retired/.arsenal-vendored"
 python3 "$init_py" --repo-path "$repo" >/dev/null 2>&1 || fail "re-run exited non-zero"

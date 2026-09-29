@@ -561,6 +561,9 @@ def _check_bundle_version(bundle: Path, arsenal: Path) -> tuple[str, str] | None
     return None
 
 
+_STATUSLINE_SCRIPT = "claude-arsenal/bin/statusline_capture.sh"
+
+
 def _register_statusline(repo_path: Path) -> None:
     """Register statusline_capture.sh as the host statusLine command.
 
@@ -571,8 +574,9 @@ def _register_statusline(repo_path: Path) -> None:
     settings_path = repo_path / ".claude" / "settings.json"
     block = {
         "type": "command",
-        "command": "bash claude-arsenal/bin/statusline_capture.sh",
+        "command": _hook_command(_STATUSLINE_SCRIPT),
     }
+    legacy = {**block, "command": _legacy_hook_command(_STATUSLINE_SCRIPT)}
     if settings_path.exists():
         try:
             settings = json.loads(settings_path.read_text(encoding="utf-8"))
@@ -581,7 +585,8 @@ def _register_statusline(repo_path: Path) -> None:
         except json.JSONDecodeError:
             print("  settings.json: unparseable — skipping statusLine registration")
             return
-        if "statusLine" in settings:
+        # A relative statusLine an earlier init wrote is ours to upgrade (#468).
+        if "statusLine" in settings and settings["statusLine"] != legacy:
             print("  settings.json: statusLine already set — skipping")
             return
         settings["statusLine"] = block
@@ -662,6 +667,22 @@ _VENDOR_MARKER = ".arsenal-vendored"
 _GATE_HOOK = "claude-arsenal/bin/check_skill_workshop_loaded.sh"
 _MARK_HOOK = "claude-arsenal/bin/mark_skill_workshop_loaded.sh"
 _MARK_PROMPT_HOOK = "claude-arsenal/bin/mark_skill_workshop_loaded_from_prompt.sh"
+
+
+def _hook_command(script: str) -> str:
+    """The settings.json command that runs `script`, anchored at the project root.
+
+    A relative `bash claude-arsenal/bin/…` resolves against the session's cwd, so
+    once a session `cd`s into a subdirectory the hook fails — on every Bash call,
+    for the gate (#468). `$CLAUDE_PROJECT_DIR` is set for hooks; the `:-.`
+    fallback keeps a runner that does not set it where it was before.
+    """
+    return f'bash "${{CLAUDE_PROJECT_DIR:-.}}"/{script}'
+
+
+def _legacy_hook_command(script: str) -> str:
+    """The relative spelling init wrote before #468, migrated on the next run."""
+    return f"bash {script}"
 
 
 def _read_settings(settings_path: Path) -> dict | None:
@@ -1179,9 +1200,15 @@ def _register_gate_hook(repo_path: Path) -> None:
         entries = hooks.setdefault(event, [])
         if not isinstance(entries, list):
             continue
+        # Upgrade the relative spelling an earlier init wrote (#468) in place.
+        for e in entries:
+            for h in e.get("hooks", []) if isinstance(e, dict) else []:
+                if isinstance(h, dict) and h.get("command") == _legacy_hook_command(command):
+                    h["command"] = _hook_command(command)
+                    changed = True
         if any(command in json.dumps(e) for e in entries):
             continue
-        entry: dict = {"hooks": [{"type": "command", "command": f"bash {command}"}]}
+        entry: dict = {"hooks": [{"type": "command", "command": _hook_command(command)}]}
         if matcher:
             entry["matcher"] = matcher
         entries.append(entry)
