@@ -221,9 +221,9 @@ the user a question the host already answered.
 
 ## Specs and plans
 
-Spec work goes through `specify`, plan work through `design`; another plugin's brainstorming
-or planning skill does not replace them, and no plan is written before the annotated spec is
-approved. **Every spec or plan handed to the user goes through `create_reader.py` and the
+Idea work goes through `explore-idea`, spec work through `specify`, plan work through `design`;
+another plugin's brainstorming or planning skill does not replace them, and no plan is written
+before the annotated spec is approved. **Every spec or plan handed to the user goes through `create_reader.py` and the
 HTML is what is handed over**, whichever skill wrote the Markdown.
 A diagram in a spec, plan or doc is a ```drawspec fence, not hand-drawn SVG or ASCII art → `claude-arsenal/references/diagrams.md`.
 

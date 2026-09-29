@@ -164,7 +164,7 @@ plugins/
   core/
     .claude-plugin/plugin.json
     skills/
-      specify/ design/ execution/ review/ ship/          # workflow
+      explore-idea/ specify/ design/ execution/ review/ ship/  # workflow
       init/ queue-add/ queue-next/ queue-status/          # queue
       gate-check/ pin-check/                              # gates
       github/ session-end/                                # git + session

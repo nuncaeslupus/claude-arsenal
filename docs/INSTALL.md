@@ -6,7 +6,7 @@ project two plugins:
 - **`skill-workshop`** — the meta-skill that gates every authoring or
   editing change to a skill, plus the validator/auditor/scaffolder
   scripts everything else is checked against.
-- **`core`** — generic engineering workflow skills (`specify`,
+- **`core`** — generic engineering workflow skills (`explore-idea`, `specify`,
   `design`, `execution`, `review`, `ship`, `github`, `gate-check`,
   `session-end`), the Python toolchain skills
   (`python-bootstrap`, `pypi-release`, `coverage-gaps`, `dep-upgrade`,
@@ -93,7 +93,7 @@ session from then on — whether or not it ever triggers.
 | Profile | Sections installed |
 |---|---|
 | `minimal` | `core` — `init`, `queue-next`, `queue-add`, `queue-status`, `github`, `session-end` |
-| `general` | `core` + `workflow` (`specify`, `design`, `execution`, `review`, `ship`, `gate-check`) |
+| `general` | `core` + `workflow` (`explore-idea`, `specify`, `design`, `execution`, `review`, `ship`, `gate-check`) |
 | `python` | `core` + `workflow` + `python` (`python-bootstrap`, `pypi-release`, `coverage-gaps`, `dep-upgrade`, `mutmut-report`, `pin-check`) |
 
 `core` is always installed: the vendored session protocol names those skills
@@ -156,7 +156,7 @@ updating one does not update the other.
 |---|---|
 | Type `Investigate why login is slow` | `specify` loads. |
 | Type `Set up the task queue in this repo` | `init` loads. |
-| `ls .claude/skills` | 18 skill folders, each with a `.arsenal-vendored` marker |
+| `ls .claude/skills` | 19 skill folders, each with a `.arsenal-vendored` marker |
 | Ask Claude to edit any `SKILL.md` without loading the meta-skill | **blocked** by the gate |
 | (local checkout) `make audit` | Per-plugin listing-budget breakdown; `PASS — under cap.` |
 

@@ -89,6 +89,12 @@
 **Open questions**:
 - [ ] ...
 
+**Decisions log** (carried unchanged from `explore-idea`; delete this block when the spec did not start there):
+
+| ID | Decision | Status | Date |
+|----|----------|--------|------|
+| D-1 | <what was decided> | agreed / open / superseded by D-N | YYYY-MM-DD |
+
 ---
 
 > Sections 5–6 (contracts, risks) are appended by `design`.

@@ -30,7 +30,7 @@
         },
         {
           "name": "session-end",
-          "description": "Use whenever the user signals end-of-job, invokes /session-end, or the opt-in SessionStart auto-fire hook runs — three steps. (1) write status/handoff.md if host repo opts in; (2) retrospective scan for repeated errors and proposed skill updates; (3) PR audit — checks CI, review comments, and merge conflicts on session PRs, prints a review table. Triggers — \"wrap up\", \"we're done\", \"/session-end\", \"end-of-job\". Do NOT use mid-job or for cross-session memory."
+          "description": "Use whenever the user signals end-of-job, invokes /session-end, or the opt-in SessionStart hook fires — writes the opt-in status/handoff.md, scans for repeated errors worth a skill update, and audits the session's PRs for CI, review comments and conflicts. Triggers — \"wrap up\", \"we're done\". Do NOT use mid-job or for cross-session memory."
         }
       ]
     },
@@ -54,11 +54,11 @@
       "skills": [
         {
           "name": "coverage-gaps",
-          "description": "Use whenever the user wants to turn coverage.py's coverage.json into a ranked list of the highest-value missing tests — surfaces contiguous missing-line runs marking whole untested functions or branches. A cheap line-coverage pass below mutmut-report. Triggers — \"what tests am I missing\", \"where are the coverage gaps\". Do NOT use to run the suite or generate the report (run coverage / pytest --cov first), or for non-Python coverage."
+          "description": "Use whenever the user wants to turn coverage.py's coverage.json into a ranked list of the highest-value missing tests — surfaces missing-line runs that mark untested functions or branches; cheaper than mutmut-report. Triggers — \"what tests am I missing\", \"where are the coverage gaps\". Do NOT use to run the suite or generate the report (run coverage / pytest --cov first), or for non-Python coverage."
         },
         {
           "name": "dep-upgrade",
-          "description": "Use whenever a uv-managed Python project's dependencies need upgrading safely — the uv lock --upgrade, pip-audit, test-gate, classify-breakage runbook, splitting lockfile churn into direct vs transitive. Triggers — \"upgrade the dependencies\", \"check for vulnerable dependencies\". Do NOT use to add one dependency (just uv add), scaffold tooling (see python-bootstrap), or publish (see pypi-release)."
+          "description": "Use whenever a uv-managed Python project's dependencies need upgrading safely — runs uv lock --upgrade, pip-audit and the test gate, classifies breakage, splits direct from transitive churn. Triggers — \"upgrade the dependencies\", \"check for vulnerable dependencies\". Do NOT use to add one dependency (just uv add), scaffold tooling (see python-bootstrap), or publish (see pypi-release)."
         },
         {
           "name": "mutmut-report",
@@ -70,7 +70,7 @@
         },
         {
           "name": "pypi-release",
-          "description": "Use whenever a Python package is ready to publish to PyPI — the build, twine check, version bump, tag, and upload runbook, catching version drift and stale dist/ artifacts before upload. Triggers — \"publish to PyPI\", \"cut a release\". Do NOT use to scaffold project tooling (see python-bootstrap) or to upgrade dependencies (see dep-upgrade)."
+          "description": "Use whenever a Python package is ready to publish to PyPI — the build, twine check, version bump, tag and upload runbook, catching version drift and stale dist/ artifacts. Triggers — \"publish to PyPI\", \"cut a release\". Do NOT use to scaffold project tooling (see python-bootstrap) or to upgrade dependencies (see dep-upgrade)."
         },
         {
           "name": "python-bootstrap",
@@ -91,6 +91,10 @@
         {
           "name": "execution",
           "description": "When the user is implementing code changes from a design — code change, tests, merge-ready output. Do NOT use for investigation (see specify), design (see design), or routine one-off scripts that bypass the design step."
+        },
+        {
+          "name": "explore-idea",
+          "description": "When the user has a vague idea and no spec yet — sizes it, asks one question at a time with pros and cons, logs decisions, hands off to specify. Triggers — \"I have an idea\", \"help me think this through\". Do NOT use once the problem is stated (see specify)."
         },
         {
           "name": "gate-check",

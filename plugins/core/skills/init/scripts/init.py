@@ -161,7 +161,8 @@ context-window = 0
 # the next `/init` (which the session protocol runs anyway) adds or prunes the
 # skills for that section.
 #
-#   workflow  specify, design, execution, review, ship, gate-check
+#   workflow  explore-idea, specify, design, execution, review, ship,
+#             gate-check
 #   python    python-bootstrap, pypi-release, coverage-gaps, dep-upgrade,
 #             mutmut-report, pin-check
 #

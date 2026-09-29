@@ -1,6 +1,6 @@
 ---
 name: session-end
-description: Use whenever the user signals end-of-job, invokes /session-end, or the opt-in SessionStart auto-fire hook runs — three steps. (1) write status/handoff.md if host repo opts in; (2) retrospective scan for repeated errors and proposed skill updates; (3) PR audit — checks CI, review comments, and merge conflicts on session PRs, prints a review table. Triggers — "wrap up", "we're done", "/session-end", "end-of-job". Do NOT use mid-job or for cross-session memory.
+description: Use whenever the user signals end-of-job, invokes /session-end, or the opt-in SessionStart hook fires — writes the opt-in status/handoff.md, scans for repeated errors worth a skill update, and audits the session's PRs for CI, review comments and conflicts. Triggers — "wrap up", "we're done". Do NOT use mid-job or for cross-session memory.
 metadata:
   type: workflow
 ---
