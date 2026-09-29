@@ -198,6 +198,99 @@ grep -q "widget-overhaul-spec-notes-'+today()+'-r3.md" "${tmp}/status/spec-reade
 grep -q '<meta name="arsenal-source-sha256" content="[0-9a-f]\{64\}">' "${tmp}/status/spec-reader.html" \
     || fail "the reader does not record the digest of the source it rendered"
 
+# --- 9: ```drawspec fences render to inline SVG (#466) ---
+#     A fake drawspec via ARSENAL_DRAWSPEC, so none of this needs the network.
+#     It logs every call, fails `validate` on a document containing BROKEN, and
+#     renders a marked SVG.
+fake="${tmp}/fake-drawspec"
+calls="${tmp}/drawspec-calls.log"
+cat > "${fake}" <<EOF
+#!/usr/bin/env bash
+echo "\$*" >> "${calls}"
+doc=\$(cat)
+case "\$1" in
+  validate) if grep -q BROKEN <<<"\${doc}"; then echo "/nodes/0/text: fake violation" >&2; exit 1; fi
+            echo "- : a valid flow document" ;;
+  render) echo '<svg xmlns="http://www.w3.org/2000/svg" data-fake="drawspec"><text>drawn</text></svg>' ;;
+  *) exit 2 ;;
+esac
+EOF
+chmod +x "${fake}"
+: > "${calls}"
+
+#     A document with no fence never runs drawspec — it must not become a
+#     dependency of every reader.
+ARSENAL_DRAWSPEC="${fake}" run_reader --input status/specification.md --output-dir status \
+    --name "Widget Overhaul" >/dev/null || fail "a fence-free document failed with drawspec configured"
+[[ ! -s "${calls}" ]] || fail "a document with no drawspec fence invoked drawspec: $(cat "${calls}")"
+ARSENAL_DRAWSPEC="${tmp}/no-such-drawspec" run_reader --input status/specification.md \
+    --output-dir status --name "Widget Overhaul" >/dev/null \
+    || fail "a fence-free document needed a runnable drawspec"
+
+mkdir -p "${tmp}/diagrams"
+cat > "${tmp}/diagrams/plan.md" <<'EOF'
+# Diagram Plan
+
+## Flow
+
+Before the picture.
+
+```drawspec
+{"version": 1, "kind": "flow", "nodes": [{"id": "a", "text": "A step"}]}
+```
+
+After the picture.
+
+## Code
+
+```json
+{"not": "a diagram"}
+```
+EOF
+out=$(ARSENAL_DRAWSPEC="${fake}" run_reader --input diagrams/plan.md --output-dir diagrams --name demo) \
+    || fail "a document with a valid drawspec fence failed: ${out}"
+html="${tmp}/diagrams/plan-reader.html"
+grep -q '<figure class="drawspec"><svg xmlns="http://www.w3.org/2000/svg" data-fake="drawspec">' "${html}" \
+    || fail "the drawspec fence was not rendered to inline SVG"
+grep -q 'DRAWSPEC-FIGURE' "${html}" && fail "a drawspec placeholder leaked into the reader"
+grep -q '&quot;kind&quot;: &quot;flow&quot;' "${html}" \
+    && fail "the drawspec source was shown as code instead of drawn"
+grep -q '<code class="language-json">' "${html}" || fail "an ordinary JSON fence stopped rendering as code"
+grep -q '^validate -$' "${calls}" || fail "drawspec validate was not run before render: $(cat "${calls}")"
+[[ "$(head -1 "${calls}")" == "validate -" ]] || fail "render ran before validate: $(cat "${calls}")"
+grep -q '^```drawspec$' "${tmp}/diagrams/plan-annotated.md" \
+    || fail "the annotated Markdown lost the drawspec source"
+
+#     A diagram drawspec refuses fails the run, names the block, and writes nothing.
+rm -f "${html}"
+sed -i 's/"A step"/"BROKEN step"/' "${tmp}/diagrams/plan.md"
+out=$(ARSENAL_DRAWSPEC="${fake}" run_reader --input diagrams/plan.md --output-dir diagrams --name demo); rc=$?
+[[ ${rc} -ne 0 ]] || fail "an invalid drawspec diagram did not fail the build"
+grep -q "diagrams/plan.md § Flow, drawspec block 1" <<<"${out}" || fail "the failure does not name the block: ${out}"
+grep -q "fake violation" <<<"${out}" || fail "drawspec's own message was not passed on: ${out}"
+[[ ! -f "${html}" ]] || fail "a reader was written despite the broken diagram"
+
+#     No runnable drawspec and a fence to draw: a loud failure, not a dropped picture.
+out=$(ARSENAL_DRAWSPEC="${tmp}/no-such-drawspec" run_reader --input diagrams/plan.md \
+        --output-dir diagrams --name demo); rc=$?
+[[ ${rc} -ne 0 ]] || fail "a drawspec fence with no drawspec to run did not fail"
+grep -q "ARSENAL_DRAWSPEC" <<<"${out}" || fail "the missing-drawspec failure does not say what to set: ${out}"
+echo "PASS: drawspec fences render, validate first, fail loudly, and cost fence-free documents nothing"
+
+#     One real render, when drawspec can be had here (PATH, or uvx and a network).
+if command -v drawspec >/dev/null 2>&1 || { command -v uvx >/dev/null 2>&1 && command -v timeout >/dev/null 2>&1 && \
+        timeout 180 uvx --quiet --from git+https://github.com/nuncaeslupus/drawspec drawspec --version \
+        >/dev/null 2>&1; }; then
+    sed -i 's/"BROKEN step"/"A step"/' "${tmp}/diagrams/plan.md"
+    out=$(env -u ARSENAL_DRAWSPEC "${PY[@]}" "${READER}" --input "${tmp}/diagrams/plan.md" \
+            --output-dir "${tmp}/diagrams" --name demo 2>&1) || fail "a real drawspec render failed: ${out}"
+    grep -q '<figure class="drawspec"><svg[^>]*viewBox=' "${html}" \
+        || fail "the real drawspec render did not land in the reader"
+    echo "PASS: a real drawspec render lands in the reader"
+else
+    echo "SKIP: real drawspec smoke — no drawspec on PATH and no uvx/network to fetch it" >&2
+fi
+
 echo "PASS: create_reader_test — all gates passed"
 
 # --- a storage failure must not silence the unload warning ------------------

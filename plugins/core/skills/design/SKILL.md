@@ -89,6 +89,10 @@ python3 "${CLAUDE_SKILL_DIR}/scripts/validate_plan.py" --input status/plan.md
 
 It checks the plan has the required sections (Technical solution, Implementation tasks, Evidence log, Sign-off) and that the task table carries the required columns including the measurable Gate — shape only. The `gate-check` skill's `run_gate.py` then audits the gate values and evidence themselves (add `--strict` there to require a gate on every task).
 
+A plan that needs a picture — the architecture, a flow, a sequence of phases — draws it
+as a fenced `drawspec` block, never hand-drawn SVG or ASCII art:
+`claude-arsenal:core:init § references/diagrams.md`.
+
 ### Step 6: Publish the annotatable plan
 
 Generate the reader once the validator passes, and hand both files to the user in the same

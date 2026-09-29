@@ -98,6 +98,10 @@ python3 "${CLAUDE_SKILL_DIR}/scripts/validate_spec.py" --input status/specificat
 
 It checks that the required sections (1–4) and the measurable Success criteria block are present and filled — shape only, not content quality. Sections 5–6 are reported as pending until `design` appends them. Exit 0 clean, 1 on a missing or unfilled required section.
 
+When a section needs a picture, write it as a fenced `drawspec` block (JSON that
+drawspec lays out and the reader renders), never hand-drawn SVG or ASCII art:
+`claude-arsenal:core:init § references/diagrams.md`.
+
 ## Annotatable reader — required before the spec is merged or built on
 
 Generate the reader once the validator passes, and hand both files to the user in the
