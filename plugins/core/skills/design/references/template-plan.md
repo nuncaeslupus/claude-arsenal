@@ -8,6 +8,16 @@
 **Date**: YYYY-MM-DD
 **Specification**: `status/specification.md`
 **Author**: <name>
+**Revision**: 1
+**Status**: draft
+**Revision log**:
+- r1 — first draft
+
+> Review record, kept the way the spec keeps its own: each round of notes bumps
+> **Revision** with a log line naming the `<project>-plan-notes-<date>-rN.md`
+> export it applied, committed beside this file in the same commit. Approval is
+> `approved (YYYY-MM-DD, revision N)`, plus `— without annotations` when there
+> were none.
 
 ---
 

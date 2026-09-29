@@ -120,15 +120,20 @@ those two paths exist and the user has been given the HTML, not merely told wher
 Add `--name "My Project"` to override the reader title.
 
 The HTML reader auto-saves notes in the browser and exports them as a Markdown file the
-reviewer sends back, named `<project>-spec-notes-<date>.md` so it stays findable among
-whatever else is in a Downloads folder. The Markdown copy has a `> ✎ Notes` slot after
+reviewer sends back, named `<project>-spec-notes-<date>-r<N>.md` — N is the spec's
+`**Revision**` — so it stays findable in a Downloads folder and says which revision it
+annotates. The Markdown copy has a `> ✎ Notes` slot after
 every section for annotation in any text editor. To re-seed a rebuilt reader with notes
 from a previous export, pass `--notes <the returned file>` — the export carries its own
 note data, so hand back the file the reviewer sent, unrenamed.
 
 When a returned export arrives — a path in `~/Downloads`, an upload, a paste — move it
-into the spec's directory beside the reader and commit it. The annotations are review
-history for this spec; left in Downloads they are gone by the next session.
+into the spec's directory beside the reader. Applying it is a new revision: bump
+`**Revision**`, add a `**Revision log**` line naming the export, regenerate the reader,
+and commit the export in the same commit as the revision it drove. When the reviewer
+approves, set `**Status**: approved (<date>, revision N)`, adding `— without annotations`
+when they sent none for that revision. `validate_spec.py` fails on a notes file the header
+names that is not committed; `--require-approved` is what `design` checks before it starts.
 
 Commit the generated files so reviewers can open the HTML directly from the repo.
 

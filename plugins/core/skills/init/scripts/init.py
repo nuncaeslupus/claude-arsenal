@@ -54,6 +54,10 @@ Otherwise, every session, without waiting to be asked:
    → `claude-arsenal/references/orchestrator-tick.md`
 6. After any session with tasks: update `{home}/session/handover.md`.
 
+Specs and plans live at `status/specification.md` and `status/plan.md` (a workspace's at
+`{home}/project/<ws>/spec.md` / `plan.md`). A brainstorming or planning skill from another
+plugin writes its output there too, not to its own default location.
+
 @claude-arsenal/AGENTS.md
 <!-- /claude-arsenal: auto-managed -->"""
 
@@ -752,6 +756,10 @@ _VENDOR_MARKER = ".arsenal-vendored"
 _GATE_HOOK = "claude-arsenal/bin/check_skill_workshop_loaded.sh"
 _MARK_HOOK = "claude-arsenal/bin/mark_skill_workshop_loaded.sh"
 _MARK_PROMPT_HOOK = "claude-arsenal/bin/mark_skill_workshop_loaded_from_prompt.sh"
+# Not part of the skill-edit gate, registered beside it for the same reason: a
+# settings hook is the only kind that reaches a cloud session. It keys on the
+# path, so a spec or plan another plugin's skill wrote gets the reminder too.
+_READER_HOOK = "claude-arsenal/bin/reader_hook.sh"
 
 
 def _hook_command(script: str) -> str:
@@ -1275,13 +1283,14 @@ def _register_gate_hook(repo_path: Path) -> None:
         print("  settings.json: unexpected 'hooks' value — skipping gate-hook registration")
         return
 
-    wanted = {
-        "PreToolUse": ("Edit|Write|MultiEdit|Bash", _GATE_HOOK),
-        "PostToolUse": ("Skill", _MARK_HOOK),
-        "UserPromptSubmit": (None, _MARK_PROMPT_HOOK),
-    }
+    wanted = [
+        ("PreToolUse", "Edit|Write|MultiEdit|Bash", _GATE_HOOK),
+        ("PostToolUse", "Skill", _MARK_HOOK),
+        ("PostToolUse", "Write|Edit|MultiEdit", _READER_HOOK),
+        ("UserPromptSubmit", None, _MARK_PROMPT_HOOK),
+    ]
     changed = False
-    for event, (matcher, command) in wanted.items():
+    for event, matcher, command in wanted:
         entries = hooks.setdefault(event, [])
         if not isinstance(entries, list):
             continue
@@ -1302,7 +1311,7 @@ def _register_gate_hook(repo_path: Path) -> None:
     if changed:
         settings_path.parent.mkdir(parents=True, exist_ok=True)
         settings_path.write_text(json.dumps(settings, indent=2) + "\n", encoding="utf-8")
-        print("  settings.json: registered the skill-edit gate")
+        print("  settings.json: registered the skill-edit gate and the spec/plan reader hook")
 
 
 def _retire_plugin_declaration(repo_path: Path) -> None:
@@ -1787,7 +1796,13 @@ def init_base(
             "existing tasks and config where nothing reads them. Move it "
             f"(`mv {default_home} {home}`), or unset ARSENAL_HOME to keep using it."
         )
-    for d in ["tasks", "specs", "plans", "project", "session"]:
+    # No `specs/` or `plans/`: nothing ever wrote there. `specify` and `design`
+    # write `status/specification.md` / `status/plan.md`, or a workspace's
+    # `project/<ws>/spec.md` / `plan.md`, and every reader of a spec looks there.
+    # Two empty directories beside them read as the place specs go, which is
+    # how a planning skill from another plugin ended up writing where no
+    # validator, reader or gate would find its output. Existing ones are left.
+    for d in ["tasks", "project", "session"]:
         (home / d).mkdir(parents=True, exist_ok=True)
 
     # Refresh bundle files

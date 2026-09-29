@@ -246,6 +246,17 @@ def main(argv: list[str] | None = None) -> int:
         if stale:
             print(f"query_status: {stale}", file=sys.stderr)
 
+    # Reviewer exports of this project's specs/plans left in a Downloads folder:
+    # review history that is one cleanup away from gone. Read-only, local, and
+    # silent when there is none — which is what makes it cheap enough for here.
+    try:
+        from reader_check import downloads_warnings
+
+        for line in downloads_warnings(Path.cwd()):
+            print(f"query_status: {line}", file=sys.stderr)
+    except Exception:
+        pass
+
     # Resolved once, for the whole board. Both sites below used to rescan
     # every issue per task.
     handle_numbers = issue_numbers_by_task(issues, titles=titles)

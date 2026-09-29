@@ -78,13 +78,13 @@ python3 "${CLAUDE_SKILL_DIR}/scripts/init.py" --workspace BACKEND --root ./backe
 The script:
 1. Creates the `claude-arsenal/` bundle structure: `bin/`, `scripts/`, `agents/`, `references/`. The host-owned `project/`, `queue/` and `session/` state does **not** live here — it is scaffolded under `arsenal/` by item 3.
 2. Copies bundle scripts from the plugin into `claude-arsenal/bin/` (checksum-based; refreshes stale files only).
-3. Scaffolds the host-owned `arsenal/` tree — `tasks/`, `specs/`, `plans/`, `session/handover.md` — and seeds `arsenal/config.toml`. Upstream owns `claude-arsenal/` and may overwrite it on every re-run; it never writes into `arsenal/` again, so an upgrade cannot touch the host repo's tasks or settings.
+3. Scaffolds the host-owned `arsenal/` tree — `tasks/`, `project/`, `session/handover.md` — and seeds `arsenal/config.toml`. Upstream owns `claude-arsenal/` and may overwrite it on every re-run; it never writes into `arsenal/` again, so an upgrade cannot touch the host repo's tasks or settings.
 4. Vendors the skills for the chosen sections into `.claude/skills/` — `core` always, plus `workflow` and/or `python`. Flipping a section to `false` in `arsenal/config.toml` prunes its skills on the next run and keeps them pruned; an upgrade of a repo that predates sections keeps whatever it already had.
 5. Writes a deny-by-default `surface_profile.json` (gitignored): surface `unknown`, no capabilities. Tasks with no `requires:` stay eligible everywhere; a task that declares one waits until `detect_surface.sh` records what this surface actually offers, rather than being handed to a surface that cannot run it.
 6. Adds `.gitignore` entries for `surface_profile.json` and the statusLine-written `rate_limits.json`.
 7. Registers `statusline_capture.sh` as the host `statusLine` command (skipped if one already exists) so `budget_check.sh` can read quota.
 8. Injects the session-start protocol block + `@claude-arsenal/AGENTS.md` import into `CLAUDE.md`.
-9. Registers the skill-edit **gate hooks** in `.claude/settings.json` (`check_skill_workshop_loaded.sh` and its two marker hooks) — a plugin ships these as plugin hooks, but plugin hooks do not travel with a clone, and settings hooks do. It no longer writes a marketplace **declaration**: the web runtime never fetches a git marketplace, so the skills are **vendored** into `.claude/skills/` (item 4) where every surface reads them from the clone itself.
+9. Registers the skill-edit **gate hooks** in `.claude/settings.json` (`check_skill_workshop_loaded.sh` and its two marker hooks), plus `reader_hook.sh`, which reminds a session to regenerate the annotatable reader whenever a spec or plan is written — a plugin ships these as plugin hooks, but plugin hooks do not travel with a clone, and settings hooks do. It no longer writes a marketplace **declaration**: the web runtime never fetches a git marketplace, so the skills are **vendored** into `.claude/skills/` (item 4) where every surface reads them from the clone itself.
 
 **Retiring vendored skill copies:**
 ```bash

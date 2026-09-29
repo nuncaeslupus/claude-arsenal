@@ -14,8 +14,12 @@ default: directory of the single input, or docs/spec-reader/ in workspace mode):
                         (notes auto-save in browser; Export button saves a Markdown file)
   <doc>-annotated.md    same document as Markdown with a note slot per section
 
-The Export button names its download for the reader title and document kind
-(`<project>-<doc>-notes-<date>.md`) so it stays findable in a Downloads folder.
+The Export button names its download for the reader title, document kind and
+revision (`<project>-<doc>-notes-<date>-r<N>.md`, N read from the document's
+`**Revision**:` header line; no `-r<N>` when it has none) so it stays findable in
+a Downloads folder and says which revision it annotates.
+The HTML carries a digest of every source it rendered, which is how
+`reader_check.py` tells a current reader from a stale one.
 A returned export belongs in {output-dir} beside the reader — it is part of the
 project, not a scratch file. Seed a rebuilt reader from one with
 `--notes <that file>`; it is Markdown with the note data embedded in a trailing
@@ -258,6 +262,22 @@ def build_part(file_md: str, code: str, part_label: str, title: str) -> dict:
 # title. A plan and a spec want different badges and different output filenames, and
 # nothing else about the reader changes between them.
 DOC_KINDS = {"plan": ("PLAN", "Plan", "plan")}
+# The header line `specify` / `design` write, read only above the first section.
+REVISION_RE = re.compile(r"^\*\*Revision\*\*:\s*r?(\d+)\b", re.MULTILINE)
+
+
+def doc_revision(raw: str) -> int | None:
+    """The document's `**Revision**: N`, or None when its header has none."""
+    header = re.split(r"^## ", raw, maxsplit=1, flags=re.MULTILINE)[0]
+    m = REVISION_RE.search(header)
+    return int(m.group(1)) if m else None
+
+
+def source_digest(raw: str) -> str:
+    """What `reader_check.py` compares against: sha256 of the text as read."""
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
 DEFAULT_DOC_KIND = ("SPEC", "Specification", "spec")
 
 
@@ -270,7 +290,10 @@ def collect_parts_single(spec_path: Path) -> list[tuple[str, dict]]:
     """Single-file mode: one part from the document at spec_path."""
     code, label, basename = doc_kind(spec_path.stem)
     raw = spec_path.read_text(encoding="utf-8")
-    return [(basename, build_part(raw, code, label, spec_path.stem.replace("-", " ").title()))]
+    part = build_part(raw, code, label, spec_path.stem.replace("-", " ").title())
+    part["source_sha256"] = source_digest(raw)
+    part["revision"] = doc_revision(raw)
+    return [(basename, part)]
 
 
 def collect_parts_workspace(workspace_dir: Path) -> list[tuple[str, dict]]:
@@ -280,9 +303,9 @@ def collect_parts_workspace(workspace_dir: Path) -> list[tuple[str, dict]]:
         ws_name = spec_file.parent.name
         code = ws_name.upper()[:8]
         raw = spec_file.read_text(encoding="utf-8")
-        parts.append(
-            ("workspace", build_part(raw, code, "Workspace", ws_name.replace("-", " ").title()))
-        )
+        part = build_part(raw, code, "Workspace", ws_name.replace("-", " ").title())
+        part["source_sha256"] = source_digest(raw)
+        parts.append(("workspace", part))
     return parts
 
 
@@ -445,6 +468,9 @@ def build_html(
 
     page = HTML_TEMPLATE
     page = page.replace("__TITLE__", esc(title))
+    page = page.replace(
+        "__SOURCE_SHA__", " ".join(p["source_sha256"] for _, p in parts if "source_sha256" in p)
+    )
     page = page.replace("__GEN_DATE__", gen_date)
     page = page.replace("__TOTAL__", str(total_sections))
     page = page.replace("__TOC__", toc_html)
@@ -455,10 +481,14 @@ def build_html(
     # that week, so the filename carries the project as well as the document kind:
     # `my-project-spec-notes-2026-08-24.md`, not a bare `spec-notes-…`.
     file_slug = f"{slug(title)}-{doc_slug}"
+    # One document, one revision: a workspace reader renders several, so its
+    # export has no single revision to name.
+    revision = parts[0][1].get("revision") if len(parts) == 1 else None
     page = page.replace(
         "__JS__",
         JS.replace("__LS_NS__", ls_ns)
         .replace("__DOC_SLUG__", file_slug)
+        .replace("__REV_SUFFIX__", f"-r{revision}" if revision else "")
         .replace("__DOC_LABEL__", single_label),
     )
     page = page.replace(
@@ -731,7 +761,7 @@ JS = r"""
   document.getElementById('btn-export').addEventListener('click',function(){
     var r=buildExport();
     if(r.n===0){toast('No notes yet — add some first.');return;}
-    var name='__DOC_SLUG__-notes-'+today()+'.md';
+    var name='__DOC_SLUG__-notes-'+today()+'__REV_SUFFIX__.md';
     var saved=download(name,r.text);openModal(r.text);
     if(navigator.clipboard){navigator.clipboard.writeText(r.text).then(function(){},function(){});}
     if(!saved){setState('⚠ Download blocked — copy the notes from this box','warn');
@@ -746,7 +776,7 @@ JS = r"""
     if(navigator.clipboard){navigator.clipboard.writeText(modalTa.value).then(function(){},function(){});ok=true;}
     toast(ok?'Copied to clipboard':'Select the text and copy');
   });
-  document.getElementById('modal-dl').addEventListener('click',function(){download('__DOC_SLUG__-notes-'+today()+'.md',modalTa.value);toast('Download started');});
+  document.getElementById('modal-dl').addEventListener('click',function(){download('__DOC_SLUG__-notes-'+today()+'__REV_SUFFIX__.md',modalTa.value);toast('Download started');});
   document.getElementById('modal-close').addEventListener('click',closeModal);
   modal.addEventListener('click',function(e){if(e.target===modal)closeModal();});
 
@@ -806,6 +836,7 @@ HTML_TEMPLATE = r"""<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
+<meta name="arsenal-source-sha256" content="__SOURCE_SHA__">
 <title>__TITLE__ — __DOC_LABEL__ (annotatable)</title>
 <style>__CSS__</style>
 </head>

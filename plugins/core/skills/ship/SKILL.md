@@ -25,6 +25,11 @@ Reads `status/specification.md` to know what should be shipping. Confirms scope 
 - Does the change solve the stated problem?
 - All acceptance criteria satisfied?
 - Every task's **Gate** is recorded and met — run the `gate-check` engine (`run_gate.py --input status/plan.md`): exit 0 means all gated tasks pass with complete evidence (measured value, command, commit SHA, provenance). A failing or unrecorded gate is No-Go; exit 2 means no Gate column found or a usage error (missing file, bad `--id`) — confirm the correct plan file exists and the invocation uses `--input`; fall back to the acceptance-criteria check only after confirming the plan genuinely predates the gate convention.
+- Every spec or plan the branch changed has a reader built from its current text (exit 1 is No-Go: regenerate the reader it names, hand the HTML over, and commit it with the document):
+
+  ```bash
+  python3 "${CLAUDE_SKILL_DIR}/../init/assets/scripts/reader_check.py" branch
+  ```
 - If partial delivery → is the partial state safe and functional?
 
 ### Step 3: Compatibility check

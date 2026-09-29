@@ -58,6 +58,7 @@ claude-arsenal/        ← upstream. /init refreshes what it ships and retires w
     gate_run.sh        ← runs the task's fenced gate block
     budget_check.sh    ← quota stop + per-session round cap
     check_update.sh    ← bundle freshness against the upstream tag
+    reader_hook.sh     ← PostToolUse: a spec or plan changed, its reader is stale
     statusline_capture.sh, detect_surface.sh, workspace_list.sh
   workflows/
     arsenal-queue.yml  ← installed to .github/workflows/ by /init
@@ -71,12 +72,12 @@ claude-arsenal/        ← upstream. /init refreshes what it ships and retires w
     arsenal_config.py  ← reads arsenal/config.toml
     arsenal_migrate.py ← one-time move from the old coordination-branch queue
     gate_evidence.py
+    reader_check.py    ← which spec/plan lacks a current reader; exports left in Downloads
 
 arsenal/               ← yours. Scaffolded once, then never written by an upgrade
   config.toml          ← merge-policy, host-gate, listing budget…
   tasks/<id>.md        ← the tasks; their front matter is the DAG
-  specs/ plans/        ← specifications and plans
-  project/             ← workspace overview + per-workspace context
+  project/             ← workspace overview + per-workspace context (<ws>/spec.md, plan.md)
   session/
     handover.md        ← live; updated each session
     surface_profile.json, rate_limits.json, budget_iterations.json  ← gitignored

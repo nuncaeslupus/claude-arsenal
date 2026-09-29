@@ -11,14 +11,23 @@ It is deliberately shallow: gate values and evidence completeness are checked by
 the `gate-check` skill (run_gate.py), not here. This script only verifies the
 plan is well-formed enough for that audit to run.
 
+It also reads the review record in the header (see _review_record.py): a notes
+file the header names must be committed beside the plan. `--require-approved`
+additionally demands a **Status** approving the current revision — run it
+before seeding tasks or starting execution from the plan.
+
 Human-readable on stdout; problems on stderr. Exit 0 = well-formed, 1 = missing
-sections or columns, 2 = usage error (file missing).
+sections or columns, a notes file not in the repo, or (with --require-approved)
+no backed approval, 2 = usage error (file missing).
 """
 
 import argparse
 import re
 import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import _review_record as review_record
 
 REQUIRED_SECTIONS = ("Technical solution", "Implementation tasks", "Evidence log", "Sign-off")
 TASK_COLUMNS = ("t#", "description", "gate", "tests")
@@ -90,6 +99,12 @@ def main() -> int:
         default="status/plan.md",
         help="plan file to check (default: status/plan.md)",
     )
+    parser.add_argument(
+        "--require-approved",
+        action="store_true",
+        help="also fail unless **Status** approves the current revision, backed by a "
+        "committed notes file or an explicit `without annotations`",
+    )
     args = parser.parse_args()
 
     path = Path(args.input)
@@ -102,7 +117,11 @@ def main() -> int:
         print(f"✗ failed to read {path}: {exc}", file=sys.stderr)
         return 2
 
-    problems = lint(text)
+    problems = lint(text) + review_record.notes_problems(text, path)
+    if review_record.revision(text) is None:
+        print("  · no **Revision** header line yet — see the template's header block")
+    if args.require_approved:
+        problems += review_record.approval_problems(text, path)
     if problems:
         for p in problems:
             print(f"  ✗ {p}")

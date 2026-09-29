@@ -217,6 +217,15 @@ the user a question the host already answered.
 
 ---
 
+## Specs and plans
+
+Spec work goes through `specify`, plan work through `design`; another plugin's brainstorming
+or planning skill does not replace them, and no plan is written before the annotated spec is
+approved. **Every spec or plan handed to the user goes through `create_reader.py` and the
+HTML is what is handed over**, whichever skill wrote the Markdown.
+
+---
+
 ## References — read the one you need, when you need it
 
 Each is a plain file to open, not an import. Nothing below is in context until you read it.

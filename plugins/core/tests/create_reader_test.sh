@@ -184,6 +184,20 @@ grep -q "reviewer typed straight" "${tmp}/status/spec-annotated.md" \
 out=$(run_reader --input status/specification.md --output-dir status --notes status/nope.md); rc=$?
 [[ ${rc} -ne 0 ]] || fail "--notes with a missing file should fail loudly"
 
+# --- 6: the export names the revision it annotates (#468) ---
+#     No `**Revision**` line (the spec above) keeps the old name; one adds -r<N>.
+run_reader --input status/specification.md --output-dir status --name "Widget Overhaul" >/dev/null \
+    || fail "regenerating the reader failed"
+grep -q "widget-overhaul-spec-notes-'+today()+'.md" "${tmp}/status/spec-reader.html" \
+    || fail "a spec with no Revision header should keep the unsuffixed export name"
+sed -i 's/^Intro prose.$/**Revision**: 3\n\nIntro prose./' "${tmp}/status/specification.md"
+run_reader --input status/specification.md --output-dir status --name "Widget Overhaul" >/dev/null \
+    || fail "generating a revisioned reader failed"
+grep -q "widget-overhaul-spec-notes-'+today()+'-r3.md" "${tmp}/status/spec-reader.html" \
+    || fail "the export filename does not carry the spec's revision"
+grep -q '<meta name="arsenal-source-sha256" content="[0-9a-f]\{64\}">' "${tmp}/status/spec-reader.html" \
+    || fail "the reader does not record the digest of the source it rendered"
+
 echo "PASS: create_reader_test — all gates passed"
 
 # --- a storage failure must not silence the unload warning ------------------
