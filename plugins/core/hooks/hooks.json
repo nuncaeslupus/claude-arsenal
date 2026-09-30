@@ -18,6 +18,17 @@
           }
         ]
       }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/skills/init/assets/bin/compact_resume.sh\" record"
+          }
+        ]
+      }
     ]
   }
 }

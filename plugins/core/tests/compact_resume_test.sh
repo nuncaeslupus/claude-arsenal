@@ -54,9 +54,35 @@ if want hook; then
   touch -t 202001010000 "${repo}/tmp/t-1234abcd-notes.md"
   out="$(run)"
   echo "$out" | grep -q 'newest' || fail "did not pick the newest notes file"
+  echo "$out" | grep -q 'GUESSED' || fail "a recency pick is not flagged as a guess"
   touch -t 202001010000 "${repo}/tmp/t-9999ffff-notes.md"
   out="$(run)"
   [ -z "$out" ] || fail "stale notes not ignored: $out"
+
+  # Which task: the session's own record wins over recency, and each session gets its own.
+  printf '## Resume\n- **Next step**: `task-a`\n' > "${repo}/tmp/t-aaaa0001-notes.md"
+  printf '## Resume\n- **Next step**: `task-b`\n' > "${repo}/tmp/t-bbbb0002-notes.md"
+  touch -t 202001010000 "${repo}/tmp/t-aaaa0001-notes.md"
+  rec() { (cd "$repo" && printf '%s' "$2" | CLAUDE_PROJECT_DIR="$repo" bash "$HOOK" record); }
+  rec x "{\"session_id\":\"sess-A\",\"tool_input\":{\"file_path\":\"${repo}/tmp/t-aaaa0001-notes.md\"}}"
+  rec x "{\"session_id\":\"sess-B\",\"tool_input\":{\"file_path\":\"tmp/t-bbbb0002-notes.md\"}}"
+  rec x '{"session_id":"sess-C","tool_input":{"file_path":"src/main.py"}}'
+  [ ! -e "${repo}/tmp/.arsenal-sessions/sess-C" ] || fail "record fired on a non-notes file"
+  runs() { (cd "$repo" && printf '{"session_id":"%s","source":"compact"}' "$1" \
+    | CLAUDE_PROJECT_DIR="$repo" bash "$HOOK"); }
+  out="$(runs sess-A)"
+  echo "$out" | grep -q 'task-a' || fail "session A did not get its own (older) notes: $out"
+  echo "$out" | grep -q 'recorded for this session' || fail "session pick not labelled"
+  out="$(runs sess-B)"
+  echo "$out" | grep -q 'task-b' || fail "session B did not get its own notes"
+
+  # No record: a task id in the branch name beats recency.
+  git -C "$repo" checkout -q -b "arsenal/t-aaaa0001-some-slug"
+  out="$(runs sess-unknown)"
+  echo "$out" | grep -q 'task-a' || fail "branch match did not win: $out"
+  echo "$out" | grep -q 'matched to branch' || fail "branch pick not labelled"
+  git -C "$repo" checkout -q -b other
+  rm -f "${repo}/tmp/t-aaaa0001-notes.md" "${repo}/tmp/t-bbbb0002-notes.md"
 
   # A notes file with no Resume section says so rather than printing nothing.
   printf '# notes\n' > "${repo}/tmp/t-0000aaaa-notes.md"
@@ -75,6 +101,8 @@ import json, sys
 s = json.load(open(sys.argv[1]))
 hits = [e for e in s["hooks"].get("SessionStart", []) if "compact_resume.sh" in json.dumps(e)]
 assert len(hits) == 1 and hits[0].get("matcher") == "compact", hits
+rec = [e for e in s["hooks"].get("PostToolUse", []) if "compact_resume.sh" in json.dumps(e)]
+assert len(rec) == 1 and "record" in json.dumps(rec[0]), rec
 EOF
   [ -x "$target/claude-arsenal/bin/compact_resume.sh" ] || fail "hook not vendored executable"
 
@@ -83,6 +111,8 @@ import json, sys
 s = json.load(open(sys.argv[1]))["hooks"]["SessionStart"]
 assert all("hooks" in e for e in s), "every entry needs a hooks list"
 assert any(e.get("matcher") == "compact" and "compact_resume.sh" in json.dumps(e) for e in s)
+p = json.load(open(sys.argv[1]))["hooks"]["PostToolUse"]
+assert any("compact_resume.sh" in json.dumps(e) and "record" in json.dumps(e) for e in p)
 EOF
 fi
 

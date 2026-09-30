@@ -27,7 +27,12 @@ Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
   `claude-arsenal/bin/compact_resume.sh`) prints that block and a short
   `git status` right after compaction, so the session resumes from disk rather
   than from a lossy summary. It is silent when there is no notes file from the
-  last 7 days. `/init` registers it in `.claude/settings.json`; re-run `/init`
+  last 7 days.
+- **Each session resumes its own task.** A companion `PostToolUse` hook records
+  which notes file each session edits (`tmp/.arsenal-sessions/<session_id>`), so
+  several agents sharing one checkout each get their own notes back. Without a
+  record it uses a notes file whose task id is in the branch name, and only then
+  the newest one — flagged as a guess to confirm. `/init` registers it in `.claude/settings.json`; re-run `/init`
   (or let the session-start refresh do it) to pick it up.
 - The core plugin's `hooks.json` now uses the standard `{matcher, hooks: [...]}`
   shape for its `SessionStart` entries.
