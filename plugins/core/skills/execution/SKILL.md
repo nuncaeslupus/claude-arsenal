@@ -14,6 +14,8 @@ Reads `status/specification.md` and `status/plan.md`. Updates `status/plan.md` t
 
 Load `references/template.md` when writing `tmp/<task-id>-notes.md` for a task.
 
+Keep its **Resume** section (Decided / Ruled out / Next step) current after RED, after GREEN, and after each decision: it is what the session reads back after context compaction, when the summary alone has lost the detail.
+
 ## Steps
 
 ### Step 1: Prepare implementation plan

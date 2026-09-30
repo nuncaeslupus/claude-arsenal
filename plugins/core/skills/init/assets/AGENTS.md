@@ -1,6 +1,6 @@
 # Claude Arsenal
 
-<!-- claude-arsenal v4.24.1 — imported via @claude-arsenal/AGENTS.md -->
+<!-- claude-arsenal v4.25.0 — imported via @claude-arsenal/AGENTS.md -->
 
 This file is imported by the host repo's `CLAUDE.md` via the session-protocol block
 that `/init` injects, so it sits in context on **every turn of every session**. It
@@ -104,7 +104,8 @@ At the start of every session (fresh start, context compaction, or cold restart)
    → `claude-arsenal/references/queue-seeding.md`
 
 5. **Read handover** — if `arsenal/session/handover.md` has content beyond the template
-   placeholder, read it for the previous session's context.
+   placeholder, read it. **After compaction mid-task**, the task's `tmp/<id>-notes.md` and
+   `git status` are the state (a hook prints both); the summary only points at them.
    > The handover is a snapshot from compaction time, not current state. Never resume a
    > task named there without re-reading the board first — the queue is the truth.
 

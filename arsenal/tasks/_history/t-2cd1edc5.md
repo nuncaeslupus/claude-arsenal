@@ -4,6 +4,7 @@ title: "SessionStart(compact) hook re-injects the active task's notes + git stat
 priority: 5
 deps: [t-a91a0550]
 tags: [hooks]
+status: merged
 ---
 
 After compaction the model resumes from the summary alone. A `SessionStart` hook with

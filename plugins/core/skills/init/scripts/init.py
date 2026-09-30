@@ -769,6 +769,9 @@ _MARK_PROMPT_HOOK = "claude-arsenal/bin/mark_skill_workshop_loaded_from_prompt.s
 # settings hook is the only kind that reaches a cloud session. It keys on the
 # path, so a spec or plan another plugin's skill wrote gets the reminder too.
 _READER_HOOK = "claude-arsenal/bin/reader_hook.sh"
+# Also beside it: after compaction, re-injects the active task's Resume notes and
+# `git status`, the state a summary loses first. Silent when there are no notes.
+_COMPACT_HOOK = "claude-arsenal/bin/compact_resume.sh"
 
 
 def _hook_command(script: str) -> str:
@@ -1297,6 +1300,7 @@ def _register_gate_hook(repo_path: Path) -> None:
         ("PostToolUse", "Skill", _MARK_HOOK),
         ("PostToolUse", "Write|Edit|MultiEdit", _READER_HOOK),
         ("UserPromptSubmit", None, _MARK_PROMPT_HOOK),
+        ("SessionStart", "compact", _COMPACT_HOOK),
     ]
     changed = False
     for event, matcher, command in wanted:
@@ -1320,7 +1324,7 @@ def _register_gate_hook(repo_path: Path) -> None:
     if changed:
         settings_path.parent.mkdir(parents=True, exist_ok=True)
         settings_path.write_text(json.dumps(settings, indent=2) + "\n", encoding="utf-8")
-        print("  settings.json: registered the skill-edit gate and the spec/plan reader hook")
+        print("  settings.json: registered the skill-edit gate and the reader/resume hooks")
 
 
 def _retire_plugin_declaration(repo_path: Path) -> None:

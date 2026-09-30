@@ -18,6 +18,20 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [4.25.0] - 2026-09-30
+
+- **Long tasks survive context compaction.** `execution`'s notes file
+  (`tmp/<task-id>-notes.md`) now opens with a **Resume** block — *Decided* (do not
+  reopen), *Ruled out*, *Next step* — kept current after RED, GREEN and each
+  decision. A new `SessionStart` hook (matcher `compact`,
+  `claude-arsenal/bin/compact_resume.sh`) prints that block and a short
+  `git status` right after compaction, so the session resumes from disk rather
+  than from a lossy summary. It is silent when there is no notes file from the
+  last 7 days. `/init` registers it in `.claude/settings.json`; re-run `/init`
+  (or let the session-start refresh do it) to pick it up.
+- The core plugin's `hooks.json` now uses the standard `{matcher, hooks: [...]}`
+  shape for its `SessionStart` entries.
+
 ## [4.24.1] - 2026-09-29
 
 - **Queue workflow fixes now reach existing installs.** `/init` (and the

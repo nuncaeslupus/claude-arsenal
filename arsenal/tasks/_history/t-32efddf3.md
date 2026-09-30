@@ -4,6 +4,7 @@ title: "AGENTS.md: after compaction, resume from task notes + git, not the summa
 priority: 10
 deps: [t-2cd1edc5]
 tags: [agents]
+status: merged
 ---
 
 The session-start protocol treats compaction like a fresh start and reads only
