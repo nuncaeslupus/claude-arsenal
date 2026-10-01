@@ -1,6 +1,6 @@
 ---
 name: github
-description: Use whenever the user is creating commits, opening pull requests, or waiting on PR review/CI feedback — applies Conventional Commits + branch naming, then polls the PR for review-bot comments and CI status until it is ready to merge. Triggers — "open a PR", "address review comments". Do NOT use for engineering review of a diff (see review) or generic git mechanics (see execution).
+description: Applies Conventional Commits and branch naming, opens PRs, and polls review bots and CI until the PR can merge. Use when the user commits, opens a PR or addresses review feedback. Not for reviewing a diff (review) or plain git mechanics (execution).
 metadata:
   type: workflow
 ---

@@ -1,6 +1,6 @@
 ---
 name: review
-description: When the user is reviewing a PR, diff, design doc, or proposal — risks, tech debt, standards compliance. Do NOT use for implementation (see execution), design (see design), or release sign-off (see ship).
+description: Reviews a PR, diff, design doc or proposal for risks, tech debt and standards. Use when the user wants something reviewed. Not for implementation (execution), design (design) or release sign-off (ship).
 metadata:
   section: workflow
   type: workflow

@@ -1,6 +1,6 @@
 ---
 name: queue-add
-description: When the user wants to add a task to the claude-arsenal queue. Do NOT use to update or remove existing tasks.
+description: Adds a task to the claude-arsenal queue. Use when the user wants a new task queued. Not for updating or removing existing tasks.
 user-invocable: true
 argument-hint: "--title TITLE [--label WORDS] [--priority N] [--workspace NAME] [--tag TAG] [--requires surface:X] [--deps t-XXXXXXXX] [--max-attempts N]"
 ---

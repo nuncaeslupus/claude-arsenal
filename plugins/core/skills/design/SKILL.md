@@ -1,6 +1,6 @@
 ---
 name: design
-description: When the user is defining the technical solution after discovery — contracts, task split, risk register, sequencing. Owns scripts — validate_plan. Do NOT use for problem investigation (see specify), implementation (see execution), or PR review (see review).
+description: Defines the technical solution after discovery — contracts, task split, risks, sequencing (validate_plan). Use when the user is planning how to build scoped work. Not for investigation (specify), implementation (execution) or PR review (review).
 metadata:
   section: workflow
   type: workflow

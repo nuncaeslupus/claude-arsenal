@@ -1,6 +1,6 @@
 ---
 name: mutmut-report
-description: Use when the user wants to triage a Python project's surviving mutmut mutants after a run — classifies each survivor as REAL_GAP, EQUIVALENT, or UNTESTABLE and reports the test fixes worth making. Triggers — "which mutants survived", "triage mutation testing results". Do NOT use to run mutmut itself, for coverage reports (see coverage-gaps), or for non-Python mutation testing.
+description: Triages surviving mutmut mutants as REAL_GAP, EQUIVALENT or UNTESTABLE and reports the test fixes worth making. Use when the user asks which mutants survived. Not for running mutmut, coverage (coverage-gaps) or non-Python mutation testing.
 argument-hint: "--module MODULE --max N"
 user-invocable: true
 metadata:

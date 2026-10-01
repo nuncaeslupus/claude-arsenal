@@ -1,6 +1,6 @@
 ---
 name: explain-repo
-description: Use when the user wants a human-facing document about a repository — a pitch, a deep-dive, interview-prep Q&A, an onboarding guide, or a status brief. Triggers — "explain this repo", "write this up for an interview". Builds from an existing `repo-audit` analysis when available. Always for the user, never the repo. Do NOT use to find bugs — use `repo-audit`.
+description: Writes a human-facing document about a repository — pitch, deep-dive, interview Q&A, onboarding guide or status brief. Use when the user wants a repo explained or written up. Not for finding bugs (repo-audit).
 ---
 
 # explain-repo

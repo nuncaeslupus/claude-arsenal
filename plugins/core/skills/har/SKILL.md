@@ -1,6 +1,6 @@
 ---
 name: har
-description: Use whenever a HAR capture has to be recorded, read, searched, filtered or turned into a scraper — which request returned a string seen on the page, which parameter pages the results, what to send to reproduce it. Triggers — "I have a HAR", "which request returns this", "capture what this page loads". Do NOT use to parse a JSON/HTML file with no capture around it.
+description: Records, reads, searches and filters HAR captures and turns them into scrapers — which request returned a string, how results page, what to send. Use when the user has or needs a HAR capture. Not for a JSON or HTML file with no capture.
 argument-hint: "--input capture.har"
 user-invocable: true
 metadata:

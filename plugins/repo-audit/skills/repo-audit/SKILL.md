@@ -1,6 +1,6 @@
 ---
 name: repo-audit
-description: Use when the user wants to find real problems in a repository — bugs, security issues, missing edge cases or tests — across the repo or a subset. Triggers — "audit this repo for bugs", "find everything wrong with this". Reports findings with severity and confidence, then queues the worthwhile ones as tasks or issues. For a human write-up, use `explain-repo`. Do NOT use for reviewing a diff or implementing a feature — use `code-review` or `specify`.
+description: Finds real problems in a repository (bugs, security issues, missing edge cases and tests), rated by severity and confidence, and queues the worthwhile ones. Use when the user wants a repo audited. Not for a write-up (explain-repo) or diff review (code-review).
 ---
 
 # repo-audit

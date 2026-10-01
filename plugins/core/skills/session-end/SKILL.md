@@ -1,6 +1,6 @@
 ---
 name: session-end
-description: Use whenever the user signals end-of-job, invokes /session-end, or the opt-in SessionStart hook fires — writes the opt-in status/handoff.md, scans for repeated errors worth a skill update, and audits the session's PRs for CI, review comments and conflicts. Triggers — "wrap up", "we're done". Do NOT use mid-job or for cross-session memory.
+description: Wraps up a session — opt-in status/handoff.md, repeated errors worth a skill update, and a CI/review/conflict audit of its PRs. Use when the user signals the end of the job or its SessionStart hook fires. Not for mid-job checkpoints or cross-session memory.
 metadata:
   type: workflow
 ---

@@ -1,6 +1,6 @@
 ---
 name: execution
-description: When the user is implementing code changes from a design — code change, tests, merge-ready output. Do NOT use for investigation (see specify), design (see design), or routine one-off scripts that bypass the design step.
+description: Implements code changes from a design, with tests and merge-ready output. Use when the user is building what a design or task describes. Not for investigation (specify), design (design) or one-off scripts.
 metadata:
   section: workflow
   type: workflow

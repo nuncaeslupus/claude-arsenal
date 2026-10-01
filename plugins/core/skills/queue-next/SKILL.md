@@ -1,6 +1,6 @@
 ---
 name: queue-next
-description: When the user wants to resume work or run the worker loop — picks the next unblocked task, optionally scoped by tag(s) and/or a workspace, or matched by title text. Use /queue-next [TAG … | WORKSPACE | search-text]. Do NOT use before running init.
+description: Picks the next unblocked task and runs the worker loop, optionally scoped by tag, workspace or title text (/queue-next [TAG … | WORKSPACE | text]). Use when the user wants to resume work. Not for a repo without init (init).
 user-invocable: true
 argument-hint: "[CAPABILITY | TAG … | WORKSPACE | search-text]"
 metadata:

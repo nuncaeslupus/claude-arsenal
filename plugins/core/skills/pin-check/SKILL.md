@@ -1,6 +1,6 @@
 ---
 name: pin-check
-description: Use when the user wants to know whether a test really pins the behaviour it claims to — reverts that one line, runs only the scoped test, restores, and reports PINNED / NOT PINNED. Triggers — "does this test actually catch that", "is this claim pinned". Do NOT use for whole-suite mutation scoring (see mutmut-report) or line coverage (see coverage-gaps).
+description: Checks whether a test pins a claimed behaviour — reverts that line, runs the scoped test, restores, reports PINNED or NOT PINNED. Use when the user asks if a test catches a change. Not for mutation scoring (mutmut-report) or coverage (coverage-gaps).
 argument-hint: "--source FILE --replace OLD --with NEW --test TARGET"
 user-invocable: true
 metadata:

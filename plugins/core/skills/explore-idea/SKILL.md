@@ -1,6 +1,6 @@
 ---
 name: explore-idea
-description: When the user has a vague idea and no spec yet — sizes it, asks one question at a time with pros and cons, logs decisions, hands off to specify. Triggers — "I have an idea", "help me think this through". Do NOT use once the problem is stated (see specify).
+description: Shapes a vague idea one question at a time, with pros and cons and logged decisions, then hands off to specify. Use when the user has an idea but no stated problem yet. Not for a problem already stated (specify).
 metadata:
   section: workflow
   type: workflow

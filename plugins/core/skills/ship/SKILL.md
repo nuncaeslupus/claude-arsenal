@@ -1,6 +1,6 @@
 ---
 name: ship
-description: When the user is confirming a change is ready for production before merge — compatibility, tests, observability, rollback. Do NOT use for implementation (see execution) or PR review (see review).
+description: Confirms a change is production-ready — compatibility, tests, observability, rollback. Use when the user wants release sign-off. Not for implementation (execution) or PR review (review).
 metadata:
   section: workflow
   type: workflow
