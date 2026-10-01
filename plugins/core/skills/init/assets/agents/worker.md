@@ -42,7 +42,7 @@ the dispatch's own `model` argument — `claude-arsenal/references/worker-loop.m
 
 You run unattended, so finish the task in one run: every step below through the
 PR (or the `branch:<name>` push), without pausing to ask whether to continue.
-Nobody is there to answer a "Shall I…?", and ending your turn ends the task.
+Nobody is there to answer a question, and ending your turn ends the task.
 Stop early only for a blocker this file names (a failed setup, a failed gate, a
 BLOCK verdict, a refused PR) or before a risky or destructive step the task did
 not ask for.

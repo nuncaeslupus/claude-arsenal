@@ -95,7 +95,7 @@ GitHub Settings UI (preserves history and sets up redirects); no
 
 ### Multi-PR autonomous work — stacking rule
 
-When a plan produces **N PRs that will be merged in sequence**, follow the stacking rule documented in the `github` skill's SKILL.md (shipped to consumers). Key points: branches must stack from the start, and **only the last PR in the stack bumps `.bundle-version`** — intermediate PRs ship content at the current version. After each merge, rebase the next branch with `--onto` to skip the now-merged commits.
+When a plan produces **N PRs that will be merged in sequence**, follow the stacking rule in the `github` skill's `references/stacking.md` (shipped to consumers). Key points: branches must stack from the start, and **only the last PR in the stack bumps `.bundle-version`** — intermediate PRs ship content at the current version. After each merge, rebase the next branch with `--onto` to skip the now-merged commits.
 
 ---
 
