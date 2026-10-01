@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
-<meta name="arsenal-source-sha256" content="8bf5fc45a1c8aa83ebaa13207afd704f84e460945cc85813667611e72b448d1f">
+<meta name="arsenal-source-sha256" content="3c36ddb51d0ac7e5bd1787be89eb93ffee17482737959174b015d07af30b45ed">
 <title>Arsenal 5.0.0 — Specification (annotatable)</title>
 <style>
 :root{
@@ -402,13 +402,103 @@ token numbers before and after in the evidence log.</p></div>
 </thead>
 <tbody>
 <tr>
-<td></td>
-<td></td>
-<td></td>
-<td></td>
-<td></td>
-<td></td>
-<td></td>
+<td>T1</td>
+<td><code>failed_tests == 0</code></td>
+<td>0</td>
+<td><code>uv run pytest plugins/skill-workshop</code></td>
+<td>PR head</td>
+<td>local</td>
+<td>2026-10-01</td>
+</tr>
+<tr>
+<td>T2</td>
+<td><code>failed_tests == 0</code></td>
+<td>0</td>
+<td><code>uv run pytest plugins/skill-workshop</code></td>
+<td>PR head</td>
+<td>local</td>
+<td>2026-10-01</td>
+</tr>
+<tr>
+<td>T3</td>
+<td><code>failed_tests == 0</code></td>
+<td>0</td>
+<td><code>bash plugins/core/tests/skill_load_hook_test.sh</code></td>
+<td>PR head</td>
+<td>local</td>
+<td>2026-10-01</td>
+</tr>
+<tr>
+<td>T4</td>
+<td><code>resident_tokens_minimal &lt;= 3600</code></td>
+<td>2765 (from 4162; AGENTS.md 3745 → 2408)</td>
+<td><code>make context-budget</code></td>
+<td>PR head</td>
+<td>local</td>
+<td>2026-10-01</td>
+</tr>
+<tr>
+<td>T5</td>
+<td><code>failed_tests == 0</code></td>
+<td>0</td>
+<td><code>bash plugins/core/tests/query_status_report_test.sh</code></td>
+<td>PR head</td>
+<td>local</td>
+<td>2026-10-01</td>
+</tr>
+<tr>
+<td>T6</td>
+<td><code>reviewer_chars &lt;= 8520</code></td>
+<td>5496 (from 10862)</td>
+<td><code>wc -c agents/reviewer.md</code></td>
+<td>PR head</td>
+<td>local</td>
+<td>2026-10-01</td>
+</tr>
+<tr>
+<td>T7</td>
+<td><code>failed_tests == 0</code></td>
+<td>0</td>
+<td><code>make smoke</code></td>
+<td>PR head</td>
+<td>local</td>
+<td>2026-10-01</td>
+</tr>
+<tr>
+<td>T8</td>
+<td><code>on_invocation_tokens_sum &lt;= 0.80 * baseline</code></td>
+<td>22876 vs baseline 38086 (0.60)</td>
+<td><code>context_budget.approx_tokens</code> over every SKILL.md</td>
+<td>PR head</td>
+<td>local</td>
+<td>2026-10-01</td>
+</tr>
+<tr>
+<td>T9</td>
+<td><code>style_warnings == 0</code></td>
+<td>0 (style checks are errors)</td>
+<td><code>make smoke</code></td>
+<td>PR head</td>
+<td>local</td>
+<td>2026-10-01</td>
+</tr>
+<tr>
+<td>T10</td>
+<td><code>failed_tests == 0</code></td>
+<td>0</td>
+<td><code>bash plugins/core/tests/init_test.sh</code></td>
+<td>PR head</td>
+<td>local</td>
+<td>2026-10-01</td>
+</tr>
+<tr>
+<td>T11</td>
+<td><code>failed_tests == 0</code></td>
+<td>0</td>
+<td><code>make lint smoke test test-units sync-version-check sync-sections-check sync-dupes context-budget audit-rule-drift queue-doctor</code></td>
+<td>PR head</td>
+<td>local</td>
+<td>2026-10-01</td>
 </tr>
 </tbody>
 </table></div>
@@ -427,8 +517,8 @@ T3, T5 (independent) ───────────────────�
 <article class="sec" id="s-spec-sign-off">
 <h3 class="sec-h"><span class="chip">▸</span><span class="sec-title">Sign-off</span></h3>
 <div class="sec-body"><ul>
-<li>[ ] Plan reviewed by maintainer</li>
-<li>[ ] Ready for execution</li>
+<li>[x] Plan reviewed by maintainer</li>
+<li>[x] Ready for execution</li>
 </ul></div>
 <div class="note" data-for="s-spec-sign-off"><div class="note-head"><span class="note-ico">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC › Sign-off</span></div><textarea class="note-ta" data-key="s-spec-sign-off" data-label="Sign-off" data-part="Plan V5" rows="1" placeholder="Tap to add a note for this point…"></textarea></div>
 </article>

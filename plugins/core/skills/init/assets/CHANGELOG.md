@@ -18,6 +18,28 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [5.0.0] - 2026-10-01
+
+Prompts rewritten for the current Claude model generation (Opus 5.5, Sonnet 5.5, Fable 5.1), following Anthropic's prompting guides for those models. Skills do the same jobs with less context and calmer, explained instructions.
+
+- **Less context, every turn.** The always-loaded tier (vendored `AGENTS.md` plus the skill list) dropped from 4,162 to about 2,765 tokens, and skill bodies dropped from about 38k to 22.5k tokens in total. Rarely needed detail moved to references that load only when needed: `har` query grammar, `queue-next` claim gotchas, `github` multi-PR stacking.
+- **Breaking: text that moved.** If your own prompts or tooling quote arsenal prose, these moved:
+  - `AGENTS.md` now points to `github-automation.md`, `worker-loop.md § Credit guards` and `evidence-gates.md` instead of repeating them.
+  - Model dispatch for workers and reviewers lives only in `worker-loop.md § Credit guards`; the snippet in `reviewer.md` is gone.
+  - Gate-speed tuning moved from `evidence-gates.md` to `performance-tuning.md § Making the gate faster`.
+  - The reviewer's follow-up-round rules now arrive in the review packet.
+- **Agents finish the job.** Workers and `execution` carry the plan through to the PR without pausing between tasks. Pre-existing bugs and unrequested cleanup are reported as follow-ups, not fixed. A code change needs one real check (tests, build, typecheck or the command itself) before it is called done.
+- **Reviews report everything.** `review`, the reviewer agent and `repo-audit` give every finding a severity and a confidence, and filtering is a separate step. `repo-audit` sizes its fan-out to the repo, has no mandatory re-verify pass, and no longer asks which model to use. The reviewer prompt is about half its old size.
+- **Short task labels.** Task files take an optional `label:` (up to 5 words). Board output and sessions name tasks as `<label> (t-id)` instead of a bare id. `create_task.py --label` writes one.
+- **New `autonomy` key** (`ask-often | ask-when-blocked | autonomous`, default `ask-when-blocked`) says how often a session stops to ask.
+- **Setup interview.** `/init` can ask four questions: autonomy, verification profile, review time budget and bot wait. It suggests `bot-triggers` for the review bots you use. Every question can be skipped, and an upgrade does not ask again; run `/init --interview` to answer later.
+- **Per-skill effort.** `queue-status` and `pin-check` run at `effort: low`.
+- **skill-workshop** (not vendored by `/init`):
+  - New `references/model-prompting.md` with the prompting rules for this generation.
+  - New style checks, now errors: CAPS emphasis, ritual re-checks, "think step by step", report-only-high-severity, hard-coded model names, turn-ending "Shall I…", and reference links with no load-when trigger.
+  - New `model-upgrade` mode documents how to repeat this alignment for the next model generation.
+- **Skill-load record.** A `PostToolUse` hook appends each skill load to `tmp/arsenal-metrics/skill-loads.tsv`. CANARY lines stay.
+
 ## [4.26.0] - 2026-10-01
 
 - **Verification is bounded.** One PR had run 8 review rounds of ~40 minutes. The review loop now ends:
