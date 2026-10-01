@@ -251,8 +251,8 @@ belongs here, in the editing loop, where being wrong costs a re-run and
 certifies nothing. A host that wants every run to be the whole gate just keeps
 running it — there is no knob to set, and nothing in the bundle runs a suite on
 your behalf while you edit. See `references/evidence-gates.md` § How often to
-run the whole gate for the reasoning and for what makes a gate slow in the first
-place.
+run the whole gate for the reasoning, and `references/performance-tuning.md`
+§ Making the gate faster for what makes a gate slow.
 
 ---
 

@@ -1,11 +1,12 @@
 # Content quality rules
 
+The interpretive rubric: each row asks the reviewer to read a stretch of
+prose and judge it, which a token search cannot do. It is walked after
+`references/skill-rules.md`, and the tiers, gate and findings format are
+shared; see `references/skill-rules.md § How the two rubrics work`.
+
 ## Contents
 
-- [Purpose](#purpose)
-- [How to read this file](#how-to-read-this-file)
-- [Gate protocol](#gate-protocol)
-- [Findings format](#findings-format)
 - [A. Prose shape](#a-prose-shape)
 - [B. Example currency](#b-example-currency)
 - [C. Reference cost](#c-reference-cost)
@@ -13,98 +14,6 @@
 - [E. Trigger and boundary quality](#e-trigger-and-boundary-quality)
 - [F. Procedural shape](#f-procedural-shape)
 - [G. Review and delegation](#g-review-and-delegation)
-- [Out of scope for this checklist](#out-of-scope-for-this-checklist)
-
-## Purpose
-
-This file is the second of two author-checkable rule lists every skill
-walks. The first — `references/skill-rules.md` — covers **structural
-shape**: frontmatter keys, body length, anchor presence, naming. Its
-rules are mostly pattern-matchable; a reviewer can tick them off in a
-glance.
-
-This file covers **content quality**: whether the prose a reader
-actually faces reads cleanly, whether examples still resolve, whether
-the description disambiguates from sibling skills. The rules are
-**interpretive** by design. Each one forces the reviewer to read a
-stretch of prose and make a judgment, not just confirm a token exists.
-
-The two rubrics together drive the gate. Structural pass first
-(cheap, deterministic), content pass second (slower, judgment-heavy).
-A skill that passes both is well-formed *and* well-written.
-
-## How to read this file
-
-Each rule has four parts:
-
-- **ID** — local to this rubric (`Q-PROSE-1`, `Q-EX-2`, …). The
-  `Q-` prefix marks it as a quality rule so findings from the two
-  rubrics never collide on ID.
-- **Tier** — `must` (alignment failure surfaces as a must finding) or
-  `should` (surfaces as a should finding).
-- **Check** — one-line statement of what alignment looks like. The
-  negation of this line is the finding message.
-- **Deep dive** — pointer to the topical reference where the *why*
-  and worked examples live.
-
-If a rule's check needs more than one line to evaluate, the deep-dive
-reference is the place to read.
-
-## Gate protocol
-
-The gate runs at the same two moments as the structural rubric:
-
-**1. Per-edit gate (mandatory, in-session).** When a commit touches
-any file inside a skill folder, walk every rule in this file against
-the **current state** of every file in that skill folder, in addition
-to the structural walk. Both walks evaluate alignment, not change.
-Append both findings blocks to `findings.md` under the same dated
-header.
-
-**2. Bulk audit (periodic).** Run the `audit_alignment.py` runner
-twice — once with `--input references/skill-rules.md`, once with
-`--input references/content-quality-rules.md`. Each run emits per-skill
-prompt blocks that a Claude session walks one at a time. No Anthropic
-API call.
-
-**Must behavior.** When a `must` finding fires, surface the list to
-the user and stop. Do not auto-fix. The user fixes (Claude applies),
-dismisses with a reason captured in the commit body, or defers
-(recorded in `findings.md`; commit proceeds, the finding stays
-visible).
-
-**Should behavior.** Surface in the same findings list; the commit
-proceeds regardless. The user acts when they choose.
-
-## Findings format
-
-Append a content-pass block under the same dated header as the
-structural pass. Distinguish the two by a `(content)` tag after the
-rule ID so reviewers can tell which rubric flagged which issue.
-
-```text
-## 2026-05-15
-
-SKILL.md is not aligned with the guidelines:
-  must   line 88   Paragraph runs 187 words without sub-structure  (Q-PROSE-1 content)
-  should line 142  Gotcha "be careful with tokens" lacks a concrete failure mode  (Q-EX-4 content)
-
-references/topic-a.md is not aligned with the guidelines:
-  should line 4    Opens with "This document covers …" rather than a trigger  (Q-REF-3 content)
-
-(other files in this skill are aligned)
-```
-
-A clean run writes a single line under the same date:
-
-```text
-## 2026-05-15 — all files aligned with guidelines
-```
-
-`findings.md` is gitignored: it is the author's living log, not part
-of the PR diff.
-
----
 
 ## A. Prose shape
 
@@ -212,19 +121,3 @@ change code on someone's behalf.
 | Q-REV-1 | should | A review prompt asks for every finding with its severity and confidence; filtering happens in a separate step, not by telling the reviewer what to leave out. |
 | Q-REV-2 | should | Delegation to a subagent is reserved for large, independent work that can run in parallel; no subagent is spawned to verify the delegator's own work. |
 | Q-SCOPE-1 | should | Steps that change code keep to the requested scope; unrequested fixes, cleanup and pre-existing bugs go to the summary as follow-ups. |
-
-## Out of scope for this checklist
-
-- Anything `skill-rules.md` already covers structurally (frontmatter
-  shape, naming regex, body length cap, anchor-presence checks). Walk
-  the structural rubric for those.
-- Anything `validate.py` already detects mechanically (broken
-  cross-cites, missing scripts, dangling anchors). Those surface
-  during a normal validator run and need no human judgment.
-- Style preferences that have not produced an observed failure mode
-  (Oxford commas, em-dashes vs en-dashes, capitalisation of
-  identifiers). Promote one only when an incident makes the case.
-- Per-domain content correctness (is this gotcha *factually* true for
-  this API / this system?). That is review territory, not rubric
-  territory — the rubric checks shape and currency, not subject-matter
-  accuracy.
