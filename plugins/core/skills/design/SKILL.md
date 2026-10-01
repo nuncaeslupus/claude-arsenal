@@ -1,6 +1,6 @@
 ---
 name: design
-description: When the user is defining the technical solution after discovery — contracts, task split, risk register, sequencing. Owns scripts — validate_plan. Do NOT use for problem investigation (see specify), implementation (see execution), or PR review (see review).
+description: Defines the technical solution after discovery — contracts, task split, risks, sequencing (validate_plan). Use when the user is planning how to build scoped work. Not for investigation (specify), implementation (execution) or PR review (review).
 metadata:
   section: workflow
   type: workflow
@@ -19,9 +19,8 @@ python3 "${CLAUDE_SKILL_DIR}/../specify/scripts/validate_spec.py" \
     --input status/specification.md --require-approved
 ```
 
-Anything but exit 0 means stop. The spec's `**Status**` must approve its current revision,
-backed by a committed notes file or an explicit `without annotations`; hand the annotated
-spec back instead of planning past it — a plan written before approval is built on a draft.
+Anything but exit 0 means stop and hand the spec back for approval, because a plan
+written before approval is built on a draft.
 
 ## Steps
 
@@ -54,13 +53,11 @@ For each task:
 - **What**: specific deliverable
 - **Where**: which files/services
 - **Dependencies**: what must be done first
-- **Gate (measurable acceptance condition)**: the objective metric and threshold that proves this task is done — written `<metric> <op> <threshold>` (e.g. `p95_latency_ms <= 200`, `line_coverage >= 0.90`), not just "tests pass." Derive it from the spec's success criteria. The `gate-check` skill defines the grammar the gate must follow so it can be checked mechanically; reserve a non-numeric gate for a condition that genuinely cannot be reduced to a number.
-- **Tests**: test file path(s) and one or more test function names using `test_<what>_<condition>_<expected_result>` naming, each with a one-sentence assertion that can be written as a failing test before any production code is touched. These are copied verbatim into the task payload so the worker writes them RED first.
+- **Gate**: `<metric> <op> <threshold>` derived from the spec's success criteria (`p95_latency_ms <= 200`, `line_coverage >= 0.90`), in the `gate-check` grammar so it can be checked mechanically; non-numeric only when no number fits.
+- **Tests**: file path(s) and `test_<what>_<condition>_<expected_result>` names, each with a one-sentence assertion; they are copied into the task payload so the worker writes them failing first.
 - **Estimated effort**: Small (< 1h) / Medium (1-4h) / Large (4h+)
 
-Recommended: tasks should be small enough to be a single commit.
-
-Every task carries a Gate. As `execution` finishes a task it records the gate's **evidence** — measured value, command run, commit SHA, environment provenance — in the plan's **Evidence log**; that record is what `review` and `ship` audit. The Gate column is required for new plans; plans predating this convention are tolerated (the `gate-check` engine and `review` / `ship` degrade gracefully when a plan has no Gate column).
+Keep each task small enough for one commit. `execution` records each gate's evidence in the plan's **Evidence log**, which `review` and `ship` audit.
 
 ### Step 4: Anticipate risks
 
@@ -87,48 +84,33 @@ After writing the files, confirm the plan's structure:
 python3 "${CLAUDE_SKILL_DIR}/scripts/validate_plan.py" --input status/plan.md
 ```
 
-It checks the plan has the required sections (Technical solution, Implementation tasks, Evidence log, Sign-off) and that the task table carries the required columns including the measurable Gate — shape only. The `gate-check` skill's `run_gate.py` then audits the gate values and evidence themselves (add `--strict` there to require a gate on every task).
+It checks shape only: the required sections and task-table columns, Gate included. `gate-check`'s `run_gate.py --strict` audits the gate values.
 
-A plan that needs a picture — the architecture, a flow, a sequence of phases — draws it
-as a fenced `drawspec` block, never hand-drawn SVG or ASCII art:
-`claude-arsenal:core:init § references/diagrams.md`.
+Draw any picture as a fenced `drawspec` block: `claude-arsenal:core:init § references/diagrams.md`.
 
 ### Step 6: Publish the annotatable plan
 
-Generate the reader once the validator passes, and hand both files to the user in the same
-reply. The plan is what the user signs off on, so it goes back in a form they can mark up
-section by section rather than as a path to open themselves:
-
-Run `create_reader.py` (in `claude-arsenal/scripts/`; it imports `markdown`, which
-`uv run --with markdown python3` supplies):
+Once the validator passes, generate the reader and give the user the HTML in the same
+reply; the plan is what they sign off on, section by section. Name the plan
+explicitly, since auto-discovery finds only specs, and send `--output-dir` with it
+(`arsenal/project/<WORKSPACE>/` for a workspace plan):
 
 ```bash
-create_reader.py --input status/plan.md --output-dir status
+create_reader.py --input status/plan.md --output-dir status   # in claude-arsenal/scripts/; uv run --with markdown
 ```
 
-Auto-discovery only looks for spec files, so the plan is named explicitly — which means
-`--output-dir` has to travel with it. Point both flags at `arsenal/project/<WORKSPACE>/`
-when a workspace plan exists, or the reader lands back in `status/` beside a plan it does
-not render. Writes `plan-reader.html` and `plan-annotated.md` there and prints both paths;
-the step is done when those two paths exist and the user has been given the HTML. The
-reader keeps its notes under a namespace of its own, so plan annotations never overwrite
-the spec's, and its export is named `<project>-plan-notes-<date>-r<N>.md`.
-
-The plan keeps the same review record as the spec (`**Revision**`, `**Status**`,
-`**Revision log**` — see the template). A returned export is moved beside the plan and
-committed in the same commit as the revision it drove; `validate_plan.py` fails on a notes
-file the header names that is not committed. Seeding tasks or starting `execution` waits
-for `validate_plan.py --input <plan> --require-approved` to pass.
-
-Full rules — which documents need one, the naming, and why the work that
-consumes the document waits for the annotations:
-`claude-arsenal:core:init § references/annotatable-reader.md`.
+It writes `plan-reader.html` and `plan-annotated.md` and prints both paths. The plan
+keeps the spec's review record (`**Revision**`, `**Status**`, `**Revision log**`);
+seeding tasks or starting `execution` waits for
+`validate_plan.py --input <plan> --require-approved`. Load
+`claude-arsenal:core:init § references/annotatable-reader.md` when a returned notes
+export arrives or when recording approval.
 
 ---
 
 ## Abbreviation
 
-**Abbreviated design** = Step 1 (solution overview, 1 paragraph) + Step 3 (task list only). Whether abbreviation is allowed depends on project conventions documented in the host repo's `CLAUDE.md`.
+**Abbreviated design** = Step 1 (one paragraph) + Step 3 (task list only), where the host repo's `CLAUDE.md` allows it.
 
 ## Workspace-aware paths
 

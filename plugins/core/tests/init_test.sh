@@ -194,5 +194,70 @@ if ! grep -q "arsenal/session/handover.md" "${tmpdir}/CLAUDE.md"; then
 fi
 echo "PASS: the session protocol names the resolved host tree"
 
+# Gate 9: the setup interview. /init asks how often to stop, how deep to
+# verify and how long to wait on bots, then passes the answers as flags.
+CFG_PY="${SCRIPT_DIR}/../skills/init/assets/scripts/arsenal_config.py"
+INTERVIEW_KEYS=(autonomy verification review-budget-min bot-wait-min bot-triggers)
+
+# test_init_interview_skipped_writes_defaults
+skipped="${tmpdir}/interview-skipped"
+mkdir -p "${skipped}"; echo "# Skipped" > "${skipped}/CLAUDE.md"
+python3 "${INIT_PY}" --repo-path "${skipped}" --bundle-dir "${BUNDLE_DIR}" --silent >/dev/null
+for key in "${INTERVIEW_KEYS[@]}"; do
+    if grep -qE "^${key} *=" "${skipped}/arsenal/config.toml"; then
+        echo "FAIL: a skipped interview wrote ${key} into config.toml" >&2; exit 1
+    fi
+done
+[[ "$(python3 "${CFG_PY}" --repo-root "${skipped}" --get autonomy)" == "ask-when-blocked" ]] \
+    || { echo "FAIL: autonomy should default to ask-when-blocked" >&2; exit 1; }
+echo "PASS: test_init_interview_skipped_writes_defaults"
+
+# test_init_interview_answers_written
+answered="${tmpdir}/interview-answered"
+mkdir -p "${answered}"; echo "# Answered" > "${answered}/CLAUDE.md"
+python3 "${INIT_PY}" --repo-path "${answered}" --bundle-dir "${BUNDLE_DIR}" --silent \
+    --autonomy autonomous --verification strict --review-budget-min 15 --bot-wait-min 30 \
+    --bot-triggers 'coderabbitai[bot]=@coderabbitai review,gemini-code-assist[bot]=/gemini review' >/dev/null
+get_answered() { python3 "${CFG_PY}" --repo-root "${answered}" --get "$1"; }
+[[ "$(get_answered autonomy)" == "autonomous" ]] || { echo "FAIL: --autonomy not written" >&2; exit 1; }
+[[ "$(get_answered verification)" == "strict" ]] || { echo "FAIL: --verification not written" >&2; exit 1; }
+[[ "$(get_answered review-budget-min)" == "15" ]] || { echo "FAIL: --review-budget-min not written" >&2; exit 1; }
+[[ "$(get_answered bot-wait-min)" == "30" ]] || { echo "FAIL: --bot-wait-min not written" >&2; exit 1; }
+triggers=$(python3 "${CFG_PY}" --repo-root "${answered}" | python3 -c 'import json,sys; print("|".join(json.load(sys.stdin)["bot-triggers"]))')
+[[ "${triggers}" == "coderabbitai[bot]=@coderabbitai review|gemini-code-assist[bot]=/gemini review" ]] \
+    || { echo "FAIL: --bot-triggers not written as a list: ${triggers}" >&2; exit 1; }
+# A re-run without flags (the session-start refresh) keeps the answers.
+python3 "${INIT_PY}" --repo-path "${answered}" --bundle-dir "${BUNDLE_DIR}" --silent >/dev/null
+[[ "$(get_answered autonomy)" == "autonomous" ]] || { echo "FAIL: a refresh dropped the interview answers" >&2; exit 1; }
+# An invalid answer is refused before anything is written.
+if python3 "${INIT_PY}" --repo-path "${answered}" --bundle-dir "${BUNDLE_DIR}" --silent \
+        --bot-triggers 'no-equals-sign' >/dev/null 2>&1; then
+    echo "FAIL: a bot-triggers entry without login=comment was accepted" >&2; exit 1
+fi
+if python3 "${INIT_PY}" --repo-path "${answered}" --bundle-dir "${BUNDLE_DIR}" --silent \
+        --autonomy sometimes >/dev/null 2>&1; then
+    echo "FAIL: an unknown --autonomy value was accepted" >&2; exit 1
+fi
+[[ "$(get_answered autonomy)" == "autonomous" ]] || { echo "FAIL: a refused answer still changed config" >&2; exit 1; }
+echo "PASS: test_init_interview_answers_written"
+
+# test_init_interview_rewrite_keeps_escapes — the second write replaces an
+# existing key, so the value must reach the file literally (a backslash is not
+# a regex escape) and stay valid TOML outside the BMP (no surrogate escapes).
+python3 "${INIT_PY}" --repo-path "${answered}" --bundle-dir "${BUNDLE_DIR}" --silent \
+    --bot-triggers 'bot[bot]=review \d 🚀 é' >/dev/null
+triggers=$(python3 "${CFG_PY}" --repo-root "${answered}" | python3 -c 'import json,sys; print("|".join(json.load(sys.stdin)["bot-triggers"]))')
+[[ "${triggers}" == 'bot[bot]=review \d 🚀 é' ]] \
+    || { echo "FAIL: rewritten bot-triggers did not round-trip: ${triggers}" >&2; exit 1; }
+echo "PASS: test_init_interview_rewrite_keeps_escapes"
+
+# The suggestion the interview offers: known commands for the configured bots.
+suggested=$(python3 "${INIT_PY}" --repo-path "${answered}" --suggest-bot-triggers)
+grep -qF 'coderabbitai[bot]=@coderabbitai review' <<<"${suggested}" \
+    || { echo "FAIL: no trigger suggested for coderabbitai[bot]: ${suggested}" >&2; exit 1; }
+grep -qF 'claude[bot]=@claude review' <<<"${suggested}" \
+    || { echo "FAIL: no trigger suggested for claude[bot]: ${suggested}" >&2; exit 1; }
+echo "PASS: --suggest-bot-triggers names the known command for each configured bot"
+
 echo "PASS: init_test — all gates passed"
 exit 0

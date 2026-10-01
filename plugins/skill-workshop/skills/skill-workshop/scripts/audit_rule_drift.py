@@ -18,9 +18,12 @@ Q-* IDs (content-quality scanner IDs) are author-defined and not
 expected to appear in the research doc — they are excluded entirely.
 
 Inputs default to the layout under
-``plugins/skill-workshop/skills/skill-workshop/`` plus
-``docs/research/claude-skill-system_v1.17.md``, all resolved from the
-repo root (located via ``.claude-plugin/marketplace.json``).
+``plugins/skill-workshop/skills/skill-workshop/`` plus the research
+sources: the frozen ``docs/research/claude-skill-system_v1.17.md`` and
+every dated ``docs/research/addendum-*.md`` beside it, all resolved from
+the repo root (located via ``.claude-plugin/marketplace.json``). New
+findings land in an addendum, so a rule only an addendum documents is
+documented, not drift.
 """
 
 from __future__ import annotations
@@ -70,8 +73,12 @@ def main() -> int:
     )
     parser.add_argument(
         "--research",
+        action="append",
         default=None,
-        help="Research doc (default: docs/research/claude-skill-system_v1.17.md).",
+        help=(
+            "Research doc(s), repeatable (default: docs/research/claude-skill-system_v1.17.md "
+            "plus every docs/research/addendum-*.md)."
+        ),
     )
     parser.add_argument(
         "--deferred",
@@ -93,24 +100,31 @@ def main() -> int:
         if args.rubric
         else [skill_refs / "skill-rules.md", skill_refs / "content-quality-rules.md"]
     )
-    research_path = (
-        Path(args.research)
+    research_dir = root / "docs" / "research"
+    research_paths = (
+        [Path(p) for p in args.research]
         if args.research
-        else root / "docs" / "research" / "claude-skill-system_v1.17.md"
+        else [
+            research_dir / "claude-skill-system_v1.17.md",
+            *sorted(research_dir.glob("addendum-*.md")),
+        ]
     )
     deferred_path = Path(args.deferred) if args.deferred else skill_refs / "research-coverage.md"
 
     rubric_ids: set[str] = set()
     for p in rubric_paths:
         rubric_ids |= _extract_ids(p)
-    research_ids = _extract_ids(research_path)
+    research_ids: set[str] = set()
+    for p in research_paths:
+        research_ids |= _extract_ids(p)
     deferred_ids = _extract_ids(deferred_path)
 
     missing_in_research = sorted(rubric_ids - research_ids)
     missing_in_rubric = sorted(research_ids - rubric_ids - deferred_ids)
 
     if not research_ids:
-        print(f"audit-rule-drift: research doc empty or missing: {research_path}", file=sys.stderr)
+        names = ", ".join(str(p) for p in research_paths)
+        print(f"audit-rule-drift: research docs empty or missing: {names}", file=sys.stderr)
         return 2
 
     exit_code = 0
@@ -137,7 +151,8 @@ def main() -> int:
     if exit_code == 0 and not missing_in_rubric:
         print(
             f"audit-rule-drift: clean ({len(rubric_ids)} rubric, "
-            f"{len(deferred_ids)} deferred, {len(research_ids)} research IDs)"
+            f"{len(deferred_ids)} deferred, {len(research_ids)} research IDs "
+            f"from {len(research_paths)} file(s))"
         )
     elif exit_code == 0:
         print(

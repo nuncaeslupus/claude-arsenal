@@ -2,10 +2,7 @@
 
 ## Contents
 
-- [Purpose](#purpose)
-- [How to read this file](#how-to-read-this-file)
-- [Gate protocol](#gate-protocol)
-- [Findings format](#findings-format)
+- [How the two rubrics work](#how-the-two-rubrics-work)
 - [1. Frontmatter](#1-frontmatter)
 - [2. Naming and folder layout](#2-naming-and-folder-layout)
 - [3. Body length and style](#3-body-length-and-style)
@@ -22,83 +19,48 @@
 - [14. Hardening](#14-hardening)
 - [Out of scope for this checklist](#out-of-scope-for-this-checklist)
 
-## Purpose
+## How the two rubrics work
 
-This file is the canonical, author-checkable rule list every skill in this
-marketplace follows. Rules are distilled from
-`docs/research/claude-skill-system_v1.17.md` (the tier-1 citation-bearing
-research archive) and cross-checked against the topical references already
-in this folder. The research IDs (e.g. `R-FM-2`, `R-BODY-1`) are preserved
-so any rule can be traced back to the underlying Anthropic-source-of-truth
-and discarded-alternatives log.
+This file is the structural rubric: frontmatter, naming, length, layout and
+scripts, mostly checkable by pattern. `references/content-quality-rules.md`
+is the interpretive rubric: whether the prose reads cleanly, examples still
+resolve and the description routes correctly. Both share the note below.
 
-The research doc stays the source-of-truth archive; the topical
-references stay the deep-dives; this file is the working ruleset Claude
-walks at modification time and at every bulk audit.
+Rule IDs are research IDs (`R-*`, traceable to
+`docs/research/claude-skill-system_v1.17.md` and its addenda) or quality IDs
+(`Q-*`); the prefixes keep findings from the two rubrics apart. Each row has a
+tier, `must` or `should`, and a one-line check whose negation is the finding
+message. Each section names a deep-dive reference with the reasons and worked
+examples; read it when a check needs more than its line.
 
-## How to read this file
+### Gate
 
-Each section corresponds to one topical reference in this folder. Each
-rule has four parts:
+- **Per-edit gate.** At work-done, walk this rubric and then the content
+  rubric against the current state of every skill file changed this session.
+  The walk judges alignment rather than the diff, so a section that drifted
+  earlier surfaces too. Skip it when the change is only to skill-workshop's
+  own validator scripts and no rule is added or removed.
+- **`must` findings** stop the gate and go to the user, who fixes them
+  (Claude applies), dismisses one with a reason in the commit body, or defers
+  it into `findings.md`. Nothing is auto-fixed, because the trade-off is the
+  user's.
+- **`should` findings** are listed and the gate proceeds.
+- **Bulk audit.** `audit_alignment.py --input references/<rubric>.md`
+  emits one prompt block per skill (ruleset, file contents, findings template)
+  for a session to walk. It makes no API call.
 
-- **ID** — research ID, stable across reorganisations.
-- **Tier** — `must` (alignment failure surfaces as a must finding) or
-  `should` (surfaces as a should finding).
-- **Check** — one-line statement of what alignment looks like. The
-  negation of this line is the finding message.
-- **Deep dive** — pointer to the topical reference where the *why*
-  and worked examples live.
+### Findings format
 
-If a rule's check needs more context than one line, the deep-dive
-reference is the place to read.
-
-## Gate protocol
-
-The gate runs in two motions:
-
-**1. Per-edit gate (mandatory, in-session).** When a commit touches
-any file inside a skill folder — `SKILL.md`, anything under
-`references/`, `scripts/`, `evals/`, or `assets/` — walk every rule in
-this file against the **current state** of every file in that skill
-folder (not the diff). The gate evaluates alignment, not change. A
-file that has been quietly drifting for sessions surfaces now.
-
-Skip only when the commit's diff is exclusively in skill-workshop's own
-tooling (the `validate.py`, `audit_library.py`, or `audit_alignment.py`
-scripts under this skill's `scripts/` folder) and no rule is being
-added or removed.
-
-**Must behavior.** When a `must` finding fires, surface the list to
-the user and stop. Do not auto-fix. The user fixes (Claude applies),
-dismisses with a reason captured in the commit body, or defers
-(recorded in `findings.md`; commit proceeds, the finding stays
-visible).
-
-**Should behavior.** Surface in the same findings list; the commit
-proceeds regardless. The user acts when they choose.
-
-**2. Bulk audit (periodic).** Run the `audit_alignment.py` runner under
-this skill's `scripts/` folder against a target library to emit
-per-skill prompt blocks (ruleset + skill contents + findings
-template) that a Claude session walks one at a time. No Anthropic API
-call; the runner is a prompt emitter, not an inference driver. Bulk
-audit output appends to each skill's `findings.md` exactly like the
-per-edit gate.
-
-## Findings format
-
-Each skill folder may carry an author-local `findings.md` (gitignored).
-The gate appends one dated section per run. Each section reports the
-alignment state of the skill **at that moment**, file-keyed, not
-diff-keyed. Files that have no violations do not appear under that
-date. A fully clean skill writes one line.
+Each skill folder may keep a gitignored `findings.md`, the author's local log.
+Every run appends one dated section, keyed by file rather than by diff; files
+without findings are omitted, and content-rubric rows carry a `content` tag:
 
 ```text
 ## 2026-05-14
 
 references/foo.md is not aligned with the guidelines:
   must   line 42   Cited path .claude/skills/old-name/scripts/x.py does not exist (R-REFLOC-1)
-  should line 88   Section over 100 lines without a Table of Contents (R-BOUNDARY-9)
+  should line 4    Opens with "This document covers …" rather than a trigger  (Q-REF-3 content)
 
 plugins/<plugin>/skills/<skill>/scripts/audit_repo.py is not aligned with the guidelines:
   should line 10   Argparse arg --env conflates two concepts (R-SR-4)
@@ -106,15 +68,7 @@ plugins/<plugin>/skills/<skill>/scripts/audit_repo.py is not aligned with the gu
 (other files in this skill are aligned)
 ```
 
-A clean run writes a single line under the date:
-
-```text
-## 2026-05-14 — all files aligned with guidelines
-```
-
-`findings.md` is gitignored: it is the author's living log, not part
-of the PR diff. Two authors of the same skill keep separate local
-logs.
+A clean run writes one line: `## 2026-05-14 — all files aligned with guidelines`.
 
 ---
 
@@ -181,6 +135,24 @@ Deep dive: `references/body-and-style.md`.
 | R-CTX-4 | should | The first 5000 tokens of the body front-load the constraints most likely to matter after auto-compaction. |
 | R-BODY-(MUST-AVOID) | should | The body avoids heavy-handed `MUST` / `ALWAYS` / `NEVER` styling. Explain *why* the constraint exists rather than asserting it categorically. |
 
+### Prompt style
+
+Deep dive: `references/model-prompting.md`. Source:
+`docs/research/addendum-2026-10.md § Prompt style`. `validate.py` reports
+each as a `content.style-*` finding over `SKILL.md`, `references/`, shipped
+`assets/` prose and (for model names) scripts.
+
+| ID | Tier | Check |
+|---|---|---|
+| R-STYLE-1 | should | ALL-CAPS emphasis tokens stay at or below about 3 per 100 prose lines; each one that remains carries its reason. |
+| R-STYLE-2 | should | No `if in doubt, use X` or `always use X`; the text says when the tool helps instead. |
+| R-STYLE-3 | should | No instruction to `think step by step`, `carefully` or `hard`, and no request to write the reasoning out. |
+| R-STYLE-4 | should | No ritual re-check (`double-check`, `re-verify`, `final verification step`, `subagent to verify`). A line naming a concrete test, build or typecheck command is exempt. |
+| R-STYLE-5 | should | Review prompts do not filter at report time (`only report high severity`, `be conservative`). |
+| R-STYLE-6 | should | No `hold all findings`, no tool-call budget (`minimise tool calls`), no vague style bans such as `avoid the generic AI look`. |
+| R-STYLE-7 | should | No hard-coded model names or ids in shipped prose or scripts. Lowercase tier aliases as config defaults and the consumer `CHANGELOG.md` are exempt. |
+| R-STYLE-8 | should | Step text does not end requested work on `Shall I…`, `Next I'll…` or `Do you want me to…`. |
+
 ## 4. References (lazy-load anatomy)
 
 Deep dive: `references/references-and-chunking.md`.
@@ -223,7 +195,7 @@ Deep dive: `references/inter-document-boundary.md`.
 | R-CONDUCT-1 | should | Default to implicit, model-mediated conduction; do not author an "orchestrator skill" for in-session multi-skill coordination. Reserve explicit orchestrators for the agent-teams tier. |
 | R-CONDUCT-2 | should | When two skills' `paths` globs both match the same file, both descriptions surface to the model — no resolution order is documented. Author `description` fields narrow enough that the model can disambiguate. |
 | R-CONDUCT-3 | must | A skill with `disable-model-invocation: true` MUST NOT also declare a `paths` glob. The combination is incoherent (`paths` is an auto-activation channel; the destructive flag forbids auto-activation). |
-| R-CONDUCT-4 | should | Mentions of agent-teams in body prose carry the EXPERIMENTAL caveat (v2.1.32+, Opus 4.6+, no nested teams, one team per session). |
+| R-CONDUCT-4 | should | Mentions of agent-teams in body prose carry the experimental caveat: no nested teams, one team per session. No version or model numbers (`docs/research/addendum-2026-10.md § Rules reworded`). |
 
 ## 6. Workspace topology and discovery
 
@@ -272,7 +244,7 @@ Deep dive: `references/refactor-cookbook.md`, `references/validation-and-evals.m
 | R-COMP-3 | must | Cross-skill helpers are embedded (one copy per skill, sibling header) OR promoted to `plugins/<plugin>/scripts/_shared/`. Never symlinked across peer skills. |
 | R-XPOLL-2 | should | Skill names favour the `-ing` suffix when the skill describes a capability ("triaging") rather than a noun ("triage"). Soft; the team-style decision is recorded in `references/research-coverage.md § Deferred families and why`. |
 | R-XPOLL-4 | must | Pairwise description cosine <0.95 across siblings. (`should` at <0.85.) Two highly similar descriptions mean two skills overlap and one should re-scope or merge. |
-| R-XPOLL-6 | should | Each SKILL.md body has at least two `### ` sub-sections AND at least one fenced code block — the mechanical proxy for "concrete examples". |
+| R-XPOLL-6 | should | Each procedural SKILL.md body has at least two `### ` sub-sections and at least one fenced code block — the mechanical proxy for "concrete examples". Reference-style skills are exempt (`docs/research/addendum-2026-10.md § Rules reworded`). |
 | R-XPOLL-7 | should | Terminology in body prose stays consistent: the same concept gets the same name throughout SKILL.md and its references. Promotion-pass cap of 3 iterations on each skill. |
 | R-XPOLL-8 | should | Deterministic helper outputs in SKILL.md are facts, not observations: no reasoning prose (`Now I will check…`, `Let me verify…`) between a ```bash``` fence and the next sentence; no time-sensitive tokens (years, month names) outside fences. |
 | R-XPOLL-9 | must | The validator dogfoods itself: this skill (the meta-skill) MUST validate clean against its own `validate.py`. Library mode: assert this skill's `SKILL.md` exists; running `validate.py` against the meta-skill folder returns zero findings. |

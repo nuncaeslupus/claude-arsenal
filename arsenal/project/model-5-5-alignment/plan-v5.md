@@ -4,7 +4,7 @@
 **Specification**: `arsenal/project/model-5-5-alignment/spec.md` (revision 2, approved)
 **Author**: imarcos@gmail.com
 **Revision**: 1
-**Status**: draft
+**Status**: approved (2026-10-01, revision 1) — without annotations
 **Revision log**:
 - r1 — first draft
 
@@ -80,6 +80,17 @@ token numbers before and after in the evidence log.
 
 | T# | Gate | Measured | Command | SHA | Env | Date |
 |----|------|----------|---------|-----|-----|------|
+| T1 | `failed_tests == 0` | 0 | `uv run pytest plugins/skill-workshop` | PR head | local | 2026-10-01 |
+| T2 | `failed_tests == 0` | 0 | `uv run pytest plugins/skill-workshop` | PR head | local | 2026-10-01 |
+| T3 | `failed_tests == 0` | 0 | `bash plugins/core/tests/skill_load_hook_test.sh` | PR head | local | 2026-10-01 |
+| T4 | `resident_tokens_minimal <= 3600` | 2765 (from 4162; AGENTS.md 3745 → 2408) | `make context-budget` | PR head | local | 2026-10-01 |
+| T5 | `failed_tests == 0` | 0 | `bash plugins/core/tests/query_status_report_test.sh` | PR head | local | 2026-10-01 |
+| T6 | `reviewer_chars <= 8520` | 5496 (from 10862) | `wc -c agents/reviewer.md` | PR head | local | 2026-10-01 |
+| T7 | `failed_tests == 0` | 0 | `make smoke` | PR head | local | 2026-10-01 |
+| T8 | `on_invocation_tokens_sum <= 0.80 * baseline` | 22876 vs baseline 38086 (0.60) | `context_budget.approx_tokens` over every SKILL.md | PR head | local | 2026-10-01 |
+| T9 | `style_warnings == 0` | 0 (style checks are errors) | `make smoke` | PR head | local | 2026-10-01 |
+| T10 | `failed_tests == 0` | 0 | `bash plugins/core/tests/init_test.sh` | PR head | local | 2026-10-01 |
+| T11 | `failed_tests == 0` | 0 | `make lint smoke test test-units sync-version-check sync-sections-check sync-dupes context-budget audit-rule-drift queue-doctor` | PR head | local | 2026-10-01 |
 
 ### Dependency graph
 
@@ -95,5 +106,5 @@ T3, T5 (independent) ───────────────────�
 
 ## Sign-off
 
-- [ ] Plan reviewed by maintainer
-- [ ] Ready for execution
+- [x] Plan reviewed by maintainer
+- [x] Ready for execution

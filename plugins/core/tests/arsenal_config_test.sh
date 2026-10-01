@@ -157,6 +157,7 @@ rm -f arsenal/config.toml
 [[ "$(get verification)" == "balanced" ]] || fail "default verification should be balanced"
 [[ "$(get review-max-rounds)" == "2" ]] || fail "default review-max-rounds should be 2"
 [[ "$(get review-budget-min)" == "10" && "$(get bot-wait-min)" == "20" ]] || fail "review-budget-min/bot-wait-min defaults"
+[[ "$(get autonomy)" == "ask-when-blocked" ]] || fail "default autonomy should be ask-when-blocked"
 # test_config_verification_invalid_value_exits_2
 printf 'verification = "loose"\n' > arsenal/config.toml
 [[ "$(get_rc verification)" == "2" ]] || fail "verification = loose must exit 2"
@@ -166,6 +167,10 @@ printf 'bot-triggers = ["no-equals-sign"]\n' > arsenal/config.toml
 [[ "$(get_rc bot-triggers)" == "2" ]] || fail "a bot-triggers entry without login=comment must exit 2"
 printf 'bot-triggers = ["coderabbitai[bot]=@coderabbitai review"]\n' > arsenal/config.toml
 [[ "$(get bot-triggers)" == "coderabbitai[bot]=@coderabbitai review" ]] || fail "bot-triggers should round-trip"
+printf 'autonomy = "sometimes"\n' > arsenal/config.toml
+[[ "$(get_rc autonomy)" == "2" ]] || fail "autonomy = sometimes must exit 2"
+printf 'autonomy = "ask-often"\n' > arsenal/config.toml
+[[ "$(get autonomy)" == "ask-often" ]] || fail "autonomy should round-trip"
 rm -f arsenal/config.toml
 echo "PASS: verification keys — defaults, refusals, bot-triggers round-trip"
 

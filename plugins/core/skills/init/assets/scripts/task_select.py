@@ -370,10 +370,11 @@ def state_from_issues(
             # loses the distinction. So a label carries it instead — every
             # surface can read labels — and `state_reason` refines the answer
             # when it happens to be there.
-            reason = issue.get("state_reason")
+            # REST spells it `state_reason`, `gh --json` spells it `stateReason`.
+            reason = issue.get("state_reason") or issue.get("stateReason")
             if cancelled_label in labels:
                 derived = "cancelled"
-            elif reason is None:
+            elif not reason:
                 derived = "done"
             else:
                 derived = "done" if str(reason).lower() == "completed" else "cancelled"
@@ -464,6 +465,20 @@ def parse_front_matter(text: str) -> dict[str, Any]:
     return data
 
 
+LABEL_MAX_WORDS = 5
+
+
+def display_label(label: Any, title: str) -> str:
+    """The short human name a task is shown by: its `label:`, else the first
+    five words of the title with an ellipsis, so a bare id never stands alone."""
+    if label and str(label).strip():
+        return " ".join(str(label).split())
+    words = title.split()
+    if len(words) <= LABEL_MAX_WORDS:
+        return " ".join(words)
+    return " ".join(words[:LABEL_MAX_WORDS]) + "…"
+
+
 def _as_list(value: Any) -> list[str]:
     """Front matter may write a single value bare: `requires: surface:cli`.
 
@@ -509,10 +524,19 @@ def load_tasks(tasks_dir: Path) -> tuple[list[dict[str, Any]], list[str]]:
             warnings.append(f"{path}: duplicate id {task_id} (also {seen[task_id]}) — skipped")
             continue
         seen[task_id] = path
+        title = str(meta.get("title", task_id))
+        label = display_label(meta.get("label"), title)
+        if meta.get("label") and len(label.split()) > LABEL_MAX_WORDS:
+            warnings.append(
+                f"{path}: `label:` has more than {LABEL_MAX_WORDS} words — "
+                "keep it short enough to read at a glance"
+            )
         tasks.append(
             {
                 "id": task_id,
-                "title": str(meta.get("title", task_id)),
+                "title": title,
+                "label": label,
+                "display": f"{label} ({task_id})",
                 "path": str(path),
                 "priority": meta.get("priority", 0)
                 if isinstance(meta.get("priority", 0), int)
@@ -723,6 +747,8 @@ def main(argv: list[str] | None = None) -> int:
             row = {
                 "id": task["id"],
                 "title": task["title"],
+                "label": task["label"],
+                "display": task["display"],
                 "state": merged.get(task["id"], "open"),
             }
             print(json.dumps(row, separators=(",", ":")))
@@ -763,6 +789,8 @@ def main(argv: list[str] | None = None) -> int:
                     {
                         "id": task["id"],
                         "title": task["title"],
+                        "label": task["label"],
+                        "display": task["display"],
                         "path": task["path"],
                         "priority": task["priority"],
                         "gate": task["gate"],

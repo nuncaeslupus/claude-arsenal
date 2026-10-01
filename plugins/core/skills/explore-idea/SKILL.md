@@ -1,6 +1,6 @@
 ---
 name: explore-idea
-description: When the user has a vague idea and no spec yet — sizes it, asks one question at a time with pros and cons, logs decisions, hands off to specify. Triggers — "I have an idea", "help me think this through". Do NOT use once the problem is stated (see specify).
+description: Shapes a vague idea one question at a time, with pros and cons and logged decisions, then hands off to specify. Use when the user has an idea but no stated problem yet. Not for a problem already stated (specify).
 metadata:
   section: workflow
   type: workflow
@@ -17,12 +17,9 @@ CANARY: explore-idea-loaded-2026-09-29-fb78d23e-0a0a801de422d737
 ## When to load
 
 Load when there is an idea but no problem statement yet — a new project, a "what if we…",
-a choice the owner cannot frame. A brainstorming or planning skill from another plugin does
-not replace this one: it tends to run on into its own spec format and skip the annotated
-review that `specify` requires.
-
-If the problem is already stated and only needs scoping, defer to `specify`; if the spec
-is approved and the question is how to build it, defer to `design`.
+a choice the owner cannot frame. Use it rather than another plugin's brainstorming skill,
+which tends to skip the annotated review `specify` requires. A stated problem goes to
+`specify`; an approved spec goes to `design`.
 
 ## Steps
 
@@ -36,9 +33,8 @@ Classify before exploring, and say the class in the reply so the owner can overr
 | **bounded** | one component, a clear edge, no new architecture | a short design in chat and an explicit yes |
 | **architectural** | new system, several components, lasting structural choices | hand-off to `specify` (Step 7) |
 
-The class can move up mid-task when a question uncovers more, never down: a request that
-looked architectural keeps that weight even after one answer makes it look smaller. Done
-when the reply names the class and the owner has not overridden it.
+The class can move up mid-task, never down. Done when the reply names the class and the
+owner has not overridden it.
 
 ### Step 2: Explore context before asking anything
 
@@ -90,8 +86,8 @@ Keep a running, numbered log in chat and reprint it whenever it changes:
 | D-3 | Hosting provider            | open (research) | 2026-09-29 |
 ```
 
-Status is `agreed`, `open`, `open (research)` or `superseded by D-N`. Never renumber or
-delete a row: a superseded decision stays visible so the spec can say why it changed.
+Status is `agreed`, `open`, `open (research)` or `superseded by D-N`. Keep every row and
+its number, so the spec can say why a superseded decision changed.
 Done when the latest reply that changed a decision reprints the whole log.
 
 ### Step 7: Hand off behind an explicit approval

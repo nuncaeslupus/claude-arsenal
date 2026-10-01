@@ -9,7 +9,9 @@ slightly different wording.
 Input JSON shape (a bare list):
 [
   {"finding": "...", "where": "path/or/component",
-   "status": "fixed" | "queued" | "issue" | "flagged"}
+   "status": "fixed" | "queued" | "issue" | "flagged",
+   "severity": "high" | "medium" | "low",      (optional)
+   "confidence": "high" | "medium" | "low"}    (optional)
 ]
 
 Exit codes:
@@ -27,6 +29,7 @@ import sys
 from pathlib import Path
 
 ALLOWED_STATUS = {"fixed", "queued", "issue", "flagged"}
+LEVELS = {"high", "medium", "low"}
 REQUIRED_KEYS = {"finding", "where", "status"}
 
 
@@ -48,10 +51,15 @@ def check(findings: list[dict]) -> list[str]:
             problems.append(f"findings[{i}] has an empty finding")
         if not str(row["where"]).strip():
             problems.append(f"findings[{i}] has an empty where")
-        if row["status"] not in ALLOWED_STATUS:
+        # isinstance first: a list or dict is unhashable, so `in` a set raises.
+        if not isinstance(row["status"], str) or row["status"] not in ALLOWED_STATUS:
             problems.append(
                 f"findings[{i}] status {row['status']!r} not in {sorted(ALLOWED_STATUS)}"
             )
+
+        for field in ("severity", "confidence"):
+            if field in row and (not isinstance(row[field], str) or row[field] not in LEVELS):
+                problems.append(f"findings[{i}] {field} {row[field]!r} not in {sorted(LEVELS)}")
 
         key = (str(row["finding"]).strip().lower(), str(row["where"]).strip().lower())
         if key in seen:

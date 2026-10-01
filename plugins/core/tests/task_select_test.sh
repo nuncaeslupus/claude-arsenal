@@ -266,6 +266,14 @@ EOF
 out=$(python3 "${SELECT_PY}" --tasks-dir "${TASKS}" --issues "${tmpdir}/issues-notplanned2.json" --max 9 2>/dev/null)
 grep -q 't-bbbb2222' <<<"${out}" && fail "state_reason=not_planned must still block the dependent"
 
+# ...including gh's camelCase spelling (`gh issue list --json stateReason`)
+cat > "${tmpdir}/issues-notplanned-gh.json" <<'EOF'
+[{"number": 1, "state": "CLOSED", "stateReason": "NOT_PLANNED",
+  "body": "handle <!-- arsenal-task: t-aaaa1111 -->"}]
+EOF
+out=$(python3 "${SELECT_PY}" --tasks-dir "${TASKS}" --issues "${tmpdir}/issues-notplanned-gh.json" --max 9 2>/dev/null)
+grep -q 't-bbbb2222' <<<"${out}" && fail "stateReason=NOT_PLANNED must still block the dependent"
+
 # --- 19: task identity survives a body sanitizer ---
 #         The GitHub MCP tools a cloud session uses strip angle-bracketed
 #         content out of issue bodies, so an id kept in an HTML comment was gone
@@ -735,5 +743,15 @@ implicit=$(grep -rn "| *python3 [^|]*task_select\.py\|{SELECT_PY}" \
     || fail "these pipe state into task_select.py without \`--state -\`, which reads nothing now:
 ${implicit}"
 echo "PASS: no caller relies on the implicit stdin spelling"
+
+# --- label: derived for display, explicit when the file has one ---------------
+LT="${tmpdir}/ltasks"
+mkdir -p "${LT}"
+printf -- '---\nid: t-lab00001\ntitle: "Make the release workflow tag only on green CI"\nlabel: tag only green CI\n---\n' > "${LT}/a.md"
+printf -- '---\nid: t-lab00002\ntitle: "Extract the surface probe into its own script"\npriority: -1\n---\n' > "${LT}/b.md"
+out=$(python3 "${SELECT_PY}" --all --state - --tasks-dir "${LT}" <<<'{}' 2>/dev/null)
+grep -q '"display":"tag only green CI (t-lab00001)"' <<<"${out}" || fail "explicit label missing from display: ${out}"
+grep -q '"display":"Extract the surface probe into\\u2026 (t-lab00002)"' <<<"${out}" || fail "fallback label wrong: ${out}"
+echo "PASS: tasks carry a display label (explicit or truncated title)"
 
 echo "PASS: task_select_test — all gates passed"

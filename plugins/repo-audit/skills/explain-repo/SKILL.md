@@ -1,6 +1,6 @@
 ---
 name: explain-repo
-description: Use when the user wants a human-facing document about a repository — a pitch, a deep-dive, interview-prep Q&A, an onboarding guide, or a status brief. Triggers — "explain this repo", "write this up for an interview". Builds from an existing `repo-audit` analysis when available. Always for the user, never the repo. Do NOT use to find bugs — use `repo-audit`.
+description: Writes a human-facing document about a repository — pitch, deep-dive, interview Q&A, onboarding guide or status brief. Use when the user wants a repo explained or written up. Not for finding bugs (repo-audit).
 ---
 
 # explain-repo
@@ -25,13 +25,13 @@ value is building on verified findings rather than fresh guesses.
 ## How to use
 
 1. **Get the source material.** Look for an existing `repo-audit` findings
-   JSON first — it's already been through a verify pass, so its claims are
-   load-bearing. If none exists, do a light orient-only read (README, root
+   JSON first — its findings carry severity and confidence, so the high-confidence ones can be leaned on
+   directly. If none exists, do a light orient-only read (README, root
    memory file, top-level layout) instead, and say plainly that this
    document skips the deep verification a full audit would have done.
    *Check: can name what evidence backs each claim before writing prose
    around it.*
-2. **Pick the type.** See
+2. **Pick the type.** Before choosing, see
    [Document types](references/document-types.md) for the five defaults
    (pitch, deep-dive, interview prep, onboarding, status brief) and what
    each is actually for. Ask which is wanted if it's not obvious, rather
@@ -51,8 +51,9 @@ value is building on verified findings rather than fresh guesses.
 ## Gotchas
 
 - **A document is not a repo contribution.** Every one of the five types is
-  for the person who asked, full stop — never propose committing a pitch,
-  a deep-dive, or an interview-prep doc into the target repo. If something
+  for the person who asked, so don't propose committing a pitch, a
+  deep-dive, or an interview-prep doc into the target repo: it is written for
+  one reader and would sit in the repo as unowned prose. If something
   in it is genuinely worth the repo having (a corrected fact, a missing
   reference page), that's a separate, narrow, specific fix — not a reason
   to commit the document itself.

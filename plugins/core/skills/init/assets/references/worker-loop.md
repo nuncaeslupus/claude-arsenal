@@ -9,7 +9,7 @@ A session that never spawns a worker never needs this file.
 - [What to run while editing](#what-to-run-while-editing) — the touched suite now, the whole gate once
 - [Per-task PRs](#per-task-prs) — what a worker opens, and the web caveat
 - [Reading a precedent](#reading-a-precedent--shape-first-prose-on-demand) — how to follow an existing module without paying for all of it
-- [Credit guards](#credit-guards--set-before-any-task-tool-dispatch) — env to set before any Task-tool dispatch
+- [Credit guards](#credit-guards--set-before-any-task-tool-dispatch) — the single home of model dispatch
 - [Tuning knobs](#tuning-knobs) — every `ARSENAL_*` / `LOOP_*` env var
 - [Agent definitions](#agent-definitions)
 
@@ -20,13 +20,15 @@ A session that never spawns a worker never needs this file.
 One orchestrator claims up to `ARSENAL_MAX_WORKERS` independent tasks and
 dispatches that many workers at once. Run when the queue has open tasks:
 
-> **Precondition — the main working tree must be clean.** Run
-> `git status --porcelain` in the host's main tree before the first dispatch.
-> If it reports anything, **stop and tell the user**: commit it, move it to a
-> worktree, or explicitly accept the risk. The loop force-restores that tree
-> after every worker (step 6), and uncommitted work sitting in it is exactly
-> what gets caught. Keep it clean for the whole loop — do not cut branches or
-> start edits there while workers are running.
+> **Precondition — the main working tree is clean, and stays clean.** Run
+> `git status --porcelain` in the host's main tree before the first dispatch;
+> if it reports anything, stop and ask the user to commit it, move it to a
+> worktree, or accept the risk. `worker_postcheck.sh` (step 6) runs
+> `git reset --hard` + `git clean -fd` in that tree whenever HEAD is off the
+> recorded host branch, and it cannot tell a worker's residue from your own
+> uncommitted work. So while workers run, cut no branch and start no edit there
+> (a small docs PR is the usual trigger); use a separate worktree, or commit
+> first.
 
 0. **Establish worker isolation (once per session).** Parallel fan-out is only
    safe when each worker runs in its own `git worktree`; without it, concurrent
@@ -105,7 +107,7 @@ dispatches that many workers at once. Run when the queue has open tasks:
      across containers — two containers routinely check out at the same path.
      The vocabulary is closed and the provenance is written to
      `worktree_isolation.why`; an unknown mechanism is refused, not recorded.
-     Do NOT use it for Task-tool subagents: `worker_postcheck.sh` measures that
+     Not for Task-tool subagents: `worker_postcheck.sh` measures that
      case correctly, and a measurement is worth more than an attestation.
 4. For each task line, `bash claude-arsenal/bin/claim_task.sh <task_id>`
    (sequential — each push is atomic):
@@ -119,12 +121,8 @@ dispatches that many workers at once. Run when the queue has open tasks:
      no upstream). Do **not** retry — it spins forever on a deadlock. Re-run
      the GitHub channel (`github_channel.sh --detect`), or fix the
      protection, then resume.
-   - **Never work around a `lost` or `error` by creating an upstream, pushing
-     `-u`, or re-claiming on a different ref.** A `lost` means another session
-     legitimately owns the task; an `error` means the lock is misconfigured.
-     "Recovering" the claim by giving your branch its own pushable ref defeats
-     the shared-ref lock entirely and lets two sessions both win the same task —
-     the precise double-claim failure this protocol prevents. Obey the result.
+   - Obey a `lost` or `error`; routing around it re-creates the double claim
+     the lock prevents (`AGENTS.md` § Claiming — the contract).
 5. **Dispatch every won task.** Which of the two shapes you are in was decided
    back in step 3, and steps 5 and 6 differ by it — so say which one you are in
    before reading on.
@@ -133,20 +131,12 @@ dispatches that many workers at once. Run when the queue has open tasks:
    message** (see `agents/worker.md`) so they run concurrently:
    - `isolation: worktree`
    - Inject the relative-path directive and the task payload path.
-   - Say that the gates run in the **foreground** and that ending the turn ends
-     the task. You are the one who can set that expectation before the worker
-     chooses how to run a 10-minute gate; `agents/worker.md` says it too, but a
-     worker deciding under time pressure reads your prompt last.
-   - Say to run `claude-arsenal/bin/host_setup.sh` first, before any test. A
-     worktree carries tracked files and nothing an install produces, so without
-     it the first gate in each worktree fails on a missing tool and every worker
-     in the fan-out diagnoses the same environmental fact separately — five of
-     nine, in the session that prompted this. The script is a no-op unless the
-     repo declares `host-setup` in `arsenal/config.toml`; if the worker reports
-     that it does not, declare it once rather than paying for it per worker. Any
-     non-zero exit — 1 the command failed, 2 the config is unreadable or this is
-     not a git repository — means the tree is not set up and the worker returns
-     `open`; only exit 0 continues, whether or not a command was declared.
+   - Restate the two rules a worker most often misses, because your prompt is
+     the last thing it reads: run gates in the foreground (ending the turn ends
+     the task), and run `claude-arsenal/bin/host_setup.sh` before any test.
+     Both are spelled out in `agents/worker.md`. If a worker reports that the
+     repo declares no `host-setup`, declare it once in `arsenal/config.toml`
+     rather than paying for the discovery per worker.
    **Separate-session dispatch — open one session per won task instead.** The
    worker never returns into this session, so there is nothing to spawn in one
    message and nothing to wait on in step 6: each session opens its own PR (or
@@ -180,22 +170,11 @@ dispatches that many workers at once. Run when the queue has open tasks:
      if it prints `restored`, the worker ran in-place — clamp
      `ARSENAL_MAX_WORKERS=1` per step 0. Exit 2 (could not restore) → stop the
      loop and surface to the user.
-   - ⚠️ **`worker_postcheck.sh` is destructive by design.** A `restored` result
-     means it ran `git reset --hard` + `git clean -fd` in the tree it was
-     invoked from — the host's MAIN working tree, when the orchestrator runs it.
-     It restores whenever HEAD is off the recorded host branch, and it cannot
-     tell a worker's residue from your own uncommitted work. So:
-     - satisfy the loop precondition (step 0) — **the main working tree is
-       clean before the loop starts**, and stays that way;
-     - **never cut a branch in the main tree while the loop is running**
-       (a small docs PR is the classic trigger: the branch moves, the next
-       postcheck restores, and everything uncommitted goes with it). Do that
-       work in a separate worktree, or commit first.
-     - If a restore did catch uncommitted work, the tree was snapshotted first:
-       the ref is on `worker_postcheck.sh`'s stderr and in
-       `arsenal/session/rescue_refs`. Recover with
-       `git checkout <ref> -- .`, and **surface it to the user** — do not
-       silently continue the loop over rescued work.
+   - `restored` is destructive (see the precondition above). If it caught
+     uncommitted work, the tree was snapshotted first: the ref is on
+     `worker_postcheck.sh`'s stderr and in `arsenal/session/rescue_refs`.
+     Recover with `git checkout <ref> -- .` and tell the user before the loop
+     continues.
    - Then record the outcome:
      - `done` + **PR URL** → nothing to record. `open_task_pr.sh` wrote
        `Closes #<issue>` and archived the task file into that PR, so merging it
@@ -272,8 +251,8 @@ belongs here, in the editing loop, where being wrong costs a re-run and
 certifies nothing. A host that wants every run to be the whole gate just keeps
 running it — there is no knob to set, and nothing in the bundle runs a suite on
 your behalf while you edit. See `references/evidence-gates.md` § How often to
-run the whole gate for the reasoning and for what makes a gate slow in the first
-place.
+run the whole gate for the reasoning, and `references/performance-tuning.md`
+§ Making the gate faster for what makes a gate slow.
 
 ---
 
@@ -322,68 +301,34 @@ a property of merging rather than a command anyone runs.
 
 ## Credit guards — set before any Task-tool dispatch
 
-Two of these are fixed. The third is the consumer's call, so it is read from
-`arsenal/config.toml` rather than written here — a model id hardcoded in a
-vendored file is a preference an upgrade overwrites:
+This is the one place model dispatch is defined; `agents/worker.md` and
+`agents/reviewer.md` point here. Assign, check, then use — in the same Bash call
+as the dispatch:
 
 ```bash
 root="$(git rev-parse --show-toplevel)"
-workers_model="$(python3 "${root}/claude-arsenal/scripts/arsenal_config.py" \
-    --repo-root "${root}" --get models.workers)" \
+cfg="${root}/claude-arsenal/scripts/arsenal_config.py"
+workers_model="$(python3 "${cfg}" --repo-root "${root}" --get models.workers)" \
   || { echo "arsenal: models.workers is unusable — fix arsenal/config.toml" >&2; exit 1; }
-printf 'dispatch workers with model: %s\n' "${workers_model:?models.workers resolved empty}"
-
-# Belt-and-braces for surfaces where a shell's exports survive to the dispatch.
-# They are not what decides — the lines above are.
-export CLAUDE_CODE_DISABLE_1M_CONTEXT=1
-export CLAUDE_CODE_DISABLE_FAST_MODE=1
-export CLAUDE_CODE_SUBAGENT_MODEL="${workers_model}"
+reviewer_model="$(python3 "${cfg}" --repo-root "${root}" --get models.reviewers)" \
+  || { echo "arsenal: models.reviewers is unusable — fix arsenal/config.toml" >&2; exit 1; }
+printf 'workers: %s  reviewer: %s\n' "${workers_model:?resolved empty}" "${reviewer_model:-${workers_model}}"
+export CLAUDE_CODE_DISABLE_1M_CONTEXT=1 CLAUDE_CODE_DISABLE_FAST_MODE=1
 ```
 
-**Pass the resolved value as the dispatch's own `model` argument.** Read the
-model out of that `printf` and write it into each Task dispatch; do not rely on
-the export having reached anything. **On cloud surfaces every Bash tool call
-gets a fresh shell** — env vars and functions do not carry from one call to the
-next, so `CLAUDE_CODE_SUBAGENT_MODEL` is gone before any dispatch could read it
-and `models.workers` governs nothing. The same is true of the two
-`CLAUDE_CODE_DISABLE_*` guards above, which is why they are set in the same call
-as the dispatch rather than once at session start.
+Write the printed model into each dispatch's own `model` argument. Why:
 
-Two things make that failure silent rather than loud, and both push toward the
-*expensive* model. An explicit `model:` on the dispatch outranks the env var, so
-an orchestrator that names one wins and is told nothing. And omitting `model:`
-does **not** fall back to `models.workers`: with no env var and no model in the
-agent definition, a subagent inherits the **parent's** model, so an Opus
-orchestrator dispatches Opus workers by default. Naming the model on the
-dispatch is the only path that yields the configured value.
+- Cloud Bash calls share no shell state, so an exported
+  `CLAUDE_CODE_SUBAGENT_MODEL` never reaches the dispatch.
+- A dispatch with no `model` inherits the parent's model, not `models.workers`.
+- `export VAR="$(cmd)"` always exits 0, so assigning first is what lets a bad
+  config fail loudly instead of dispatching on an empty value.
 
-Nothing inside a session can observe which model a subagent actually ran on, and
-the token report arrives after the spend — so this is not pinnable by a gate the
-way the rest of the protocol prefers. Making the correct path the only path is
-the guard.
-
-**Assign, check, then use** — and anchor both paths on the repo root. Written
-as one line, `export VAR="$(cmd)"` reports the exit status of `export`, which
-always succeeds: a rejected model or a script path that did not resolve from a
-subdirectory would set an empty value, `export` would return 0, and the fleet
-would dispatch on whatever model Claude Code defaults to. That is the silent
-fleet the hard error below exists to prevent, arriving by a different door.
-
-`models.workers` defaults to `sonnet` and takes either an alias Claude Code
-resolves (`opus`, `sonnet`, `haiku`) or a full model id. A value that is
-neither is a hard config error, not a silent fallback: a worker fleet quietly
-running a model nobody chose is exactly the kind of thing that is only
-discovered on the invoice.
-
-**The orchestrator half is advisory.** `models.orchestrator` says which model
-this repo wants running the dispatching session, and no script can enforce it —
-a session cannot change the model it is already running as. What it can do is
-notice: compare the configured value against the model you are actually running
-and, if they differ, say so once rather than dispatching a fleet from a session
-the repo did not want driving it. Empty (the default) means no opinion.
-
-**Version requirement**: Claude Code ≥ v2.1.172. Check with `claude --version`
-before starting; older versions do not support `statusLine.rate_limits`.
+`models.workers` defaults to `sonnet` and takes an alias (`opus`, `sonnet`,
+`haiku`) or a full model id; anything else is a hard config error. Empty
+`models.reviewers` means "same as workers". `models.orchestrator` is advisory:
+a session cannot change its own model, so if it differs from the one you are
+running, say so once before dispatching. Empty means no opinion.
 
 ---
 

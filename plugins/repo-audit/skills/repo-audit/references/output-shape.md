@@ -27,8 +27,8 @@ contracts.
    commit style, version-bump rules — read them first, don't assume this
    repo's conventions). Run `${CLAUDE_SKILL_DIR}/scripts/validate_markdown.py`
    against any new or changed `.md` files before proposing them.
-3. **The findings ledger.** Every CONFIRMED finding, one row each, with a
-   `status` of `fixed`, `queued`, `issue`, or `flagged` (see the decision
+3. **The findings ledger.** Every reported finding, one row each, with `severity` and
+   `confidence` (high / medium / low) and a `status` of `fixed`, `queued`, `issue`, or `flagged` (see the decision
    below). Build it as JSON matching
    `${CLAUDE_SKILL_DIR}/scripts/validate_findings.py`'s input shape, run the
    validator, then feed the same structure into `create_artifact.py`'s
@@ -54,7 +54,7 @@ State this plainly to the user every time; don't assume it's obvious.
 
 ## The fix / queue / issue / ledger decision
 
-Every CONFIRMED finding lands in exactly one bucket, in this preference
+Each finding chosen for action lands in exactly one bucket, in this preference
 order:
 
 1. **Fix directly** — mechanically verifiable and low-risk: a count that's

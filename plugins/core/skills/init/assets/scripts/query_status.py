@@ -378,6 +378,8 @@ def main(argv: list[str] | None = None) -> int:
                     {
                         "id": task["id"],
                         "title": task["title"],
+                        "label": task["label"],
+                        "display": task["display"],
                         "path": task["path"],
                         "state": current,
                         "terminal": current in TERMINAL,
@@ -409,7 +411,7 @@ def main(argv: list[str] | None = None) -> int:
             elif task["id"] not in handled:
                 marks.append("no-handle")
             suffix = f"  [{'; '.join(marks)}]" if marks else ""
-            print(f"  {task['id']}  p{task['priority']:<3} {current:<9} {task['title']}{suffix}")
+            print(f"  {task['id']}  p{task['priority']:<3} {current:<9} {task['display']}{suffix}")
 
     if _report(notes, warnings, problems, fail_on_problems=args.fail_on_problems):
         return 1

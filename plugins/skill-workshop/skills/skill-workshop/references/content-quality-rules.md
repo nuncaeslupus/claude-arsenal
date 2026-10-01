@@ -1,109 +1,19 @@
 # Content quality rules
 
+The interpretive rubric: each row asks the reviewer to read a stretch of
+prose and judge it, which a token search cannot do. It is walked after
+`references/skill-rules.md`, and the tiers, gate and findings format are
+shared; see `references/skill-rules.md § How the two rubrics work`.
+
 ## Contents
 
-- [Purpose](#purpose)
-- [How to read this file](#how-to-read-this-file)
-- [Gate protocol](#gate-protocol)
-- [Findings format](#findings-format)
 - [A. Prose shape](#a-prose-shape)
 - [B. Example currency](#b-example-currency)
 - [C. Reference cost](#c-reference-cost)
 - [D. Evergreen-doc-style](#d-evergreen-doc-style)
 - [E. Trigger and boundary quality](#e-trigger-and-boundary-quality)
 - [F. Procedural shape](#f-procedural-shape)
-- [Out of scope for this checklist](#out-of-scope-for-this-checklist)
-
-## Purpose
-
-This file is the second of two author-checkable rule lists every skill
-walks. The first — `references/skill-rules.md` — covers **structural
-shape**: frontmatter keys, body length, anchor presence, naming. Its
-rules are mostly pattern-matchable; a reviewer can tick them off in a
-glance.
-
-This file covers **content quality**: whether the prose a reader
-actually faces reads cleanly, whether examples still resolve, whether
-the description disambiguates from sibling skills. The rules are
-**interpretive** by design. Each one forces the reviewer to read a
-stretch of prose and make a judgment, not just confirm a token exists.
-
-The two rubrics together drive the gate. Structural pass first
-(cheap, deterministic), content pass second (slower, judgment-heavy).
-A skill that passes both is well-formed *and* well-written.
-
-## How to read this file
-
-Each rule has four parts:
-
-- **ID** — local to this rubric (`Q-PROSE-1`, `Q-EX-2`, …). The
-  `Q-` prefix marks it as a quality rule so findings from the two
-  rubrics never collide on ID.
-- **Tier** — `must` (alignment failure surfaces as a must finding) or
-  `should` (surfaces as a should finding).
-- **Check** — one-line statement of what alignment looks like. The
-  negation of this line is the finding message.
-- **Deep dive** — pointer to the topical reference where the *why*
-  and worked examples live.
-
-If a rule's check needs more than one line to evaluate, the deep-dive
-reference is the place to read.
-
-## Gate protocol
-
-The gate runs at the same two moments as the structural rubric:
-
-**1. Per-edit gate (mandatory, in-session).** When a commit touches
-any file inside a skill folder, walk every rule in this file against
-the **current state** of every file in that skill folder, in addition
-to the structural walk. Both walks evaluate alignment, not change.
-Append both findings blocks to `findings.md` under the same dated
-header.
-
-**2. Bulk audit (periodic).** Run the `audit_alignment.py` runner
-twice — once with `--input references/skill-rules.md`, once with
-`--input references/content-quality-rules.md`. Each run emits per-skill
-prompt blocks that a Claude session walks one at a time. No Anthropic
-API call.
-
-**Must behavior.** When a `must` finding fires, surface the list to
-the user and stop. Do not auto-fix. The user fixes (Claude applies),
-dismisses with a reason captured in the commit body, or defers
-(recorded in `findings.md`; commit proceeds, the finding stays
-visible).
-
-**Should behavior.** Surface in the same findings list; the commit
-proceeds regardless. The user acts when they choose.
-
-## Findings format
-
-Append a content-pass block under the same dated header as the
-structural pass. Distinguish the two by a `(content)` tag after the
-rule ID so reviewers can tell which rubric flagged which issue.
-
-```text
-## 2026-05-15
-
-SKILL.md is not aligned with the guidelines:
-  must   line 88   Paragraph runs 187 words without sub-structure  (Q-PROSE-1 content)
-  should line 142  Gotcha "be careful with tokens" lacks a concrete failure mode  (Q-EX-4 content)
-
-references/topic-a.md is not aligned with the guidelines:
-  should line 4    Opens with "This document covers …" rather than a trigger  (Q-REF-3 content)
-
-(other files in this skill are aligned)
-```
-
-A clean run writes a single line under the same date:
-
-```text
-## 2026-05-15 — all files aligned with guidelines
-```
-
-`findings.md` is gitignored: it is the author's living log, not part
-of the PR diff.
-
----
+- [G. Review and delegation](#g-review-and-delegation)
 
 ## A. Prose shape
 
@@ -115,7 +25,7 @@ search cannot answer that.
 
 | ID | Tier | Check |
 |---|---|---|
-| Q-PROSE-1 | must | No paragraph in `SKILL.md` or any `references/*.md` exceeds ~120 words (~6 sentences) without internal structure (sub-bullets, sub-heading, code block). A long unbroken paragraph signals dense reasoning that should be split. |
+| Q-PROSE-1 | should | Paragraphs stay short. One that runs past ~120 words gets internal structure (sub-bullets, a sub-heading, a code block); a short paragraph needs none. Use a list or table when the content is one, not to decorate prose. |
 | Q-PROSE-2 | should | The first sentence of every `##` section makes the most important claim of that section. Sections where the lede only emerges in paragraph 2 fail. |
 | Q-PROSE-3 | should | The `SKILL.md` body holds imperative voice ("Run X, then Y") throughout — not just at the start. Mid-body switches to second person (`you should …`) or passive (`X is run by …`) fail. |
 | Q-PROSE-4 | should | Bare `MUST` / `ALWAYS` / `NEVER` / `IMPORTANT` styling is justified inline (the next clause names a concrete failure if violated) or rewritten as plain prose. Categorical assertions without a reason train readers to skip them. |
@@ -189,29 +99,25 @@ at activation time.
 
 Deep dive: `references/body-and-style.md`.
 
-These rules force the reviewer to read the body as the agent executes
-it, step by step, and ask two questions at each one: can the agent tell
-whether this step worked, and is this a step at all rather than a
-paragraph about the domain. Voice checks miss both — a body can be
-verb-first throughout and still be a tutorial with no checkable state.
+Read the body as the agent executes it and ask two questions at each
+step: if it produces code, does it name a real check; and is it a step at
+all rather than a paragraph about the domain.
 
 | ID | Tier | Check |
 |---|---|---|
-| Q-PROC-1 | should | Each step in a procedural `SKILL.md` names how to confirm it succeeded — a command, an exit code, a file that now exists, an observable state. "Run the tests" fails; "run `make test`; it exits 0" passes. A step whose outcome the agent cannot check is where execution diverges without anything noticing. |
+| Q-PROC-1 | should | Steps that produce code name a real check — a command and its expected result (`make test` exits 0), a typecheck, a build. Other steps carry no ritual confirmation lines; the model already notices when an ordinary step fails. |
 | Q-PROC-2 | should | The body reads as a sequence of actions, not an explanation of a domain. Material that teaches *why* moves to `references/`; the body keeps what to do, in what order. A section a reader could mistake for a tutorial fails. |
 
-## Out of scope for this checklist
+## G. Review and delegation
 
-- Anything `skill-rules.md` already covers structurally (frontmatter
-  shape, naming regex, body length cap, anchor-presence checks). Walk
-  the structural rubric for those.
-- Anything `validate.py` already detects mechanically (broken
-  cross-cites, missing scripts, dangling anchors). Those surface
-  during a normal validator run and need no human judgment.
-- Style preferences that have not produced an observed failure mode
-  (Oxford commas, em-dashes vs en-dashes, capitalisation of
-  identifiers). Promote one only when an incident makes the case.
-- Per-domain content correctness (is this gotcha *factually* true for
-  this API / this system?). That is review territory, not rubric
-  territory — the rubric checks shape and currency, not subject-matter
-  accuracy.
+Deep dive: `references/model-prompting.md`. Source:
+`docs/research/addendum-2026-10.md § Review conduct` and `§ Scope and procedure`.
+
+These rules apply to skills and agent prompts that review, delegate or
+change code on someone's behalf.
+
+| ID | Tier | Check |
+|---|---|---|
+| Q-REV-1 | should | A review prompt asks for every finding with its severity and confidence; filtering happens in a separate step, not by telling the reviewer what to leave out. |
+| Q-REV-2 | should | Delegation to a subagent is reserved for large, independent work that can run in parallel; no subagent is spawned to verify the delegator's own work. |
+| Q-SCOPE-1 | should | Steps that change code keep to the requested scope; unrequested fixes, cleanup and pre-existing bugs go to the summary as follow-ups. |

@@ -103,6 +103,12 @@ DEFAULTS: dict[str, Any] = {
     # rounds of ~40 minutes under a cap of three. `adversarial_review.sh --reset`
     # starts over deliberately.
     "review-max-rounds": 2,
+    # How often a session stops to ask the user. Read by AGENTS.md, which every
+    # session loads; /init sets it from the setup interview.
+    #   ask-often         confirm each step before taking it
+    #   ask-when-blocked  ask only when blocked or before a risky action
+    #   autonomous        never wait on the user for reversible work
+    "autonomy": "ask-when-blocked",
     # How deep local verification goes, given what CI and the review bots
     # already did on the PR. Read by scripts/review_sources.py (the decision
     # line every caller follows), bin/fast_gate.sh and bin/adversarial_review.sh.
@@ -249,6 +255,7 @@ ENUMS: dict[str, set[str]] = {
     # writing a line into the body of someone who switched the check off.
     "pre-pr-review": {"warn", "required", "off"},
     "verification": {"fast", "balanced", "strict"},
+    "autonomy": {"ask-often", "ask-when-blocked", "autonomous"},
     "branch-protection": {"", "applied", "existing", "unavailable", "off"},
 }
 
@@ -269,6 +276,7 @@ READERS = {
     "pre-pr-review": "plugins/core/skills/init/assets/bin/open_task_pr.sh",
     "review-max-rounds": "plugins/core/skills/init/assets/bin/adversarial_review.sh",
     "verification": "plugins/core/skills/init/assets/scripts/review_sources.py",
+    "autonomy": "plugins/core/skills/init/assets/AGENTS.md",
     "review-budget-min": "plugins/core/skills/init/assets/bin/adversarial_review.sh",
     "bot-wait-min": "plugins/core/skills/init/assets/scripts/review_sources.py",
     "bot-triggers": "plugins/core/skills/init/assets/scripts/review_sources.py",
@@ -481,8 +489,8 @@ def load(repo_root: Path | None = None) -> tuple[dict[str, Any], dict[str, str]]
             continue
         if not MODEL_VALUE_REGEX.match(value):
             raise ConfigError(
-                f"{key}: {value!r} is not a model name — expected an alias like "
-                f"'opus' or a model id like 'claude-sonnet-4-6' (from {sources[key]})"
+                f"{key}: {value!r} is not a model name — expected a tier alias like "
+                f"'opus' or a full model id (from {sources[key]})"
             )
 
     return values, sources

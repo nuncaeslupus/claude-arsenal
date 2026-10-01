@@ -98,6 +98,15 @@ echo "mine" > "${REPO}/arsenal/session/handover.md"
 python3 "${INIT_PY}" --repo-path "${REPO}" --bundle-dir "${BUNDLE}" --silent >/dev/null 2>&1
 [[ -f "${REPO}/arsenal/tasks/t-keepme.md" ]] || fail "a host task file was deleted"
 grep -q mine "${REPO}/arsenal/session/handover.md" || fail "host handover was clobbered"
+# An upgrade does not re-run the setup interview: with no interview flags, no
+# answer is added and a recorded one is left as it was.
+grep -qE '^(autonomy|verification|bot-wait-min|review-budget-min|bot-triggers) *=' \
+    "${REPO}/arsenal/config.toml" && fail "an upgrade wrote interview answers nobody gave"
+# Prepended: a bare key after the [models] header would land inside that table.
+{ printf 'autonomy = "ask-often"\n'; cat "${REPO}/arsenal/config.toml"; } > "${tmpdir}/cfg" \
+    && mv "${tmpdir}/cfg" "${REPO}/arsenal/config.toml"
+python3 "${INIT_PY}" --repo-path "${REPO}" --bundle-dir "${BUNDLE}" --silent >/dev/null 2>&1
+grep -q '^autonomy = "ask-often"' "${REPO}/arsenal/config.toml" || fail "an upgrade changed a recorded interview answer"
 
 # --- 5: re-running is a no-op on the block, and says so ---
 out=$(python3 "${INIT_PY}" --repo-path "${REPO}" --bundle-dir "${BUNDLE}" 2>&1)

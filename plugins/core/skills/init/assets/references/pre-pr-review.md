@@ -75,7 +75,7 @@ The reviewer's whole prompt is the packet path:
 > `verdict.md` in the same directory.
 
 Dispatch it with `models.reviewers` (falling back to `models.workers`) as the
-dispatch's own `model` argument — `agents/reviewer.md` § Launch parameters has
+dispatch's own `model` argument — `references/worker-loop.md` § Credit guards has
 the snippet; a dispatch that names no model inherits the caller's. Pass nothing
 else: no summary, no account of the approach, no conversation history. Each of
 those hands the reviewer the author's blind spot, and the packet is complete

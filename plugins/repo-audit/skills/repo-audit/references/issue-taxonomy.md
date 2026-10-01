@@ -1,14 +1,16 @@
 # Issue taxonomy
 
-Load before the hunt pass, to scope one research agent per group below. Nine
-groups is a default, not a rule — combine light groups on a small repo, or
-split a heavy one (security on a repo handling payment data) into two.
+Load before hunting. Nine groups is a default, not a rule: on a small repo one
+reader covers them all inline; on a large one, give each worker the groups
+that fit its subsystem, or split a heavy one (security on a repo handling
+payment data).
 
 Each group is a dispatch unit and a question, not a checklist. A worker reads
 its group, then reads the code on its own terms. Every candidate needs a
 `file:line` and a one-sentence failure scenario — "input X causes Y" — before
 it is worth reporting; a finding with no concrete trigger is a hunch, and
-hunches go through the verify pass, not into the ledger.
+a hunch is checked (repro, failing test, traced path) before it is reported
+as a bug.
 
 ## The groups
 
@@ -57,3 +59,26 @@ re-finding what `ruff`/`eslint`/`clippy` catches wastes a worker's pass. It is
 also not a list of patterns to grep for: naming the patterns hands a worker
 something to match instead of code to read, and the defects that matter here
 are the ones no pattern names.
+
+## Optional prompts for architecture claims
+
+Use these when a doc or design asserts something about behaviour. Each is a
+question to trace in code; an observation needs evidence, not a repro.
+
+- **Other surfaces.** Does it behave the same locally, on a hosted runner, in
+  CI, in a fork? Name the capability missing on each.
+- **Automation off.** If CI or automation is down or never set up, what
+  silently stops, and who would notice?
+- **Declared but dead.** Is any config key accepted but never read? Grep where
+  it is read, not only where it is declared.
+- **Lock-in.** Which vendor, host, OS or language is it tied to, and is that
+  stated?
+- **Update footguns.** Can an update lose local work, or report success while
+  doing nothing?
+- **Missing pieces.** What would a comparable mature project have that this
+  lacks (ownership, security policy, release notes)? Say settings you cannot
+  see from the filesystem are unverifiable.
+- **Write paths.** Do calls that mutate external state handle timeouts,
+  retries and partial failure?
+- **"Automatic" claims.** Trace the code path behind each; if it lives in an
+  optional component, the claim is overstated for anyone without it.

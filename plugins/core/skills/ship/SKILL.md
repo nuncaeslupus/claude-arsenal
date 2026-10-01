@@ -1,6 +1,6 @@
 ---
 name: ship
-description: When the user is confirming a change is ready for production before merge — compatibility, tests, observability, rollback. Do NOT use for implementation (see execution) or PR review (see review).
+description: Confirms a change is production-ready — compatibility, tests, observability, rollback. Use when the user wants release sign-off. Not for implementation (execution) or PR review (review).
 metadata:
   section: workflow
   type: workflow
@@ -24,7 +24,13 @@ Reads `status/specification.md` to know what should be shipping. Confirms scope 
 
 - Does the change solve the stated problem?
 - All acceptance criteria satisfied?
-- Every task's **Gate** is recorded and met — run the `gate-check` engine (`run_gate.py --input status/plan.md`): exit 0 means all gated tasks pass with complete evidence (measured value, command, commit SHA, provenance). A failing or unrecorded gate is No-Go; exit 2 means no Gate column found or a usage error (missing file, bad `--id`) — confirm the correct plan file exists and the invocation uses `--input`; fall back to the acceptance-criteria check only after confirming the plan genuinely predates the gate convention.
+- Every task's **Gate** is recorded and met:
+
+  ```bash
+  python3 "${CLAUDE_SKILL_DIR}/../gate-check/scripts/run_gate.py" --input status/plan.md
+  ```
+
+  Exit 1 is No-Go. Exit 0 still leaves each manual (`?`) gate to a human verdict; one not yet confirmed is No-Go. Exit 2 (no Gate column or usage error): confirm the plan path, then fall back to the acceptance criteria only for a plan that predates gates.
 - Every spec or plan the branch changed has a reader built from its current text (exit 1 is No-Go: regenerate the reader it names, hand the HTML over, and commit it with the document):
 
   ```bash
@@ -69,10 +75,11 @@ only if commits landed after the last reviewed tree. Protocol and exits:
 
 - **CLEAR** (reused or new) → record it in the ship output (§ 3 Adversarial
   review row) and proceed to Step 8.
-- **BLOCK** → show the findings verbatim and halt. A finding judged a false
-  positive may be overridden: record which, why, and what was checked in the
-  same row, then proceed. Otherwise resolve it and re-run from Step 1.
-- **No verdict or a moved tree** → not a pass and not an override case; re-run.
+- **BLOCK** → show the findings verbatim and stop. A finding judged a false
+  positive may be overridden by recording which, why, and what was checked in
+  the same row; once every blocking finding is overridden this way, the BLOCK is
+  cleared: proceed to Step 8. Otherwise resolve it and re-run from Step 1.
+- **No verdict or a moved tree** → re-run.
 
 ### Step 8: Produce ship output
 
@@ -82,11 +89,7 @@ Load `references/template.md` when producing the ship output document.
 
 ## Abbreviation
 
-**Abbreviated ship** = Steps 2 + 4 + Go/No-Go. Whether abbreviation is allowed
-depends on project conventions documented in the host repo's `CLAUDE.md`.
-
-The adversarial reviewer gate (Step 7) runs even in abbreviated mode unless
-the host repo's `CLAUDE.md` carries the marker
-`<!-- ship: adversarial-review=skip -->` **and** the change is docs-only or
-config-only. For all code changes the gate is mandatory regardless of
-abbreviation.
+**Abbreviated ship** = Steps 2 + 4 + 7 + Go/No-Go, where the host repo's
+`CLAUDE.md` allows it. Step 7 may be skipped only when that file carries
+`<!-- ship: adversarial-review=skip -->` and the change is docs-only or
+config-only; every code change runs it.

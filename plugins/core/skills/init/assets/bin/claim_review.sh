@@ -5,10 +5,9 @@
 # A review is a unit of expensive work — a second reader on a substantial PR is
 # 135k–280k tokens and several minutes — and until now it was the only expensive
 # unit in this bundle with no compare-and-swap. Tasks have `claim_task.sh`;
-# reviews had a convention. Two sessions dispatched an Opus reader at the same
-# head within minutes of each other, and the duplicate was only noticed because
-# one session said so in a message. Coordination by announcement is exactly what
-# the claim ref exists to stop needing.
+# reviews had a convention, so two sessions could dispatch a reader at the same
+# head and only notice the duplicate if one said so. Coordination by
+# announcement is exactly what the claim ref exists to stop needing.
 #
 # Same primitive as claim_task.sh, one more ref namespace:
 #

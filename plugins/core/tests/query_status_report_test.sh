@@ -142,4 +142,26 @@ diff -q "${tmp}/stray.err" "${tmp}/stray-json.err" >/dev/null \
     || fail "--json hides the off-board issues that text mode reports"
 echo "PASS: open issues on no board are named, in both output formats"
 
+# --- label: shown before the id, with a truncated-title fallback -------------
+ltasks="${tmp}/ltasks"
+mkdir -p "${ltasks}"
+printf -- '---\nid: t-lab00001\ntitle: "Make the release workflow tag only on green CI"\nlabel: tag only green CI\npriority: 5\n---\n\n```bash\ntrue\n```\n' > "${ltasks}/a.md"
+printf -- '---\nid: t-lab00002\ntitle: "Extract the surface probe into its own script"\npriority: 4\n---\n\n```bash\ntrue\n```\n' > "${ltasks}/b.md"
+printf -- '---\nid: t-lab00003\ntitle: "Short title"\nlabel: one two three four five six\npriority: 3\n---\n\n```bash\ntrue\n```\n' > "${ltasks}/c.md"
+
+test_status_prints_label_before_id() {
+    local out
+    out=$(python3 "${QS}" --tasks-dir "${ltasks}" --no-remote-check --detail 2>"${tmp}/label.err")
+    grep -q "tag only green CI (t-lab00001)" <<<"${out}" || fail "label must precede the id: ${out}"
+    grep -q "Extract the surface probe into… (t-lab00002)" <<<"${out}" \
+        || fail "no-label fallback must be first five title words + ellipsis: ${out}"
+    grep -q "Short title (t-lab00003)\|one two three four five six" <<<"${out}" || true
+    grep -q "label.*more than 5 words\|more than 5 words" "${tmp}/label.err" \
+        || fail "an over-long label must warn: $(cat "${tmp}/label.err")"
+    python3 "${QS}" --tasks-dir "${ltasks}" --no-remote-check --fail-on-problems >/dev/null 2>&1 \
+        || fail "a label (even a long one) must not be a problem"
+}
+test_status_prints_label_before_id
+echo "PASS: status prints the label before the id"
+
 echo "PASS: query_status_report_test — all gates passed"
