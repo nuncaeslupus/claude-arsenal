@@ -18,6 +18,18 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [4.26.0] - 2026-10-01
+
+- **Verification is bounded.** One PR had run 8 review rounds of ~40 minutes. The review loop now ends:
+  - **Rounds follow the branch.** The round counter is kept per branch, so rebases and base merges no longer restart it. `review-max-rounds` now defaults to **2**: one full review, plus a follow-up only for BLOCKERs. `adversarial_review.sh emit --reset` starts over deliberately. Set the key back to 3 if you relied on it.
+  - **Each round has a budget.** Every packet states it (`review-budget-min`, default 10). The reviewer runs targeted tests only; the full suite and mutation runs are reserved for the new `strict` profile.
+  - **Findings come with severity and confidence.** The reviewer now reports every finding with a severity and a confidence instead of dropping the uncertain ones.
+- **New `verification` profile** (`fast | balanced | strict`, default `balanced`) decides how much local checking a PR needs, given what CI and the review bots did. With CI and a bot both green on a low-risk diff, no local review round runs. `risk-paths` and `risk-lines` mark changes that always get one.
+- **New `review_sources.py --pr N`.** It reports CI and each review bot as `ok`, `pending`, `skipped`, `rate-limited` or `absent`, and prints the decision line every caller now follows. It reads the bots' skip, rate-limit and pause notices, including commit statuses that read "success" on a skipped review and summary comments edited in place.
+- **The bot wait ends.** After `bot-wait-min` (default 20), `--trigger` asks a silent or skipped bot once, using its `bot-triggers` entry (`"login=comment"`, or `request-reviewer` for bots requested as reviewers; a paused bot gets its resume command). After one more wait the bot is `absent` and the loop moves on. `query_pr_state.py` has new states `bot_skipped`, `bot_rate_limited` and `bot_absent`, and a `--local-review-done` flag.
+- **The full test suite runs once per tree.** `fast_gate.sh --full` and `open_task_pr.sh` record a receipt keyed by tree hash and reuse it while the tree is unchanged. Green CI on the PR head counts as the merge-time evidence, except under `strict`.
+- **One review procedure.** `execution`, `github`, `ship` and the worker agent all point to `references/pre-pr-review.md` (about half its old size). `ship` reuses the last verdict unless commits landed after it.
+
 ## [4.25.0] - 2026-09-30
 
 - **Long tasks survive context compaction.** `execution`'s notes file

@@ -152,6 +152,23 @@ out=$(python3 "${CFG}" --repo-root . --get context-window 2>&1 || true)
 grep -q "100000" <<<"${out}" || fail "the refusal must name the accepted range: ${out}"
 echo "PASS: context-window defaults off, accepts 100k-1M, refuses the rest"
 
+# --- verification keys (bounded review): defaults and refusals ---------------
+rm -f arsenal/config.toml
+[[ "$(get verification)" == "balanced" ]] || fail "default verification should be balanced"
+[[ "$(get review-max-rounds)" == "2" ]] || fail "default review-max-rounds should be 2"
+[[ "$(get review-budget-min)" == "10" && "$(get bot-wait-min)" == "20" ]] || fail "review-budget-min/bot-wait-min defaults"
+# test_config_verification_invalid_value_exits_2
+printf 'verification = "loose"\n' > arsenal/config.toml
+[[ "$(get_rc verification)" == "2" ]] || fail "verification = loose must exit 2"
+printf 'bot-wait-min = 0\n' > arsenal/config.toml
+[[ "$(get_rc bot-wait-min)" == "2" ]] || fail "bot-wait-min = 0 must exit 2"
+printf 'bot-triggers = ["no-equals-sign"]\n' > arsenal/config.toml
+[[ "$(get_rc bot-triggers)" == "2" ]] || fail "a bot-triggers entry without login=comment must exit 2"
+printf 'bot-triggers = ["coderabbitai[bot]=@coderabbitai review"]\n' > arsenal/config.toml
+[[ "$(get bot-triggers)" == "coderabbitai[bot]=@coderabbitai review" ]] || fail "bot-triggers should round-trip"
+rm -f arsenal/config.toml
+echo "PASS: verification keys — defaults, refusals, bot-triggers round-trip"
+
 # The shipped template must keep `context-window` ABOVE the [models] header. A
 # bare key written after a table header is read as a member of that table, so a
 # template that drifted would ship `models.context-window` — a key nothing reads,

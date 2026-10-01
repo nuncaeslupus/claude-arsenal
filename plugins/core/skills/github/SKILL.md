@@ -43,35 +43,24 @@ Branches: `feat/<short-description>`, `fix/<short-description>`. Main branch is 
 
 ## Pre-PR gate — lint, then an independent read, before `gh pr create`
 
-Before any `gh pr create` invocation, run the host repo's full lint/format/test gate (whatever the project's Makefile / package.json exposes — e.g. `make lint`, `make smoke`, `npm run lint`). Pre-commit hooks do not always cover the same checks CI runs; relying on them alone is how PRs land red. Treat a clean local lint as a non-negotiable precondition for opening the PR — the agile review loop assumes CI was green at push time.
+Before `gh pr create`, run the host repo's lint/format/test gate (whatever its Makefile or package.json exposes — e.g. `make lint`, `npm run lint`). Pre-commit hooks do not always cover what CI runs, and the review loop below assumes CI was green at push time. If the project has no lint target, say so and propose one to the user, then proceed.
 
-That full gate runs **once** here, and once more before merge only if commits landed since. Review rounds never re-run it: each round fixes all its comments, runs the fast change-scoped gate once, and pushes **once** — every push is a CI run wherever CI fires per push. Why, and the per-PR CI trigger block: `claude-arsenal:core:init § references/ci-minutes.md`.
+The full gate runs once per tree: `fast_gate.sh --full` writes a receipt and reuses it while the tree is unchanged, and once CI is green on the PR head it is not re-run locally. Review rounds run only the fast change-scoped gate, once, then push once — every push is a CI run. Why, and the per-PR CI trigger block: `claude-arsenal:core:init § references/ci-minutes.md`.
 
 ```bash
 FAST="${CLAUDE_SKILL_DIR}/../init/assets/bin/fast_gate.sh"
 bash "$FAST"          # each review round: `preflight-gate` over the changed files
-bash "$FAST" --full   # before merge, only if commits landed since the pre-PR gate
+bash "$FAST" --full   # before merge, only if no receipt or green CI covers the tree
 ```
 
-If the host project has no lint target, document that gap (propose a Makefile addition to the user) and proceed; but the omission is the proposal, not a license to skip.
-
-A green lint says the change does not break the repo. It says nothing about whether it is the change that was asked for, and the session that just wrote it is the wrong reader for that question. So the second half of the gate is an adversarial review by a subagent with no history of the work:
-
-```bash
-REVIEW="${CLAUDE_SKILL_DIR}/../init/assets/bin/adversarial_review.sh"
-bash "$REVIEW" emit      # prints the packet's absolute path
-# spawn a subagent whose whole prompt is: read THAT path, reply into verdict.md beside it
-bash "$REVIEW" verdict   # 0 CLEAR · 1 BLOCK · 2 no usable verdict · 3 the tree moved mid-review
-```
-
-Neither 2 nor 3 is a pass: 2 means no verdict came back, 3 means the answer describes a tree that no longer exists. Pass `--intent <file>` when the change has a written intent other than `status/specification.md`, which is what auto-discovery reaches for. Pass the reviewer nothing but the packet path — a summary of what the change was meant to do hands it the author's blind spot. On BLOCK, fix and re-emit rather than opening the PR with the findings unaddressed. Full protocol, override rules, and the form for a repo without the vendored bundle: `claude-arsenal:core:init § references/pre-pr-review.md`.
+A green gate says the change does not break the repo, not that it is the change that was asked for. For that, run the independent review before opening the PR, and again on the open PR when its decision line calls for one: `claude-arsenal:core:init § references/pre-pr-review.md`.
 
 ## The agile review loop
 
 After `gh pr create` returns the PR number, immediately enter the polling loop. **Inline the action rubric in the `/loop` prompt** — a bare `query_pr_state.py` invocation produces a JSON snapshot each tick and forces the LLM to re-derive what to do every time. Pass `--unresolved-only` so the loop does not re-trigger on already-addressed comments.
 
 ```bash
-/loop 90s python3 "${CLAUDE_SKILL_DIR}/scripts/query_pr_state.py" --pr <PR_NUMBER> --unresolved-only — if state is bot_commented, address per the rubric (agree → fix, then after the round's last fix run fast_gate.sh once and push once + reply "addressed in <sha>" via gh api repos/<owner>/<repo>/pulls/<PR_NUMBER>/comments/<id>/replies; disagree → reply with rationale on the same endpoint; ambiguous → reply asking for clarification + ping the user). If conflicts, rebase onto (or merge) the base branch, resolve, and push; loop continues. If ci_failed, fetch the failing job log and fix + reply on any related comments. Every fix or dismissal MUST be paired with a reply on the thread — that is what makes --unresolved-only filter the comment on the next tick. Only stop the loop on ready_to_merge, merged, or closed — bot_approved still waits for the quiet window. When stopping, CronDelete <job-id> and hand back to user to merge.
+/loop 90s python3 "${CLAUDE_SKILL_DIR}/scripts/query_pr_state.py" --pr <PR_NUMBER> --unresolved-only --trigger — if state is bot_commented, address per the rubric (agree → fix, then after the round's last fix run fast_gate.sh once and push once + reply "addressed in <sha>" via gh api repos/<owner>/<repo>/pulls/<PR_NUMBER>/comments/<id>/replies; disagree → reply with rationale on the same endpoint; ambiguous → reply asking for clarification + ping the user). Pair every fix or dismissal with a reply on the thread, since the reply is what --unresolved-only filters on next tick. If bot_skipped / bot_rate_limited / bot_absent, follow its decision: local-review none → continue; diff or full → run one review round per the pre-PR review protocol, then add --local-review-done. If conflicts, rebase onto (or merge) the base branch, resolve, and push. If ci_failed, fetch the failing job log, fix, and reply on related comments. Stop only on ready_to_merge, merged, or closed (bot_approved still waits for the quiet window); then CronDelete <job-id> and hand back to the user.
 ```
 
 `/loop` rounds `90s` up to `*/2 * * * *` (every 2 min) because cron has no sub-minute granularity. Stop early with `CronDelete <job-id>` — `/loop` prints the ID at scheduling time, and `CronList` recovers it later.
@@ -80,7 +69,7 @@ The script returns JSON to stdout and exits with:
 
 | Exit | State |
 |---|---|
-| 0 | `bot_commented` (any bot line-comments — Claude judges per-comment) OR `ready_to_merge` OR `merged` / `closed` (PR no longer open — short-circuit, nothing to do) |
+| 0 | `bot_skipped` / `bot_rate_limited` / `bot_absent` (a bot will not review this head — follow `decision`) OR `bot_commented` (any bot line-comments — Claude judges per-comment) OR `ready_to_merge` OR `merged` / `closed` (PR no longer open — short-circuit, nothing to do) |
 | 1 | `waiting` / `bot_eyeing` / `ci_running` / `bot_approved` (loop continues) |
 | 2 | `conflicts` (merge conflict — rebase/resolve) OR `ci_failed` (Claude must act) |
 
@@ -88,6 +77,7 @@ Handle each state per the rubric in [pr-review-loop](references/pr-review-loop.m
 
 - `bot_eyeing` → loop continues. Bot owns clearing `:eyes:` by acting again. Exception: with `--unresolved-only`, when every comment the bot wrote is filtered out and the bot did review at some point, the script promotes the state to `bot_approved` / `ready_to_merge` — the loop has done its part and stale eyes lose their blocking force.
 - `bot_commented` → for each comment in `bot_line_comments`, judge: **already addressed** (reply "addressed in <sha>"), **agree** (fix + push — batched: one fast gate and one push per round — + **reply** "addressed in <sha>" — the reply is what `--unresolved-only` anchors on), **disagree** (reply with rationale via `gh api .../pulls/<N>/comments/<id>/replies`), or **ambiguous** (reply asking for clarification + ping the user). Loop continues after action. A fix or dismissal without a reply leaves the thread unresolved, so the next pass re-reads a comment that has already been handled — pair every one with a reply.
+- `bot_skipped` / `bot_rate_limited` / `bot_absent` → `--trigger` has already asked the bot once where a `bot-triggers` command exists. Follow the `decision` field: `none` continues to merge on green CI; `diff`/`full` runs one local review round (`claude-arsenal:core:init § references/pre-pr-review.md`), then re-run with `--local-review-done`. `waiting` never outlasts `bot-wait-min` plus one trigger.
 - `conflicts` → the PR branch conflicts with its base. Rebase onto (or merge) the base branch, resolve the conflicts, and push. Loop continues. A conflicted PR cannot merge regardless of CI/review state, so this is surfaced first. When the branch is stacked on a PR that already merged, use `rebase_stack.sh` (see *Multi-PR stacking* below) rather than replaying by hand — it skips the merged commits and knows which conflicts are regenerable.
 - `ci_failed` → fetch the failed log via `gh run view --log-failed <run-id>`, fix, push. Reply on any comments the fix relates to. Loop continues.
 - `ready_to_merge` → exit the loop, tell the user "PR #N ready to merge". In a repo carrying `arsenal/config.toml`, handing back is not automatically the right ending: `merge-policy` there is the host's standing answer to whether an agent may merge it, and the vendored protocol's completion step gives the rule for each value. Read it before asking a question the host already answered.

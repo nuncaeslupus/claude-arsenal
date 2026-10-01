@@ -10,9 +10,18 @@ Returns one of:
   - ci_failed     — at least one CI check failed
   - bot_approved  — watched bot approved, quiet window not elapsed yet
   - ready_to_merge — bot approved + CI green + quiet window elapsed
+  - bot_skipped / bot_rate_limited / bot_absent — no watched bot will review
+    this head (a skip notice, a limit notice, or silence past bot-wait-min and
+    one trigger). The payload's `decision` names the local review to run
+    instead; with --local-review-done (that review has a CLEAR verdict) or a
+    decision of `none`, CI green and mergeable, the state is ready_to_merge.
+
+Bot states come from review_sources.py (the bundle's scripts/ folder), the one
+classifier the rest of the bundle uses. Without it the bot half stays as before.
 
 Exit codes:
-  0 — bot_commented (unaddressed) OR ready_to_merge (actionable)
+  0 — bot_commented (unaddressed) / bot_skipped / bot_rate_limited / bot_absent /
+      ready_to_merge (actionable)
   1 — waiting / bot_eyeing / ci_running / bot_approved (loop continues)
   2 — conflicts / ci_failed (Claude action) or error (surface to user)
 """
@@ -20,12 +29,14 @@ Exit codes:
 from __future__ import annotations
 
 import argparse
+import importlib
 import json
 import shutil
 import subprocess
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
+from types import ModuleType
 from typing import Any
 
 DEFAULT_BOTS = ["gemini-code-assist[bot]", "coderabbitai[bot]", "claude[bot]"]
@@ -58,6 +69,80 @@ def _resolve_watch_bots(flag: str | None, repo_root: Path | None = None) -> list
             pass
 
     return list(DEFAULT_BOTS)
+
+
+def _load_review_sources() -> ModuleType | None:
+    """Import the bundle's review_sources.py, wherever this copy runs from.
+
+    Upstream and as a plugin, this file sits at skills/github/scripts/ and the
+    bundle's scripts at skills/init/assets/scripts/. Vendored, it sits at
+    .claude/skills/github/scripts/ and the bundle at claude-arsenal/scripts/.
+    """
+    here = Path(__file__).resolve().parent
+    candidates = [
+        here.parent.parent / "init" / "assets" / "scripts",
+        Path.cwd() / "claude-arsenal" / "scripts",
+    ]
+    if len(here.parents) > 3:
+        candidates.insert(1, here.parents[3] / "claude-arsenal" / "scripts")
+    for folder in candidates:
+        if (folder / "review_sources.py").is_file():
+            if str(folder) not in sys.path:
+                sys.path.insert(0, str(folder))
+            try:
+                return importlib.import_module("review_sources")
+            except ImportError:
+                return None
+    return None
+
+
+_BOT_STATES = {
+    "rate-limited": "bot_rate_limited",
+    "skipped": "bot_skipped",
+    "absent": "bot_absent",
+}
+
+
+def _bot_fallback(args: argparse.Namespace, result: dict, repo: str) -> dict:
+    """Replace an open-ended `waiting` / `bot_eyeing` when no bot will review.
+
+    Asks review_sources.py what each watched bot did on this head. While any is
+    `ok` or `pending` the state stands; that pending is bounded by bot-wait-min
+    (plus one more wait after a --trigger). Once every watched bot is skipped,
+    rate-limited or absent, the state names that and carries the decision line;
+    it is ready_to_merge when the decision needs no local review, or when the
+    caller says the local review is recorded (--local-review-done).
+    """
+    if result["state"] not in ("waiting", "bot_eyeing") or not args.watch_bots:
+        return result
+    if result["bot_reviews"]["changes_requested"]:
+        return result
+    rs = _load_review_sources()
+    if rs is None:
+        result["bot_sources"] = "unavailable: review_sources.py not found"
+        return result
+    try:
+        report = rs.run(args.pr, repo, trigger=args.trigger, watch_bots=args.watch_bots)
+    except rs.SourceError as exc:
+        sys.stderr.write(f"review_sources: {exc}\n")
+        sys.exit(2)
+    states = [v.state for v in report.bots]
+    result["bot_sources"] = [
+        {"login": v.login, "state": v.state, "detail": v.detail} for v in report.bots
+    ]
+    result["decision"] = report.decision
+    if report.triggers_posted:
+        result["triggers_posted"] = report.triggers_posted
+    if not states or any(s in ("ok", "pending") for s in states):
+        return result
+    for raw, name in _BOT_STATES.items():
+        if raw in states:
+            result["state"], result["exit_code"] = name, 0
+            break
+    local_done = args.local_review_done or report.decision["local_review"] == "none"
+    if local_done and result["ci"] == "success" and result["mergeable"] == "MERGEABLE":
+        result["state"], result["exit_code"] = "ready_to_merge", 0
+    return result
 
 
 def _norm_user(name: str | None) -> str:
@@ -408,6 +493,22 @@ def main() -> int:
             "already-addressed comments."
         ),
     )
+    p.add_argument(
+        "--trigger",
+        action="store_true",
+        help=(
+            "post a skipped or silent bot's `bot-triggers` command, once per head "
+            "(review_sources.py --trigger)"
+        ),
+    )
+    p.add_argument(
+        "--local-review-done",
+        action="store_true",
+        help=(
+            "the local review the decision asks for has a CLEAR verdict "
+            "(adversarial_review.sh check exits 0); bot_* states may then merge"
+        ),
+    )
     args = p.parse_args()
     args.watch_bots = _resolve_watch_bots(args.watch_bots)
 
@@ -479,6 +580,7 @@ def main() -> int:
     result = _classify(
         args, head_ts, ci, reactions, reviews, line_comments, addressed_count, mergeable
     )
+    result = _bot_fallback(args, result, repo)
     json.dump(result, sys.stdout, indent=2)
     sys.stdout.write("\n")
     return int(result["exit_code"])

@@ -35,12 +35,12 @@ Both live in `arsenal/config.toml`; both are host-defined commands.
 
 | Key | What it is | When it runs |
 |---|---|---|
-| `host-gate` | The full suite — everything the repo checks. | **Once** before the PR opens (`open_task_pr.sh`, or the `github` skill's pre-PR gate), and once more before merge **only** if commits landed since. |
+| `host-gate` | The full suite — everything the repo checks. | **Once** before the PR opens (`open_task_pr.sh`, or the `github` skill's pre-PR gate), and once more before merge **only** if commits landed since — a passing run leaves a receipt for its tree, so `--full` over the same tree prints `reused` instead of re-running. |
 | `preflight-gate` | Fast and change-scoped: lint/typecheck the changed files, the tests the change selects. | `open_task_pr.sh --preflight`, and **every review round after the first**, on the delta. |
 
 ```bash
 bash claude-arsenal/bin/fast_gate.sh          # preflight-gate, scoped to the change
-bash claude-arsenal/bin/fast_gate.sh --full   # host-gate — before merge, if needed
+bash claude-arsenal/bin/fast_gate.sh --full   # host-gate — reuses a receipt for this tree
 ```
 
 `fast_gate.sh` exports `ARSENAL_CHANGED_FILES` (one per line, deletions excluded)

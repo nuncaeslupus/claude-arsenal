@@ -281,6 +281,10 @@ CANONICAL_ARGS = {
     "--drop-types",
     "--against",
     "--size-tolerance",
+    # query_pr_state.py: ask a silent or skipped review bot once, and record that
+    # the local fallback review ran — actions with no canonical equivalent
+    "--trigger",
+    "--local-review-done",
 }
 FORBIDDEN_ARG_SYNONYMS = {
     "--out": "--output",

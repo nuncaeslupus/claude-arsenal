@@ -95,20 +95,40 @@ DEFAULTS: dict[str, Any] = {
     "pre-pr-review": "warn",
     # How many adversarial-review rounds one change gets before the loop is
     # declared non-convergent. Read by bin/adversarial_review.sh, which refuses
-    # to emit a packet past it.
+    # to emit a packet past it. Round two is a follow-up on the previous
+    # findings plus the delta, and only BLOCKERs earn it.
     #
-    # There is a cap at all because the loop has no natural fixed point: each
-    # round asks a fresh reader to find a reason not to merge, and the fixes
-    # from the last round are new surface for the next one to find one in.
-    # Measured at six and eight rounds on real changes before this existed.
-    # Round two onward is now a bounded follow-up — the previous findings plus
-    # what changed since — so three is a real budget rather than a guillotine:
-    # a change that has not converged by then has a problem the fourth round
-    # will not find either, and splitting it is the answer.
-    #
-    # The counter is bound to the review's base commit, so rebasing or splitting
-    # the change resets it — which is exactly the move a stuck review needs.
-    "review-max-rounds": 3,
+    # The counter belongs to the branch, not the base commit: when it was bound
+    # to the base, every rebase or base merge restarted it, and one PR ran eight
+    # rounds of ~40 minutes under a cap of three. `adversarial_review.sh --reset`
+    # starts over deliberately.
+    "review-max-rounds": 2,
+    # How deep local verification goes, given what CI and the review bots
+    # already did on the PR. Read by scripts/review_sources.py (the decision
+    # line every caller follows), bin/fast_gate.sh and bin/adversarial_review.sh.
+    #   fast      local review only for high-risk diffs or when nothing external ran
+    #   balanced  no local review when CI and a bot both passed a low-risk diff;
+    #             one diff review, targeted tests only, when the bots are out
+    #   strict    always one local review; reviewer may run the full suite and
+    #             mutations; no CI-green shortcut at merge
+    "verification": "balanced",
+    # Minutes one review round is told it has, as an elapsed/budget line in the
+    # packet. Advisory to the reviewer; the dispatcher stops waiting at twice it.
+    "review-budget-min": 10,
+    # Minutes a configured review bot may stay silent on a PR head before
+    # review_sources.py sends its trigger (see bot-triggers) and, after a
+    # second wait, records it as absent so the loop moves on.
+    "bot-wait-min": 20,
+    # Manual review commands, one "login=comment" per bot. A bot that skipped
+    # the PR (some skip small or unstarred repos) or stayed silent gets this
+    # comment once per head. Empty means never post one. A starting value: /init
+    # suggests entries for the bots in review-bots.
+    "bot-triggers": [],
+    # Globs whose change always gets a local review round, whatever CI and the
+    # bots said (auth, migrations, release scripts — your call).
+    "risk-paths": [],
+    # A diff larger than this many changed lines always gets a local round.
+    "risk-lines": 400,
     # Which review bots the PR review loop waits on, by GitHub username. Read
     # by the github skill's query_pr_state.py, which watches for their :eyes:,
     # their line comments and their approval before a PR is callable.
@@ -228,6 +248,7 @@ ENUMS: dict[str, set[str]] = {
     # a binding gate is in place. A misspelled opt-out fails the other way,
     # writing a line into the body of someone who switched the check off.
     "pre-pr-review": {"warn", "required", "off"},
+    "verification": {"fast", "balanced", "strict"},
     "branch-protection": {"", "applied", "existing", "unavailable", "off"},
 }
 
@@ -247,6 +268,12 @@ READERS = {
     "host-setup": "plugins/core/skills/init/assets/bin/host_setup.sh",
     "pre-pr-review": "plugins/core/skills/init/assets/bin/open_task_pr.sh",
     "review-max-rounds": "plugins/core/skills/init/assets/bin/adversarial_review.sh",
+    "verification": "plugins/core/skills/init/assets/scripts/review_sources.py",
+    "review-budget-min": "plugins/core/skills/init/assets/bin/adversarial_review.sh",
+    "bot-wait-min": "plugins/core/skills/init/assets/scripts/review_sources.py",
+    "bot-triggers": "plugins/core/skills/init/assets/scripts/review_sources.py",
+    "risk-paths": "plugins/core/skills/init/assets/scripts/review_sources.py",
+    "risk-lines": "plugins/core/skills/init/assets/scripts/review_sources.py",
     "review-bots": "plugins/core/skills/github/scripts/query_pr_state.py",
     "listing-budget": "plugins/skill-workshop/skills/skill-workshop/scripts/audit_library.py",
     "queue-automation": "plugins/core/skills/init/scripts/init.py",
@@ -398,6 +425,23 @@ def load(repo_root: Path | None = None) -> tuple[dict[str, Any], dict[str, str]]
             f"review-max-rounds must be an integer >= 1, got "
             f"{values['review-max-rounds']!r} (from {sources['review-max-rounds']})"
         )
+    for key in ("review-budget-min", "bot-wait-min", "risk-lines"):
+        if type(values[key]) is not int or values[key] < 1:
+            raise ConfigError(
+                f"{key} must be an integer >= 1, got {values[key]!r} (from {sources[key]})"
+            )
+    for key in ("risk-paths", "bot-triggers"):
+        if not isinstance(values[key], list) or not all(isinstance(v, str) for v in values[key]):
+            raise ConfigError(
+                f"{key} must be a list of strings, got {values[key]!r} (from {sources[key]})"
+            )
+    for entry in values["bot-triggers"]:
+        login, sep, comment = entry.partition("=")
+        if not sep or not login.strip() or not comment.strip():
+            raise ConfigError(
+                f'bot-triggers entries are "login=comment", got {entry!r} '
+                f"(from {sources['bot-triggers']})"
+            )
     # A list, because that is what it is — and a bare string here would be a
     # comma-separated list nobody told the consumer about. Empty is legal and
     # means "no review bot in this repo"; the reader below documents what that
