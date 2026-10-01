@@ -18,6 +18,13 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [5.0.1] - 2026-10-01
+
+- **Spec/plan readers keep your notes.** Three bugs in the annotatable reader that `create_reader.py` generates are fixed (#477). Regenerate a reader to pick up the fixes:
+  - clearing a note no longer brings the original note back after a reload;
+  - blocked browser storage no longer hides the notes embedded in the reader;
+  - "Copy" reports success only when the copy really happened, and otherwise tells you to select the text and copy it yourself.
+
 ## [5.0.0] - 2026-10-01
 
 Prompts rewritten for the current Claude model generation (Opus 5.5, Sonnet 5.5, Fable 5.1), following Anthropic's prompting guides for those models. Skills do the same jobs with less context and calmer, explained instructions.

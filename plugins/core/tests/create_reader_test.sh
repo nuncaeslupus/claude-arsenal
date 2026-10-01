@@ -316,3 +316,111 @@ if [ -n "$reader_html" ] && [ -f "$reader_html" ]; then
         || fail "a blocked download is not reported to the reviewer"
     echo "PASS: a blocked download is reported, not counted as a backup"
 fi
+
+# --- #477: a cleared note stays cleared, seeds survive blocked storage, and ---
+#     Copy reports success only once a copy happened.
+#     1. save() removed the key for an empty note, so on reload the loader saw
+#        "never touched" and put the seeded note back over a deliberate clear.
+#     2. The seed was applied inside the same try as the storage read, so a
+#        throwing localStorage skipped it and the reader came up empty.
+#     3. modal-copy set ok=true as soon as clipboard.writeText was *called*, so a
+#        rejected write still toasted "Copied to clipboard".
+run_reader --input status/specification.md --output-dir status --name "Widget Overhaul" >/dev/null \
+    || fail "generating a reader for the #477 checks failed"
+r477="${tmp}/status/spec-reader.html"
+grep -q "localStorage.removeItem(k)" "${r477}" \
+    && fail "save() still removes the key for an empty note — a seeded note returns after a clear"
+grep -q "if(v!=null){t.value=v;}" "${r477}" \
+    || fail "the loader no longer lets a stored value override the seed"
+grep -q "writeText(modalTa.value).then(function(){},function(){});ok=true" "${r477}" \
+    && fail "modal-copy reports success before clipboard.writeText settles"
+grep -q "p.then(function(){report(true);},function(){report(false);})" "${r477}" \
+    || fail "modal-copy does not wait on the clipboard promise before reporting"
+echo "PASS: #477 — the generated JS stores cleared notes, seeds first, and waits on the clipboard"
+
+if command -v node >/dev/null 2>&1; then
+    key=$(grep -o 'class="note-ta" data-key="[^"]*"' "${r477}" | head -1 | sed 's/.*data-key="\([^"]*\)"/\1/')
+    [[ -n "${key}" ]] || fail "no note key found in the generated reader"
+    printf '# notes\n\n<!-- SPEC-NOTES-DATA\n{"%s": "seeded note"}\n-->\n' "${key}" > "${tmp}/status/seed-notes.md"
+    run_reader --input status/specification.md --output-dir status --name "Widget Overhaul" \
+        --notes status/seed-notes.md >/dev/null || fail "generating a seeded reader failed"
+    cat > "${tmp}/harness.js" <<'JS'
+// Minimal DOM stub: enough of document/window for the reader's script to run,
+// so the three #477 behaviours are checked by executing them, not by grep.
+const fs = require('fs');
+const [, , file, key] = process.argv;
+const html = fs.readFileSync(file, 'utf8');
+const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1]);
+const keys = [...html.matchAll(/class="note-ta" data-key="([^"]*)"/g)].map(m => m[1]);
+function el() {
+  return { value: '', textContent: '', style: {}, dataset: {}, h: {}, scrollHeight: 0,
+    classList: { add() {}, remove() {}, toggle() {} },
+    addEventListener(t, f) { this.h[t] = f; }, click() { if (this.h.click) this.h.click({}); },
+    select() {}, closest() { return null; }, querySelector() { return null; } };
+}
+function boot(storage, clipboard, execResult) {
+  const byId = {}, toasts = [];
+  const tas = keys.map(k => { const t = el(); t.dataset = { key: k, part: 'P', label: 'L' }; return t; });
+  const document = {
+    querySelectorAll: () => tas,
+    getElementById(id) { if (!byId[id]) byId[id] = el(); return byId[id]; },
+    execCommand: () => { if (execResult === 'throw') throw new Error('no'); return execResult; },
+    createElement: el, body: { appendChild() {} },
+  };
+  const window = { addEventListener() {}, scrollTo() {} };
+  const navigator = clipboard ? { clipboard } : {};
+  const setTimeoutStub = () => 0;  // debounced saves are driven by blur below
+  const toastEl = document.getElementById('toast');
+  Object.defineProperty(toastEl, 'textContent', { set(v) { toasts.push(v); }, get() { return toasts[toasts.length - 1]; } });
+  const src = scripts.join(';\n').replace(/\bvar SPEC_SEED_NOTES\b/, 'SPEC_SEED_NOTES');
+  const fn = new Function('document', 'window', 'navigator', 'localStorage', 'setTimeout', 'clearTimeout',
+    'confirm', 'FileReader', 'Blob', 'URL', 'SPEC_SEED_NOTES', src);
+  fn(document, window, navigator, storage, setTimeoutStub, () => {}, () => true, function () {}, function () {},
+     { createObjectURL() { return ''; }, revokeObjectURL() {} }, undefined);
+  return { tas, byId, toasts, t: tas.find(t => t.dataset.key === key) };
+}
+function memStorage() {
+  const m = new Map();
+  return { getItem: k => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)),
+           removeItem: k => m.delete(k) };
+}
+const throwing = { getItem() { throw new Error('blocked'); }, setItem() { throw new Error('blocked'); },
+                   removeItem() { throw new Error('blocked'); } };
+const fails = [];
+(async () => {
+  // 1. clearing a seeded note survives a reload
+  const store = memStorage();
+  let a = boot(store, null, false);
+  if (a.t.value !== 'seeded note') fails.push('seed not applied with working storage: ' + JSON.stringify(a.t.value));
+  a.t.value = ''; a.t.h.blur();
+  a = boot(store, null, false);
+  if (a.t.value !== '') fails.push('a cleared seeded note came back after reload: ' + JSON.stringify(a.t.value));
+  // 2. blocked storage still shows the seed
+  const b = boot(throwing, null, false);
+  if (b.t.value !== 'seeded note') fails.push('blocked storage dropped the seed: ' + JSON.stringify(b.t.value));
+  // 3. copy: rejected clipboard + failed execCommand -> manual instruction
+  const tick = () => new Promise(r => setImmediate(r));
+  let c = boot(memStorage(), { writeText: () => Promise.reject(new Error('denied')) }, false);
+  c.byId['modal-copy'].click(); await tick();
+  if (c.toasts[c.toasts.length - 1] !== 'Select the text and copy')
+    fails.push('a rejected clipboard write reported: ' + JSON.stringify(c.toasts));
+  // ...and nothing claims success before the promise settles
+  let resolve; c = boot(memStorage(), { writeText: () => new Promise(r => { resolve = r; }) }, false);
+  c.byId['modal-copy'].click();
+  if (c.toasts.includes('Copied to clipboard')) fails.push('copy reported success before writeText resolved');
+  resolve(); await tick();
+  if (c.toasts[c.toasts.length - 1] !== 'Copied to clipboard') fails.push('a fulfilled write did not report success');
+  // legacy execCommand success, no clipboard API
+  c = boot(memStorage(), null, true); c.byId['modal-copy'].click();
+  if (c.toasts[c.toasts.length - 1] !== 'Copied to clipboard') fails.push('execCommand success not reported');
+  // neither path available
+  c = boot(memStorage(), null, 'throw'); c.byId['modal-copy'].click();
+  if (c.toasts[c.toasts.length - 1] !== 'Select the text and copy') fails.push('no copy path did not show the manual instruction');
+  if (fails.length) { console.error(fails.join('\n')); process.exit(1); }
+})().catch(e => { console.error('harness error: ' + e.stack); process.exit(1); });
+JS
+    out=$(node "${tmp}/harness.js" "${r477}" "${key}" 2>&1) || fail "#477 behaviour: ${out}"
+    echo "PASS: #477 — behavioural check (stubbed localStorage/clipboard) under node"
+else
+    echo "SKIP: #477 behavioural check — node not available" >&2
+fi
