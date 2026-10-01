@@ -12,7 +12,7 @@
 **Specification**: `arsenal/project/model-5-5-alignment/spec.md` (revision 2, approved)
 **Author**: imarcos@gmail.com
 **Revision**: 1
-**Status**: draft
+**Status**: approved (2026-10-01, revision 1) — without annotations
 **Revision log**:
 - r1 — first draft
 
