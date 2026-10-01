@@ -66,6 +66,10 @@ import arsenal_config
 # "paused" is reported as skipped (the remedy is the same: one manual command),
 # with the bot's resume command used as the trigger where BOTS names one.
 NOTICES: list[tuple[str, str, str | None]] = [
+    # A bot rewrites its summary comment to say it is working (seen on
+    # CodeRabbit right after a manual trigger); the review is on its way.
+    ("in-progress", r"review in progress by", None),
+    ("in-progress", r"currently processing new changes", None),
     ("rate-limited", r"rate[- ]?limit", None),
     ("rate-limited", r"\bquota\b", None),
     ("rate-limited", r"usage limit", None),
@@ -367,7 +371,7 @@ def classify_bot(
             ts = parse_ts(c.get("updated_at") or c.get("created_at")) or pushed
             notices.append((ts, hit[0], hit[1], f"comment {c.get('id', '?')}"))
     for r in data["reviews"]:
-        if norm((r.get("user") or {}).get("login")) != login:
+        if norm((r.get("user") or r.get("author") or {}).get("login")) != login:
             continue
         hit = match_notice(r.get("body") or "", login)
         if hit:
@@ -379,6 +383,21 @@ def classify_bot(
     triggered = parse_ts(trig.read_text(encoding="utf-8").strip()) if trig.is_file() else None
     triggered_s = triggered.isoformat() if triggered else ""
 
+    if notices:
+        ts, kind, phrase, where = max(notices, key=lambda n: n[0])
+        # Working, by its own account: pending, but on the same clock as silence
+        # (from the later of the notice and the trigger), so a stuck "in
+        # progress" still ends as absent.
+        if kind == "in-progress":
+            since_notice = int((at - max(ts, triggered or ts)).total_seconds() // 60)
+            if since_notice < wait_min:
+                return Verdict(
+                    "pending",
+                    f'"{phrase}" ({where}), {since_notice} of {wait_min} min',
+                    login,
+                    triggered_at=triggered_s,
+                )
+            notices = [n for n in notices if n[1] != "in-progress"]
     if notices:
         ts, kind, phrase, where = max(notices, key=lambda n: n[0])
         if triggered is None or ts > triggered:

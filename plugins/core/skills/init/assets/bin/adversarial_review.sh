@@ -763,7 +763,10 @@ cmd_emit() {
       # does the subtraction. Milliseconds, not the ISO stamp above: that one is
       # for a human reading the packet, and parsing it back portably is a worse
       # trade than one more line.
-      printf 'emitted_ms=%s\n' "$(command -v _arsenal_now_ms >/dev/null 2>&1 && _arsenal_now_ms || echo 0)"; } \
+      printf 'emitted_ms=%s\n' "$(command -v _arsenal_now_ms >/dev/null 2>&1 && _arsenal_now_ms || echo 0)"
+      # The branch's round directory, so `verdict` closes the round on the branch
+      # that emitted it even if the checkout has moved since.
+      printf 'round_dir=%s\n' "${ROUND_ENV%/round.env}"; } \
         > "${META}" || die "could not write ${META}"
 
     # A new packet retires the previous answer — BOTH halves of it. Deleting
@@ -870,7 +873,13 @@ cmd_verdict() {
     # line, or answered about a tree that had already moved reviewed nothing —
     # so the next `emit` is that same round again rather than a follow-up built
     # on an answer nobody gave, and the cap counts reviews rather than attempts.
-    _set_round_paths "${base}"
+    local round_dir
+    round_dir="$(sed -n 's/^round_dir=//p' "${META}")"
+    if [[ -n "${round_dir}" ]]; then
+        ROUND_ENV="${round_dir}/round.env"; ROUNDS_DIR="${round_dir}/rounds"
+    else
+        _set_round_paths "${base}"   # a packet emitted before round_dir was recorded
+    fi
     if mkdir -p "${ROUNDS_DIR}" 2>/dev/null; then
         cp "${REPLY_FILE}" "${ROUNDS_DIR}/round-${round}.md" 2>/dev/null \
             && { printf 'round=%s\n' "${round}"

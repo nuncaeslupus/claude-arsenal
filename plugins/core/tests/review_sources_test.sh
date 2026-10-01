@@ -121,6 +121,24 @@ line "bot:coderabbitai" <<<"${out}" | grep -q 'skipped .*5929979667' \
 ${out}"
 echo "PASS: test_classify_skip_notice_returns_skipped"
 
+# --- test_classify_in_progress_is_pending_then_bounded --------------------------
+# A summary comment rewritten to "review in progress" is pending, on the same
+# clock as silence: still in progress past bot-wait-min ends as absent.
+fx="${tmp}/fx-progress"; fixture "${fx}" "${HEAD}"
+cat > "${fx}/issue_comments.json" <<JSON
+[{"id":7,"user":{"login":"coderabbitai[bot]"},"created_at":"2026-09-30T08:00:00Z",
+  "updated_at":"$(at 2)","body":"<!-- This is an auto-generated comment: review in progress by coderabbit.ai -->\nCurrently processing new changes in this PR."}]
+JSON
+out=$(rs "${fx}" 5) || fail "in-progress fixture: exit $?"
+line "bot:coderabbitai" <<<"${out}" | grep -q "pending" \
+    || fail "a review-in-progress summary must classify pending:
+${out}"
+out=$(rs "${fx}" 40) || fail "stale in-progress fixture: exit $?"
+line "bot:coderabbitai" <<<"${out}" | grep -q "absent" \
+    || fail "in progress past bot-wait-min must end as absent:
+${out}"
+echo "PASS: test_classify_in_progress_is_pending_then_bounded"
+
 # --- test_classify_rate_limit_returns_rate_limited ---------------------------
 config 'review-bots = ["gemini-code-assist[bot]"]'
 fx="${tmp}/fx-limit"; fixture "${fx}" "${HEAD}"
