@@ -107,7 +107,7 @@ dispatches that many workers at once. Run when the queue has open tasks:
      across containers — two containers routinely check out at the same path.
      The vocabulary is closed and the provenance is written to
      `worktree_isolation.why`; an unknown mechanism is refused, not recorded.
-     Do NOT use it for Task-tool subagents: `worker_postcheck.sh` measures that
+     Not for Task-tool subagents: `worker_postcheck.sh` measures that
      case correctly, and a measurement is worth more than an attestation.
 4. For each task line, `bash claude-arsenal/bin/claim_task.sh <task_id>`
    (sequential — each push is atomic):

@@ -108,7 +108,7 @@ CANARY_LINE_REGEX = re.compile(r"^CANARY:.*$", re.MULTILINE)
 # severity. "warn" records them as `style` issues: printed beside warnings and
 # never blocking, even under `--severity warn`, while the shipped tree is being
 # brought to zero. "error" records them as fails.
-STYLE_SEVERITY = "warn"
+STYLE_SEVERITY = "error"
 
 # Built via chr() instead of a literal "../" so the AST self-scan on
 # line 776 does not see this file's own check string as a finding.
