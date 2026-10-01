@@ -17,6 +17,8 @@ them. `claude-arsenal/` is the vendored bundle and never moves.
   notes alongside the next tool call rather than ending the turn on them. Stop only when
   blocked or before a risky or irreversible action. When the request is a question or a
   problem description, the assessment is the deliverable — answer it before changing code.
+- **How often to ask** is `autonomy` in `arsenal/config.toml`: `ask-often` (confirm each step),
+  `ask-when-blocked` (default), `autonomous` (never wait on the user for reversible work).
 - **Reports lead with the outcome.** Add sections (done / not done / questions / next) only
   when they have content, and keep the whole report short.
 - **Batch independent tool calls** into one response; sequence only calls that depend on

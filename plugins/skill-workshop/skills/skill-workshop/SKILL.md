@@ -50,6 +50,15 @@ a unique canary and a negative-control fact, and that the description does not
 overlap a sibling. When a check fails, fix the skill rather than widening the
 rule.
 
+## Model-upgrade mode
+
+When a new model generation's prompting guides are out, or the maintainer asks
+to realign the prompts, follow
+[model-upgrade.md](references/model-upgrade.md): fetch the guides, update the
+rules and checks, audit, then spec, plan, execute and log the run in
+`docs/MODELS.md`. It edits prompts and checks only; the bundle never checks
+which model it runs on.
+
 ## Commands
 
 Scripts live in `${CLAUDE_SKILL_DIR}/scripts/` and need only stdlib plus
@@ -79,6 +88,7 @@ python3 "${CLAUDE_SKILL_DIR}/scripts/validate_memory.py" --root .          # CLA
 - [Refactor cookbook](references/refactor-cookbook.md) — load when splitting, merging, retiring or redirecting skills.
 - [Improvements log](references/improvements-log.md) — load when recording a new gotcha or planning a refactor pass.
 - [Research coverage](references/research-coverage.md) — load when the validator misses a real failure or a deferred rule is questioned.
+- [Model upgrade](references/model-upgrade.md) — load when aligning the prompts with a new model generation.
 - [Bash gate mechanics](references/bash-gate-mechanics.md) — load when a Bash command is blocked for touching a skill folder and the reason is unclear.
 
 ## Gotchas

@@ -2,7 +2,7 @@
 name: init
 description: Sets up claude-arsenal/ in a host repo or registers a workspace (--workspace); safe to re-run. Use when the user wants the arsenal installed, refreshed or a workspace added. Not for adding tasks (queue-add) or resuming work (queue-next).
 user-invocable: true
-argument-hint: "[--repo-path PATH] [--profile NAME] [--sections A,B] [--no-branch-protection] [--workspace NAME] [--root PATH] [--spec PATH] [--plan PATH]"
+argument-hint: "[--repo-path PATH] [--profile NAME] [--sections A,B] [--no-branch-protection] [--interview] [--workspace NAME] [--root PATH] [--spec PATH] [--plan PATH]"
 ---
 
 # init
@@ -37,6 +37,27 @@ Take the answer from the user rather than the file tree: a repo with `.py` files
 not necessarily one whose release process this bundle should advise on. The profile
 is written as an editable `[skills]` table; `--sections workflow,python` names
 sections directly instead.
+
+## Setup interview
+
+On a first install, or when the user asks to redo setup (`/init --interview`), ask
+these in one AskUserQuestion with the defaults first, and let the user skip it. An
+upgrade does not ask again, because the answers are already in `arsenal/config.toml`.
+
+1. How often should a session stop to ask? `ask-when-blocked` (default), `ask-often`,
+   `autonomous`.
+2. How deep should local verification go? `balanced` (default), `fast`, `strict`.
+3. Minutes per review round (10) and minutes to wait on a silent review bot (20)?
+4. Which manual review triggers to post? Offer what `init.py --suggest-bot-triggers`
+   prints for the configured bots.
+
+Pass only what was answered; a skipped question writes nothing and keeps its default:
+
+```bash
+python3 "${CLAUDE_SKILL_DIR}/scripts/init.py" --repo-path . --autonomy autonomous \
+  --verification balanced --review-budget-min 10 --bot-wait-min 20 \
+  --bot-triggers "coderabbitai[bot]=@coderabbitai review"
+```
 
 ## After a first install — questions init prints
 
