@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
-<meta name="arsenal-source-sha256" content="d7d7b95799c0932cccf351736106211db9ffdb6f2c747627944d3eab36c40d10">
+<meta name="arsenal-source-sha256" content="0b2119f47928b0268d86a833b15c621feacd7417d4c0cbb85ad6ff3f0fda1b86">
 <title>Arsenal 5.5 alignment — Plan (annotatable)</title>
 <style>
 :root{
@@ -172,7 +172,7 @@ h4.sec-h{font-size:16.5px;color:var(--fg)}
 <strong>Specification</strong>: <code>arsenal/project/model-5-5-alignment/spec.md</code> (revision 2, § 3 workstream V, § 5–6)
 <strong>Author</strong>: imarcos@gmail.com
 <strong>Revision</strong>: 1
-<strong>Status</strong>: draft
+<strong>Status</strong>: approved (2026-10-01, revision 1) — without annotations
 <strong>Revision log</strong>:
 - r1 — first draft</p>
 <blockquote>
@@ -386,13 +386,76 @@ interview — later PRs. No change to <code>merge-policy</code> semantics.</p></
 </thead>
 <tbody>
 <tr>
-<td></td>
-<td></td>
-<td></td>
-<td></td>
-<td></td>
-<td></td>
-<td></td>
+<td>T1</td>
+<td><code>failed_tests == 0</code></td>
+<td>0</td>
+<td><code>bash plugins/core/tests/arsenal_config_test.sh</code></td>
+<td>PR #476 head</td>
+<td>local</td>
+<td>2026-10-01</td>
+</tr>
+<tr>
+<td>T2</td>
+<td><code>failed_tests == 0</code></td>
+<td>0</td>
+<td><code>bash plugins/core/tests/adversarial_review_test.sh</code></td>
+<td>PR #476 head</td>
+<td>local</td>
+<td>2026-10-01</td>
+</tr>
+<tr>
+<td>T3</td>
+<td><code>failed_tests == 0</code></td>
+<td>0</td>
+<td><code>bash plugins/core/tests/adversarial_review_test.sh</code></td>
+<td>PR #476 head</td>
+<td>local</td>
+<td>2026-10-01</td>
+</tr>
+<tr>
+<td>T4</td>
+<td><code>failed_tests == 0</code></td>
+<td>0</td>
+<td><code>bash plugins/core/tests/review_sources_test.sh</code></td>
+<td>PR #476 head</td>
+<td>local</td>
+<td>2026-10-01</td>
+</tr>
+<tr>
+<td>T5</td>
+<td><code>failed_tests == 0</code></td>
+<td>0</td>
+<td><code>bash plugins/core/tests/review_sources_test.sh</code></td>
+<td>PR #476 head</td>
+<td>local</td>
+<td>2026-10-01</td>
+</tr>
+<tr>
+<td>T6</td>
+<td><code>failed_tests == 0</code></td>
+<td>0</td>
+<td><code>bash plugins/core/tests/fast_gate_test.sh</code></td>
+<td>PR #476 head</td>
+<td>local</td>
+<td>2026-10-01</td>
+</tr>
+<tr>
+<td>T7</td>
+<td><code>review_snippet_homes == 1</code></td>
+<td>1</td>
+<td><code>bash plugins/core/tests/bundle_refs_test.sh</code></td>
+<td>PR #476 head</td>
+<td>local</td>
+<td>2026-10-01</td>
+</tr>
+<tr>
+<td>T8</td>
+<td><code>failed_tests == 0</code></td>
+<td>0</td>
+<td><code>make test</code></td>
+<td>PR #476 head</td>
+<td>local</td>
+<td>2026-10-01</td>
 </tr>
 </tbody>
 </table></div>
@@ -411,9 +474,10 @@ interview — later PRs. No change to <code>merge-policy</code> semantics.</p></
 <article class="sec" id="s-plan-sign-off">
 <h3 class="sec-h"><span class="chip">▸</span><span class="sec-title">Sign-off</span></h3>
 <div class="sec-body"><ul>
-<li>[ ] Plan reviewed by maintainer</li>
-<li>[ ] Ready for execution</li>
-</ul></div>
+<li>[x] Plan reviewed by maintainer</li>
+<li>[x] Ready for execution</li>
+</ul>
+<p>T8 note: the incident replay is covered by three tests rather than one fixture — rounds across two base moves (<code>adversarial_review_test.sh</code>), bot wait ending (<code>review_sources_test.sh</code>), one full gate per tree (<code>fast_gate_test.sh</code>).</p></div>
 <div class="note" data-for="s-plan-sign-off"><div class="note-head"><span class="note-ico">✎</span><span class="note-label">Your note</span><span class="note-ref">PLAN › Sign-off</span></div><textarea class="note-ta" data-key="s-plan-sign-off" data-label="Sign-off" data-part="Plan" rows="1" placeholder="Tap to add a note for this point…"></textarea></div>
 </article>
 </section>
