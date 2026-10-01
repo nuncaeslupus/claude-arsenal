@@ -351,6 +351,11 @@ grep -qi "could not commit" <<<"${out}" \
     || fail "the run should have reached the commit, which is past the gate: ${out}"
 [[ -f "arsenal/tasks/t-drift.md" ]] \
     || fail "the refused commit left the task file archived: it must be restored"
+#     The pass left a receipt for the tree the commit would carry (fast_gate.sh
+#     --as-committed), so a merge-time --full over that head reuses it.
+grep -qx 'gate=test ! -e arsenal/tasks/t-drift.md' tmp/arsenal-gate/receipts/* 2>/dev/null \
+    || fail "a passing host gate should leave a tree receipt: $(ls -R tmp/arsenal-gate 2>&1)"
+rm -rf tmp/arsenal-gate
 git checkout -q main 2>/dev/null || true
 echo "PASS: a gate whose measurement the archive changes is satisfiable"
 

@@ -62,4 +62,41 @@ run >/dev/null; rc=$?
 (( rc == 7 )) || fail "a failing gate's exit must pass up, got ${rc}"
 echo "PASS: nothing declared is gate: none; a failure keeps its exit"
 
+# --- gate receipt: the full gate runs at most once per tree ------------------
+counter="${tmp}/counter"
+cfg "host-gate = \"echo x >> ${counter}\""
+commit_all() { (cd "${repo}" && git add -A && git commit -qm "$1") || fail "commit: $1"; }
+commit_all "receipt fixture"
+runs() { [[ -f "${counter}" ]] && grep -c . "${counter}" || echo 0; }
+
+test_full_gate_twice_same_tree_runs_once() {
+    : > "${counter}"
+    out=$(run --full) || fail "first --full should pass: ${out}"
+    [[ "$(runs)" == 1 ]] || fail "first --full should run the gate once, ran $(runs)"
+    out=$(run --full) || fail "second --full should pass: ${out}"
+    [[ "${out}" == *"host-gate passed on this tree at "*" — reused"* ]] \
+        || fail "second --full on the same clean tree should say reused: ${out}"
+    [[ "$(runs)" == 1 ]] || fail "second --full re-ran the gate (counter $(runs))"
+    [[ -z "$(git -C "${repo}" status --porcelain)" ]] || fail "the receipt dirtied the tree"
+    echo "PASS: test_full_gate_twice_same_tree_runs_once"
+}
+
+test_receipt_ignored_after_edit() {
+    : > "${counter}"
+    printf 'edit\n' >> "${repo}/kept.txt"
+    out=$(run --full) || fail "--full on a dirty tree should pass: ${out}"
+    [[ "${out}" != *reused* && "$(runs)" == 1 ]] || fail "a dirty tree must run the gate: ${out}"
+    commit_all "edit"
+    out=$(run --full) || fail "--full after the edit should pass: ${out}"
+    [[ "${out}" != *reused* && "$(runs)" == 2 ]] || fail "a new tree must run the gate: ${out}"
+    cfg "host-gate = \"echo y >> ${counter}\""; commit_all "other gate"
+    out=$(run --full) || fail "gate change, first run: ${out}"
+    out=$(run --full) || fail "gate change, second run: ${out}"
+    [[ "${out}" == *reused* && "$(runs)" == 3 ]] || fail "a changed gate command must run once, then reuse: ${out}"
+    echo "PASS: test_receipt_ignored_after_edit"
+}
+
+test_full_gate_twice_same_tree_runs_once
+test_receipt_ignored_after_edit
+
 echo "PASS: fast_gate_test"

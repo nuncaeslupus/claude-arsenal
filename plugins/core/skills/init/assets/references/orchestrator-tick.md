@@ -89,10 +89,9 @@ Merge only when **all** of these hold:
 - **The task is not held.** No `arsenal:hold` label, no unresolved blocker on its
   issue.
 - **Every review thread is resolved.** Not "addressed in a later commit" — resolved.
-- **You ran the host gate yourself and saw exit 0.** Not the worker's report of it.
-  A worker saying its gate passed is a claim; the orchestrator running the gate is
-  the evidence. This is the precondition most likely to be quietly dropped at 3am,
-  and it is the one the whole arrangement rests on.
+- **The head passed the gate** — CI green on its SHA (`merge_ready.sh`), or
+  `fast_gate.sh --full`, which reuses a receipt for the head tree. A worker's
+  report is not evidence. `strict` needs the local run even with CI green.
 
 `merge-policy` in `arsenal/config.toml` may require more (a human review, CI). It
 never requires less. Read it each tick rather than remembering it — it is a host

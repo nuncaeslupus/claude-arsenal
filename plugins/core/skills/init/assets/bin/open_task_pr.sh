@@ -912,10 +912,17 @@ fi
 # and for a task worked from a payload elsewhere, and gating on it would leave
 # those two cases running no host gate at all — a skip, in the one check the
 # script says has deliberately no way to skip it.
+# Through fast_gate.sh --full --as-committed when it is installed: same command,
+# same root, but a pass leaves a receipt keyed by the tree this commit will
+# carry, so a re-run over that tree — here, or at merge — reuses it instead of
+# paying for the suite again. Failure handling below is unchanged.
 _phase host-gate
 if [[ -n "${host_gate}" ]]; then
     echo "open_task_pr: running host gate over the tree being committed: ${host_gate}" >&2
-    if ! bash -c "${host_gate}" >&2; then
+    _host_gate_cmd=(bash -c "${host_gate}")
+    [[ -f "${SCRIPT_DIR}/fast_gate.sh" ]] \
+        && _host_gate_cmd=(bash "${SCRIPT_DIR}/fast_gate.sh" --full --as-committed)
+    if ! "${_host_gate_cmd[@]}" >&2; then
         # Say which of the two happened. Claiming the restoration unconditionally
         # told a reader the tree was back the way it started in exactly the case
         # where it is not, and that is the case where they have to act.
