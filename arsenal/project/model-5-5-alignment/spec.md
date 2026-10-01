@@ -1,12 +1,13 @@
 # Specification: Align arsenal with the Claude 5.5 model generation
 
 **Date**: 2026-10-01
-**Ticket / PR**: — (opened with this spec)
+**Ticket / PR**: #476
 **Author**: imarcos@gmail.com
-**Revision**: 1
+**Revision**: 2
 **Status**: draft
 **Revision log**:
 - r1 — first draft, from a three-way audit of the shipped tree against Anthropic's 5.5-generation prompting guides
+- r2 — applied `arsenal-5-5-alignment-spec-notes-2026-10-01-r1.md`: Option C chosen; verification redesign promoted to workstream V and shipped first; model-upgrade meta-skill (workstream U); reference-file usage rule; research addendum; task short labels; setup interview; per-skill effort/model; canaries kept plus a load hook; target 5.0.0
 
 > Review record. Each round of reviewer notes makes a new revision: bump
 > **Revision**, add a log line naming the export it applied, and commit that
@@ -17,142 +18,187 @@
 
 ## 1. Problem statement
 
-Arsenal's shipped prompts (the vendored `AGENTS.md`, 23 `SKILL.md` bodies, the
-`worker`/`reviewer` agent definitions and ~50 references) were written for the
-Opus 4.x / Opus 5 generation. Anthropic's guides for the current generation
-(Opus 5.5, Sonnet 5.5, Fable 5.1) say those models already self-verify, delegate
-readily, follow instructions literally, and finish long work when told the scope —
-so prompts tuned for older models now cost tokens and, in places, steer the model
-wrong: three stacked adversarial-review gates (execution, github, ship), a
-mandatory re-verification pass in `repo-audit`, review rubrics that filter
-findings at report time, emphatic MUST/NEVER phrasing, model names that go stale,
-and no finish-the-task / scope language in the skills that run unattended. On top
-of that, the audit found ~65k characters of duplicated rules, incident history and
-rationale that a model executing a step does not need — ~5.5k of it in the resident
-`AGENTS.md`, paid on every turn of every consumer session.
+Four problems, one release:
 
-The goal is to make every shipped prompt match the 5.5-generation guidance, make
-the rubric enforce it mechanically so it does not drift back, and cut context cost
-— without changing what any skill does for a consumer.
+1. **Prompts tuned for older models.** The shipped prompts (vendored `AGENTS.md`, 23 `SKILL.md` bodies, the `worker`/`reviewer` agents, ~50 references) predate the current generation (Opus 5.5, Sonnet 5.5, Fable 5.1). Those models self-verify, delegate readily, follow instructions literally and finish long work when told the scope. Prompts written for older models now waste tokens and in places steer them wrong: ritual re-checks, review rubrics that filter at report time, CAPS emphasis, stale model names, no finish-the-task or scope language in unattended skills.
+2. **Verification never ends.** One PR took 8 adversarial reviews of ~40 min each. Measured causes (file:line in § 2): the reviewer has no time limit and may run tests and mutations; the round counter resets on every rebase or base merge; four skills each start their own review cycle; the post-PR bot loop has no timeout, so a bot that skipped, is rate-limited or unpaid is waited on forever; the full suite runs at 3–4 points per PR on top of CI. Nothing detects which external checks (CI, review bots) are actually working, so local checks never stand down when external ones cover the change, and never step in cleanly when they fail.
+3. **Context cost.** ~65k chars of duplicated rules, incident history and rationale the executing model does not need; ~5.5k of it in the resident `AGENTS.md`, paid on every turn of every consumer session. Some references are loaded on every invocation, so splitting them out of `SKILL.md` saved nothing.
+4. **No repeatable upgrade path.** This review was done by hand. The next model generation needs the same process — read the newest guides, update the rules, audit, fix — run by a tool, with `skill-workshop` at the centre, since it is what validates every skill.
 
-**Source guidance** (fetched 2026-10-01): Prompting Claude Opus 5.5, Prompting
-Claude Opus 5, Prompting Claude Sonnet 5.5, Prompting Claude Fable 5.1, Prompting
-best practices — all under `platform.claude.com/docs/en/build-with-claude/prompt-engineering/`.
-Distilled into the G-rules in § 3 Option B, which become a shipped reference.
+Plus two maintainer-facing gaps: task IDs (`t-0663f708`) appear in outputs and questions without a readable label, and there is no setup interview for how much a session should ask, how strict verification should be, or which effort levels to use.
+
+**Source guidance** (fetched 2026-10-01): Prompting Claude Opus 5.5, Opus 5, Sonnet 5.5, Fable 5.1 and Prompting best practices (`platform.claude.com/docs/en/build-with-claude/prompt-engineering/`); Claude Code skills, sub-agents and hooks docs (`code.claude.com/docs/en/`).
 
 **Success criteria (measurable)**:
 
-- [ ] `resident_tokens_minimal <= 3600` (from 4162; `make context-budget`, `minimal` row)
-- [ ] `agents_md_tokens <= 2700` (from 3745; same report)
-- [ ] `sum(on_invocation_tokens, all SKILL.md) <= 0.80 * baseline` (baseline recorded from `make context-budget` before the first PR)
-- [ ] `reviewer.md` chars `<= 0.75 * 11361` (it is embedded in every review packet)
-- [ ] `validate.py` new `content.style-*` checks: 0 warnings on the shipped tree, `skill-workshop` included (its blanket exemption narrowed)
-- [ ] ALL-CAPS emphasis tokens (`MUST|NEVER|ALWAYS|CRITICAL|IMPORTANT|Do NOT`) in shipped `.md`: `<= 15` (from 67), each with its reason in the same sentence
-- [ ] hard-coded model names/ids in shipped prose and code: 0, outside `docs/MODELS.md` and `CHANGELOG.md`
-- [ ] exactly one home for the adversarial-review protocol; the other skills point to it (grep for the emit/spawn/verdict snippet: 1 hit)
-- [ ] `make check` (lint, tests, audit, sync-version-check, queue-doctor, audit-rule-drift) green on every PR
-- [ ] behaviour unchanged: every existing test passes without editing its assertions, except tests that pin removed prose
-- [ ] no consumer-facing "unsupported model" message anywhere (grep `not prepared|unsupported model|upgrade arsenal`: 0)
+*Verification (V)*
+- [ ] review rounds per PR `<= 2` (one full, one follow-up for BLOCKERs only); the counter is keyed to the PR/branch and survives rebases and base merges
+- [ ] every reviewer round carries a wall-clock budget (default 10 min) and a test budget (targeted tests only; no full suite, no mutation runs unless the profile is `strict`)
+- [ ] full-suite runs per head tree `<= 1` locally: `host-gate` writes a receipt keyed by tree hash, and later steps (orchestrator, ship, `fast_gate --full`) reuse it
+- [ ] local full suite skipped when CI is detected healthy and will run on the head (profile `fast`/`balanced`)
+- [ ] bot wait bounded: after `bot-wait` (default 20 min) with no response, one manual trigger (e.g. a mention command) is sent where the bot supports it; still nothing → bot marked unavailable for this PR and the local fallback review runs
+- [ ] `review_sources.py` reports each source (CI, each review bot) as `ok | skipped | rate-limited | absent` with the evidence line, and has tests for skip notices, rate-limit notices and silence
+- [ ] replaying the incident scenario in a test fixture (rebase ×3, silent bot, no preflight gate): total review rounds `<= 2`, bot wait ends, full suite runs once per tree
+
+*Prompts and context (P)*
+- [ ] `resident_tokens_minimal <= 3600` (from 4162); `agents_md_tokens <= 2700` (from 3745)
+- [ ] `sum(on_invocation_tokens) <= 0.80 * baseline`; `reviewer.md` `<= 0.75 * 11361` chars
+- [ ] `validate.py` `content.style-*` checks: 0 warnings on the shipped tree, `skill-workshop` included
+- [ ] ALL-CAPS emphasis tokens in shipped `.md`: `<= 15` (from 67), each with its reason
+- [ ] hard-coded model names in shipped prose and code: 0 outside `docs/MODELS.md`, `CHANGELOG.md` and config examples that are tier aliases
+- [ ] every reference link in a `SKILL.md` has a conditional "load when" trigger; a reference loaded unconditionally is inlined or the skill is shrunk (`content.ref-unconditional`: 0)
+
+*Upgrade path (U) and usability*
+- [ ] `skill-workshop` `model-upgrade` mode runs end to end on a dry run: fetches guides, diffs them against `model-prompting.md`, lists rule changes, runs the audit, writes a spec through `specify`
+- [ ] research addendum exists and `audit-rule-drift` reads v1.17 plus the addendum
+- [ ] every task mention in skill output and questions shows its short label: `query_status.py` / `task_select.py` print `<label> (t-xxxx)`; task files carry `label:` (≤ 5 words)
+- [ ] `/init` interview writes `autonomy`, `verification` and `effort` keys; defaults apply when skipped
+- [ ] `make check` green on every PR; existing tests pass without editing their assertions, except tests pinning removed prose
+- [ ] no consumer-facing "unsupported model" message (grep: 0)
 
 ## 2. Systems & Impact
 
 | System | Type | Role | Needs changes? | Impact | Severity |
 |--------|------|------|----------------|--------|----------|
-| `init/assets/AGENTS.md` | Primary | Resident protocol in every consumer session | Yes | −~1k tokens per turn; history/rationale moved to references | High |
-| `init/assets/agents/{worker,reviewer}.md` | Primary | Dispatched agent prompts; reviewer is embedded in every packet | Yes | Scope/finish language added; report-all-with-severity; dedup | High |
-| `core/skills/*/SKILL.md` (20) | Primary | On-invocation prompts + resident descriptions | Yes | Calmer phrasing, dedup, heavy sections to references, shorter descriptions | Medium |
-| `init/assets/references/*` | Dependent | On-demand detail | Yes | Receive moved content; tuning sections consolidated | Low |
-| `skill-workshop` (rubric, `validate.py`, SKILL.md) | Primary | Enforces prompt quality on every skill | Yes | New `R-STYLE-*` / `Q-*` rows + regex checks; outdated rows reworded | High |
-| `repo-audit` | Primary | Multi-agent audit skill | Yes | Fan-out sized to repo; drop mandatory re-verify pass; no model menu | Medium |
-| `init/assets/bin/adversarial_review.sh` | Dependent | Builds review packets | Yes | Shorter error text; packet carries follow-up scope only | Low |
-| `scripts/arsenal_config.py`, `docs/fleet.md` | Dependent | `models.*` defaults | Yes | Example ids updated; defaults stay tier aliases | Low |
-| `docs/research/claude-skill-system_v1.17.md` | Shared resource | Rubric source of truth for `audit-rule-drift` | Validation | New rows need `research-coverage.md` entries; archive itself untouched | Medium |
-| Consumer repos | Client | Re-vendor on update | No action | Same skills, same flags; smaller context; changelog entry explains | Low |
+| `bin/adversarial_review.sh` | Primary | Review rounds | Yes | Counter keyed to PR/branch (today reset on base change, l.508-521); time budget in packet | High |
+| `agents/reviewer.md` | Primary | Reviewer prompt, embedded in every packet | Yes | No full-suite/mutation runs by default (today l.98-105, 181-185); report all with severity; −25 % | High |
+| `github` / `pr-review-loop.md`, `query_pr_state.py` | Primary | Post-PR bot loop | Yes | Bot-wait timeout, manual trigger, availability states (today: no timeout, waits forever) | High |
+| new `review_sources.py` | Primary | Detect CI and bot health per PR | New | Reads checks, bot comments (skip / rate-limit notices), past-PR activity | High |
+| `open_task_pr.sh`, `fast_gate.sh`, `orchestrator-tick.md`, `ship` | Dependent | Full-suite call sites | Yes | Reuse the tree-hash receipt instead of re-running (today 3–4 runs per PR) | High |
+| `execution`, `github`, `ship`, `worker.md` | Dependent | Four separate review call sites | Yes | One protocol in `pre-pr-review.md`; callers point to it | Medium |
+| `scripts/arsenal_config.py` | Shared resource | Config keys + `CONSUMER` map | Yes | New `verification`, `autonomy`, `effort`, `bot-wait`, `review-budget-min` keys; `config_keys_test.sh` | Medium |
+| `init/assets/AGENTS.md` | Primary | Resident protocol | Yes | −~1k tokens/turn; task-label rule; outcome-first reports | High |
+| `core/skills/*/SKILL.md` (20) | Primary | Skill prompts + resident descriptions | Yes | Calmer, deduplicated; `effort:` frontmatter where it pays | Medium |
+| `skill-workshop` (rubric, `validate.py`, SKILL.md) | Primary | Validation of every skill | Yes | New style/ref rules; `model-upgrade` mode; narrower self-exemption | High |
+| `docs/research/` | Shared resource | Rubric source for `audit-rule-drift` | Yes | v1.17 kept; addendum added; drift script reads both | Medium |
+| `query_status.py`, `task_select.py`, task template | Dependent | Board and task output | Yes | `label:` field; `<label> (t-id)` everywhere | Low |
+| `repo-audit` | Primary | Multi-agent audit | Yes | Fan-out sized to repo; no mandatory re-verify; no model menu | Medium |
+| Consumer repos | Client | Re-vendor on update | Config migrates with defaults | Faster PRs, smaller context; 5.0.0 CHANGELOG entry | Medium |
 
-**Risk of inaction**: every consumer turn keeps paying ~1k avoidable resident
-tokens; unattended workers keep the old early-stop and over-verify habits; the
-review gate runs up to three times per change.
+**Risk of inaction**: PRs keep stalling in review loops (measured: 8 × 40 min on one PR); every consumer turn keeps paying ~1k avoidable tokens; the next model generation repeats this manual review.
 
 ## 3. Options
 
 ### Option A: Resident-tier trim only (Conservative)
 
-- **Description**: Rewrite `AGENTS.md`, `worker.md`, `reviewer.md` and the skill descriptions against the guidance. Leave SKILL bodies, rubric and references alone.
+- **Description**: Rewrite `AGENTS.md`, `worker.md`, `reviewer.md` and the descriptions against the guidance.
 - **Scope**: 3 files + 20 frontmatter blocks.
-- **Effort**: Small (1 PR).
-- **Tradeoffs**: Gets most of the per-turn saving. Nothing stops the old patterns coming back; triple review gate and `repo-audit` misalignments stay.
-- **Compatibility**: Fully compatible.
+- **Effort**: Small.
+- **Tradeoffs**: Most of the per-turn saving. Leaves the verification loop as is, and nothing stops drift.
+- **Compatibility**: Full.
 
-### Option B: Codify, enforce, then rewrite in tiers (Recommended)
+### Option B: Codify, enforce, rewrite in tiers
 
-- **Description**: (1) Ship the guidance as a rubric and a scanner first, so every later PR is checked by it. (2) Rewrite the shipped tree tier by tier — resident, agents, SKILL bodies, references — deduplicating as it goes. (3) Add a model-compatibility log. Never a runtime model check.
-- **Scope**: whole shipped tree, in 5 stacked PRs (§ 4).
+- **Description**: Guidance shipped as rules and scanner checks; the tree rewritten tier by tier; a compatibility log.
+- **Scope**: Whole shipped tree.
 - **Effort**: Large.
-- **Tradeoffs**: Most work; the scanner adds a small maintenance surface. Pays back on every future skill edit.
-- **Compatibility**: No interface change. Minor bump (`4.26.0`) on the last PR.
+- **Tradeoffs**: Fixes the prompts durably, but treats verification as prompt text only. The incident's causes are in scripts (counter reset, no timeout, repeated full suites).
+- **Compatibility**: Full.
 
-**The G-rules** (what "aligned" means; shipped as `skill-workshop/references/model-prompting.md`, load when writing or reviewing prompt text):
+### Option C: B + verification redesign + upgrade tooling (Chosen, r2)
+
+- **Description**: B, plus workstream V (verification is detected, budgeted and done once), workstream U (`model-upgrade` mode, research addendum), the setup interview, per-skill effort and task labels.
+- **Scope**: B + review scripts, config, `skill-workshop`, `/init`.
+- **Effort**: Large+.
+- **Tradeoffs**: Most work. Adds config keys and one detection script. Fixes the problem the maintainer ranks first.
+- **Compatibility**: New config keys with defaults; review behaviour changes (fewer rounds) → **5.0.0**.
+
+**Workstream V — verification, designed:**
+
+1. **Detect** (`review_sources.py`, run once per PR, cached per head): CI = workflows exist and a run reported on the head or the base recently; each bot = configured in `review-bots` *and* active on recent PRs. Per PR it classifies each source from evidence: `ok` (reviewed this head), `skipped` (a skip notice, e.g. a bot that does not auto-review small repos), `rate-limited` (a limit notice), `absent` (silence past `bot-wait`). Each state names its next action.
+2. **Decide** (one policy, the `verification` profile: `fast | balanced | strict`, default `balanced`):
+
+   | External coverage on this PR | `balanced` local action |
+   |---|---|
+   | CI `ok` and a bot `ok` | no local adversarial round unless the diff is high-risk (security paths, migrations, > N lines) |
+   | CI `ok`, bots `skipped`/`rate-limited`/`absent` | one local round on the diff, targeted tests only |
+   | CI absent or broken | one local round + one local full suite, receipt recorded |
+   | docs-/config-only diff | no adversarial round in any profile but `strict` |
+
+3. **Budget**: `review-max-rounds` default 2, counted per PR/branch and kept across rebases; follow-up round only for BLOCKERs. Each round's packet states its time budget (`review-budget-min`, default 10) as an elapsed/budget line (Anthropic reports agents pace to such lines); the orchestrator keeps a hard timeout at 2× the budget. The reviewer reads gate receipts and runs at most targeted tests; mutation testing only under `strict`.
+4. **Run tests once**: `host-gate` writes a receipt keyed by tree hash; `open_task_pr`, the orchestrator, `ship` and `fast_gate --full` reuse it while the tree is unchanged. With CI healthy, the local full suite is skipped in `fast`/`balanced`.
+5. **Bounded bot loop**: wait at most `bot-wait` (default 20 min); then send the bot's manual trigger once, where `review-bots` declares one; still nothing → `absent` for this PR, run the fallback row above, continue. The loop ends after the final state is reached, never on silence alone.
+6. **Coherence**: session, workers and reviewers read the same `verification` block; the packet carries the profile and remaining budget, and the reviewer prompt says rounds are the orchestrator's decision, not the reviewer's. Workers never start rounds of their own.
+
+**Workstream U — next model generation:**
+
+- `skill-workshop` gets a `model-upgrade` mode (no consumer cost; skill-workshop is not vendored): fetch the newest prompting guides → diff against `references/model-prompting.md` → propose rule and scanner changes → run the three-part audit (resident, agents/skills, workshop/docs) → write the spec through `specify` → hand off to `design`. This revision is its first run, recorded as the worked example.
+- `docs/research/claude-skill-system_v1.17.md` stays frozen. New findings go to `docs/research/addendum-YYYY-MM.md` (first: this generation's guidance and the reference-usage rule); `audit_rule_drift.py` reads both.
+- `docs/MODELS.md`: maintainer log of which generation the prompts were aligned with, when, and from which guides. Nothing reads it at runtime.
+
+**G-rules** (the alignment target; shipped as `skill-workshop/references/model-prompting.md`, loaded when writing or reviewing prompt text):
 
 | ID | Rule | Enforced by |
 |----|------|-------------|
-| G1 | Effort controls thinking. No "think carefully / step by step"; never ask for reasoning in the response (invites `reasoning_extraction` refusals). | R-STYLE-3 |
-| G2 | No ritual re-checks ("double-check", "re-verify", "final verification step", "subagent to verify"). Code changes still need one **real** check — tests, typecheck, build or the command itself; if none can run, say which and why. | R-STYLE-4, Q-PROC-1 reworded |
-| G3 | Deliver what was asked at the intended scope. Pre-existing bugs and unrequested cleanup/docs/tests are follow-ups in the summary. Ambiguity: take the reading the wording supports and state it. | Q-SCOPE-1 |
-| G4 | Unattended runs finish the task: no "Next I'll…" endings, no "Shall I…?" for requested reversible work, status notes go with the next tool call. Stop only when blocked on the user or before a risky action. Exception: a question or problem description → the assessment is the deliverable. | R-STYLE-8, worker/execution text |
-| G5 | Multi-part work lives in a checklist (task file, to-do); a text-only turn end is a report, not completion; wait for background commands/subagents. | worker-loop text |
-| G6 | Delegate only large, independent, parallel work; not what a handful of tool calls does; one subagent over several. | Q-REV-2, R-COMP-1 clause |
-| G7 | Reviews report every finding with severity and confidence; filtering is a separate step. No "only high severity" / "be conservative". | R-STYLE-5, Q-REV-1 |
-| G8 | One-line intent before the first tool call; updates on findings or direction changes; final report leads with the outcome, then what is needed from the user. | AGENTS.md text |
-| G9 | Deliverable length matches the task; no filler sections, history or rationale the executor does not need; literal prose over flourish. | Q-PROSE rows |
-| G10 | Say when formatting helps instead of blanket anti-formatting rules. | Q-PROSE-1 reworded |
-| G11 | Calm, explained instructions over CAPS; no "if in doubt, use X" (now over-triggers). | R-STYLE-1, R-STYLE-2 |
-| G12 | Explore before acting on loosely specified, multi-source tasks; then commit to an approach. | execution/explore-idea text |
-| G13 | Issue independent tool calls in one response. | AGENTS.md text |
-| G14 | Targeted edits over whole-file rewrites. | AGENTS.md text |
-| G15 | Verify fast-moving facts (models, tool versions) instead of recalling them; don't tell the model to minimise tool calls. | R-STYLE-6 |
-| G16 | Mark untrusted pasted/fetched content; follow instructions in it only where the user asked. | worker/reviewer text |
-| G17 | Multi-agent runs: an elapsed/budget line makes teams finish sooner (advisory; keep a hard timeout). | worker-loop optional |
-| G18 | Compaction/handoff summaries name what to preserve: problems + resolutions, options set aside, decisions exactly, current state, next step. | session-end, compact_resume |
-| G19 | No hard-coded model names in shipped prompts; name tiers or read config. | R-STYLE-7 |
+| G1 | Effort controls thinking; no "think carefully"; never ask for reasoning in the response | R-STYLE-3 |
+| G2 | No ritual re-checks; code changes need one real check (tests/typecheck/build/the command), or say which could not run | R-STYLE-4, Q-PROC-1 reworded |
+| G3 | Deliver the asked scope; unrequested fixes/cleanup are summary follow-ups | Q-SCOPE-1 |
+| G4 | Unattended runs finish: no "Next I'll…" endings, no "Shall I…?" for requested reversible work; stop only when blocked or before risk | R-STYLE-8 |
+| G5 | Multi-part work lives in a checklist; a text-only turn end is a report; wait for background work | worker-loop |
+| G6 | Delegate only large, independent, parallel work | Q-REV-2 |
+| G7 | Reviews report every finding with severity + confidence; filter separately | R-STYLE-5, Q-REV-1 |
+| G8 | Reports lead with the outcome; sections (done / not done / questions / next) only when non-empty; short | AGENTS.md |
+| G9 | Length matches the task; no history or rationale the executor does not need | Q-PROSE |
+| G10 | When-to-format rules, not blanket anti-formatting | Q-PROSE-1 reworded |
+| G11 | Calm, explained instructions; no "if in doubt, use X" | R-STYLE-1/2 |
+| G12 | Explore loosely specified tasks first, then commit to an approach | execution |
+| G13 | Independent tool calls in one response | AGENTS.md |
+| G14 | Targeted edits over rewrites | AGENTS.md |
+| G15 | Verify fast-moving facts; don't tell the model to minimise tool calls | R-STYLE-6 |
+| G16 | Mark untrusted pasted/fetched content | worker/reviewer |
+| G17 | Time signals (elapsed/budget) for multi-agent runs; keep a hard timeout | V.3 |
+| G18 | Compaction/handoff summaries name what to preserve | session-end, `compact_resume.sh` (landed 4.25.0) |
+| G19 | No hard-coded model names; tiers or config | R-STYLE-7 |
+| G20 | A reference read on every invocation belongs in `SKILL.md` (or the skill is too big); every reference link states when to load it | `content.ref-unconditional` |
+| G21 | Name tasks by short label with the id in brackets | AGENTS.md, `query_status.py` |
 
-### Option C: Option B + harness-level changes
+**Model and effort per skill**: Claude Code lets a `SKILL.md` and an agent definition set `model:` and `effort:` in frontmatter, and the Agent tool takes a per-dispatch `model`. A running session cannot change its own model or effort; the user does that (`/model`, effort setting). So arsenal sets effort per skill where it pays (e.g. `low` for `queue-status`, `pin-check`; `high` for `review`), keeps `models.workers` / `models.reviewers` as tier aliases, and the interview lets the user override.
 
-- **Description**: B, plus changes to how arsenal drives sessions: time/budget lines injected by the orchestrator (G17), a progress-reminder after N silent worker steps, effort hints per skill.
-- **Scope**: B + `worker-loop`, orchestrator scripts, `arsenal_config.py`.
-- **Effort**: Large+.
-- **Tradeoffs**: Real gains for fleet runs, but Claude Code owns effort and turn-scoped messages; arsenal can only approximate them in prose, and they need measurement on real fleets first.
-- **Compatibility**: New config keys.
+**Setup interview** (`/init`, skippable, defaults shown): `autonomy` = `ask-when-blocked` (alternatives `ask-often`, `autonomous`); `verification` = `balanced`; `effort` = per-skill defaults or one override; `review-budget-min` = 10; `bot-wait` = 20. Written to arsenal config; every key already has a default, so existing consumers need no action.
+
+**Canaries**: kept. A `PostToolUse` hook on the `Skill` tool (the mechanism `skill-workshop` already uses) records each load, so loading verification no longer depends on the model echoing the canary.
 
 ### Comparison
 
 | | Option A | Option B | Option C |
 |---|---|---|---|
 | Effort | S | L | L+ |
-| Risk | Low | Low–Med | Med |
-| Completeness | Resident only | Whole tree + enforcement | B + harness |
-| Compatibility | Full | Full | New keys |
-| Maintenance | Drifts back | Scanner holds the line | Scanner + harness code |
+| Fixes the review loop | No | Prose only | Yes, in scripts |
+| Prevents drift | No | Scanner | Scanner + upgrade mode |
+| Compatibility | Full | Full | New keys, defaults; 5.0.0 |
 
 ## 4. Recommendation
 
-**Recommended option**: Option B. It is the only one that keeps the result — the
-scanner turns the guidance into a build failure rather than a memory. C's harness
-items go to follow-up tasks once B ships and a fleet run can measure them.
+**Chosen option**: C (maintainer, r1 notes).
 
-**PR stack** (stacked from the start; only PR 5 bumps `.bundle-version`):
+**Delivery** — V first, because PRs are stalling now:
 
-1. **Codify.** `references/model-prompting.md` (G-table above, with the source links); `R-STYLE-1…8` in `skill-rules.md`, `Q-REV-1/2`, `Q-SCOPE-1` in `content-quality-rules.md`; reword `Q-PROC-1` (real check only for steps that produce code), `Q-PROSE-1` (should, allow shorter paragraphs), `R-XPOLL-6` (only for procedural skills), drop model versions from `R-CONDUCT-4`/`R-LLMJ-5`; matching `research-coverage.md` entries. `validate.py`: refactor the three regex loops into one `(slug, regex, msg)` table, add the R-STYLE checks as **warnings**, narrow the `skill-workshop` exemption to rule-ID/date detectors. Gate: `make check` green, warnings listed (not yet zero).
-2. **Resident tier.** `AGENTS.md` rewrite: drop history and anecdotes, collapse update-check / handle-sync / completion to pointers (canonical copies in `github-automation.md`), add the short G4/G8/G13/G14 lines. Shorten all 20 descriptions (`Not for X` instead of `Do NOT use for X (see X)`). Gate: resident ≤ 3600, AGENTS.md ≤ 2700.
-3. **Agents + review gate.** `worker.md`: finish-steps-1–8 clause, scope/follow-up rule, dedupe model-dispatch and stash text to `worker-loop § Credit guards`. `reviewer.md`: report every candidate with severity + confidence, style only when it causes a defect, drop the model script and follow-up section (packet carries it). One adversarial-review protocol in `pre-pr-review.md`; execution / github / ship point to it, and ship's run happens only when commits landed after the last review. `repo-audit`: fan-out sized to the repo, drop the mandatory re-verify pass (real repro for bug findings only), no model menu. Gate: reviewer ≤ 75 %, one snippet home.
-4. **SKILL bodies + references.** Calm phrasing (≤ 15 CAPS tokens left), move `har` query grammar, `queue-next` claim gotchas and `github` stacking (made generic) to references; `init` script narration → "run it, it prints what it did"; `skill-workshop` body halved; `evidence-gates.md` / `pre-pr-review.md` tuning sections into `performance-tuning.md`; `execution` gets G3/G4 lines and a single real-check step. Flip the R-STYLE checks from warning to error. Gate: 0 style warnings, on-invocation ≤ 80 %.
-5. **Log + release.** `docs/MODELS.md`: "prompts aligned with" table (generation, date, guide links, arsenal version) — a maintainer log, read by nobody at runtime. Update `models.*` example ids. `.bundle-version` → `4.26.0`, CHANGELOG entry for consumers. Then `make release-check`.
+1. **PR 1 — Verification (V), released alone as `4.26.0`.** `review_sources.py`; `verification` profile + `bot-wait` + `review-budget-min` keys; counter keyed to PR/branch; tree-hash gate receipt; bounded bot loop with manual trigger; single protocol in `pre-pr-review.md`; reviewer test budget. Incident-replay test fixture.
 
-**Immediate next action**: open PR 1 on `claude/arsenal-claude-v5-5-upgrade-9wadhh` (rubric + scanner as warnings), with `skill-workshop` loaded for every `skills/` edit.
+Then a stack where only the last PR bumps to **`5.0.0`**:
+
+2. **Codify** — `model-prompting.md`; R-STYLE / Q-REV / Q-SCOPE / ref-unconditional rules; scanner table in `validate.py` (warnings); narrower self-exemption; research addendum + drift script; canary load hook.
+3. **Resident tier** — `AGENTS.md` rewrite; descriptions shortened; task `label:` field and `<label> (t-id)` output.
+4. **Agents and skills** — `worker`/`reviewer`, `repo-audit`, SKILL bodies and references rewritten; unconditional references inlined; `effort:` frontmatter; style checks flipped to errors.
+5. **Upgrade path and release** — `model-upgrade` mode; `/init` interview; `docs/MODELS.md`; CHANGELOG; `.bundle-version` → `5.0.0`; `make release-check`.
+
+**Immediate next action**: after approval, `design` appends contracts and risks; PR 1 starts with the incident-replay fixture, which fails today.
 
 **Open questions**:
-- [ ] **Adversarial review policy.** Today a cold reviewer subagent runs on every task, and up to three times per change. Guidance says don't verify by subagent, but a harness-designed writer/verifier split is a pattern Anthropic also endorses. Proposal: keep **one** review per change, skip it for docs-/config-only diffs (the `ship` marker already allows that), never a second round for RISK/NOTE only. Agree, or keep it on every change?
-- [ ] **CANARY lines** (20 × ~100 chars, on invocation). `validate.py` and `evals/loading_verification.json` use them to prove a skill loaded. Proposal: keep them — cost is per invocation and small. Agree, or replace with a hook-based check?
-- [ ] **Version**: minor `4.26.0` (no interface change) — or `5.0.0` to mark the generation switch?
+- [ ] **Ship the review fix (PR 1) on its own as `4.26.0` first**, rather than waiting for 5.0.0? Recommended: yes, since PRs are stalling today.
+- [ ] **`balanced` defaults**: 2 rounds, 10 min per round, 20 min bot wait, and no local adversarial round when CI and a bot both passed (unless high-risk). Accept, or tighten?
+
+**Decisions log**:
+
+| ID | Decision | Status | Date |
+|----|----------|--------|------|
+| D-1 | Option C over B | agreed | 2026-10-01 |
+| D-2 | Keep CANARY lines; add a `Skill` load hook | agreed | 2026-10-01 |
+| D-3 | Release as 5.0.0 | agreed | 2026-10-01 |
+| D-4 | No runtime model check or "unsupported model" message; `docs/MODELS.md` is a maintainer log | agreed | 2026-10-01 |
+| D-5 | Verification redesign is in scope now and ships first | agreed | 2026-10-01 |
+| D-6 | `skill-workshop` owns the model-upgrade process; research v1.17 frozen, addendum for new findings | agreed | 2026-10-01 |
+| D-7 | Token reduction and short outputs are standing goals for every change | agreed | 2026-10-01 |
 
 ---
 
