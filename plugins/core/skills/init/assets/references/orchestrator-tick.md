@@ -55,12 +55,14 @@ and anything that would widen a permission or change the merge policy.
 - **The task is not held**: no `arsenal:hold` label and no unresolved blocker on
   its issue.
 - **Every review thread is resolved**, not merely addressed in a later commit.
-- **The head passed the gate**: `merge_ready.sh` for CI on its SHA, or
-  `fast_gate.sh --full`, which reuses a receipt for the head tree. A worker's
-  report is not evidence, and `strict` needs the local run even with CI green.
+- **The head passed the gate**: CI green on its SHA (the `ci` row of
+  `merge_ready.sh`), or `fast_gate.sh --full`, which reuses a receipt for the
+  head tree. A worker's report is not evidence, and `strict` needs the local run
+  even with CI green.
 
-`merge-policy` may require more, never less; read it each tick, because hosts
-change it. Each value's rule is in `references/github-automation.md` § Merge
+`merge_ready.sh` exit 0 answers the merge policy, not the gate, because a policy
+such as `after-review` does not look at CI; run it as well, since the policy may
+require more, never less. Read the policy each tick, because hosts change it. Each value's rule is in `references/github-automation.md` § Merge
 policy.
 
 ## Reporting — say nothing when nothing changed

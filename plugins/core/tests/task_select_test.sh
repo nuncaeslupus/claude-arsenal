@@ -266,6 +266,14 @@ EOF
 out=$(python3 "${SELECT_PY}" --tasks-dir "${TASKS}" --issues "${tmpdir}/issues-notplanned2.json" --max 9 2>/dev/null)
 grep -q 't-bbbb2222' <<<"${out}" && fail "state_reason=not_planned must still block the dependent"
 
+# ...including gh's camelCase spelling (`gh issue list --json stateReason`)
+cat > "${tmpdir}/issues-notplanned-gh.json" <<'EOF'
+[{"number": 1, "state": "CLOSED", "stateReason": "NOT_PLANNED",
+  "body": "handle <!-- arsenal-task: t-aaaa1111 -->"}]
+EOF
+out=$(python3 "${SELECT_PY}" --tasks-dir "${TASKS}" --issues "${tmpdir}/issues-notplanned-gh.json" --max 9 2>/dev/null)
+grep -q 't-bbbb2222' <<<"${out}" && fail "stateReason=NOT_PLANNED must still block the dependent"
+
 # --- 19: task identity survives a body sanitizer ---
 #         The GitHub MCP tools a cloud session uses strip angle-bracketed
 #         content out of issue bodies, so an id kept in an HTML comment was gone

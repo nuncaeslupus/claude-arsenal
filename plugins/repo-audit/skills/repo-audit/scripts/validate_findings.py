@@ -51,13 +51,14 @@ def check(findings: list[dict]) -> list[str]:
             problems.append(f"findings[{i}] has an empty finding")
         if not str(row["where"]).strip():
             problems.append(f"findings[{i}] has an empty where")
-        if row["status"] not in ALLOWED_STATUS:
+        # isinstance first: a list or dict is unhashable, so `in` a set raises.
+        if not isinstance(row["status"], str) or row["status"] not in ALLOWED_STATUS:
             problems.append(
                 f"findings[{i}] status {row['status']!r} not in {sorted(ALLOWED_STATUS)}"
             )
 
         for field in ("severity", "confidence"):
-            if field in row and row[field] not in LEVELS:
+            if field in row and (not isinstance(row[field], str) or row[field] not in LEVELS):
                 problems.append(f"findings[{i}] {field} {row[field]!r} not in {sorted(LEVELS)}")
 
         key = (str(row["finding"]).strip().lower(), str(row["where"]).strip().lower())

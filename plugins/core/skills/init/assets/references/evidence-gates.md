@@ -192,7 +192,7 @@ a gate that verifies a subset verifies nothing in particular, and its selection
 logic becomes the least-tested code with the most authority.
 
 For the same reason `host-gate` never caches **outcomes**. Tooling that skips
-tests it believes a change could not affect (`pytest --lf`, `--ff`, `testmon`, a
+tests it believes a change could not affect (`pytest --lf`, `testmon`, a
 "no relevant files changed" branch in CI) turns *this tree passes* into *nothing
 I chose to run failed*, with no signal that the check narrowed. Use it in the
 edit loop only. Caching **inputs** is safe;

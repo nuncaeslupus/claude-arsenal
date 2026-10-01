@@ -82,10 +82,10 @@ Init runs non-interactively, so it prints what is undecided and the session asks
   and the manual step; pass both to the user. `branch_protection.py` (in
   `claude-arsenal/scripts/`) re-runs it: `--dry-run` previews, `--force` adds to an
   existing rule.
-- **Vendored skill copies found** — init stops and lists them. Ask the user whether
-  to remove them, then re-run with `--migrate-plugins yes` (or `no` to keep them
-  and stop being asked). Only folders carrying the `.arsenal-vendored` marker are
-  removed.
+- **A skill folder "is not arsenal-vendored — left alone"** — init replaces and
+  prunes only folders carrying the `.arsenal-vendored` marker, so a same-named
+  folder without it keeps the shipped skill out. Ask the user whether to remove or
+  rename theirs, then re-run.
 
 ## Other invocations
 

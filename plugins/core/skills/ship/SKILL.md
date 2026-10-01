@@ -30,7 +30,7 @@ Reads `status/specification.md` to know what should be shipping. Confirms scope 
   python3 "${CLAUDE_SKILL_DIR}/../gate-check/scripts/run_gate.py" --input status/plan.md
   ```
 
-  Exit 1 is No-Go. Exit 2 (no Gate column or usage error): confirm the plan path, then fall back to the acceptance criteria only for a plan that predates gates.
+  Exit 1 is No-Go. Exit 0 still leaves each manual (`?`) gate to a human verdict; one not yet confirmed is No-Go. Exit 2 (no Gate column or usage error): confirm the plan path, then fall back to the acceptance criteria only for a plan that predates gates.
 - Every spec or plan the branch changed has a reader built from its current text (exit 1 is No-Go: regenerate the reader it names, hand the HTML over, and commit it with the document):
 
   ```bash
@@ -77,7 +77,8 @@ only if commits landed after the last reviewed tree. Protocol and exits:
   review row) and proceed to Step 8.
 - **BLOCK** → show the findings verbatim and stop. A finding judged a false
   positive may be overridden by recording which, why, and what was checked in
-  the same row; otherwise resolve it and re-run from Step 1.
+  the same row; once every blocking finding is overridden this way, the BLOCK is
+  cleared: proceed to Step 8. Otherwise resolve it and re-run from Step 1.
 - **No verdict or a moved tree** → re-run.
 
 ### Step 8: Produce ship output

@@ -37,8 +37,8 @@ The JSON gives `mode` (`scaffold` without `pyproject.toml`, else `retrofit`),
 
 ## Step 2 — Apply the canonical blocks
 
-Load `references/canonical-config.md` in this step: it holds the pyproject
-(ruff + mypy), Makefile and uv blocks. Apply only what the report flags:
+Load `references/canonical-config.md` before applying any block: it holds the
+pyproject (ruff + mypy), Makefile and uv blocks. Apply only what the report flags:
 
 - Merge into existing `[tool.ruff]` and `[tool.mypy]` tables, keeping the
   project's `per-file-ignores`, extra `select` codes and module overrides.

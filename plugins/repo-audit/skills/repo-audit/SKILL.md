@@ -29,11 +29,11 @@ feature, use `code-review` or `execution`.
    subsystem is itself large). Workers run on the session's model, or on
    `models.workers` from `arsenal/config.toml` when that file sets it; the
    summary says which.
-2. **Understand.** Read each subsystem against
-   [Research categories](references/research-categories.md), citing real file
-   paths.
-3. **Hunt.** Work through [Issue taxonomy](references/issue-taxonomy.md),
-   scoped to the subset asked for, skipping what the repo's own linter already
+2. **Understand.** Before reading the subsystems, load
+   [Research categories](references/research-categories.md); read each one
+   against it, citing real file paths.
+3. **Hunt.** Before hunting, load [Issue taxonomy](references/issue-taxonomy.md)
+   and work through it, scoped to the subset asked for, skipping what the repo's own linter already
    catches. A bug finding needs a real check: a repro, a failing test, or a
    code path traced end to end, plus a file:line and a one-sentence failure
    scenario ("input X causes Y"). Architecture observations need evidence but
@@ -41,7 +41,7 @@ feature, use `code-review` or `execution`.
 4. **Report.** Give every finding a severity (high / medium / low) and a
    confidence (high / medium / low), and report all of them, including
    uncertain ones, labelled as such. Build the ledger as JSON and validate it
-   (shape in [Output shape](references/output-shape.md)):
+   (load [Output shape](references/output-shape.md) before building it):
 
    ```bash
    python3 "${CLAUDE_SKILL_DIR}/scripts/validate_findings.py" --input findings.json
@@ -50,8 +50,8 @@ feature, use `code-review` or `execution`.
    Re-derive every number in the report with a command, and keep the command
    in the working notes.
 5. **Queue.** As a separate last step, choose which findings become work,
-   usually the ones with medium-or-higher severity and confidence; the
-   fix / queue / issue / ledger decision is in
+   usually the ones with medium-or-higher severity and confidence. When
+   choosing, the fix / queue / issue / ledger decision is in
    [Output shape](references/output-shape.md). Queue a task only when the
    target repo has `arsenal/tasks/`:
 

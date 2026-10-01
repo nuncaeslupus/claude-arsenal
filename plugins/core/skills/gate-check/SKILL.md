@@ -46,8 +46,9 @@ The script defaults to `status/plan.md`; pass `--input` for any other path.
 python3 "${CLAUDE_SKILL_DIR}/scripts/run_gate.py" --input status/plan.md
 ```
 
-Prints one line per task and a summary. Exit 0 when every gated task passes with
-complete evidence, 1 when any gate fails or lacks evidence. `--strict` also fails
+Prints one line per task and a summary. Exit 0 when no gated task fails or lacks
+evidence, 1 otherwise. A manual (`?`) gate exits 0 once its evidence is recorded,
+so it still needs a human verdict before it counts as met. `--strict` also fails
 ungated tasks; without it they are grandfathered.
 
 ### Focus one task, compare a measured value

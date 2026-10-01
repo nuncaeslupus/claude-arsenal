@@ -10,7 +10,16 @@ name="$(printf '%s' "$payload" | sed -n 's/.*"skill"[[:space:]]*:[[:space:]]*"\(
 [[ -n "$name" ]] || exit 0
 
 root="$(git rev-parse --show-toplevel 2>/dev/null)" || root="${CLAUDE_PROJECT_DIR:-$PWD}"
-dir="${root}/tmp/arsenal-metrics"
-mkdir -p "$dir" 2>/dev/null || exit 0
-printf '%s\t%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$name" >>"${dir}/skill-loads.tsv" 2>/dev/null
+# The repo controls these paths, so a symlink at any of them could redirect the
+# append to any file the session can write. Skip the row instead, and create each
+# directory one level at a time so mkdir never follows a link.
+tmpdir="${root}/tmp"
+dir="${tmpdir}/arsenal-metrics"
+tsv="${dir}/skill-loads.tsv"
+for d in "$tmpdir" "$dir"; do
+    [[ -L "$d" ]] && exit 0
+    [[ -d "$d" ]] || mkdir "$d" 2>/dev/null || exit 0
+done
+[[ -L "$tsv" ]] && exit 0
+printf '%s\t%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$name" >>"$tsv" 2>/dev/null
 exit 0

@@ -31,7 +31,7 @@ value is building on verified findings rather than fresh guesses.
    document skips the deep verification a full audit would have done.
    *Check: can name what evidence backs each claim before writing prose
    around it.*
-2. **Pick the type.** See
+2. **Pick the type.** Before choosing, see
    [Document types](references/document-types.md) for the five defaults
    (pitch, deep-dive, interview prep, onboarding, status brief) and what
    each is actually for. Ask which is wanted if it's not obvious, rather

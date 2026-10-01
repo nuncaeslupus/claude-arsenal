@@ -32,6 +32,27 @@ test_skill_load_hook_never_fails() {
   [[ "$(wc -l <"${tmp}/tmp/arsenal-metrics/skill-loads.tsv")" -eq 2 ]] || fail "garbage must not add rows"
 }
 
+# A repo-controlled symlink at tmp/, tmp/arsenal-metrics/ or the tsv must not
+# redirect the append; the hook skips the row and still exits 0.
+test_skill_load_hook_ignores_symlinks() {
+  local link repo target
+  for link in tmp tmp/arsenal-metrics tmp/arsenal-metrics/skill-loads.tsv; do
+    repo="$(mktemp -d "${tmp}/sym.XXXXXX")"
+    git -C "${repo}" init -q
+    target="$(mktemp -d "${tmp}/target.XXXXXX")"
+    printf 'keep\n' >"${target}/victim"
+    mkdir -p "${repo}/$(dirname "${link}")"
+    case "${link}" in
+      *.tsv) ln -s "${target}/victim" "${repo}/${link}" ;;
+      *) ln -s "${target}" "${repo}/${link}" ;;
+    esac
+    (cd "${repo}" && printf '%s' '{"tool_input":{"skill":"specify"}}' | bash "${HOOK}") \
+      || fail "symlinked ${link} must still exit 0"
+    [[ "$(cat "${target}/victim")" == "keep" ]] || fail "symlinked ${link} redirected the append"
+    [[ "$(find "${target}" -mindepth 1 | wc -l)" -eq 1 ]] || fail "symlinked ${link} wrote through the link"
+  done
+}
+
 test_skill_load_hook_registered() {
   grep -q 'record_skill_load.sh' "${core}/hooks/hooks.json" || fail "not registered in core hooks.json"
   python3 - "${core}/hooks/hooks.json" <<'PY' || fail "PostToolUse Skill matcher missing"
@@ -43,5 +64,6 @@ PY
 
 test_skill_load_hook_records_row
 test_skill_load_hook_never_fails
+test_skill_load_hook_ignores_symlinks
 test_skill_load_hook_registered
 echo "PASS: skill_load_hook_test — all gates passed"

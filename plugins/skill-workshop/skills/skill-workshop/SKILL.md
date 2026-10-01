@@ -30,7 +30,7 @@ and only these checks surface them.
    clean, 1 failure, 2 internal error), then one `audit_library.py
    <library-root>` per changed library for the listing budget and cross-skill
    checks. It takes under a second per skill, so it always runs.
-2. **Semantic.** Walk `references/skill-rules.md`, then
+2. **Semantic.** Once the mechanical pass is clean, walk `references/skill-rules.md`, then
    `references/content-quality-rules.md`, against the current state of the
    files changed this session. A `must` finding stops the gate until the user
    fixes, dismisses or defers it; a `should` finding is reported and the gate
@@ -75,8 +75,8 @@ python3 "${CLAUDE_SKILL_DIR}/scripts/validate_memory.py" --root .          # CLA
 
 ## References
 
-- [Skill rules](references/skill-rules.md) — load at the gate for the structural walk.
-- [Content quality rules](references/content-quality-rules.md) — load at the gate after `skill-rules.md`.
+- [Skill rules](references/skill-rules.md) — load when the gate reaches the structural walk.
+- [Content quality rules](references/content-quality-rules.md) — load after `skill-rules.md` during the gate.
 - [Frontmatter and naming](references/frontmatter-and-naming.md) — load when writing or fixing the YAML header.
 - [Model prompting](references/model-prompting.md) — load when writing or reviewing prompt text, or when a `content.style-*` finding needs its reason.
 - [Body and style](references/body-and-style.md) — load when a body passes 400 lines or reads poorly.

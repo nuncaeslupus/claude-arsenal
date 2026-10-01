@@ -825,16 +825,16 @@ MODEL_NAME_REGEX = re.compile(
     r"\b(?:" + "|".join(n.title() for n in _MODEL_FAMILIES) + r")\b"
     r"|\bclaude-(?:[a-z]+-)*\d+(?:[-.]\d+)*(?:-[a-z]+)*\b"
 )
+# Explicit conditionals only: "load" or "for the details" says what to read, not
+# when, so "2. Load references/x.md" is an unconditional load.
 REF_TRIGGER_REGEX = re.compile(
-    r"\b(?:when|whenever|if|unless|for|before|after|while|during|once|"
-    r"load|loads|loaded|loading)\b",
+    r"\b(?:when|whenever|if|unless|before|after|while|during|once|in case)\b",
     re.IGNORECASE,
 )
 SENTENCE_BOUNDARY_REGEX = re.compile(
     r"(?<=[.!?])\s+(?=[A-Z`*\[(])|\n[ \t]*\n|\n(?=[ \t]*(?:[-*+][ \t]|\d+[.)][ \t]|\||#))"
 )
 LIST_ITEM_REGEX = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s")
-NUMBERED_ITEM_REGEX = re.compile(r"^\s*\d+[.)]\s")
 HEADING_LINE_REGEX = re.compile(r"^#{1,6}\s+(.+?)\s*$")
 SHIPPED_TEXT_SUFFIXES = {".md", ".py", ".sh", ".toml", ".yml", ".yaml"}
 STYLE_EXEMPT_BASENAMES = {"CHANGELOG.md"}
@@ -882,7 +882,13 @@ CONTENT_RULES: tuple[ContentRule, ...] = (
     ),
     ContentRule(
         "content.style-if-in-doubt",
-        re.compile(r"\b(?:if|when) in doubt\b[^.\n]*\buse\b|\balways use\b", re.IGNORECASE),
+        # A negation before "use" ("if in doubt, do not use X") steers away, so
+        # it does not over-trigger.
+        re.compile(
+            r"\b(?:if|when) in doubt\b(?:(?!\b(?:not|never|no)\b|n['\u2019]t\b)[^.\n])*\buse\b"
+            r"|\balways use\b",
+            re.IGNORECASE,
+        ),
         "{token!r} over-triggers the tool; say when it helps instead (R-STYLE-2)",
         "style",
     ),
@@ -1033,8 +1039,8 @@ def _check_ref_conditions(body: str, skill_md: Path, result: Result) -> None:
 
     The context is the sentence holding the mention; a table row adds its
     header row, and a list item adds a lead-in line ending in ':'. A mention
-    inside a numbered step, or under a heading that names a step or a
-    condition (`## Step 2`, `## When to load`), is conditioned by position.
+    under a heading that names a condition (`## When to load`) is conditioned
+    by position.
     """
     spans, _ = scan_fences(body)
     lines = body.splitlines()
@@ -1083,21 +1089,15 @@ def _check_ref_conditions(body: str, skill_md: Path, result: Result) -> None:
 
 
 def _positioned(lines: list[str], idx: int) -> bool:
-    """Whether line `idx` sits in a numbered step or under a conditional heading."""
-    j = idx
-    while j >= 0 and lines[j].strip() and not HEADING_LINE_REGEX.match(lines[j]):
-        if NUMBERED_ITEM_REGEX.match(lines[j]):
-            return True
-        if not lines[j].startswith((" ", "\t")) and j != idx:
-            break
-        j -= 1
+    """Whether line `idx` sits under a heading that states a condition.
+
+    A numbered step or a `## Steps` heading orders the work but does not say
+    when the reference is needed, so neither counts.
+    """
     for k in range(idx, -1, -1):
         m = HEADING_LINE_REGEX.match(lines[k])
         if m:
-            heading = m.group(1)
-            return bool(re.search(r"\bsteps?\b", heading, re.IGNORECASE)) or bool(
-                REF_TRIGGER_REGEX.search(heading)
-            )
+            return bool(REF_TRIGGER_REGEX.search(m.group(1)))
     return False
 
 

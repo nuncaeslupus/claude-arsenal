@@ -34,8 +34,9 @@ purge bytecode from. Arguments after the flags go to `pytest`.
 
 Use the script rather than a hand `sed` cycle: it purges `__pycache__`, runs
 each test in a fresh subprocess, refuses a target that matches nothing, and
-restores the file from a sentinel even after a killed run — each of which a
-hand cycle gets wrong without noticing.
+restores the file when the run ends; after a killed run, its sentinel makes the
+next run refuse to start and print the manual restore command. A hand cycle gets
+each of these wrong without noticing.
 
 ## Step 2 — Read the verdict
 

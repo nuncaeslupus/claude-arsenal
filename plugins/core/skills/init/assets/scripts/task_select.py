@@ -370,10 +370,11 @@ def state_from_issues(
             # loses the distinction. So a label carries it instead — every
             # surface can read labels — and `state_reason` refines the answer
             # when it happens to be there.
-            reason = issue.get("state_reason")
+            # REST spells it `state_reason`, `gh --json` spells it `stateReason`.
+            reason = issue.get("state_reason") or issue.get("stateReason")
             if cancelled_label in labels:
                 derived = "cancelled"
-            elif reason is None:
+            elif not reason:
                 derived = "done"
             else:
                 derived = "done" if str(reason).lower() == "completed" else "cancelled"

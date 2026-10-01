@@ -46,10 +46,11 @@ clean environment before trusting green.
 ## Step 3 — Audit for CVEs
 
 ```bash
-uvx pip-audit
+uv run --with pip-audit pip-audit
 ```
 
-Answer a finding by moving forward to the patched release; pinning back onto
+Run it through `uv run` so it audits the project's environment; a bare `uvx
+pip-audit` audits only its own isolated tool environment. Answer a finding by moving forward to the patched release; pinning back onto
 the vulnerable version reintroduces it. Surface any advisory with no fixed
 version as a risk.
 

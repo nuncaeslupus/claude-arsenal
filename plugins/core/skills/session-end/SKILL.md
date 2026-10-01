@@ -1,6 +1,6 @@
 ---
 name: session-end
-description: Wraps up a session — opt-in status/handoff.md, repeated errors worth a skill update, and a CI/review/conflict audit of its PRs. Use when the user signals the end of the job or its SessionStart hook fires. Not for mid-job checkpoints or cross-session memory.
+description: Wraps up a session — opt-in status/handoff.md, repeated errors worth a skill update, and a CI/review/conflict audit of its PRs. Use when the user signals the end of the job or its opt-in auto-fire hook runs. Not for mid-job checkpoints or cross-session memory.
 metadata:
   type: workflow
 ---
@@ -38,7 +38,7 @@ Then read the host repo's `CLAUDE.md` for the marker:
 | `<!-- session-end: handoff=no -->` | Skip (the project does not use handoffs). |
 | (no marker) | Ask the user once which mode this repo uses, then write the marker. |
 
-With `yes`, load [handoff-mode](references/handoff-mode.md) for the template, then:
+When the mode is `yes`, load [handoff-mode](references/handoff-mode.md) for the template, then:
 
 ```bash
 python3 "${CLAUDE_SKILL_DIR}/scripts/create_handoff.py" --output status/handoff.md
@@ -56,9 +56,9 @@ python3 "${CLAUDE_SKILL_DIR}/scripts/query_session_history.py" --days 7 --limit 
 The JSON report lists mechanical signals: repeated tool errors, throwaway scripts in
 `tmp/`, repeated user corrections, repeated failing commands. Judge which are
 recurring friction rather than normal noise, and offer the user a short list of
-skill-update proposals. For each one they accept, load
+skill-update proposals. Once they accept one, load
 [retrospective-rubric](references/retrospective-rubric.md) for the block format and
-append it to:
+append each accepted proposal to:
 
 | Where the session runs | Target file |
 |---|---|
@@ -71,8 +71,14 @@ This step reports and repairs nothing: merged task PRs already closed their task
 and the queue workflow releases abandoned claims, so a session that ends abruptly
 still leaves a correct queue.
 
-From the `arsenal:task` issues, take every claimed task and every task with a `pr`
-field, and check each PR:
+Task issues carry no PR link, so map open PRs to tasks by branch:
+`open_task_pr.sh` names each `arsenal/<task-id>-<slug>`. Take the open PRs on such
+branches, plus every claimed task (no PR yet shows as escalated or in progress),
+and check each PR:
+
+```bash
+gh pr list --state open --json number,headRefName --jq '.[] | select(.headRefName | startswith("arsenal/"))'
+```
 
 ```bash
 gh pr view <pr-url> --json title,state,mergeable,reviewDecision,statusCheckRollup \

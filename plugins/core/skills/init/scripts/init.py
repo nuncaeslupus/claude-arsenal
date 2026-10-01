@@ -1646,7 +1646,7 @@ def _upsert_bare_key(config: Path, key: str, value: str) -> None:
         if re.search(rf"^\s*{re.escape(key)}\s*=", text, re.MULTILINE):
             text = re.sub(
                 rf"^\s*{re.escape(key)}\s*=.*$",
-                f"{key} = {value}",
+                lambda _: f"{key} = {value}",
                 text,
                 count=1,
                 flags=re.MULTILINE,
@@ -2226,7 +2226,7 @@ def _interview_answers(args: argparse.Namespace) -> dict[str, str]:
             allowed = _arsenal_config().ENUMS[key]
             if raw not in allowed:
                 sys.exit(f"init: --{key} must be one of {', '.join(sorted(allowed))}, got {raw!r}")
-            answers[key] = json.dumps(raw)
+            answers[key] = json.dumps(raw, ensure_ascii=False)
         elif key in ("review-budget-min", "bot-wait-min"):
             if raw < 1:
                 sys.exit(f"init: --{key} must be an integer >= 1, got {raw}")
@@ -2237,9 +2237,11 @@ def _interview_answers(args: argparse.Namespace) -> dict[str, str]:
                 login, sep, comment = entry.partition("=")
                 if not sep or not login.strip() or not comment.strip():
                     sys.exit(f'init: --bot-triggers entries are "login=comment", got {entry!r}')
-            answers[key] = "[" + ", ".join(json.dumps(e) for e in entries) + "]"
+            # ensure_ascii=False: JSON escapes non-BMP characters as surrogate
+            # pairs, which TOML rejects; the characters themselves are valid.
+            answers[key] = "[" + ", ".join(json.dumps(e, ensure_ascii=False) for e in entries) + "]"
         else:
-            answers[key] = json.dumps(raw)
+            answers[key] = json.dumps(raw, ensure_ascii=False)
     return answers
 
 

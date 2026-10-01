@@ -241,6 +241,16 @@ fi
 [[ "$(get_answered autonomy)" == "autonomous" ]] || { echo "FAIL: a refused answer still changed config" >&2; exit 1; }
 echo "PASS: test_init_interview_answers_written"
 
+# test_init_interview_rewrite_keeps_escapes — the second write replaces an
+# existing key, so the value must reach the file literally (a backslash is not
+# a regex escape) and stay valid TOML outside the BMP (no surrogate escapes).
+python3 "${INIT_PY}" --repo-path "${answered}" --bundle-dir "${BUNDLE_DIR}" --silent \
+    --bot-triggers 'bot[bot]=review \d 🚀 é' >/dev/null
+triggers=$(python3 "${CFG_PY}" --repo-root "${answered}" | python3 -c 'import json,sys; print("|".join(json.load(sys.stdin)["bot-triggers"]))')
+[[ "${triggers}" == 'bot[bot]=review \d 🚀 é' ]] \
+    || { echo "FAIL: rewritten bot-triggers did not round-trip: ${triggers}" >&2; exit 1; }
+echo "PASS: test_init_interview_rewrite_keeps_escapes"
+
 # The suggestion the interview offers: known commands for the configured bots.
 suggested=$(python3 "${INIT_PY}" --repo-path "${answered}" --suggest-bot-triggers)
 grep -qF 'coderabbitai[bot]=@coderabbitai review' <<<"${suggested}" \

@@ -29,7 +29,9 @@ bash "${CLAUDE_SKILL_DIR}/../init/assets/bin/rebase_stack.sh" fix/iss-B fix/iss-
 with lease. Cascade it down the stack (B→C, C→D, …) after each merge;
 `--no-push` rebases only.
 
-When every conflicted path is one a task declares as `evidence:`, the script
-takes the branch's side, re-runs `host-gate` to regenerate the evidence, and
-continues, since hand-merging two measurements of a tree means nothing. Any
-other conflict stops the rebase and is named for a human to resolve.
+When every conflicted path is one a task declares as `evidence:` and `host-gate`
+is set, the script takes the branch's side, re-runs `host-gate` to regenerate the
+evidence, and continues, since hand-merging two measurements of a tree means
+nothing. It stops instead, naming the paths for a human, when `host-gate` is
+unset, when the branch's side cannot be checked out (a file deleted on one side),
+when the gate fails, or on any other conflict.

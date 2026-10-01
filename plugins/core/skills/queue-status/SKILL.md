@@ -25,7 +25,7 @@ CANARY: queue-status-loaded-2026-06-13-fb78d23e-d4e5f6a7b8c9d0e1
 
 Fetch the `arsenal:task` issues, open and closed, with whatever GitHub access
 this surface has, asking for `number`, `title`, `state`, `labels`, `assignees`
-and leaving out `body` — the board is derived from labels and state, and bodies
+(plus `state_reason` where the surface returns it) and leaving out `body` — the board is derived from labels and state, and bodies
 are most of the fetch. Then run `query_status.py` (in `claude-arsenal/scripts/`):
 
 ```bash
@@ -59,5 +59,7 @@ Problems go to stderr; `--fail-on-problems` makes them a non-zero exit for a
 - `blocked` is not failed: the task becomes eligible once its dependencies are
   closed as completed. A close as not-planned leaves dependents blocked.
 - `claimed` means an agent holds the claim ref; the issue's assignee and claim
-  comment name the session. A claim over a day old with no open PR is from a
-  crashed session, and `arsenal-queue.yml` releases those on a schedule.
+  comment name the session. A claim over a day old with no open PR may be stale;
+  `arsenal-queue.yml` releases those on a schedule, and
+  `claude-arsenal:core:queue-next § references/claim-gotchas.md` says how
+  stale claims are released.

@@ -25,9 +25,10 @@ CANARY: queue-next-loaded-2026-06-13-fb78d23e-b2c3d4e5f6a7b8c9
 
 **1. Fetch the task issues.** List issues labelled `arsenal:task`, open and
 closed — a closed-as-completed issue is what satisfies a dependency. Request
-`number`, `title`, `state`, `labels`, `assignees` and leave out `body`: the
-resolver matches titles when bodies are absent, and bodies are most of the
-fetch. `github_channel.sh --detect` (in `claude-arsenal/bin/`) prints `gh`,
+`number`, `title`, `state`, `labels`, `assignees`, plus `state_reason` where the
+surface returns it, and leave out `body`: the resolver matches titles when bodies
+are absent, and bodies are most of the fetch. Without `state_reason`, a closed
+issue reads as done unless it carries `arsenal:cancelled`. `github_channel.sh --detect` (in `claude-arsenal/bin/`) prints `gh`,
 `rest` or `none`; on `none`, use the built-in GitHub tools, because skipping the
 fetch means picking up work another agent already holds.
 
@@ -58,6 +59,8 @@ closed, assigned, or labelled `arsenal:claimed`.
 
 Then self-assign the issue, add `arsenal:claimed`, and comment with the session
 id from `CLAUDE_CODE_REMOTE_SESSION_ID` (or `CLAUDE_CODE_SESSION_ID` locally).
+When neither is set, say so in the comment rather than writing an id, because a
+made-up id points the next reader at a session that does not exist.
 
 Load `references/claim-gotchas.md` when a claim is refused, looks stale, or a
 task needs a retry attempt. In short: `lost` is final, stale claims are released

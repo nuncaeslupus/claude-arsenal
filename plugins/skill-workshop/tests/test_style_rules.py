@@ -104,6 +104,11 @@ def test_style_if_in_doubt_warns(tmp_path: Path) -> None:
     assert _checks(_skill(tmp_path, line)) == ["content.style-if-in-doubt"]
 
 
+def test_style_if_in_doubt_negation_is_fine(tmp_path: Path) -> None:
+    assert _checks(_skill(tmp_path, "If in doubt, do not use this tool.")) == []
+    assert _checks(_skill(tmp_path, "When in doubt, don't use the cache.")) == []
+
+
 def test_style_always_use_warns(tmp_path: Path) -> None:
     assert _checks(_skill(tmp_path, "Always use the search tool.")) == ["content.style-if-in-doubt"]
 
@@ -201,8 +206,23 @@ def test_ref_with_trigger_is_fine(tmp_path: Path) -> None:
     assert _checks(skill) == []
 
 
-def test_ref_in_numbered_step_is_positioned(tmp_path: Path) -> None:
-    skill = _skill(tmp_path, "2. Open `references/guide.md` and apply it.")
+@pytest.mark.parametrize(
+    "line",
+    [
+        "2. Load `references/guide.md`.",
+        "- Load `references/guide.md` for the details.",
+        "## Steps\n\nOpen `references/guide.md` and apply it.",
+    ],
+)
+def test_ref_without_a_condition_warns(tmp_path: Path, line: str) -> None:
+    skill = _skill(tmp_path, line)
+    (skill / "references").mkdir()
+    (skill / "references" / "guide.md").write_text("# Guide\n\nDetails.\n", encoding="utf-8")
+    assert _checks(skill) == ["content.ref-unconditional"]
+
+
+def test_ref_under_a_conditional_heading_is_positioned(tmp_path: Path) -> None:
+    skill = _skill(tmp_path, "## When the build fails\n\nOpen `references/guide.md`.")
     (skill / "references").mkdir()
     (skill / "references" / "guide.md").write_text("# Guide\n\nDetails.\n", encoding="utf-8")
     assert _checks(skill) == []
