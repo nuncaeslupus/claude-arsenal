@@ -25,8 +25,8 @@ value is building on verified findings rather than fresh guesses.
 ## How to use
 
 1. **Get the source material.** Look for an existing `repo-audit` findings
-   JSON first — it's already been through a verify pass, so its claims are
-   load-bearing. If none exists, do a light orient-only read (README, root
+   JSON first — its findings carry severity and confidence, so the high-confidence ones can be leaned on
+   directly. If none exists, do a light orient-only read (README, root
    memory file, top-level layout) instead, and say plainly that this
    document skips the deep verification a full audit would have done.
    *Check: can name what evidence backs each claim before writing prose
@@ -51,8 +51,9 @@ value is building on verified findings rather than fresh guesses.
 ## Gotchas
 
 - **A document is not a repo contribution.** Every one of the five types is
-  for the person who asked, full stop — never propose committing a pitch,
-  a deep-dive, or an interview-prep doc into the target repo. If something
+  for the person who asked, so don't propose committing a pitch, a
+  deep-dive, or an interview-prep doc into the target repo: it is written for
+  one reader and would sit in the repo as unowned prose. If something
   in it is genuinely worth the repo having (a corrected fact, a missing
   reference page), that's a separate, narrow, specific fix — not a reason
   to commit the document itself.

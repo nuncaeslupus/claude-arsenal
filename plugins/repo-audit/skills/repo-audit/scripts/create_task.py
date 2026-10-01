@@ -43,6 +43,7 @@ TEMPLATE = """\
 ---
 id: {task_id}
 title: {title}
+label: {label}
 priority: {priority}
 {extra}---
 
@@ -65,6 +66,7 @@ false
 # The documented meaning of `priority`: task size, larger runs sooner. Kept here
 # rather than in prose so `--size` and the board's convention check agree on one
 # set of values.
+LABEL_MAX_WORDS = 5
 SIZE_PRIORITY = {"S": 10, "M": 5, "L": 1}
 
 
@@ -144,6 +146,7 @@ def build(
     tasks_dir: Path,
     *,
     title: str,
+    label: str | None = None,
     priority: int,
     deps: list[str],
     requires: list[str],
@@ -154,6 +157,12 @@ def build(
 ) -> tuple[str, str]:
     """Return (task_id, file contents). Raises ValueError on a bad dep or title."""
     known = existing_ids(tasks_dir)
+
+    # The label is what a board shows beside the id, so it stays short: five
+    # words at most. Left out, it is the first five words of the title.
+    label = label or " ".join(title.split()[:LABEL_MAX_WORDS])
+    if len(label.split()) > LABEL_MAX_WORDS:
+        raise ValueError(f"label {label!r} is longer than {LABEL_MAX_WORDS} words")
 
     # A title is not decoration: `handle_sync.py` and `arsenal-queue.yml` both
     # title the issue handle from it, and `task_id_from_issue` resolves an issue
@@ -211,6 +220,7 @@ def build(
     text = TEMPLATE.format(
         task_id=task_id,
         title=json.dumps(title),
+        label=json.dumps(label),
         priority=priority,
         extra=extra,
         body=(body.strip() + "\n\n") if body.strip() else "",
@@ -223,6 +233,7 @@ def main(argv: list[str] | None = None) -> int:
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument("--title", required=True)
+    parser.add_argument("--label", help="short name shown beside the id, 5 words max")
     parser.add_argument(
         "--size",
         choices=sorted(SIZE_PRIORITY),
@@ -260,6 +271,7 @@ def main(argv: list[str] | None = None) -> int:
         task_id, text = build(
             args.tasks_dir,
             title=args.title,
+            label=args.label,
             priority=priority,
             deps=args.deps,
             requires=args.requires,

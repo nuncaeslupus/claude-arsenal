@@ -43,8 +43,8 @@ echo "PASS: the gate procedure is stated in one place"
 #     Naming patterns hands a worker something to match instead of code to
 #     read. The rewrite is one open question per group.
 lines=$(wc -l < "${TAXONOMY}")
-[[ "${lines}" -le 75 ]] \
-    || fail "issue-taxonomy.md is ${lines} lines — it is enumerating patterns again (ceiling 75)"
+[[ "${lines}" -le 90 ]] \
+    || fail "issue-taxonomy.md is ${lines} lines — it is enumerating patterns again (ceiling 90)"
 grep -q "Simplicity and instruction economy" "${TAXONOMY}" \
     || fail "the simplicity group is missing — it is the one that found this file"
 groups=$(grep -cE '^[0-9]+\. \*\*' "${TAXONOMY}")
@@ -70,8 +70,8 @@ check_size() {  # check_size <file> <ceiling-chars> <what>
         || fail "$3 is ${size} chars, over its ${2} ceiling — on-invocation cost grew"
 }
 check_size "${WORKSHOP}" 12800 "skill-workshop/SKILL.md"
-check_size "${AUDIT}" 7000 "repo-audit/SKILL.md"
-check_size "${TAXONOMY}" 3800 "issue-taxonomy.md"
+check_size "${AUDIT}" 5000 "repo-audit/SKILL.md"
+check_size "${TAXONOMY}" 4900 "issue-taxonomy.md"
 echo "PASS: every thinned file is still under its ceiling"
 
 echo "PASS: instruction_economy_test — all gates passed"

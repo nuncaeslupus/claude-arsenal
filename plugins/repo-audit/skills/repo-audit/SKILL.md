@@ -1,124 +1,87 @@
 ---
 name: repo-audit
-description: Use when the user wants to find real problems in a repository — bugs, security issues, missing edge cases or tests — across the repo or a subset. Triggers — "audit this repo for bugs", "find everything wrong with this". Verifies each finding and queues it as a task or issue. For a human write-up, use `explain-repo`. Do NOT use for reviewing a diff or implementing a feature — use `code-review` or `specify`.
+description: Use when the user wants to find real problems in a repository — bugs, security issues, missing edge cases or tests — across the repo or a subset. Triggers — "audit this repo for bugs", "find everything wrong with this". Reports findings with severity and confidence, then queues the worthwhile ones as tasks or issues. For a human write-up, use `explain-repo`. Do NOT use for reviewing a diff or implementing a feature — use `code-review` or `specify`.
 ---
 
 # repo-audit
 
-Reads a repository the way an experienced engineer doing a real audit would —
-understand it, then hunt across a real checklist for what's actually wrong,
-verify every candidate before trusting it, then turn each confirmed finding
-into properly-gated work instead of a list nobody acts on. Works on any
-repository, or a named subset of one; `explain-repo` handles turning the
+Reads a repository the way an experienced engineer doing a real audit would:
+understand it, hunt for what is actually wrong, report every finding with how
+serious and how certain it is, then queue the ones worth acting on as gated
+work. Works on any repository or a named subset; `explain-repo` turns the
 results into a human-facing document.
 
 CANARY: repo-audit-loaded-2026-09-20-fb78d23e-6a5b7d83932f7e55
 
 ## When to load
 
-Load this when the ask is about the repo (or a real subset of it) as a
-whole — "audit this for bugs", "what would break here", "find everything
-wrong with this codebase" — not when it's about one diff, one bug, or one
-feature already in hand. If the request is really "review this PR" or "fix
-this test", defer to `code-review` or `execution`; this skill stands back
-from the whole repository, not from a change already made to it.
+Load this when the ask is about the repo (or a real subset) as a whole —
+"audit this for bugs", "what would break here". For one diff, one bug, or one
+feature, use `code-review` or `execution`.
 
 ## How to use
 
-Five passes, in order. Each has its own check — don't start the next until
-the current one's check is satisfied.
-
 1. **Orient.** Read the README, the root memory file (`CLAUDE.md` /
-   `AGENTS.md`), and the top-level directory listing directly — cheap, and it
-   shows what's worth delegating. Ask the user (`AskUserQuestion`) which
-   model — Sonnet, Opus, Haiku, or Fable — the worker agents spawned below
-   should run on: a wide fan-out is a cost/thoroughness tradeoff that's the
-   user's call, not a default to assume. Skip the question and use Sonnet
-   when there's no one to ask (an unattended run). Pass the answer as every
-   worker's `model` from here on. *Check: name the repo's purpose and its
-   3–5 major subsystems, and have the worker model set, before spawning
-   anything.*
-2. **Understand.** One parallel research agent per major subsystem — see
-   [Research categories](references/research-categories.md). *Check: every
-   agent's report cites a real file path, not a paraphrase of another
-   agent's report.*
-3. **Hunt.** One parallel research agent per group in
-   [Issue taxonomy](references/issue-taxonomy.md), which names the nine and
-   what each one asks. Scope to whatever subset was asked for; skip what a
-   linter already configured in this repo would have caught. *Check: every
-   candidate finding names a file:line and a one-sentence failure scenario —
-   "input X causes Y" — not a general risk statement.*
-4. **Verify.** Every candidate from passes 2 and 3 — an architecture claim
-   as much as a suspected bug — gets checked independently before it's
-   trusted: reproduce it, read the actual code path, or run the check that
-   would confirm it. See
-   [Adversarial checklist](references/adversarial-checklist.md) for the
-   architecture side. *Check: each finding is marked CONFIRMED (reproduced
-   or directly verified) or DROPPED (didn't hold up) — nothing ships as
-   "probably".*
-5. **Act.** For each CONFIRMED finding, decide fix / queue / issue / ledger
-   — see [Output shape](references/output-shape.md) for the decision and
-   for how the write-up's own destination (repo vs. user-only) is decided.
-   Build the findings ledger as structured JSON and validate it before
-   writing anything:
+   `AGENTS.md`) and the top-level layout. Then size the work, because
+   fan-out costs more than it saves on a small repo. As a starting value:
+   under about 150 source files or 20k lines, do the whole audit inline;
+   above that, one worker per major subsystem (and per taxonomy group where a
+   subsystem is itself large). Workers run on the session's model, or on
+   `models.workers` from `arsenal/config.toml` when that file sets it; the
+   summary says which.
+2. **Understand.** Read each subsystem against
+   [Research categories](references/research-categories.md), citing real file
+   paths.
+3. **Hunt.** Work through [Issue taxonomy](references/issue-taxonomy.md),
+   scoped to the subset asked for, skipping what the repo's own linter already
+   catches. A bug finding needs a real check: a repro, a failing test, or a
+   code path traced end to end, plus a file:line and a one-sentence failure
+   scenario ("input X causes Y"). Architecture observations need evidence but
+   not a repro. A hunch with no trigger is not a finding.
+4. **Report.** Give every finding a severity (high / medium / low) and a
+   confidence (high / medium / low), and report all of them, including
+   uncertain ones, labelled as such. Build the ledger as JSON and validate it
+   (shape in [Output shape](references/output-shape.md)):
 
    ```bash
    python3 "${CLAUDE_SKILL_DIR}/scripts/validate_findings.py" --input findings.json
    ```
 
-   If the target repo will receive new or edited Markdown, sanity-check it
-   before proposing the diff:
-
-   ```bash
-   python3 "${CLAUDE_SKILL_DIR}/scripts/validate_markdown.py" --input-dir <path-to-changed-docs> --repo-root <target-repo>
-   ```
-
-   To queue a finding as an arsenal task (only when the target repo has
-   `arsenal/tasks/`):
+   Re-derive every number in the report with a command, and keep the command
+   in the working notes.
+5. **Queue.** As a separate last step, choose which findings become work,
+   usually the ones with medium-or-higher severity and confidence; the
+   fix / queue / issue / ledger decision is in
+   [Output shape](references/output-shape.md). Queue a task only when the
+   target repo has `arsenal/tasks/`:
 
    ```bash
    python3 "${CLAUDE_SKILL_DIR}/scripts/create_task.py" --title "<finding, as a job>" --tag <category> --body "<failure scenario + suggested direction>" --tasks-dir <target-repo>/arsenal/tasks
    ```
 
-   *Check: every number in the final output has the command that re-derived
-   it sitting next to it in the working notes; both validators exit 0 before
-   anything is published or proposed.*
+   Run `validate_markdown.py --input-dir <changed-docs> --repo-root <target-repo>`
+   on any Markdown the target repo will receive, and expect exit 0 before
+   proposing it.
 
 ## Gotchas
 
-- **The method stays here, and a finding is queued rather than committed
-  unasked.** Both rules, in full, are in
-  [Output shape](references/output-shape.md) — what never goes into the
-  target repo, and the fix / queue / issue / ledger decision. Read it
-  before deciding where a finding lands; the condensed version above used
-  to read as complete, and a reader could miss the distinctions.
-- **A sub-agent's count — or a sub-agent's bug — is a hypothesis, not a
-  fact.** Both a numeric claim and a suspected bug have been wrong before in
-  the same way a confident paraphrase goes wrong. The verify pass exists
-  because of this, not as a formality; don't skip it under time pressure.
-- **The orchestrator's model isn't this skill's to set.** These steps run as
-  whatever model the current session already is — no tool call changes that
-  mid-run. Getting a specific model to orchestrate (deciding what to hunt
-  for, writing each worker's prompt, reading its report back) means
-  starting or switching the session to it *before* invoking repo-audit; only
-  the fan-out workers' model is a setting this skill can apply, via the
-  question in the Orient pass.
-- **"No documentation exists for X" is itself a finding.** Skip it and the
-  audit undersells the repo: a subsystem that's real, tested, and shipped
-  reads as though it doesn't exist, because nothing describes it outside
-  the code that implements it.
-- **Don't fix what needs a maintainer's judgment.** A stale number or a
-  broken cross-link is safe to correct directly. Anything else is a finding
-  to queue or report — never a PR opened unasked.
+- **Where a finding lands, and what stays out of the target repo,** are
+  decided in [Output shape](references/output-shape.md); read it before step 5.
+- **A worker's count or suspected bug is a hypothesis.** Check it with the
+  step 3 standard before it goes in the report as fact.
+- **"No documentation exists for X" is a finding.** A real, shipped subsystem
+  that nothing describes reads as though it does not exist.
+- **Queue rather than fix when a maintainer's judgment is needed.** A stale
+  number or broken link is safe to correct directly; anything else becomes a
+  task, an issue or a ledger row, and no pull request is opened unasked,
+  because the maintainer owns what merges.
 
 ## References — load on demand
 
-- [Research categories](references/research-categories.md) — load before
-  the understand pass, to scope what each agent investigates.
-- [Issue taxonomy](references/issue-taxonomy.md) — load before the hunt
-  pass, to scope one worker per group.
-- [Adversarial checklist](references/adversarial-checklist.md) — load
-  before the verify pass, for the architecture-claim side of it.
-- [Output shape](references/output-shape.md) — load before the act pass —
-  the fix/queue/issue/ledger decision, the write-up's destination, and the
-  validator/task-creation scripts' exact contracts.
+- [Research categories](references/research-categories.md) — before
+  understanding, to scope each subsystem read.
+- [Issue taxonomy](references/issue-taxonomy.md) — before hunting; includes
+  optional architecture prompts.
+- [Output shape](references/output-shape.md) — before reporting and queueing:
+  the ledger shape, the destination, and the fix / queue / issue / ledger
+  decision.
