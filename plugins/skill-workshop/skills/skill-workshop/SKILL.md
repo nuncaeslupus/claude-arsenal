@@ -155,6 +155,7 @@ the chosen canonical onto its declared siblings.
 Each reference covers one topic. Load only what the current task needs.
 
 - [Frontmatter and naming](references/frontmatter-and-naming.md) — load when writing or fixing the YAML header (name regex, length limits, allowed keys, trigger phrases).
+- [Model prompting](references/model-prompting.md) — load when writing or reviewing prompt text (a skill body, a reference, an agent definition, `AGENTS.md`) or when a `content.style-*` finding needs its reason.
 - [Body and style](references/body-and-style.md) — load when the body is over 400 lines or readability needs work (line budget, runbook shape, code blocks, tone, what NOT to put in a SKILL).
 - [References and chunking](references/references-and-chunking.md) — load when splitting an oversized SKILL into reference docs (when to split, ToC requirement, link-back rules).
 - [Scripts and CLI conventions](references/scripts-and-cli-conventions.md) — load before adding a script or reviewing one (argument-name canon, output discipline, naming, duplication header, print conventions).

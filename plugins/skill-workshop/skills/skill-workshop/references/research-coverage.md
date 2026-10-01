@@ -38,7 +38,9 @@ either promote a family on demand or argue against it.
 
 Each row names what the check looks at and the severity at which it
 trips. Severity `fail` blocks the skill; `warn` surfaces a message
-without changing exit code (unless `--severity warn` is passed).
+without changing exit code (unless `--severity warn` is passed); `style`
+never blocks while `STYLE_SEVERITY` in `validate.py` is `"warn"`, and
+becomes `fail` when it is set to `"error"`.
 
 | Check | Severity | Looks at |
 |---|---|---|
@@ -73,6 +75,8 @@ without changing exit code (unless `--severity warn` is passed).
 | `main()` + `__main__` guard in scripts | warn | Each `<skill>/scripts/*.py` has both. |
 | Script CLI argument names | warn | argparse args drawn from the canonical name set; flags forbidden synonyms. |
 | Capability vs workflow taxonomy | warn | A skill described as fetching/querying owns ≥1 script; a skill described as routing/orchestrating owns 0. |
+| Prompt style (`content.style-*`) | style | ALL-CAPS density, `if in doubt` / `always use`, thinking instructions, ritual re-checks, report-time severity filters, withheld findings or tool-call budgets, hard-coded model names, turn-ending questions. Rules R-STYLE-1..8, `docs/research/addendum-2026-10.md § Prompt style`. |
+| Reference load condition (`content.ref-unconditional`) | style | Each `references/*.md` mention in `SKILL.md` sits in a sentence (or table row, or list lead-in) with a load condition. `docs/research/addendum-2026-10.md § Reference usage`. |
 
 ## Library-wide checks (`audit_library.py`)
 
@@ -193,7 +197,7 @@ Anchor: `docs/research/claude-skill-system_v1.17.md § Q-008 — Validation: LLM
 - R-LLMJ-2 — Judge output `verdict` ∈ `{pass, warn, fail}` (no Likert/numeric).
 - R-LLMJ-3 — Per-rule judge prompt has task intro + pinned eval steps + structured JSON output schema.
 - R-LLMJ-4 — `samples: 3`, `aggregation: majority_vote`.
-- R-LLMJ-5 — Default `model: claude-sonnet-4-6`; Opus 4.7 requires `--high-precision` opt-in.
+- R-LLMJ-5 — Default judge `model:` is a configured tier alias; a higher tier is an explicit opt-in. Reworded in `docs/research/addendum-2026-10.md § Rules reworded`.
 - R-LLMJ-6 — Default `mode: pointwise`; `pairwise` only for `R-DRIFT-5`.
 - R-LLMJ-7 — Judge output JSON schema: `{rule_id, verdict, critique, samples[]}`.
 - R-LLMJ-8 — Each rule ships `calibration/` with ≥10 hand-labelled examples; TPR/TNR ≥ 0.80.

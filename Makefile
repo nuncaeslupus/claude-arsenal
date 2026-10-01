@@ -65,7 +65,7 @@ context-budget:  ## report what this marketplace costs a consumer's context, and
 timings:  ## report p50/p95 by boundary from tmp/arsenal-metrics/metrics.tsv
 	@uv run python plugins/core/skills/init/assets/scripts/arsenal_timings.py $(TIMINGS_ARGS) || [ $$? -eq 1 ]  # 1 = no data yet, not a failure
 
-audit-rule-drift:  ## diff rule IDs in references/skill-rules.md vs docs/research/claude-skill-system_v1.17.md
+audit-rule-drift:  ## diff rule IDs in references/skill-rules.md vs docs/research/ (v1.17 + addendum-*.md)
 	uv run python $(AUDIT_DRIFT)
 
 tag:  ## publish v<.bundle-version> as a remote tag from HEAD — manual fallback for tag-release.yml

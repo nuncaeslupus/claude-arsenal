@@ -20,6 +20,7 @@ import re
 import sys
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
+from typing import NamedTuple
 
 import yaml
 
@@ -96,9 +97,19 @@ RULE_ID_REGEX = re.compile(r"\b[QR]-[A-Z]+-\d+\b")
 # Q-EVER-2: catch GitHub-style PR refs (#1234) and project-ticket prefixes
 # (ABC-123, JIRA-4567, PROJ-12, etc.) — anywhere from 2 to 6 uppercase chars
 # followed by 2+ digits, matching the conventional shape across trackers.
-PR_BRANCH_REGEX = re.compile(r"(?:(?<!\]\()(?<!\w)#\d+|(?<![A-Z])[A-Z]{2,6}-\d{2,})")
+# Not a ticket: the tail of a rule ID (`R-META-10`), a research discarded-
+# alternative ID (`DA-099`), or a standard's name (`SHA-256`, `ISO-8601`).
+PR_BRANCH_REGEX = re.compile(
+    r"(?:(?<!\]\()(?<!\w)#\d+|(?<![A-Z])(?<!\b[RQ]-)(?!(?:SHA|ISO|RFC|DA)-)[A-Z]{2,6}-\d{2,})"
+)
 HARDCODED_DATE_REGEX = re.compile(r"\b20\d{2}-\d{2}-\d{2}\b")
 CANARY_LINE_REGEX = re.compile(r"^CANARY:.*$", re.MULTILINE)
+# Prompt-style findings (R-STYLE-*, `content.ref-unconditional`) report at this
+# severity. "warn" records them as `style` issues: printed beside warnings and
+# never blocking, even under `--severity warn`, while the shipped tree is being
+# brought to zero. "error" records them as fails.
+STYLE_SEVERITY = "warn"
+
 # Built via chr() instead of a literal "../" so the AST self-scan on
 # line 776 does not see this file's own check string as a finding.
 _DOTDOT_SLASH = chr(46) + chr(46) + chr(47)
@@ -317,7 +328,7 @@ ALLOWED_SCRIPT_VERBS = {
 
 @dataclass
 class Issue:
-    severity: str  # "fail" | "warn"
+    severity: str  # "fail" | "warn" | "style" (non-blocking; see STYLE_SEVERITY)
     check: str
     message: str
     path: str | None = None
@@ -333,6 +344,10 @@ class Result:
 
     def warn(self, check: str, message: str, path: Path | None = None) -> None:
         self.issues.append(Issue("warn", check, message, str(path) if path else None))
+
+    def style(self, check: str, message: str, path: Path | None = None) -> None:
+        severity = "fail" if STYLE_SEVERITY == "error" else "style"
+        self.issues.append(Issue(severity, check, message, str(path) if path else None))
 
 
 def _read_text(path: Path) -> str:
@@ -785,68 +800,337 @@ def check_body(skill_dir: Path, result: Result) -> tuple[str, str]:
     return text, body
 
 
-def _scan_content_quality(prose: str, source: Path, result: Result) -> None:
-    """Run the three evergreen-doc-style detectors lifted from content-quality-rules.md.
+CAPS_TOKEN_REGEX = re.compile(r"\b(?:MUST|NEVER|ALWAYS|CRITICAL|IMPORTANT)\b|\bDo NOT\b")
+# More than this many emphasis tokens per 100 lines (files shorter than 100
+# lines count as 100) reads as shouting; calm, explained instructions work better.
+CAPS_PER_100_LINES = 3
+URL_REGEX = re.compile(r"https?://\S+")
+# A line naming a concrete command in backticks is a real check, not a ritual.
+CONCRETE_CHECK_REGEX = re.compile(
+    r"`[^`\n]*\b(?:make|pytest|npm|pnpm|yarn|cargo|go|tsc|mypy|ruff|uv|bash|sh|python3?|"
+    r"gradle|mvn|just|tox|bun|deno|dotnet|rspec|jest|vitest)\b[^`\n]*`"
+)
+# Product names are matched capitalised and full ids by shape, so the lowercase
+# tier aliases a config default carries stay legal. Spelled from lowercase
+# parts so this file does not report itself.
+_MODEL_FAMILIES = ("opus", "sonnet", "haiku", "fable")
+MODEL_NAME_REGEX = re.compile(
+    r"\b(?:" + "|".join(n.title() for n in _MODEL_FAMILIES) + r")\b"
+    r"|\bclaude-(?:[a-z]+-)*\d+(?:[-.]\d+)*(?:-[a-z]+)*\b"
+)
+REF_TRIGGER_REGEX = re.compile(
+    r"\b(?:when|whenever|if|unless|for|before|after|while|during|once|"
+    r"load|loads|loaded|loading)\b",
+    re.IGNORECASE,
+)
+SENTENCE_BOUNDARY_REGEX = re.compile(
+    r"(?<=[.!?])\s+(?=[A-Z`*\[(])|\n[ \t]*\n|\n(?=[ \t]*(?:[-*+][ \t]|\d+[.)][ \t]|\||#))"
+)
+LIST_ITEM_REGEX = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s")
+NUMBERED_ITEM_REGEX = re.compile(r"^\s*\d+[.)]\s")
+HEADING_LINE_REGEX = re.compile(r"^#{1,6}\s+(.+?)\s*$")
+SHIPPED_TEXT_SUFFIXES = {".md", ".py", ".sh", ".toml", ".yml", ".yaml"}
+STYLE_EXEMPT_BASENAMES = {"CHANGELOG.md"}
 
-    Operates on code-stripped, canary-stripped prose. Flags only the first
-    occurrence of each token so a single drift does not produce a wall of
-    duplicate warnings.
+
+class ContentRule(NamedTuple):
+    """One mechanical content detector: a regex run over each prose line.
+
+    `severity` is "warn" for the evergreen-doc rules and "style" for the
+    prompt-style rules (resolved through `STYLE_SEVERITY`). `exempt` matches
+    the raw line, inline code included, to excuse it. `self_exempt` rules skip
+    the skill-workshop skill, whose rubric files quote rule IDs and dates as
+    content. `code` rules also scan scripts and shipped asset code.
     """
-    prose = CANARY_LINE_REGEX.sub("", prose)
-    seen_rule_ids: set[str] = set()
-    for m in RULE_ID_REGEX.finditer(prose):
-        token = m.group(0)
-        if token in seen_rule_ids:
+
+    slug: str
+    regex: re.Pattern[str]
+    message: str
+    severity: str
+    exempt: re.Pattern[str] | None = None
+    self_exempt: bool = False
+    code: bool = False
+
+
+CONTENT_RULES: tuple[ContentRule, ...] = (
+    ContentRule(
+        "content.rule-id-in-prose",
+        RULE_ID_REGEX,
+        "rule-ID {token!r} in body prose; IDs are rubric vocabulary (Q-EVER-1)",
+        "warn",
+        self_exempt=True,
+    ),
+    ContentRule(
+        "content.pr-number-in-prose",
+        PR_BRANCH_REGEX,
+        "PR / branch reference {token!r} in body prose; rots quickly (Q-EVER-2)",
+        "warn",
+    ),
+    ContentRule(
+        "content.hard-coded-date",
+        HARDCODED_DATE_REGEX,
+        "hard-coded date {token!r} in body prose; dated callouts rot (Q-EVER-4)",
+        "warn",
+        self_exempt=True,
+    ),
+    ContentRule(
+        "content.style-if-in-doubt",
+        re.compile(r"\b(?:if|when) in doubt\b[^.\n]*\buse\b|\balways use\b", re.IGNORECASE),
+        "{token!r} over-triggers the tool; say when it helps instead (R-STYLE-2)",
+        "style",
+    ),
+    ContentRule(
+        "content.style-think",
+        re.compile(
+            r"\bthink (?:step[- ]by[- ]step|carefully|hard)\b"
+            r"|\b(?:explain|show|write out|include|state) (?:your|the|its) reasoning\b"
+            r"|\breasoning in (?:the|your) (?:response|answer|reply|output)\b",
+            re.IGNORECASE,
+        ),
+        "{token!r}: effort controls thinking; drop the instruction (R-STYLE-3)",
+        "style",
+    ),
+    ContentRule(
+        "content.style-double-check",
+        re.compile(
+            r"\bdouble[- ]check\w*|\bre-?verif(?:y|ies|ied|ying|ication)\b"
+            r"|\bfinal verification step\b|\bverify (?:your|its) own work\b"
+            r"|\bsub-?agent to (?:verify|check|double[- ]check)\b",
+            re.IGNORECASE,
+        ),
+        "{token!r} asks for a ritual re-check; name the real check to run (R-STYLE-4)",
+        "style",
+        exempt=CONCRETE_CHECK_REGEX,
+    ),
+    ContentRule(
+        "content.style-severity-filter",
+        re.compile(
+            r"\b(?:only report|report only)\b[^.\n]{0,40}?\b(?:high|critical|severe|important)\b"
+            r"|\bbe conservative\b",
+            re.IGNORECASE,
+        ),
+        "{token!r} filters at report time and under-reports; report all with severity (R-STYLE-5)",
+        "style",
+    ),
+    ContentRule(
+        "content.style-restraint",
+        re.compile(
+            r"\bhold (?:all|every|your|the) (?:\w+ )?findings\b"
+            r"|\bminimi[sz]e (?:the )?(?:number of )?tool calls\b"
+            r"|\bgeneric AI[- ](?:look|aesthetic|style)\b",
+            re.IGNORECASE,
+        ),
+        "{token!r} suppresses useful work or is too vague to follow (R-STYLE-6)",
+        "style",
+    ),
+    ContentRule(
+        "content.style-model-name",
+        MODEL_NAME_REGEX,
+        "hard-coded model name {token!r}; use a tier alias or config (R-STYLE-7)",
+        "style",
+        code=True,
+    ),
+    ContentRule(
+        "content.style-turn-end",
+        re.compile(r"\bShall I\b|\bNext,? I['\u2019]ll\b|\bDo you want me to\b", re.IGNORECASE),
+        "{token!r} ends the turn on requested work; continue instead (R-STYLE-8)",
+        "style",
+    ),
+)
+
+
+def _prose_lines(text: str, *, code: bool = False) -> list[tuple[int, str, str]]:
+    """`(line_no, raw, prose)` for each line a content rule should read.
+
+    Line numbers count from the top of the file. Prose files drop frontmatter,
+    fenced blocks and canary lines, and `prose` has inline code and URLs
+    removed. Code files keep every line and only lose URLs.
+    """
+    lines = text.splitlines()
+    if code:
+        return [(i, ln, URL_REGEX.sub("", ln)) for i, ln in enumerate(lines, 1)]
+    skip: set[int] = set()
+    if text.startswith("---\n"):
+        end = text.find("\n---\n", 4)
+        if end != -1:
+            skip.update(range(1, text[: end + 5].count("\n") + 1))
+    for open_line, close in scan_fences(text)[0]:
+        skip.update(range(open_line, close + 1))
+    out: list[tuple[int, str, str]] = []
+    for i, ln in enumerate(lines, 1):
+        if i in skip or CANARY_LINE_REGEX.match(ln):
             continue
-        seen_rule_ids.add(token)
-        result.warn(
-            "content.rule-id-in-prose",
-            f"rule-ID {token!r} in body prose; IDs are rubric vocabulary (Q-EVER-1)",
+        out.append((i, ln, URL_REGEX.sub("", re.sub(r"`[^`\n]*`", "", ln))))
+    return out
+
+
+def _report(result: Result, severity: str, check: str, message: str, source: Path) -> None:
+    if severity == "style":
+        result.style(check, message, source)
+    else:
+        result.warn(check, message, source)
+
+
+def _scan_content_quality(
+    text: str, source: Path, result: Result, *, self_scan: bool, kind: str
+) -> None:
+    """Run every applicable `CONTENT_RULES` row over one file.
+
+    `kind` is "skill" (SKILL.md and references: every rule), "asset" (shipped
+    prose under assets/: style rules only) or "code" (scripts: `code` rules).
+    Evergreen rules report the first occurrence of each token; style rules
+    report each offending line, since each one is a separate edit.
+    """
+    is_code = kind == "code"
+    lines = _prose_lines(text, code=is_code)
+    seen: set[tuple[str, str]] = set()
+    for rule in CONTENT_RULES:
+        if self_scan and rule.self_exempt:
+            continue
+        if kind != "skill" and rule.severity != "style":
+            continue
+        if is_code and not rule.code:
+            continue
+        for line_no, raw, prose in lines:
+            m = rule.regex.search(prose)
+            if not m or (rule.exempt is not None and rule.exempt.search(raw)):
+                continue
+            token = m.group(0)
+            key = (rule.slug, str(line_no) if rule.severity == "style" else token.casefold())
+            if key in seen:
+                continue
+            seen.add(key)
+            message = rule.message.format(token=token)
+            if rule.severity == "style":
+                message = f"line {line_no}: {message}"
+            _report(result, rule.severity, rule.slug, message, source)
+    if not is_code:
+        _check_caps_density(lines, source, result)
+
+
+def _check_caps_density(lines: list[tuple[int, str, str]], source: Path, result: Result) -> None:
+    """R-STYLE-1: ALL-CAPS emphasis density across one prose file."""
+    count = sum(len(CAPS_TOKEN_REGEX.findall(prose)) for _, _, prose in lines)
+    span = max(len(lines), 100)
+    if count * 100 > CAPS_PER_100_LINES * span:
+        result.style(
+            "content.style-caps",
+            f"{count} ALL-CAPS emphasis tokens in {len(lines)} prose lines "
+            f"(>{CAPS_PER_100_LINES} per 100); explain the reason instead (R-STYLE-1)",
             source,
         )
-    seen_pr: set[str] = set()
-    for m in PR_BRANCH_REGEX.finditer(prose):
-        token = m.group(0)
-        if token in seen_pr:
+
+
+def _check_ref_conditions(body: str, skill_md: Path, result: Result) -> None:
+    """Each `references/*.md` mention in SKILL.md says when to load it.
+
+    The context is the sentence holding the mention; a table row adds its
+    header row, and a list item adds a lead-in line ending in ':'. A mention
+    inside a numbered step, or under a heading that names a step or a
+    condition (`## Step 2`, `## When to load`), is conditioned by position.
+    """
+    spans, _ = scan_fences(body)
+    lines = body.splitlines()
+    fenced = {n for o, c in spans for n in range(o, c + 1)}
+    masked = "\n".join("" if i in fenced else ln for i, ln in enumerate(lines, 1))
+    lines = masked.split("\n")
+    cross = [(m.start(1), m.end(1)) for m in CROSS_SKILL_REF_CITE_REGEX.finditer(masked)]
+    bounds = [(m.start(), m.end()) for m in SENTENCE_BOUNDARY_REGEX.finditer(masked)]
+    reported: set[tuple[str, int]] = set()
+    for m in REFERENCE_MENTION_REGEX.finditer(masked):
+        if any(s <= m.start() and m.end() <= e for s, e in cross):
             continue
-        seen_pr.add(token)
-        result.warn(
-            "content.pr-number-in-prose",
-            f"PR / branch reference {token!r} in body prose; rots quickly (Q-EVER-2)",
-            source,
-        )
-    seen_dates: set[str] = set()
-    for m in HARDCODED_DATE_REGEX.finditer(prose):
-        token = m.group(0)
-        if token in seen_dates:
+        line_idx = masked.count("\n", 0, m.start())
+        line = lines[line_idx]
+        if _positioned(lines, line_idx):
             continue
-        seen_dates.add(token)
-        result.warn(
-            "content.hard-coded-date",
-            f"hard-coded date {token!r} in body prose; dated callouts rot (Q-EVER-4)",
-            source,
+        if line.lstrip().startswith("|"):
+            top = line_idx
+            while top > 0 and lines[top - 1].lstrip().startswith("|"):
+                top -= 1
+            context = line + " " + lines[top]
+        else:
+            start = max((e for s, e in bounds if e <= m.start()), default=0)
+            end = min((s for s, e in bounds if s >= m.end()), default=len(masked))
+            context = masked[start:end]
+        if LIST_ITEM_REGEX.match(line):
+            j = line_idx - 1
+            while j >= 0 and (LIST_ITEM_REGEX.match(lines[j]) or lines[j].startswith("  ")):
+                j -= 1
+            while j >= 0 and not lines[j].strip():
+                j -= 1
+            if j >= 0 and lines[j].rstrip().endswith(":"):
+                context += " " + lines[j]
+        if REF_TRIGGER_REGEX.search(REFERENCE_MENTION_REGEX.sub("", context)):
+            continue
+        key = (m.group(1), line_idx)
+        if key in reported:
+            continue
+        reported.add(key)
+        result.style(
+            "content.ref-unconditional",
+            f"references/{m.group(1)} is cited without a load condition "
+            "(when / if / before …); say when to read it, or inline it",
+            skill_md,
         )
+
+
+def _positioned(lines: list[str], idx: int) -> bool:
+    """Whether line `idx` sits in a numbered step or under a conditional heading."""
+    j = idx
+    while j >= 0 and lines[j].strip() and not HEADING_LINE_REGEX.match(lines[j]):
+        if NUMBERED_ITEM_REGEX.match(lines[j]):
+            return True
+        if not lines[j].startswith((" ", "\t")) and j != idx:
+            break
+        j -= 1
+    for k in range(idx, -1, -1):
+        m = HEADING_LINE_REGEX.match(lines[k])
+        if m:
+            heading = m.group(1)
+            return bool(re.search(r"\bsteps?\b", heading, re.IGNORECASE)) or bool(
+                REF_TRIGGER_REGEX.search(heading)
+            )
+    return False
 
 
 def check_content_quality(skill_dir: Path, body: str, result: Result) -> None:
-    """Lift the mechanical detectors of content-quality-rules.md onto SKILL.md + references.
+    """Run the mechanical content detectors over a skill's shipped text.
 
-    Skips the skill-workshop skill itself — that skill owns the rubrics, so
-    rule IDs / PR examples / dated findings-format examples there are
-    content, not rot.
+    SKILL.md and `references/` get every rule; prose under `assets/` gets the
+    style rules; scripts and asset code get the model-name rule. The
+    skill-workshop skill skips only the rule-ID and date detectors, because its
+    rubric files quote both as content.
     """
-    if skill_dir.name == "skill-workshop":
-        return
+    self_scan = skill_dir.name == "skill-workshop"
     skill_md = skill_dir / "SKILL.md"
     if skill_md.exists():
-        _scan_content_quality(_strip_all_code(body), skill_md, result)
+        _scan_content_quality(
+            _read_text(skill_md), skill_md, result, self_scan=self_scan, kind="skill"
+        )
+        _check_ref_conditions(body, skill_md, result)
     refs_dir = skill_dir / "references"
-    if not refs_dir.is_dir():
-        return
-    for ref in sorted(refs_dir.rglob("*.md")):
-        text = _read_text(ref)
-        _, ref_body = _split_frontmatter(text) if text.startswith("---\n") else (None, text)
-        _scan_content_quality(_strip_all_code(ref_body), ref, result)
+    if refs_dir.is_dir():
+        for ref in sorted(refs_dir.rglob("*.md")):
+            _scan_content_quality(_read_text(ref), ref, result, self_scan=self_scan, kind="skill")
+    for sub in ("scripts", "assets"):
+        root = skill_dir / sub
+        if not root.is_dir():
+            continue
+        for path in sorted(root.rglob("*")):
+            if (
+                not path.is_file()
+                or path.suffix not in SHIPPED_TEXT_SUFFIXES
+                or path.name in STYLE_EXEMPT_BASENAMES
+                or "__pycache__" in path.parts
+            ):
+                continue
+            kind = "asset" if path.suffix == ".md" else "code"
+            try:
+                text = _read_text(path)
+            except UnicodeDecodeError:
+                continue
+            _scan_content_quality(text, path, result, self_scan=self_scan, kind=kind)
 
 
 def _check_inline_parent_traversal(
@@ -1262,7 +1546,8 @@ def emit_text(result: Result) -> None:
         return
     fails = [i for i in result.issues if i.severity == "fail"]
     warns = [i for i in result.issues if i.severity == "warn"]
-    console.start(f"{result.skill}: {len(fails)} fail, {len(warns)} warn")
+    styles = [i for i in result.issues if i.severity == "style"]
+    console.start(f"{result.skill}: {len(fails)} fail, {len(warns)} warn, {len(styles)} style")
     for issue in result.issues:
         emit = console.fail if issue.severity == "fail" else console.warn
         loc = f" [{issue.path}]" if issue.path else ""

@@ -181,6 +181,24 @@ Deep dive: `references/body-and-style.md`.
 | R-CTX-4 | should | The first 5000 tokens of the body front-load the constraints most likely to matter after auto-compaction. |
 | R-BODY-(MUST-AVOID) | should | The body avoids heavy-handed `MUST` / `ALWAYS` / `NEVER` styling. Explain *why* the constraint exists rather than asserting it categorically. |
 
+### Prompt style
+
+Deep dive: `references/model-prompting.md`. Source:
+`docs/research/addendum-2026-10.md § Prompt style`. `validate.py` reports
+each as a `content.style-*` finding over `SKILL.md`, `references/`, shipped
+`assets/` prose and (for model names) scripts.
+
+| ID | Tier | Check |
+|---|---|---|
+| R-STYLE-1 | should | ALL-CAPS emphasis tokens stay at or below about 3 per 100 prose lines; each one that remains carries its reason. |
+| R-STYLE-2 | should | No `if in doubt, use X` or `always use X`; the text says when the tool helps instead. |
+| R-STYLE-3 | should | No instruction to `think step by step`, `carefully` or `hard`, and no request to write the reasoning out. |
+| R-STYLE-4 | should | No ritual re-check (`double-check`, `re-verify`, `final verification step`, `subagent to verify`). A line naming a concrete test, build or typecheck command is exempt. |
+| R-STYLE-5 | should | Review prompts do not filter at report time (`only report high severity`, `be conservative`). |
+| R-STYLE-6 | should | No `hold all findings`, no tool-call budget (`minimise tool calls`), no vague style bans such as `avoid the generic AI look`. |
+| R-STYLE-7 | should | No hard-coded model names or ids in shipped prose or scripts. Lowercase tier aliases as config defaults and the consumer `CHANGELOG.md` are exempt. |
+| R-STYLE-8 | should | Step text does not end requested work on `Shall I…`, `Next I'll…` or `Do you want me to…`. |
+
 ## 4. References (lazy-load anatomy)
 
 Deep dive: `references/references-and-chunking.md`.
@@ -223,7 +241,7 @@ Deep dive: `references/inter-document-boundary.md`.
 | R-CONDUCT-1 | should | Default to implicit, model-mediated conduction; do not author an "orchestrator skill" for in-session multi-skill coordination. Reserve explicit orchestrators for the agent-teams tier. |
 | R-CONDUCT-2 | should | When two skills' `paths` globs both match the same file, both descriptions surface to the model — no resolution order is documented. Author `description` fields narrow enough that the model can disambiguate. |
 | R-CONDUCT-3 | must | A skill with `disable-model-invocation: true` MUST NOT also declare a `paths` glob. The combination is incoherent (`paths` is an auto-activation channel; the destructive flag forbids auto-activation). |
-| R-CONDUCT-4 | should | Mentions of agent-teams in body prose carry the EXPERIMENTAL caveat (v2.1.32+, Opus 4.6+, no nested teams, one team per session). |
+| R-CONDUCT-4 | should | Mentions of agent-teams in body prose carry the experimental caveat: no nested teams, one team per session. No version or model numbers (`docs/research/addendum-2026-10.md § Rules reworded`). |
 
 ## 6. Workspace topology and discovery
 
@@ -272,7 +290,7 @@ Deep dive: `references/refactor-cookbook.md`, `references/validation-and-evals.m
 | R-COMP-3 | must | Cross-skill helpers are embedded (one copy per skill, sibling header) OR promoted to `plugins/<plugin>/scripts/_shared/`. Never symlinked across peer skills. |
 | R-XPOLL-2 | should | Skill names favour the `-ing` suffix when the skill describes a capability ("triaging") rather than a noun ("triage"). Soft; the team-style decision is recorded in `references/research-coverage.md § Deferred families and why`. |
 | R-XPOLL-4 | must | Pairwise description cosine <0.95 across siblings. (`should` at <0.85.) Two highly similar descriptions mean two skills overlap and one should re-scope or merge. |
-| R-XPOLL-6 | should | Each SKILL.md body has at least two `### ` sub-sections AND at least one fenced code block — the mechanical proxy for "concrete examples". |
+| R-XPOLL-6 | should | Each procedural SKILL.md body has at least two `### ` sub-sections and at least one fenced code block — the mechanical proxy for "concrete examples". Reference-style skills are exempt (`docs/research/addendum-2026-10.md § Rules reworded`). |
 | R-XPOLL-7 | should | Terminology in body prose stays consistent: the same concept gets the same name throughout SKILL.md and its references. Promotion-pass cap of 3 iterations on each skill. |
 | R-XPOLL-8 | should | Deterministic helper outputs in SKILL.md are facts, not observations: no reasoning prose (`Now I will check…`, `Let me verify…`) between a ```bash``` fence and the next sentence; no time-sensitive tokens (years, month names) outside fences. |
 | R-XPOLL-9 | must | The validator dogfoods itself: this skill (the meta-skill) MUST validate clean against its own `validate.py`. Library mode: assert this skill's `SKILL.md` exists; running `validate.py` against the meta-skill folder returns zero findings. |
