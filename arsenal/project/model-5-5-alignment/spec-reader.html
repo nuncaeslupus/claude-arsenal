@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
-<meta name="arsenal-source-sha256" content="e750a866852eb9960aa91d1653b55dcdce22d991729e0f13431aad0710df5756">
+<meta name="arsenal-source-sha256" content="211c36dab71edc45e6f459f1dfde0cf155c620e8fa008420afdc57889d539894">
 <title>Arsenal 5.5 alignment — Specification (annotatable)</title>
 <style>
 :root{
@@ -130,7 +130,7 @@ h4.sec-h{font-size:16.5px;color:var(--fg)}
     <button class="btn primary" id="btn-export">Save / Export</button>
   </div>
 </div>
-<div class="statusbar"><div class="wrap"><span class="count" id="count">0 / 9 notes</span><span class="hint"> · notes save automatically; <strong>Save / Export</strong> keeps a file you can send back</span></div></div>
+<div class="statusbar"><div class="wrap"><span class="count" id="count">0 / 16 notes</span><span class="hint"> · notes save automatically; <strong>Save / Export</strong> keeps a file you can send back</span></div></div>
 <div id="warnbar"><div class="wrap"><strong>Heads up —</strong> this browser isn't storing your notes automatically (private/incognito mode or restricted file view). Tap <strong>Save / Export</strong> regularly.</div></div>
 
 <div class="wrap">
@@ -160,6 +160,13 @@ h4.sec-h{font-size:16.5px;color:var(--fg)}
 <li><a href="#s-spec-option-c-b-verification-redesign">Option C: B + verification redesign + upgrade tooling (Chosen, r2)</a></li>
 <li><a href="#s-spec-comparison">Comparison</a></li>
 <li><a href="#s-spec-4">§4 Recommendation</a></li>
+<li><a href="#s-spec-5">§5 Contracts</a></li>
+<li><a href="#s-spec-configuration-arsenal-config-tom">Configuration (arsenal/config.toml)</a></li>
+<li><a href="#s-spec-review-sources-py-new-init-asset">review_sources.py (new, init/assets/scripts/)</a></li>
+<li><a href="#s-spec-adversarial-review-sh-changes">adversarial_review.sh changes</a></li>
+<li><a href="#s-spec-gate-receipt">Gate receipt</a></li>
+<li><a href="#s-spec-queryprstate-py-changes">queryprstate.py changes</a></li>
+<li><a href="#s-spec-6">§6 Risks &amp; Validation</a></li>
 </ul></details>
 </details>
   <section class="part">
@@ -170,7 +177,7 @@ h4.sec-h{font-size:16.5px;color:var(--fg)}
 <strong>Ticket / PR</strong>: #476
 <strong>Author</strong>: imarcos@gmail.com
 <strong>Revision</strong>: 2
-<strong>Status</strong>: draft
+<strong>Status</strong>: approved (2026-10-01, revision 2) — without annotations
 <strong>Revision log</strong>:
 - r1 — first draft, from a three-way audit of the shipped tree against Anthropic's 5.5-generation prompting guides
 - r2 — applied <code>arsenal-5-5-alignment-spec-notes-2026-10-01-r1.md</code>: Option C chosen; verification redesign promoted to workstream V and shipped first; model-upgrade meta-skill (workstream U); reference-file usage rule; research addendum; task short labels; setup interview; per-skill effort/model; canaries kept plus a load hook; target 5.0.0</p>
@@ -661,11 +668,163 @@ export beside this file in the same commit. On approval set <strong>Status</stro
 <td>2026-10-01</td>
 </tr>
 </tbody>
-</table>
-<blockquote>
-<p>Sections 5–6 (contracts, risks) are appended by <code>design</code>.</p>
-</blockquote></div>
+</table></div>
 <div class="note" data-for="s-spec-4"><div class="note-head"><span class="note-ico">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC §4</span></div><textarea class="note-ta" data-key="s-spec-4" data-label="§4 Recommendation" data-part="Spec" rows="1" placeholder="Tap to add a note for this point…"></textarea></div>
+</article>
+<article class="sec" id="s-spec-5">
+<h3 class="sec-h"><span class="chip">§5</span><span class="sec-title">Contracts</span></h3>
+<div class="sec-body"><p>Scope: workstream V (PR 1, <code>4.26.0</code>). Workstreams P and U get their own contracts when their plan is written.</p></div>
+<div class="note" data-for="s-spec-5"><div class="note-head"><span class="note-ico">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC §5</span></div><textarea class="note-ta" data-key="s-spec-5" data-label="§5 Contracts" data-part="Spec" rows="1" placeholder="Tap to add a note for this point…"></textarea></div>
+</article>
+<article class="sec" id="s-spec-configuration-arsenal-config-tom">
+<h4 class="sec-h"><span class="chip">▸</span><span class="sec-title">Configuration (<code>arsenal/config.toml</code>)</span></h4>
+<div class="sec-body"><table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Type / values</th>
+<th>Default</th>
+<th>Read by</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>verification</code></td>
+<td><code>fast</code> | <code>balanced</code> | <code>strict</code></td>
+<td><code>balanced</code></td>
+<td><code>review_sources.py</code>, <code>fast_gate.sh</code>, <code>adversarial_review.sh</code></td>
+</tr>
+<tr>
+<td><code>review-max-rounds</code></td>
+<td>int ≥ 1</td>
+<td><strong>2</strong> (was 3)</td>
+<td><code>adversarial_review.sh</code></td>
+</tr>
+<tr>
+<td><code>review-budget-min</code></td>
+<td>int ≥ 1</td>
+<td>10</td>
+<td><code>adversarial_review.sh</code> (packet line)</td>
+</tr>
+<tr>
+<td><code>bot-wait-min</code></td>
+<td>int ≥ 1</td>
+<td>20</td>
+<td><code>review_sources.py</code>, <code>query_pr_state.py</code></td>
+</tr>
+<tr>
+<td><code>bot-triggers</code></td>
+<td>table <code>bot = "comment"</code></td>
+<td><code>{}</code> (starting value; <code>/init</code> suggests known commands for the bots in <code>review-bots</code>)</td>
+<td><code>review_sources.py --trigger</code></td>
+</tr>
+<tr>
+<td><code>risk-paths</code></td>
+<td>list of globs</td>
+<td><code>[]</code></td>
+<td><code>review_sources.py</code></td>
+</tr>
+<tr>
+<td><code>risk-lines</code></td>
+<td>int ≥ 1</td>
+<td>400</td>
+<td><code>review_sources.py</code></td>
+</tr>
+</tbody>
+</table>
+<p>Every key enters <code>DEFAULTS</code>, the enum/int validators and the <code>CONSUMER</code> map (<code>config_keys_test.sh</code>).</p></div>
+<div class="note" data-for="s-spec-configuration-arsenal-config-tom"><div class="note-head"><span class="note-ico">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC › Configuration (arsenal/config.toml)</span></div><textarea class="note-ta" data-key="s-spec-configuration-arsenal-config-tom" data-label="Configuration (arsenal/config.toml)" data-part="Spec" rows="1" placeholder="Tap to add a note for this point…"></textarea></div>
+</article>
+<article class="sec" id="s-spec-review-sources-py-new-init-asset">
+<h4 class="sec-h"><span class="chip">▸</span><span class="sec-title"><code>review_sources.py</code> (new, <code>init/assets/scripts/</code>)</span></h4>
+<div class="sec-body"><pre><code class="language-text">review_sources.py --pr N [--repo owner/name] [--json] [--trigger]
+</code></pre>
+<p>Prints one line per source, then the decision. Exit 0 on a classification, 2 on an error (no <code>gh</code>, unreadable config).</p>
+<pre><code class="language-text">ci              ok            3 checks green on 1a2b3c4
+bot:&lt;name&gt;      skipped       &quot;does not receive automatic reviews&quot; (comment 5929979667)
+bot:&lt;name&gt;      rate-limited  &quot;rate limit exceeded&quot; (comment …)
+bot:&lt;name&gt;      absent        no activity 24 min after head push (bot-wait-min 20)
+decision        local-review=diff  full-suite=skip  reason=ci ok, no bot review, 212 changed lines
+</code></pre>
+<p>States: CI <code>ok | failing | pending | absent</code>; bot <code>ok | pending | skipped | rate-limited | absent</code>. <code>--trigger</code> posts the bot's <code>bot-triggers</code> comment once per PR head for a <code>skipped</code> or first-time <code>absent</code> bot and records it under <code>tmp/arsenal-review/pr-&lt;N&gt;/</code>; a second absence after the trigger is final. <code>decide(profile, ci, bots, risk, docs_only)</code> is a pure function implementing the § 3 table: <code>local-review ∈ {none, diff, full}</code>, <code>full-suite ∈ {skip, run}</code>.</p></div>
+<div class="note" data-for="s-spec-review-sources-py-new-init-asset"><div class="note-head"><span class="note-ico">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC › review_sources.py (new, init/assets/scripts/)</span></div><textarea class="note-ta" data-key="s-spec-review-sources-py-new-init-asset" data-label="review_sources.py (new, init/assets/scripts/)" data-part="Spec" rows="1" placeholder="Tap to add a note for this point…"></textarea></div>
+</article>
+<article class="sec" id="s-spec-adversarial-review-sh-changes">
+<h4 class="sec-h"><span class="chip">▸</span><span class="sec-title"><code>adversarial_review.sh</code> changes</span></h4>
+<div class="sec-body"><ul>
+<li>Round state moves to <code>tmp/arsenal-review/&lt;branch-slug&gt;/round.env</code> (<code>round</code>, <code>tree</code>, <code>base</code>). The count survives base moves and rebases; it resets only on a different branch or <code>--reset</code>.</li>
+<li>Packet header gains: <code>Budget: round R of M · B min · profile P. Targeted tests only (changed files, --checks); no full suite; no mutation runs unless profile is strict. Further rounds are the orchestrator's call.</code></li>
+</ul></div>
+<div class="note" data-for="s-spec-adversarial-review-sh-changes"><div class="note-head"><span class="note-ico">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC › adversarial_review.sh changes</span></div><textarea class="note-ta" data-key="s-spec-adversarial-review-sh-changes" data-label="adversarial_review.sh changes" data-part="Spec" rows="1" placeholder="Tap to add a note for this point…"></textarea></div>
+</article>
+<article class="sec" id="s-spec-gate-receipt">
+<h4 class="sec-h"><span class="chip">▸</span><span class="sec-title">Gate receipt</span></h4>
+<div class="sec-body"><p><code>fast_gate.sh --full</code> and <code>open_task_pr.sh</code>'s host-gate write <code>tmp/arsenal-gate/receipts/&lt;tree-hash&gt;</code> (<code>exit=0</code>, gate command, UTC time) after a passing run on a clean tree. Before running the full gate they look for a receipt for the current tree and reuse it (<code>fast_gate: host-gate passed on this tree at &lt;time&gt; — reused</code>). Dirty tree → no reuse. With CI green on the PR head SHA and a profile other than <code>strict</code>, the merge-time full run is skipped and the CI result is named as the evidence.</p></div>
+<div class="note" data-for="s-spec-gate-receipt"><div class="note-head"><span class="note-ico">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC › Gate receipt</span></div><textarea class="note-ta" data-key="s-spec-gate-receipt" data-label="Gate receipt" data-part="Spec" rows="1" placeholder="Tap to add a note for this point…"></textarea></div>
+</article>
+<article class="sec" id="s-spec-queryprstate-py-changes">
+<h4 class="sec-h"><span class="chip">▸</span><span class="sec-title"><code>query_pr_state.py</code> changes</span></h4>
+<div class="sec-body"><p>Bot classification comes from <code>review_sources.py</code> (shared module). New states <code>bot_skipped</code>, <code>bot_rate_limited</code>, <code>bot_absent</code>; none of them blocks <code>ready_to_merge</code> once the local fallback that <code>decide()</code> requires has a recorded verdict. <code>waiting</code> can no longer last past <code>bot-wait-min</code> plus one trigger.</p></div>
+<div class="note" data-for="s-spec-queryprstate-py-changes"><div class="note-head"><span class="note-ico">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC › queryprstate.py changes</span></div><textarea class="note-ta" data-key="s-spec-queryprstate-py-changes" data-label="queryprstate.py changes" data-part="Spec" rows="1" placeholder="Tap to add a note for this point…"></textarea></div>
+</article>
+<article class="sec" id="s-spec-6">
+<h3 class="sec-h"><span class="chip">§6</span><span class="sec-title">Risks &amp; Validation</span></h3>
+<div class="sec-body"><table>
+<thead>
+<tr>
+<th>Risk</th>
+<th>Likelihood</th>
+<th>Impact</th>
+<th>Mitigation</th>
+<th>Validation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A real bug merges because a local review was skipped on "CI + bot ok"</td>
+<td>Medium</td>
+<td>High</td>
+<td><code>risk-paths</code>/<code>risk-lines</code> force a local round; <code>strict</code> keeps today's depth; the decision line is logged on the PR</td>
+<td>unit tests of <code>decide()</code>; incident-replay fixture</td>
+</tr>
+<tr>
+<td>Bot skip/limit notices change wording</td>
+<td>High</td>
+<td>Medium</td>
+<td>Regexes in one table with fixtures; unmatched bot text → <code>pending</code> then <code>absent</code> after the wait, never a hang</td>
+<td>fixture per known notice + one unknown</td>
+</tr>
+<tr>
+<td>Trigger comment spams a PR</td>
+<td>Low</td>
+<td>Low</td>
+<td>Once per head per bot, recorded on disk</td>
+<td>unit test</td>
+</tr>
+<tr>
+<td>Stale receipt reused after a change</td>
+<td>Low</td>
+<td>High</td>
+<td>Keyed by tree hash; clean tree only</td>
+<td><code>fast_gate_test.sh</code> case: edit → rerun</td>
+</tr>
+<tr>
+<td>Counter keyed to branch never resets on a genuinely new change on the same branch</td>
+<td>Medium</td>
+<td>Low</td>
+<td><code>--reset</code>, and the cap message names it</td>
+<td><code>adversarial_review_test.sh</code></td>
+</tr>
+<tr>
+<td>Consumers relying on 3 rounds</td>
+<td>Low</td>
+<td>Low</td>
+<td>Key stays configurable; CHANGELOG says so</td>
+<td>—</td>
+</tr>
+</tbody>
+</table></div>
+<div class="note" data-for="s-spec-6"><div class="note-head"><span class="note-ico">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC §6</span></div><textarea class="note-ta" data-key="s-spec-6" data-label="§6 Risks &amp; Validation" data-part="Spec" rows="1" placeholder="Tap to add a note for this point…"></textarea></div>
 </article>
 </section>
 </div>

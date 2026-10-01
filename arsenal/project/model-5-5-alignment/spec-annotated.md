@@ -12,7 +12,7 @@
 **Ticket / PR**: #476
 **Author**: imarcos@gmail.com
 **Revision**: 2
-**Status**: draft
+**Status**: approved (2026-10-01, revision 2) — without annotations
 **Revision log**:
 - r1 — first draft, from a three-way audit of the shipped tree against Anthropic's 5.5-generation prompting guides
 - r2 — applied `arsenal-5-5-alignment-spec-notes-2026-10-01-r1.md`: Option C chosen; verification redesign promoted to workstream V and shipped first; model-upgrade meta-skill (workstream U); reference-file usage rule; research addendum; task short labels; setup interview; per-skill effort/model; canaries kept plus a load hook; target 5.0.0
@@ -252,11 +252,103 @@ Then a stack where only the last PR bumps to **`5.0.0`**:
 | D-6 | `skill-workshop` owns the model-upgrade process; research v1.17 frozen, addendum for new findings | agreed | 2026-10-01 |
 | D-7 | Token reduction and short outputs are standing goals for every change | agreed | 2026-10-01 |
 
-
-> Sections 5–6 (contracts, risks) are appended by `design`.
-
 <!-- -->
 
 > **✎ Notes** · `SPEC §4`
 > I think I prefer C. Let's fix how adversarial reviews work as I explained above, keep the canary lines (a hook won't hurt) and boom to 5.0.0.
+
+## §5 Contracts
+
+Scope: workstream V (PR 1, `4.26.0`). Workstreams P and U get their own contracts when their plan is written.
+
+<!-- -->
+
+> **✎ Notes** · `SPEC §5`
+> _(your notes here — replace this line)_
+
+### Configuration (arsenal/config.toml)
+
+| Key | Type / values | Default | Read by |
+|-----|---------------|---------|---------|
+| `verification` | `fast` \| `balanced` \| `strict` | `balanced` | `review_sources.py`, `fast_gate.sh`, `adversarial_review.sh` |
+| `review-max-rounds` | int ≥ 1 | **2** (was 3) | `adversarial_review.sh` |
+| `review-budget-min` | int ≥ 1 | 10 | `adversarial_review.sh` (packet line) |
+| `bot-wait-min` | int ≥ 1 | 20 | `review_sources.py`, `query_pr_state.py` |
+| `bot-triggers` | table `bot = "comment"` | `{}` (starting value; `/init` suggests known commands for the bots in `review-bots`) | `review_sources.py --trigger` |
+| `risk-paths` | list of globs | `[]` | `review_sources.py` |
+| `risk-lines` | int ≥ 1 | 400 | `review_sources.py` |
+
+Every key enters `DEFAULTS`, the enum/int validators and the `CONSUMER` map (`config_keys_test.sh`).
+
+<!-- -->
+
+> **✎ Notes** · `SPEC › Configuration (arsenal/config.toml)`
+> _(your notes here — replace this line)_
+
+### review_sources.py (new, init/assets/scripts/)
+
+```text
+review_sources.py --pr N [--repo owner/name] [--json] [--trigger]
+```
+
+Prints one line per source, then the decision. Exit 0 on a classification, 2 on an error (no `gh`, unreadable config).
+
+```text
+ci              ok            3 checks green on 1a2b3c4
+bot:<name>      skipped       "does not receive automatic reviews" (comment 5929979667)
+bot:<name>      rate-limited  "rate limit exceeded" (comment …)
+bot:<name>      absent        no activity 24 min after head push (bot-wait-min 20)
+decision        local-review=diff  full-suite=skip  reason=ci ok, no bot review, 212 changed lines
+```
+
+States: CI `ok | failing | pending | absent`; bot `ok | pending | skipped | rate-limited | absent`. `--trigger` posts the bot's `bot-triggers` comment once per PR head for a `skipped` or first-time `absent` bot and records it under `tmp/arsenal-review/pr-<N>/`; a second absence after the trigger is final. `decide(profile, ci, bots, risk, docs_only)` is a pure function implementing the § 3 table: `local-review ∈ {none, diff, full}`, `full-suite ∈ {skip, run}`.
+
+<!-- -->
+
+> **✎ Notes** · `SPEC › review_sources.py (new, init/assets/scripts/)`
+> _(your notes here — replace this line)_
+
+### adversarial_review.sh changes
+
+- Round state moves to `tmp/arsenal-review/<branch-slug>/round.env` (`round`, `tree`, `base`). The count survives base moves and rebases; it resets only on a different branch or `--reset`.
+- Packet header gains: `Budget: round R of M · B min · profile P. Targeted tests only (changed files, --checks); no full suite; no mutation runs unless profile is strict. Further rounds are the orchestrator's call.`
+
+<!-- -->
+
+> **✎ Notes** · `SPEC › adversarial_review.sh changes`
+> _(your notes here — replace this line)_
+
+### Gate receipt
+
+`fast_gate.sh --full` and `open_task_pr.sh`'s host-gate write `tmp/arsenal-gate/receipts/<tree-hash>` (`exit=0`, gate command, UTC time) after a passing run on a clean tree. Before running the full gate they look for a receipt for the current tree and reuse it (`fast_gate: host-gate passed on this tree at <time> — reused`). Dirty tree → no reuse. With CI green on the PR head SHA and a profile other than `strict`, the merge-time full run is skipped and the CI result is named as the evidence.
+
+<!-- -->
+
+> **✎ Notes** · `SPEC › Gate receipt`
+> _(your notes here — replace this line)_
+
+### queryprstate.py changes
+
+Bot classification comes from `review_sources.py` (shared module). New states `bot_skipped`, `bot_rate_limited`, `bot_absent`; none of them blocks `ready_to_merge` once the local fallback that `decide()` requires has a recorded verdict. `waiting` can no longer last past `bot-wait-min` plus one trigger.
+
+<!-- -->
+
+> **✎ Notes** · `SPEC › queryprstate.py changes`
+> _(your notes here — replace this line)_
+
+## §6 Risks & Validation
+
+| Risk | Likelihood | Impact | Mitigation | Validation |
+|------|-----------|--------|------------|------------|
+| A real bug merges because a local review was skipped on "CI + bot ok" | Medium | High | `risk-paths`/`risk-lines` force a local round; `strict` keeps today's depth; the decision line is logged on the PR | unit tests of `decide()`; incident-replay fixture |
+| Bot skip/limit notices change wording | High | Medium | Regexes in one table with fixtures; unmatched bot text → `pending` then `absent` after the wait, never a hang | fixture per known notice + one unknown |
+| Trigger comment spams a PR | Low | Low | Once per head per bot, recorded on disk | unit test |
+| Stale receipt reused after a change | Low | High | Keyed by tree hash; clean tree only | `fast_gate_test.sh` case: edit → rerun |
+| Counter keyed to branch never resets on a genuinely new change on the same branch | Medium | Low | `--reset`, and the cap message names it | `adversarial_review_test.sh` |
+| Consumers relying on 3 rounds | Low | Low | Key stays configurable; CHANGELOG says so | — |
+
+<!-- -->
+
+> **✎ Notes** · `SPEC §6`
+> _(your notes here — replace this line)_
 
