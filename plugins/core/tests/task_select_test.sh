@@ -736,4 +736,14 @@ implicit=$(grep -rn "| *python3 [^|]*task_select\.py\|{SELECT_PY}" \
 ${implicit}"
 echo "PASS: no caller relies on the implicit stdin spelling"
 
+# --- label: derived for display, explicit when the file has one ---------------
+LT="${tmpdir}/ltasks"
+mkdir -p "${LT}"
+printf -- '---\nid: t-lab00001\ntitle: "Make the release workflow tag only on green CI"\nlabel: tag only green CI\n---\n' > "${LT}/a.md"
+printf -- '---\nid: t-lab00002\ntitle: "Extract the surface probe into its own script"\npriority: -1\n---\n' > "${LT}/b.md"
+out=$(python3 "${SELECT_PY}" --all --state - --tasks-dir "${LT}" <<<'{}' 2>/dev/null)
+grep -q '"display":"tag only green CI (t-lab00001)"' <<<"${out}" || fail "explicit label missing from display: ${out}"
+grep -q '"display":"Extract the surface probe into\\u2026 (t-lab00002)"' <<<"${out}" || fail "fallback label wrong: ${out}"
+echo "PASS: tasks carry a display label (explicit or truncated title)"
+
 echo "PASS: task_select_test — all gates passed"

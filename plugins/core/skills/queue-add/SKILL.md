@@ -2,7 +2,7 @@
 name: queue-add
 description: When the user wants to add a task to the claude-arsenal queue. Do NOT use to update or remove existing tasks.
 user-invocable: true
-argument-hint: "--title TITLE [--priority N] [--workspace NAME] [--tag TAG] [--requires surface:X] [--deps t-XXXXXXXX] [--max-attempts N]"
+argument-hint: "--title TITLE [--label WORDS] [--priority N] [--workspace NAME] [--tag TAG] [--requires surface:X] [--deps t-XXXXXXXX] [--max-attempts N]"
 ---
 
 # queue-add
@@ -27,6 +27,7 @@ Load this skill when:
 ```bash
 python3 "${CLAUDE_SKILL_DIR}/scripts/create_task.py" \
   --title "Extract the surface probe into its own script" \
+  --label "extract surface probe" \
   --priority 5 \
   --deps t-aaaa1111 \
   --requires "surface:cli" \
@@ -39,6 +40,9 @@ issue with whatever GitHub access this surface offers — the built-in GitHub to
 or the REST API — with the `arsenal:task` label and a visible `` `arsenal-task: <id>` `` line in the
 body. **The marker is what links issue to task**; without it the task is invisible to the
 selector, and without the label the issue is never treated as claimable work.
+
+`--label` is the short name (five words at most) a board shows beside the id, so write
+one that says what the task does; left out, it is the first five words of the title.
 
 Use the printed id as a `--deps` argument when adding dependent tasks.
 

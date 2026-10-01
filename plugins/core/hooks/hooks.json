@@ -28,6 +28,15 @@
             "command": "bash \"${CLAUDE_PLUGIN_ROOT}/skills/init/assets/bin/compact_resume.sh\" record"
           }
         ]
+      },
+      {
+        "matcher": "Skill",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/skills/init/assets/bin/record_skill_load.sh\""
+          }
+        ]
       }
     ]
   }
