@@ -44,8 +44,8 @@ that data arrives on. Before every dispatch, the loop runs `budget_check.sh`:
 - Either window (`five_hour` / `seven_day`) at/above `ARSENAL_QUOTA_STOP_PCT`
   (default 90) → exit `3`: stop, write `handover.md`, report the reset time.
 - File missing / fields absent (non-Pro/Max plan, before the first response,
-  older Claude Code) → exit `0`, **fail-open**: the loop runs where quota is not
-  observable.
+  Claude Code older than v2.1.172, which has no `statusLine.rate_limits`) →
+  exit `0`, **fail-open**: the loop runs where quota is not observable.
 
 `rate_limits` is a snapshot at the last message and is **Pro/Max only**; on
 API/metered usage the quota check always fails open. So `budget_check.sh` also
