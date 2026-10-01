@@ -882,10 +882,11 @@ CONTENT_RULES: tuple[ContentRule, ...] = (
     ),
     ContentRule(
         "content.style-if-in-doubt",
-        # A negation before "use" ("if in doubt, do not use X") steers away, so
-        # it does not over-trigger.
+        # A negation right before "use" ("if in doubt, do not use X") steers away;
+        # a negation elsewhere in the sentence does not cancel a positive "use".
         re.compile(
-            r"\b(?:if|when) in doubt\b(?:(?!\b(?:not|never|no)\b|n['\u2019]t\b)[^.\n])*\buse\b"
+            r"\b(?:if|when) in doubt\b[^.\n]*?"
+            r"(?<!\bnot )(?<!\bnever )(?<!n't )(?<!n\u2019t )(?<!\bnot to )\buse\b"
             r"|\balways use\b",
             re.IGNORECASE,
         ),

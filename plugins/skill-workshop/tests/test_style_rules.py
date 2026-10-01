@@ -107,6 +107,9 @@ def test_style_if_in_doubt_warns(tmp_path: Path) -> None:
 def test_style_if_in_doubt_negation_is_fine(tmp_path: Path) -> None:
     assert _checks(_skill(tmp_path, "If in doubt, do not use this tool.")) == []
     assert _checks(_skill(tmp_path, "When in doubt, don't use the cache.")) == []
+    # A negation elsewhere in the sentence does not cancel a positive "use".
+    assert _checks(_skill(tmp_path, "If in doubt and no tests exist, use X.")) != []
+    assert _checks(_skill(tmp_path, "If in doubt, it is not wrong to use X.")) != []
 
 
 def test_style_always_use_warns(tmp_path: Path) -> None:
