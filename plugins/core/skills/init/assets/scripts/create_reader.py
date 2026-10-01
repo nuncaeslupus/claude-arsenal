@@ -815,16 +815,21 @@ JS = r"""
     if(!lsOK){dirty=true;setState(WARN,'warn');return;}
     var k=NS+t.dataset.key;
     try{
-      if(t.value.trim()===''){localStorage.removeItem(k);}else{localStorage.setItem(k,t.value);}
+      // An empty note is stored as "", not removed: a missing key means "never
+      // touched" and the loader falls back to the seed, so removing it brought a
+      // seeded note back after the reviewer had deliberately cleared it (#477).
+      localStorage.setItem(k,t.value.trim()===''?'':t.value);
       dirty=true;setState('✓ Saved '+nowStamp(),'ok');
     }catch(e){dirty=true;lsOK=false;document.getElementById('warnbar').style.display='block';setState(WARN,'warn');}
   }
   var SEED=(typeof SPEC_SEED_NOTES!=='undefined')?SPEC_SEED_NOTES:{};
   tas.forEach(function(t){
-    try{var v=localStorage.getItem(NS+t.dataset.key);
-        if(v!=null){t.value=v;}
-        else if(Object.prototype.hasOwnProperty.call(SEED,t.dataset.key)){
-          var sv=SEED[t.dataset.key];if(typeof sv==='string'){t.value=sv;}}}catch(e){}
+    // Seed first, then let storage override it. With the read inside the same
+    // try as the seed, a throwing localStorage skipped the seed too and the
+    // reader came up empty exactly when it could save nothing (#477).
+    if(Object.prototype.hasOwnProperty.call(SEED,t.dataset.key)){
+      var sv=SEED[t.dataset.key];if(typeof sv==='string'){t.value=sv;}}
+    try{var v=localStorage.getItem(NS+t.dataset.key);if(v!=null){t.value=v;}}catch(e){}
     autoGrow(t);setFilled(t);
     t.addEventListener('input',function(){
       autoGrow(t);setFilled(t);updateCount();
@@ -883,7 +888,7 @@ JS = r"""
     if(r.n===0){toast('No notes yet — add some first.');return;}
     var name='__DOC_SLUG__-notes-'+today()+'__REV_SUFFIX__.md';
     var saved=download(name,r.text);openModal(r.text);
-    if(navigator.clipboard){navigator.clipboard.writeText(r.text).then(function(){},function(){});}
+    try{if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(r.text).then(function(){},function(){});}}catch(e){}
     if(!saved){setState('⚠ Download blocked — copy the notes from this box','warn');
                toast('Download blocked — copy the notes before leaving');return;}
     dirty=false;setState('✓ Backup saved '+nowStamp(),'ok');
@@ -892,9 +897,16 @@ JS = r"""
   document.getElementById('btn-export2').addEventListener('click',function(){document.getElementById('btn-export').click();});
 
   document.getElementById('modal-copy').addEventListener('click',function(){
-    modalTa.select();var ok=false;try{ok=document.execCommand('copy');}catch(e){}
-    if(navigator.clipboard){navigator.clipboard.writeText(modalTa.value).then(function(){},function(){});ok=true;}
-    toast(ok?'Copied to clipboard':'Select the text and copy');
+    // Success is reported only once a copy actually happened: the legacy
+    // execCommand returned true, or the clipboard promise fulfilled. Claiming it
+    // before writeText settled told the reviewer a rejected copy had worked (#477).
+    function report(ok){toast(ok?'Copied to clipboard':'Select the text and copy');}
+    modalTa.select();var legacy=false;try{legacy=document.execCommand('copy')===true;}catch(e){}
+    if(legacy){report(true);return;}
+    var p=null;
+    try{if(navigator.clipboard&&navigator.clipboard.writeText){p=navigator.clipboard.writeText(modalTa.value);}}catch(e){p=null;}
+    if(p&&typeof p.then==='function'){p.then(function(){report(true);},function(){report(false);});}
+    else{report(false);}
   });
   document.getElementById('modal-dl').addEventListener('click',function(){download('__DOC_SLUG__-notes-'+today()+'__REV_SUFFIX__.md',modalTa.value);toast('Download started');});
   document.getElementById('modal-close').addEventListener('click',closeModal);
