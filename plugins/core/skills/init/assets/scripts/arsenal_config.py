@@ -481,8 +481,8 @@ def load(repo_root: Path | None = None) -> tuple[dict[str, Any], dict[str, str]]
             continue
         if not MODEL_VALUE_REGEX.match(value):
             raise ConfigError(
-                f"{key}: {value!r} is not a model name — expected an alias like "
-                f"'opus' or a model id like 'claude-sonnet-4-6' (from {sources[key]})"
+                f"{key}: {value!r} is not a model name — expected a tier alias like "
+                f"'opus' or a full model id (from {sources[key]})"
             )
 
     return values, sources
