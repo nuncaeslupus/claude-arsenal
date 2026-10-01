@@ -177,45 +177,16 @@ Verify `pwd` at the start of the task if unsure.
      ```
 
      Exit.
-6. **Gate passes** → get an independent read before opening anything. The gates
-   prove the repo is not broken. They cannot tell whether you built what the
-   task asked for, and neither can you: you have been reasoning about this
-   change for the whole task, and that is exactly the context that makes a
-   wrong implementation look right.
+6. **Gate passes** → get an independent read before opening anything: run the
+   pre-PR review with `--task <task_id>`, following
+   `claude-arsenal/references/pre-pr-review.md`. Only a CLEAR verdict lets you
+   continue to step 7.
 
-   ```bash
-   bash claude-arsenal/bin/adversarial_review.sh emit --task <task_id>
-   ```
-
-   Spawn ONE subagent whose entire prompt is: read the absolute packet path
-   `emit` printed and follow it, writing the reply to `verdict.md` in that same
-   directory. Give it nothing else — not your notes, not the approach you took, not which parts you
-   are sure about. Then:
-
-   ```bash
-   bash claude-arsenal/bin/adversarial_review.sh verdict --task <task_id>
-   ```
-
-   Pass the same `--task` to both: it namespaces the review slot, so two workers
-   sharing a tree do not clear each other's verdict.
-
-   Exit 0 clears you to open the PR. Exit 1 is a BLOCK: fix what it found and
-   start the review again from `emit` — a cleared review of the tree before the
-   fix does not cover the tree after it. Exit 2 means no usable verdict came
-   back (no reply file, or a reply with no `VERDICT:` line), which is not a pass
-   — ask again. Exit 3 means the tree changed while the review ran, so the
-   answer describes code that no longer exists: re-emit and review the tree you
-   actually have. Only exit 0 lets you continue to step 7.
-
-   **If this surface cannot spawn a subagent at all**, do not stand in for one.
-   A review you run on your own work, recorded as an independent review, is
-   worth less than none — it launders the same blind spot into a PR body that
-   claims someone checked. Skip it, say so in your outcome report, and let
-   `open_task_pr.sh` record that no independent review ran — and note that when
-   the host sets `pre-pr-review = "required"`, that helper refuses to open the PR
-   at all without a CLEAR verdict. That refusal is the point: on a host that
-   requires the review, "the surface could not spawn a reviewer" is a reason to
-   stop and report, never a reason to open the PR anyway.
+   If this surface cannot spawn a subagent, skip the review and say so in your
+   outcome report; `open_task_pr.sh` records that none ran. A review of your own
+   work recorded as independent would claim a check that did not happen. When
+   the host sets `pre-pr-review = "required"` the helper then refuses the PR —
+   stop and report rather than working around it.
 
 7. **Review is clear** → open the PR with the thin helper. Export the dynamic
    Co-Authored-By identity supplied by the harness first (never hardcode a

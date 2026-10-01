@@ -45,11 +45,12 @@
 #   one that makes quoting an already-run check's exit code safe while quoting a
 #   summary of the change is not.
 #
-#   `review-max-rounds` (default 3) is the hard stop. Beyond it `emit` refuses:
-#   a change that will not converge in three rounds is a finding about the
-#   change — split it, or record the override — and a fourth round has never
-#   been the answer. The counter is bound to the base, so a rebase or a split
-#   resets it.
+#   `review-max-rounds` (default 2) is the hard stop. Beyond it `emit` refuses:
+#   a change that will not converge in that many rounds is a finding about the
+#   change — split it, or record the override — and another round has never
+#   been the answer. The counter is keyed to the BRANCH, not the base: a rebase
+#   moves the base without making the change a different one, so only a
+#   different branch, or `emit --reset`, starts it over.
 #
 #   CHECKS. `emit --checks <file>` records deterministic commands the author
 #   already ran on this tree — real exit codes, real output — as a fenced data
@@ -94,9 +95,10 @@
 #      ARSENAL_QUEUE_REMOTE (default origin) — for resolving the default branch
 #      ARSENAL_REVIEW_DIR (packet dir, default tmp/arsenal-review)
 #      ARSENAL_REVIEW_MAX_DIFF_LINES (default 4000) — inline diff cap
-# Config: review-max-rounds (arsenal/config.toml, default 3) — the round cap
+# Config: review-max-rounds (default 2) — the round cap; review-budget-min (10)
+#         and verification (balanced) are quoted in the packet's Budget line
 # Options: emit [--task <id>] [--intent <file>] [--checks <file>] [--base <ref>]
-#          [--out <dir>]; verdict/check [--task <id>] [--out <dir>]
+#          [--reset] [--out <dir>]; verdict/check [--task <id>] [--out <dir>]
 # Exit: emit    0 packet written (absolute path on stdout); 3 nothing to
 #               review; 2 error — including the round cap being exhausted and
 #               a follow-up whose tree is unchanged since the last round, both
@@ -144,9 +146,9 @@ CONFIG_PY="${SCRIPT_DIR}/../scripts/arsenal_config.py"
 die() { echo "adversarial_review: $1" >&2; exit "${2:-2}"; }
 
 SUB="${1:-}"; shift || true
-[[ -z "${SUB}" ]] && die "usage: adversarial_review.sh <emit|verdict|check> [--task id] [--intent file] [--checks file] [--base ref] [--out dir]"
+[[ -z "${SUB}" ]] && die "usage: adversarial_review.sh <emit|verdict|check> [--task id] [--intent file] [--checks file] [--base ref] [--reset] [--out dir]"
 
-BASE_OVERRIDE=""; TASK_ID=""; INTENT_FILE=""; REPLY_FILE=""; CHECKS_FILE=""
+RESET=0; BASE_OVERRIDE=""; TASK_ID=""; INTENT_FILE=""; REPLY_FILE=""; CHECKS_FILE=""
 OUT_DIR="${ARSENAL_REVIEW_DIR:-}"; OUT_DIR_GIVEN=0
 [[ -n "${OUT_DIR}" ]] && OUT_DIR_GIVEN=1
 # `${2:?message}` was the obvious way to write these and exits 1 — the status
@@ -161,6 +163,7 @@ _need() {  # $1 = option name, $2 = value (may be unset)
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --base)   BASE_OVERRIDE="$(_need --base "${2:-}")" || exit $?; shift 2 ;;
+        --reset)  RESET=1; shift ;;
         --task)   TASK_ID="$(_need --task "${2:-}")" || exit $?; shift 2 ;;
         --intent) INTENT_FILE="$(_need --intent "${2:-}")" || exit $?; shift 2 ;;
         --checks) CHECKS_FILE="$(_need --checks "${2:-}")" || exit $?; shift 2 ;;
@@ -226,8 +229,29 @@ RECEIPT="${OUT_DIR}/receipt.env"
 # which tree the last one actually read — so a follow-up can ask the bounded
 # question instead: are those findings resolved, and does what changed since
 # introduce anything new.
-ROUND_ENV="${OUT_DIR}/round.env"
-ROUNDS_DIR="${OUT_DIR}/rounds"
+#
+# The state is keyed to the branch: ${OUT_DIR}/<branch-slug>/. A rebase or a
+# merge moves the base but leaves the change the same change, so keying to the
+# base turned every rebase into a refund of the budget. `base` is still recorded
+# in round.env, for the reader's benefit only. Set by _set_round_paths once the
+# base is known (a detached HEAD is named after it).
+ROUND_ENV=""; ROUNDS_DIR=""
+_set_round_paths() {  # $1 = base commit
+    local branch slug
+    branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)" || branch=""
+    if [[ -z "${branch}" || "${branch}" == "HEAD" ]]; then
+        slug="detached-${1:0:12}"
+    else
+        slug="$(printf '%s' "${branch}" | tr -c 'A-Za-z0-9._-' '_')"
+        # Two branch names can sanitize alike (feat/x, feat_x); a short checksum
+        # of the real name keeps their counters apart.
+        [[ "${slug}" == "${branch}" ]] \
+            || slug="${slug}-$(printf '%s' "${branch}" | cksum | cut -d' ' -f1)"
+        slug="${slug#.}"; slug="${slug#.}"; [[ -n "${slug}" ]] || slug="branch"
+    fi
+    ROUND_ENV="${OUT_DIR}/${slug}/round.env"
+    ROUNDS_DIR="${OUT_DIR}/${slug}/rounds"
+}
 
 # The review directory must exist, and must exclude itself from git, BEFORE any
 # diff is taken. Its own files are untracked, so without this the packet written
@@ -454,12 +478,23 @@ _write_tree() {
 _max_rounds() {
     local v
     if [[ ! -f "${CONFIG_PY}" ]] || ! command -v python3 >/dev/null 2>&1; then
-        printf '3\n'; return 0
+        printf '2\n'; return 0
     fi
     v="$(python3 "${CONFIG_PY}" --repo-root "$(pwd -P)" --get review-max-rounds 2>/dev/null)" \
         || return 1
     [[ "${v}" =~ ^[0-9]+$ ]] && (( v >= 1 )) || return 1
     printf '%s\n' "${v}"
+}
+
+# A config value quoted in the packet header. Informational, so an unreadable
+# config falls back to the shipped default rather than blocking the review —
+# the round cap, which does gate, is read strictly by _max_rounds.
+_cfg_or() {  # $1 = key, $2 = fallback
+    local v=""
+    if [[ -f "${CONFIG_PY}" ]] && command -v python3 >/dev/null 2>&1; then
+        v="$(python3 "${CONFIG_PY}" --repo-root "$(pwd -P)" --get "$1" 2>/dev/null)" || v=""
+    fi
+    printf '%s\n' "${v:-$2}"
 }
 
 cmd_emit() {
@@ -506,29 +541,30 @@ cmd_emit() {
     }
 
     # --- which round is this, and against what -------------------------------
-    # The counter is bound to the base. A rebase, a merge, or a deliberate split
-    # of the change moves it, and what follows is a review of a different
-    # change — counting that as round four of the old one would refuse the one
-    # move that reliably unsticks a stalled review.
-    local prev_round=0 prev_base="" prev_tree=""
+    # The counter follows the branch. A rebase or a merge moves the base but the
+    # change is still the same change, so it keeps counting; a different branch
+    # has its own state, and --reset clears this one on purpose.
+    _set_round_paths "${base}"
+    if (( RESET )); then
+        rm -rf "$(dirname "${ROUND_ENV}")"
+    fi
+    local prev_round=0 prev_tree=""
     if [[ -f "${ROUND_ENV}" ]]; then
         prev_round="$(sed -n 's/^round=//p' "${ROUND_ENV}")"
-        prev_base="$(sed -n 's/^base=//p' "${ROUND_ENV}")"
         prev_tree="$(sed -n 's/^tree=//p' "${ROUND_ENV}")"
         [[ "${prev_round}" =~ ^[0-9]+$ ]] || prev_round=0
-        [[ "${prev_base}" == "${base}" ]] || { prev_round=0; prev_tree=""; }
     fi
     local round=$((prev_round + 1))
 
     local max_rounds
     max_rounds="$(_max_rounds)" || die "review-max-rounds is unusable — fix arsenal/config.toml"
     if (( round > max_rounds )); then
-        echo "adversarial_review: round ${round} would exceed review-max-rounds=${max_rounds} for base ${base:0:12}." >&2
+        echo "adversarial_review: round ${round} would exceed review-max-rounds=${max_rounds} on this branch." >&2
         echo "adversarial_review: ${max_rounds} rounds without convergence is a finding about the change, not about the reviewer. Three ways out:" >&2
         echo "adversarial_review:   split    — drop the disputed part, open the rest, file the remainder as its own task" >&2
         echo "adversarial_review:   override — say in the PR body which finding you judge a false positive, what you checked, and why" >&2
         echo "adversarial_review:   raise    — set review-max-rounds higher in arsenal/config.toml, if this change genuinely needs more" >&2
-        echo "adversarial_review: the counter resets when the base moves; 'rm -rf ${OUT_DIR}' clears it outright." >&2
+        echo "adversarial_review: the count follows the branch, not the base. 'emit --reset' starts it over; so does a different branch." >&2
         exit 2
     fi
 
@@ -580,6 +616,8 @@ cmd_emit() {
 
     {
         printf '# Pre-PR adversarial review — case file\n\n'
+        printf 'Budget: round %s of %s · %s min · profile %s. Targeted tests only (changed files, --checks); no full suite; no mutation runs unless profile is strict. Further rounds are the orchestrator'"'"'s call.\n\n' \
+            "${round}" "${max_rounds}" "$(_cfg_or review-budget-min 10)" "$(_cfg_or verification balanced)"
         if (( followup )); then
             printf '**Follow-up round %s of %s.** A reviewer with no more history than\n' "${round}" "${max_rounds}"
             printf 'you have already read this change and returned the findings in\n'
@@ -832,6 +870,7 @@ cmd_verdict() {
     # line, or answered about a tree that had already moved reviewed nothing —
     # so the next `emit` is that same round again rather than a follow-up built
     # on an answer nobody gave, and the cap counts reviews rather than attempts.
+    _set_round_paths "${base}"
     if mkdir -p "${ROUNDS_DIR}" 2>/dev/null; then
         cp "${REPLY_FILE}" "${ROUNDS_DIR}/round-${round}.md" 2>/dev/null \
             && { printf 'round=%s\n' "${round}"
@@ -855,7 +894,7 @@ cmd_verdict() {
         exit 0
     fi
     if [[ "${max_rounds}" =~ ^[0-9]+$ ]] && (( round >= max_rounds )); then
-        echo "adversarial_review: round ${round} of ${max_rounds} — the last one. Another emit against this base is refused." >&2
+        echo "adversarial_review: round ${round} of ${max_rounds} — the last one. Another emit on this branch is refused." >&2
         echo "adversarial_review: fix the BLOCKER findings and open the PR declaring what you changed, split the disputed part out, or raise review-max-rounds in arsenal/config.toml." >&2
     else
         echo "adversarial_review: round ${round} of ${max_rounds}. Fix the BLOCKER findings and re-emit — round $((round + 1)) reads those findings plus what you changed, not the whole diff again." >&2

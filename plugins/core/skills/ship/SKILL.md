@@ -41,7 +41,7 @@ Reads `status/specification.md` to know what should be shipping. Confirms scope 
 
 ### Step 4: Test confirmation
 
-- [ ] All unit/integration tests pass (including the new tests written for this change)
+- [ ] All unit/integration tests pass (including the new tests written for this change). A gate receipt for this tree or green CI on the PR head is the evidence; run the full suite only when neither covers the tree.
 - [ ] E2E tests pass (if applicable)
 - [ ] Manual testing completed for high-risk paths
 - [ ] No flaky tests introduced
@@ -63,35 +63,16 @@ Reads `status/specification.md` to know what should be shipping. Confirms scope 
 
 ### Step 7: Adversarial reviewer gate
 
-Before pushing or producing the ship document, put the change in front of a
-reviewer that has no history with it. This is the same gate `execution` and
-`github` run before opening a PR, re-run here against the merge-ready tree —
-which is not the tree that was reviewed then. Review feedback and CI fixes have
-landed since, and those commits have had no independent read of their own.
+Reuse the verdict on record when it covers the merge-ready tree; run a new round
+only if commits landed after the last reviewed tree. Protocol and exits:
+`claude-arsenal:core:init § references/pre-pr-review.md`.
 
-```bash
-REVIEW="${CLAUDE_SKILL_DIR}/../init/assets/bin/adversarial_review.sh"
-bash "$REVIEW" emit      # prints the packet's absolute path
-# spawn a sub-agent whose whole prompt is: read THAT path, reply into verdict.md beside it
-bash "$REVIEW" verdict   # 0 CLEAR · 1 BLOCK · 2 no verdict · 3 the tree moved mid-review
-```
-
-The sub-agent gets the packet path and nothing else — no conversation history,
-no summary of what is shipping, no note about which parts are already reviewed.
-Load `claude-arsenal:core:init § references/pre-pr-review.md` for the full
-protocol and the manual form for a repo without the vendored bundle.
-
-Decision rules:
-- **Exit 1 (BLOCK)** → Show the sub-agent's findings verbatim. Halt the
-  workflow by default, but allow a manual override if the finding is a false
-  positive — record the override justification in the ship output (§ 3
-  Adversarial review row) and proceed to Step 8. Otherwise, resolve the
-  blockers and re-run from Step 1.
-- **Exit 2 (no verdict line) or 3 (the tree moved mid-review)** → not a pass and
-  not an override case: re-run the gate.
-- **Exit 0 (CLEAR)** → proceed to Step 8. Append a one-line summary of the
-  verdict to the ship output document (§ 3 Checks completed → Adversarial
-  review row).
+- **CLEAR** (reused or new) → record it in the ship output (§ 3 Adversarial
+  review row) and proceed to Step 8.
+- **BLOCK** → show the findings verbatim and halt. A finding judged a false
+  positive may be overridden: record which, why, and what was checked in the
+  same row, then proceed. Otherwise resolve it and re-run from Step 1.
+- **No verdict or a moved tree** → not a pass and not an override case; re-run.
 
 ### Step 8: Produce ship output
 

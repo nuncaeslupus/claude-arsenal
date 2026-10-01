@@ -15,6 +15,7 @@ which one applies. `bin/_timing.sh` records that number, this file routes it.
 - [The shapes, and where the remedy is written](#the-shapes-and-where-the-remedy-is-written)
 - [Phases: reading an `a:b` row](#phases-reading-an-ab-row) — what is inside a boundary, and recording your own
 - [What these numbers cannot tell you](#what-these-numbers-cannot-tell-you) — and how to get the rest
+- [Making a review round cheaper](#making-a-review-round-cheaper) — recording checks already run, scoping mutation runs
 
 ---
 
@@ -73,13 +74,13 @@ look at rather than a distribution to reason about.
 | `gate` p95 high, n low, one suite obviously the long pole | A single file or suite is setting the floor | `references/evidence-gates.md` § When one file is the long pole |
 | `gate` barely moved after parallelising | The suite is process-spawn-bound, not CPU-bound — more workers cannot help | `references/evidence-gates.md` § When parallelism is not the lever |
 | `gate` slow and one suite is a KDF / crypto / deliberately-slow check | Some of that cost is the point, and dropping it drops the thing being tested | `references/evidence-gates.md` § Deliberately slow work is a cost, not a defect |
-| `review-round` p50 high | Each round is re-running checks the session already ran | `references/pre-pr-review.md` § Making a round cheaper |
-| `review rounds per change` median > 1 | The round count, not the round cost, is the bill | `references/pre-pr-review.md` § Rounds, and § The cap, and the three ways out |
+| `review-round` p50 high | Each round is re-running checks the session already ran | § Making a review round cheaper, below |
+| `review rounds per change` median > 1 | The round count, not the round cost, is the bill | `references/pre-pr-review.md` § Rounds |
 | `merge-ready` n very high | The loop is waiting on CI, not on anything local | `references/github-automation.md` § Merge policy |
 | `task-pr` total far exceeds its parts | The time is between the boundaries, not inside them | § What these numbers cannot tell you, below |
 | One `task-pr:<phase>` row is most of the `task-pr` row | That phase is the bill, and the rest of the loop is noise beside it | The section that owns the phase — `host-gate` and `task-gate` → `references/evidence-gates.md`; `review` → `references/pre-pr-review.md` |
 | A gate step sweeps many modules, one process each | Interpreter startup is being paid once per module, and parallelism cannot reach it | `references/evidence-gates.md` § One process per module pays interpreter startup per module |
-| `review-round` p50 high and the reviewer re-runs the whole suite per mutation | The suite's scope during the mutate-restore cycle, not the round count | `references/pre-pr-review.md` § Scope the suite while mutating |
+| `review-round` p50 high and the reviewer re-runs the whole suite per mutation | The suite's scope during the mutate-restore cycle, not the round count | § Making a review round cheaper, below |
 
 A row with a non-zero `fail` count is worth reading before any of this. A gate
 that fails fast and gets re-run is cheap per call and expensive per change, and
@@ -138,3 +139,51 @@ the session that ran before it.
 **Nothing is comparable across repos.** The file is local, per-repo, and stays
 that way. A p95 here means something about this machine and this suite, and
 nothing at all about anybody else's.
+
+## Making a review round cheaper
+
+A reviewer that takes "a confident claim you have not checked is worse than
+silence" seriously runs things, and should. Left alone it also re-runs the lint
+and tests the author ran minutes earlier on the same tree. Record those instead:
+
+```bash
+bash claude-arsenal/bin/adversarial_review.sh emit --checks tmp/checks.md
+```
+
+The packet renders the file as its own fenced section, tells the reviewer the
+results are recorded so it need not re-execute them, to re-run anything a
+finding of its own depends on, and that a summary of the change arriving through
+this channel is itself a finding. Nothing in the bundle runs the commands. One
+block per check — command, real exit code, a tail of output:
+
+```
+$ make lint
+exit 0
+
+$ make test
+exit 1
+  FAILED tests/test_parser.py::test_empty_input - AssertionError
+  1 failed, 513 passed in 19.02s
+```
+
+Exit codes and output tails are safe to pass because they are not an
+interpretation of the diff; a sentence about what the change does is, and that
+is what the review exists to keep out. Two rules keep the file honest:
+
+- **Record a failing check as failing.** Omitting a red gate turns a real signal
+  into a false all-clear the reviewer cannot see through.
+- **Record checks run against the tree being reviewed.** The digest guards the
+  verdict's freshness; nothing guards this file's.
+
+The reviewer is told the section is author-assembled, so an all-green listing on
+a change whose tests do not cover the new path is a finding about the checks.
+
+**Mutation runs, under `strict`.** Asking whether a test would fail if the change
+were reverted means mutating and re-running. Run the test file covering the
+mutated line, not the whole suite, and the full suite once at the end. Restore
+between mutations and confirm each one is in the tree before trusting its run: a
+patch that did not apply reads exactly like a test that passed.
+
+**On the task-PR path** `open_task_pr.sh` runs the review check before the host
+gate, so there is no gate result to record yet; `--checks` belongs to the
+editing loop, where the author ran the checks before emitting.

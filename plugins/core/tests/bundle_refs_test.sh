@@ -131,6 +131,23 @@ if [[ -d "${ASSETS}/references" ]]; then
     done
 fi
 
+# The review protocol (emit → cold reviewer → verdict) has one home,
+# references/pre-pr-review.md. Every other shipped page points there, so a
+# change to the protocol is made once. The `verdict` invocation is the line a
+# copy cannot do without, so it is what this counts.
+test_review_protocol_has_one_home() {
+    local plugins="${SCRIPT_DIR}/../.." homes
+    mapfile -t homes < <(
+        grep -rlE --include='*.md' --exclude='CHANGELOG.md' \
+            'adversarial_review\.sh"? verdict|\$REVIEW"? verdict' "${plugins}" 2>/dev/null
+    )
+    if (( ${#homes[@]} != 1 )); then
+        note "the adversarial_review.sh verdict snippet appears in ${#homes[@]} shipped .md \
+files (want 1, references/pre-pr-review.md): ${homes[*]#"${plugins}/"}"
+    fi
+}
+test_review_protocol_has_one_home
+
 # The inverse direction is not an error — a bundle script may exist without any
 # prose naming it — but a *deleted* script leaving a live caller is, and that is
 # what the loop above catches.

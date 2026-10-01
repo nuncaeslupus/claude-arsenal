@@ -40,6 +40,8 @@ git init -q -b main .
 git config user.email t@e.x; git config user.name T; git config commit.gpgsign false
 echo "print('hi')" > app.py
 printf '# Spec\n\nMake the app say bye.\n' > status/specification.md
+# The shipped default cap is 2; these scenarios walk three rounds, so pin it.
+mkdir -p arsenal; printf 'review-max-rounds = 3\n' > arsenal/config.toml
 git add -A; git commit -qm init
 
 echo "print('bye')" >> app.py       # tracked, uncommitted
@@ -480,6 +482,8 @@ git init -q -b main .
 git config user.email t@e.x; git config user.name T; git config commit.gpgsign false
 echo "print('hi')" > app.py
 printf '# Spec\n\nMake the app say bye.\n' > status/specification.md
+# The shipped default cap is 2; these scenarios walk three rounds, so pin it.
+mkdir -p arsenal; printf 'review-max-rounds = 3\n' > arsenal/config.toml
 git add -A; git commit -qm init
 echo "print('bye')" >> app.py
 
@@ -495,7 +499,7 @@ grep -qE '^\*\*Follow-up round' tmp/arsenal-review/packet.md \
     && fail "round 1 must not be shaped as a follow-up — there is nothing to follow up on"
 out=$(_block CANARY_ONE)
 grep -q "round 1 of 3" <<<"${out}" || fail "verdict should report which round closed: ${out}"
-[[ -f tmp/arsenal-review/rounds/round-1.md ]] \
+[[ -f tmp/arsenal-review/main/rounds/round-1.md ]] \
     || fail "verdict must keep the reply — the next round is built from it"
 echo "PASS: round 1 is a cold read, and verdict closes and keeps it"
 
@@ -530,7 +534,7 @@ echo "print('again')" >> app.py
 bash "${REVIEW}" emit >/dev/null 2>&1 || fail "emit should succeed"
 : > tmp/arsenal-review/verdict.md                   # reviewer wrote nothing usable
 bash "${REVIEW}" verdict >/dev/null 2>&1
-[[ "$(sed -n 's/^round=//p' tmp/arsenal-review/round.env)" == "1" ]] \
+[[ "$(sed -n 's/^round=//p' tmp/arsenal-review/main/round.env)" == "1" ]] \
     || fail "a reply with no VERDICT: line must not advance the round counter"
 echo "PASS: a round that produced no usable verdict costs no budget"
 
@@ -539,7 +543,7 @@ bash "${REVIEW}" emit >/dev/null 2>&1 || fail "emit should succeed"
 out=$(_block CANARY_TWO); grep -q "round 2 of 3" <<<"${out}" || fail "expected round 2: ${out}"
 echo "print('r3')" >> app.py
 bash "${REVIEW}" emit >/dev/null 2>&1 || fail "round 3 emit should succeed"
-rm -rf tmp/arsenal-review/rounds                    # the previous reply is now gone
+rm -rf tmp/arsenal-review/main/rounds                    # the previous reply is now gone
 out=$(_block CANARY_THREE)
 grep -q "round 3 of 3" <<<"${out}" || fail "a missing prior reply must still count as a round: ${out}"
 echo "print('r4')" >> app.py
@@ -549,20 +553,74 @@ grep -q "review-max-rounds=3" <<<"${out}" || fail "the refusal should name the b
 grep -q "split" <<<"${out}" || fail "the refusal must name the ways out, or it is a dead end: ${out}"
 echo "PASS: the round cap refuses, and losing the rounds directory does not refund it"
 
-# --- 24: the counter is bound to the base, so moving the base resets it ---
-# Splitting or rebasing is one of the three documented exits from a spent
-# budget; it only works if it actually gives the change a fresh read.
+# --- 24: the counter is keyed to the branch, so a base move keeps counting ---
+# A moved base used to reset the budget, which made every rebase a refund. The
+# state now follows the branch; only a different branch or --reset starts over.
 git add -A; git commit -qm "land round 1-3 work"
 bash "${REVIEW}" emit >/dev/null 2>&1; st=$?
 (( st == 3 )) || fail "with everything committed on the default branch there is nothing to review, got ${st}"
 git checkout -q -b feat/next
 echo "print('new work')" >> app.py
-bash "${REVIEW}" emit >/dev/null 2>&1 || fail "a new base must get a fresh budget"
+bash "${REVIEW}" emit >/dev/null 2>&1 || fail "a new branch must get a fresh budget"
 grep -qE '^\*\*Follow-up round' tmp/arsenal-review/packet.md \
-    && fail "a change against a different base is a first round, not a continuation"
+    && fail "a different branch is a first round, not a continuation"
 out=$(_block CANARY_FOUR)
-grep -q "round 1 of 3" <<<"${out}" || fail "moving the base must reset the counter: ${out}"
-echo "PASS: the round counter is bound to the base and resets when it moves"
+grep -q "round 1 of 3" <<<"${out}" || fail "a different branch must start at round 1: ${out}"
+echo "PASS: the round counter is keyed to the branch"
+
+test_round_counter_after_base_move_keeps_counting() {
+    local d="${tmp}/basemove" out st
+    mkdir -p "${d}"; cd "${d}" || fail "cd basemove"
+    git init -q -b main .
+    git config user.email t@e.x; git config user.name T; git config commit.gpgsign false
+    echo "print('hi')" > app.py
+    git add -A; git commit -qm init
+    git checkout -q -b feat/x
+    echo "one" >> app.py
+    bash "${REVIEW}" emit >/dev/null 2>&1 || fail "round 1 emit should succeed"
+    out=$(_block BASEMOVE_ONE)
+    grep -q "round 1 of 2" <<<"${out}" || fail "expected round 1 of 2 under the default cap: ${out}"
+    git checkout -q main; echo "m" > m.txt; git add -A; git commit -qm "main moves"
+    git checkout -q feat/x; git rebase -q main 2>/dev/null || fail "rebase should succeed"
+    echo "two" >> app.py
+    bash "${REVIEW}" emit >/dev/null 2>&1 || fail "round 2 emit should succeed after a base move"
+    grep -q "Follow-up round 2 of 2" tmp/arsenal-review/packet.md \
+        || fail "a base move must not reset the count: the next emit is round 2"
+    out=$(_block BASEMOVE_TWO)
+    grep -q "round 2 of 2" <<<"${out}" || fail "expected round 2 of 2: ${out}"
+    git checkout -q main; echo "m2" > m2.txt; git add -A; git commit -qm "main moves again"
+    git checkout -q feat/x; git rebase -q main 2>/dev/null || fail "second rebase should succeed"
+    echo "three" >> app.py
+    out=$(bash "${REVIEW}" emit 2>&1); st=$?
+    (( st == 2 )) || fail "round 3 after a base move must be refused at max 2, got ${st}: ${out}"
+    grep -q -- "--reset" <<<"${out}" || fail "the refusal must name --reset: ${out}"
+    grep -q "counter resets when the base moves" <<<"${out}" && fail "the base no longer resets the counter"
+    bash "${REVIEW}" emit --reset >/dev/null 2>&1 || fail "--reset should allow a fresh emit"
+    grep -qE '^\*\*Follow-up round' tmp/arsenal-review/packet.md \
+        && fail "--reset must start at round 1, not a follow-up"
+    out=$(_block BASEMOVE_RESET)
+    grep -q "round 1 of 2" <<<"${out}" || fail "--reset must start at round 1: ${out}"
+    echo "PASS: a base move keeps counting; --reset starts over"
+}
+test_round_counter_after_base_move_keeps_counting
+
+test_packet_includes_budget_line() {
+    local d="${tmp}/budget"
+    mkdir -p "${d}"; cd "${d}" || fail "cd budget"
+    git init -q -b main .
+    git config user.email t@e.x; git config user.name T; git config commit.gpgsign false
+    echo "print('hi')" > app.py
+    git add -A; git commit -qm init
+    echo "more" >> app.py
+    bash "${REVIEW}" emit >/dev/null 2>&1 || fail "emit should succeed"
+    grep -qF 'Budget: round 1 of 2 · 10 min · profile balanced' tmp/arsenal-review/packet.md \
+        || fail "the packet must state the review budget under default config"
+    grep -qF 'Targeted tests only (changed files, --checks)' tmp/arsenal-review/packet.md \
+        || fail "the budget line must say what the reviewer may run"
+    echo "PASS: the packet header carries the budget line"
+}
+test_packet_includes_budget_line
+cd "${RR}"
 
 # --- 25: review-max-rounds is honoured from arsenal/config.toml ---
 mkdir -p arsenal; printf 'review-max-rounds = 1\n' > arsenal/config.toml

@@ -43,28 +43,17 @@ Branches: `feat/<short-description>`, `fix/<short-description>`. Main branch is 
 
 ## Pre-PR gate — lint, then an independent read, before `gh pr create`
 
-Before any `gh pr create` invocation, run the host repo's full lint/format/test gate (whatever the project's Makefile / package.json exposes — e.g. `make lint`, `make smoke`, `npm run lint`). Pre-commit hooks do not always cover the same checks CI runs; relying on them alone is how PRs land red. Treat a clean local lint as a non-negotiable precondition for opening the PR — the agile review loop assumes CI was green at push time.
+Before `gh pr create`, run the host repo's lint/format/test gate (whatever its Makefile or package.json exposes — e.g. `make lint`, `npm run lint`). Pre-commit hooks do not always cover what CI runs, and the review loop below assumes CI was green at push time. If the project has no lint target, say so and propose one to the user, then proceed.
 
-That full gate runs **once** here, and once more before merge only if commits landed since. Review rounds never re-run it: each round fixes all its comments, runs the fast change-scoped gate once, and pushes **once** — every push is a CI run wherever CI fires per push. Why, and the per-PR CI trigger block: `claude-arsenal:core:init § references/ci-minutes.md`.
+The full gate runs once per tree: `fast_gate.sh --full` writes a receipt and reuses it while the tree is unchanged, and once CI is green on the PR head it is not re-run locally. Review rounds run only the fast change-scoped gate, once, then push once — every push is a CI run. Why, and the per-PR CI trigger block: `claude-arsenal:core:init § references/ci-minutes.md`.
 
 ```bash
 FAST="${CLAUDE_SKILL_DIR}/../init/assets/bin/fast_gate.sh"
 bash "$FAST"          # each review round: `preflight-gate` over the changed files
-bash "$FAST" --full   # before merge, only if commits landed since the pre-PR gate
+bash "$FAST" --full   # before merge, only if no receipt or green CI covers the tree
 ```
 
-If the host project has no lint target, document that gap (propose a Makefile addition to the user) and proceed; but the omission is the proposal, not a license to skip.
-
-A green lint says the change does not break the repo. It says nothing about whether it is the change that was asked for, and the session that just wrote it is the wrong reader for that question. So the second half of the gate is an adversarial review by a subagent with no history of the work:
-
-```bash
-REVIEW="${CLAUDE_SKILL_DIR}/../init/assets/bin/adversarial_review.sh"
-bash "$REVIEW" emit      # prints the packet's absolute path
-# spawn a subagent whose whole prompt is: read THAT path, reply into verdict.md beside it
-bash "$REVIEW" verdict   # 0 CLEAR · 1 BLOCK · 2 no usable verdict · 3 the tree moved mid-review
-```
-
-Neither 2 nor 3 is a pass: 2 means no verdict came back, 3 means the answer describes a tree that no longer exists. Pass `--intent <file>` when the change has a written intent other than `status/specification.md`, which is what auto-discovery reaches for. Pass the reviewer nothing but the packet path — a summary of what the change was meant to do hands it the author's blind spot. On BLOCK, fix and re-emit rather than opening the PR with the findings unaddressed. Full protocol, override rules, and the form for a repo without the vendored bundle: `claude-arsenal:core:init § references/pre-pr-review.md`.
+A green gate says the change does not break the repo, not that it is the change that was asked for. For that, run the independent review before opening the PR, and again on the open PR when its decision line calls for one: `claude-arsenal:core:init § references/pre-pr-review.md`.
 
 ## The agile review loop
 

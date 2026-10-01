@@ -71,7 +71,7 @@
 
 ### Adversarial review
 
-- [ ] Adversarial reviewer gate passed — VERDICT: CLEAR (<one-line reason from sub-agent>)
+- [ ] VERDICT: CLEAR, reused or new (<one-line reason>), or override + what was checked
 
 ### Observability
 
