@@ -432,12 +432,15 @@ def load(repo_root: Path | None = None) -> tuple[dict[str, Any], dict[str, str]]
             )
     for key in ("risk-paths", "bot-triggers"):
         if not isinstance(values[key], list) or not all(isinstance(v, str) for v in values[key]):
-            raise ConfigError(f"{key} must be a list of strings, got {values[key]!r} (from {sources[key]})")
+            raise ConfigError(
+                f"{key} must be a list of strings, got {values[key]!r} (from {sources[key]})"
+            )
     for entry in values["bot-triggers"]:
         login, sep, comment = entry.partition("=")
         if not sep or not login.strip() or not comment.strip():
             raise ConfigError(
-                f'bot-triggers entries are "login=comment", got {entry!r} (from {sources["bot-triggers"]})'
+                f'bot-triggers entries are "login=comment", got {entry!r} '
+                f"(from {sources['bot-triggers']})"
             )
     # A list, because that is what it is — and a bare string here would be a
     # comma-separated list nobody told the consumer about. Empty is legal and

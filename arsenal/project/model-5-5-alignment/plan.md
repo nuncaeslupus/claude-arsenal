@@ -83,6 +83,14 @@ Every `skills/` edit runs with `skill-workshop` loaded; `make check` is the gate
 
 | T# | Gate | Measured | Command | SHA | Env | Date |
 |----|------|----------|---------|-----|-----|------|
+| T1 | `failed_tests == 0` | 0 | `bash plugins/core/tests/arsenal_config_test.sh` | PR #476 head | local | 2026-10-01 |
+| T2 | `failed_tests == 0` | 0 | `bash plugins/core/tests/adversarial_review_test.sh` | PR #476 head | local | 2026-10-01 |
+| T3 | `failed_tests == 0` | 0 | `bash plugins/core/tests/adversarial_review_test.sh` | PR #476 head | local | 2026-10-01 |
+| T4 | `failed_tests == 0` | 0 | `bash plugins/core/tests/review_sources_test.sh` | PR #476 head | local | 2026-10-01 |
+| T5 | `failed_tests == 0` | 0 | `bash plugins/core/tests/review_sources_test.sh` | PR #476 head | local | 2026-10-01 |
+| T6 | `failed_tests == 0` | 0 | `bash plugins/core/tests/fast_gate_test.sh` | PR #476 head | local | 2026-10-01 |
+| T7 | `review_snippet_homes == 1` | 1 | `bash plugins/core/tests/bundle_refs_test.sh` | PR #476 head | local | 2026-10-01 |
+| T8 | `failed_tests == 0` | 0 | `make test` | PR #476 head | local | 2026-10-01 |
 
 ### Dependency graph
 
@@ -98,5 +106,7 @@ T1 ──┬─> T2 ──────────────┐
 
 ## Sign-off
 
-- [ ] Plan reviewed by maintainer
-- [ ] Ready for execution
+- [x] Plan reviewed by maintainer
+- [x] Ready for execution
+
+T8 note: the incident replay is covered by three tests rather than one fixture — rounds across two base moves (`adversarial_review_test.sh`), bot wait ending (`review_sources_test.sh`), one full gate per tree (`fast_gate_test.sh`).

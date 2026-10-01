@@ -8,13 +8,16 @@ The agile review loop, triggered after `gh pr create`, runs `query_pr_state.py` 
 |---|---|---|---|
 | `merged` | `gh pr view`'s `state` field is `MERGED` | 0 | Exit the loop. Nothing to act on. |
 | `closed` | `gh pr view`'s `state` field is `CLOSED` (closed without merge) | 0 | Exit the loop. Nothing to act on. |
-| `waiting` | No watched-bot positive signal yet, OR bot opened `CHANGES_REQUESTED` with no line-comments | 1 | Loop continues. |
+| `waiting` | No watched-bot positive signal yet, OR bot opened `CHANGES_REQUESTED` with no line-comments | 1 | Loop continues. Bounded: a silent bot becomes `bot_absent` after `bot-wait-min` (plus one more wait after a trigger). |
 | `bot_eyeing` | A watched bot has reacted `:eyes:` on the PR header AND has not since thumbed/approved | 1 | Loop continues. The bot owns clearing the eyes — *unless* `--unresolved-only` is on and "everything addressed" fires (see below), in which case the script promotes to `bot_approved`/`ready_to_merge`. |
 | `ci_running` | At least one CI check is `in_progress` / `queued` | 1 | Loop continues. |
 | `ci_failed` | At least one CI check is `failure` | 2 | Fetch `gh run view --log-failed <run-id>`, fix, commit, push. Reply on any related comments. Loop resumes on next tick. |
 | `bot_commented` | At least one (unfiltered, under `--unresolved-only`) watched-bot line-level comment exists on the PR | 0 | Address each comment per the rubric below. The reply on the thread is what causes `--unresolved-only` to drop it from the next tick. |
 | `bot_approved` | CI green + explicit positive signal (thumb / APPROVED review) **OR** `--unresolved-only` "everything addressed" promotion + quiet anchor not yet elapsed | 1 | Loop continues. Quiet anchor = later of (last bot event, head commit). |
-| `ready_to_merge` | Same as `bot_approved` + quiet window of `--min-quiet-seconds` (default 60) has elapsed | 0 | Exit loop. Tell the user `PR #N ready to merge`. |
+| `bot_skipped` | Every watched bot is out on this head, at least one by a skip or pause notice | 0 | Exit loop. Run the local review the `decision` field names (see below). |
+| `bot_rate_limited` | As above, at least one by a rate-limit or quota notice | 0 | Same. Do not re-request the review on a short cadence. |
+| `bot_absent` | As above, by silence past `bot-wait-min` (after the one trigger, when `bot-triggers` has one) | 0 | Same. |
+| `ready_to_merge` | Same as `bot_approved` + quiet window of `--min-quiet-seconds` (default 60) has elapsed; or a `bot_*` state whose decision is `none`, or with `--local-review-done` | 0 | Exit loop. Tell the user `PR #N ready to merge`. |
 
 **Terminal states short-circuit.** `merged` and `closed` are checked first, before anything else — once the PR is no longer open the loop has no work and exits.
 
@@ -32,7 +35,7 @@ hand between ticks is. Read the comments, not the check.
 
 **CI-only mode**: when invoked with `--watch-bots ""` (no bots configured), the script skips bot tracking. Green CI plus the quiet window past the head commit is enough to reach `ready_to_merge`.
 
-**Silent approval requires a positive signal.** A bot that commented and then went silent is NOT silent approval. Silent approval requires either a `:+1:` / `:rocket:` reaction, an `APPROVED` review submission, OR — under `--unresolved-only` — every comment the bot wrote being addressed (replied to + filtered out). If none of those hold, the state stays `waiting` indefinitely. This is intentional: ambiguous silence should not auto-merge.
+**Silent approval requires a positive signal.** A bot that commented and then went silent is not silent approval. Approval is a `:+1:` / `:rocket:` reaction, an `APPROVED` review, or — under `--unresolved-only` — every comment the bot wrote being addressed. Silence never merges on its own: it ends the wait as `bot_absent`, which asks for a local review instead.
 
 ## Which bots are watched
 
@@ -103,28 +106,24 @@ The fetch costs one extra GraphQL call per tick (~50 ms typical), well under the
 - **Always include the agree/disagree/ambiguous rubric inline in the `/loop` prompt** AND pass `--unresolved-only` to the script. A bare `/loop 90s python3 .../query_pr_state.py --pr <N>` produces a JSON snapshot each tick and forces the LLM to re-derive what to do from the skill body every time. `--unresolved-only` filters out comments whose review thread is GH-side resolved OR has a human reply (the "addressed in <sha>" pattern) so each tick stays focused on what actually still needs attention. The rubric-inlined form keeps each tick self-contained:
 
   ```text
-  /loop 90s python3 "${CLAUDE_SKILL_DIR}/scripts/query_pr_state.py" --pr <N> --unresolved-only — if state is bot_commented, address per the rubric (agree → fix + push + reply "addressed in <sha>" via gh api repos/<owner>/<repo>/pulls/<N>/comments/<id>/replies; disagree → reply with rationale on the same endpoint; ambiguous → reply asking for clarification + ping the user). If ci_failed, fetch the failing job log and fix + reply on any related comments. Every fix or dismissal MUST be paired with a reply on the thread — that is what makes --unresolved-only filter the comment on the next tick. Only stop the loop on ready_to_merge, merged, or closed — bot_approved still waits for the quiet window. Abort immediately if the script exits 2 with any state other than ci_failed (authentication error, repo not found): that is a permanent failure and retrying it just burns ticks — surface it to the user. When stopping, CronDelete <job-id>; hand back to the user to merge only on ready_to_merge — on merged or closed, report that terminal state instead, since there is nothing left to merge.
+  /loop 90s python3 "${CLAUDE_SKILL_DIR}/scripts/query_pr_state.py" --pr <N> --unresolved-only --trigger — if state is bot_commented, address per the rubric (agree → fix + push + reply "addressed in <sha>" via gh api repos/<owner>/<repo>/pulls/<N>/comments/<id>/replies; disagree → reply with rationale on the same endpoint; ambiguous → reply asking for clarification + ping the user). If ci_failed, fetch the failing job log and fix + reply on any related comments. If bot_skipped, bot_rate_limited or bot_absent, stop the loop and run the local review the decision field names. Every fix or dismissal MUST be paired with a reply on the thread — that is what makes --unresolved-only filter the comment on the next tick. Otherwise stop only on ready_to_merge, merged, or closed — bot_approved still waits for the quiet window. Abort immediately if the script exits 2 with any state other than ci_failed (authentication error, repo not found): that is a permanent failure and retrying it just burns ticks — surface it to the user. When stopping, CronDelete <job-id>; hand back to the user to merge only on ready_to_merge — on merged or closed, report that terminal state instead, since there is nothing left to merge.
   ```
 
 - Termination: the loop exits as soon as `query_pr_state.py` returns `ready_to_merge` (exit 0 with `state: "ready_to_merge"`). Call `CronDelete <job-id>` to stop early — the `/loop` skill prints the job ID at scheduling time, and `CronList` recovers it later.
 - Abort: Claude stops the loop if `query_pr_state.py` returns exit 2 with a state other than `ci_failed` (e.g. authentication error, repo not found). Surface the error to the user.
 
-## When the review bot rate-limits itself
+## When no bot will review this head
 
-Some review-bot vendors cap how many reviews they run per hour (or per day), independently of anything GitHub itself enforces — the bot just posts a plain PR comment saying it is out of budget for now. Wording varies by vendor ("rate limit", "review limit reached", an "included reviews" quota exhausted, and similar), and `query_pr_state.py` does not classify it as its own state — it only reads reactions, reviews, and line comments, not general PR comments — so it is easy to mistake the resulting silence for `waiting` and either give up on the PR or hammer the bot with retries that fail the same way.
+`query_pr_state.py` asks `review_sources.py` (the bundle's `scripts/` folder; `claude-arsenal/scripts/` in a consumer) what each watched bot did on the current head. It reads the bots' reviews, their check runs and statuses by description (some bots report a green status that says "Review skipped"), and their comments as they read now (some bots edit one summary comment in place). The notice phrases live in one table at the top of that script; add a row when a vendor rewords one.
 
-Treat a rate-limit comment as informational, not as something to fix:
+The wait is bounded. A bot silent for `bot-wait-min` (default 20) after the head push is `absent`. With `--trigger` and a `bot-triggers` entry for it, the loop first posts that command once for this head (a paused bot gets its resume command) and waits once more; silence after that is final. A rate-limited bot is not pinged: its notice is the answer for this head. Running `review_sources.py --pr <N> [--trigger]` by hand prints the same classification.
 
-- It is not `ci_failed` and not a defect in the diff. Nothing about the code is wrong, so there is nothing to patch — the fix, if any, is time.
-- The comment usually says when the next slot frees up. Requeue the re-review request after that window, not immediately — an immediate retry lands in the same exhausted window and burns another attempt for nothing.
-- The quota is typically shared account/org-wide, not per-PR. If several PRs are being pushed at once, review requests on all of them draw from the same hourly pool, and one PR hitting the limit is usually a sign the others are close behind it.
-- Some review bots also pause automatic re-review once a branch has accumulated many commits, independently of the rate limit — pushing a fix is not guaranteed to bring a fresh look on its own. If the bot's own comments name a manual command to re-request a review, send it explicitly after every fix; do not assume a push alone reactivates it.
-- Merging does not have to wait on a fresh review from a rate-limited bot. `merge-policy: after-review` (see `claude-arsenal/references/github-automation.md`) is satisfied once *a* review has landed and its comments are addressed — a still-pending re-review is not a blocker for a PR that already cleared that bar on an earlier commit. Keep driving the PRs that are already clear to merge instead of blocking a whole batch on one bot's clock.
-- If the same rate limit keeps coming back across several retries, stop retrying on a short fixed cadence and fall back to a slower check-in instead — an hourly wake (a scheduled reminder, or the host's own recurring-task mechanism) both respects the bot's own cooldown and avoids burning API calls in a loop that cannot succeed any faster than the vendor's clock allows.
+When every watched bot is out, the loop ends with `bot_skipped`, `bot_rate_limited` or `bot_absent`, and the payload's `decision` names what replaces the bot: `local_review` (`none`, `diff`, `full`) and `full_suite` (`skip`, `run`), from the `verification` profile and the change's risk. Run that review through the review protocol; once its verdict is CLEAR (`adversarial_review.sh check` exits 0), rerun with `--local-review-done` and the state becomes `ready_to_merge` when CI is green. A decision of `none` needs no flag.
+
+Trigger commands are set once in `arsenal/config.toml`, for example `bot-triggers = ["yourbot[bot]=@yourbot review"]`; the value `request-reviewer` requests the bot as a reviewer instead of commenting. Some bots ignore commands posted by bot accounts such as `github-actions[bot]`, so post triggers as a user.
 
 ## Caveats
 
-- **`:eyes:` reactions are sticky.** GitHub does not remove a bot's `:eyes:` automatically when the bot finishes its review; the bot owns the lifecycle. The script treats any present `:eyes:` from a watched bot as `bot_eyeing` (a hard block on `ready_to_merge`) unless the bot has also thumbed or approved.
-- **Silent approval requires a positive signal.** A bot that posted a COMMENTED review and then went silent is NOT silent approval. Approval requires `:+1:` / `:rocket:` reaction or `APPROVED` review submission.
+- **`:eyes:` reactions are sticky.** GitHub does not remove a bot's `:eyes:` automatically when the bot finishes its review; the bot owns the lifecycle. The script treats any present `:eyes:` from a watched bot as `bot_eyeing` (a hard block on `ready_to_merge`) unless the bot has also thumbed or approved, or has since been classified skipped, rate-limited or absent.
 - **Priority-badge convention.** Some bots prefix comments with `![critical](...)`, `![high](...)`, `![medium](...)`, `![low](...)`. The script preserves the body verbatim; Claude reads the badge to triage which comment to address first.
 - **CI-only mode.** `--watch-bots ""` skips bot tracking; only CI status drives the state machine. Useful for solo branches where no bots are configured.
