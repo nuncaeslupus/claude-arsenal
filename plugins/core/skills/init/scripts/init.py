@@ -374,7 +374,7 @@ def _bundle_files(bundle: Path) -> list[str]:
 _SOURCE_PREFIX = "# source: "
 
 
-def _bundle_source_url(bundle: Path) -> str | None:
+def _bundle_source_url(bundle: Path, target: Path) -> str | None:
     """Where this bundle came from, or None when nothing on disk says.
 
     A NON-SUBTREE install leaves no `arsenal` remote by definition, and until
@@ -390,20 +390,37 @@ def _bundle_source_url(bundle: Path) -> str | None:
       * the CLI plugin route runs it from `~/.claude/plugins/cache/<market>/...`,
         which is a plain copy -- but `~/.claude/plugins/marketplaces/<market>`
         beside it is the git clone that copy was made from.
+
+    A third case is not an install route: the copy vendored INTO the host
+    (`.claude/skills/init/`, or a subtree's `claude-arsenal/`), which the
+    session-start refresh runs every session. There `git -C` walks up to the
+    host's work tree and answers with the host's own `origin` (#480, #483), so a
+    checkout whose root is the target's root is never asked.
     """
 
-    def _origin(repo: Path) -> str | None:
+    def _git(repo: Path, *args: str) -> str | None:
         try:
             out = subprocess.run(
-                ["git", "-C", str(repo), "remote", "get-url", "origin"],
+                ["git", "-C", str(repo), *args],
                 capture_output=True,
                 text=True,
                 check=False,
             )
         except OSError:
             return None
-        url = out.stdout.strip()
-        return url if out.returncode == 0 and url else None
+        text = out.stdout.strip()
+        return text if out.returncode == 0 and text else None
+
+    def _origin(repo: Path) -> str | None:
+        return _git(repo, "remote", "get-url", "origin")
+
+    top = _git(bundle, "rev-parse", "--show-toplevel")
+    if (
+        top
+        and Path(top).resolve()
+        == Path(_git(target, "rev-parse", "--show-toplevel") or target).resolve()
+    ):
+        return None
 
     if url := _origin(bundle):
         return url
@@ -443,7 +460,7 @@ def _write_manifest(bundle: Path, target: Path) -> None:
     # Keep whatever a previous install recorded when this one cannot tell: a
     # cache copy with no git beside it should not erase a URL a clone install
     # already wrote.
-    url = _bundle_source_url(bundle) or manifest_source_url(target)
+    url = _bundle_source_url(bundle, target) or manifest_source_url(target)
     if url:
         lines = [_SOURCE_PREFIX + url, *lines]
     (target / _MANIFEST).write_text("\n".join(lines) + "\n", encoding="utf-8")

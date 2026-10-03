@@ -18,6 +18,10 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [5.0.2] - 2026-10-03
+
+- **The session-start refresh no longer dirties your tree.** `init.py --silent`, run from the copy vendored into your repo, rewrote the `# source:` line of `claude-arsenal/.arsenal-manifest` to your own repository's URL (#480, #483). It now keeps the recorded upstream. If an earlier refresh already rewrote it, restore the line with `git checkout -- claude-arsenal/.arsenal-manifest` (or set it back to the marketplace URL) before your next update.
+
 ## [5.0.1] - 2026-10-01
 
 - **Spec/plan readers keep your notes.** Three bugs in the annotatable reader that `create_reader.py` generates are fixed (#477). Regenerate a reader to pick up the fixes:

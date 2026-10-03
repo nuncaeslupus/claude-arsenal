@@ -136,6 +136,19 @@ grep -q -- "${url}" <<<"${report}" \
     || fail "the INERT report still says <marketplace-url>: ${report}"
 pass "check_update.sh's INERT report names the recorded upstream"
 
+# The session-start refresh runs the copy vendored INTO the host, where
+# `git -C` answers with the host's own origin. That must not overwrite the
+# recorded upstream (#480, #483).
+git -C "${tmp}/repo" remote add origin https://example.com/host.git
+vendored="${tmp}/repo/.claude/skills/init/scripts/init.py"
+[[ -f "${vendored}" ]] || fail "expected a vendored init.py at ${vendored}"
+python3 "${vendored}" --repo-path "${tmp}/repo" --silent >/dev/null 2>&1 \
+    || fail "the vendored init.py does not complete"
+after="$(sed -n 's/^# source: //p' "${manifest}" | head -1)"
+[[ "${after}" == "${url}" ]] \
+    || fail "the vendored refresh recorded the host as upstream: ${after}"
+pass "the vendored refresh keeps the recorded upstream"
+
 # --- 6. the gate blocks writes, not reads -----------------------------------
 
 GATE="${ROOT}/plugins/skill-workshop/hooks/gate_target.py"
