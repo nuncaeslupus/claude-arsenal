@@ -2077,6 +2077,10 @@ def init_base(
         "rescue_refs",
     ):
         _add_gitignore_entry(repo_path, f"{session.as_posix()}/{entry}")
+    # Agent-tool workers with `isolation: worktree` run in a checkout nested
+    # here. Unignored, the host's `git status` reports it as untracked and
+    # worker_postcheck.sh read the worker's own tree as residue (#485).
+    _add_gitignore_entry(repo_path, "/.claude/worktrees/")
 
     # skill-workshop's per-skill alignment report, written beside the skill it
     # audited. Author-local by design: it records what one validator run found

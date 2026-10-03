@@ -312,4 +312,35 @@ grep -q "not inside a git repository" <<<"${err}" \
 echo "PASS: a call from outside any repository is refused, not guessed at"
 set -e
 
+# --- #485: a live nested worktree is not residue ------------------------------
+# An Agent-tool worker with `isolation: worktree` runs in .claude/worktrees/…,
+# inside the host tree. With no ignore rule the host's status reports it as
+# untracked; it must neither trip the restore nor be a `git clean` candidate.
+set +e
+wrepo="${tmp}/wt-host"
+git init -q -b main "${wrepo}"
+cd "${wrepo}"
+git config user.email "test@arsenal.example"
+git config user.name "Arsenal Test"
+git config commit.gpgsign false
+printf 'arsenal/session/host_branch\narsenal/session/rescue_refs\narsenal/session/worktree_isolation\narsenal/session/worktree_isolation.why\n' > .gitignore
+git add -A && git commit -q -m "seed"
+git worktree add -q .claude/worktrees/agent-1 -b worker/agent-1 2>/dev/null \
+    || fail "cannot add a nested worktree"
+wt="$(cd .claude/worktrees/agent-1 && pwd -P)"
+echo "worker edit" > "${wt}/work.txt"
+out=$(ARSENAL_WORKER_TOPLEVEL="${wt}" bash "${POSTCHECK}" 2>/dev/null)
+[[ "${out}" == "ok" ]] || fail "a live nested worktree read as residue, got '${out}'"
+[[ "$(cat arsenal/session/worktree_isolation 2>/dev/null)" == "available" ]] \
+    || fail "isolation should be recorded available for a nested worktree"
+echo "PASS: a live nested worktree does not trip the restore"
+
+echo "residue" > stray.txt
+out=$(ARSENAL_WORKER_TOPLEVEL="${wt}" bash "${POSTCHECK}" 2>/dev/null)
+[[ "${out}" == "restored" ]] || fail "real residue beside a worktree should restore, got '${out}'"
+[[ ! -e stray.txt ]] || fail "the residue was not cleaned"
+[[ -f "${wt}/work.txt" ]] || fail "the restore touched the worker's worktree"
+echo "PASS: real residue is cleaned and the live worktree is left alone"
+set -e
+
 echo "PASS: worker_postcheck_test — all gates passed"
