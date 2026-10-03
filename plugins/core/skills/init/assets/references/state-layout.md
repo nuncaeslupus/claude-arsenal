@@ -84,6 +84,21 @@ arsenal/               ← yours. Scaffolded once, then never written by an upgr
     surface_profile.json, rate_limits.json, budget_iterations.json  ← gitignored
 ```
 
+`surface_profile.json` is what `task_select.py` offers against `requires:`, with any
+`--capability` added. `detect_surface.sh` writes it at session start: `surface:cli` or
+`surface:cloud`+`surface:web`, reachable services, and every host probe declared in
+`config.toml` that exits 0 here (5 s each):
+
+```toml
+[capabilities]
+"net:example.com" = "curl -sf -o /dev/null --max-time 5 https://example.com/"
+"data"            = "test -d data/raw"
+```
+
+`requires:` also gates on things that are not the surface — `[human:gate]` for "not for
+the worker loop", a name nobody grants for "not yet". A task asking for a capability no
+surface offers is listed in the selector's warning, never dispatched.
+
 The split is the point: upstream owns exactly one directory, so an upgrade can never touch
 your tasks, plans, or settings — and the vendored prefix contains only upstream content,
 which is what makes it consumable as a subtree.

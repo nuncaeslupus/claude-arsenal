@@ -40,10 +40,9 @@ task_select.py --tasks-dir arsenal/tasks --issues /tmp/issues.json \
 ```
 
 `task_select.py` (in `claude-arsenal/scripts/`) applies deps, priority,
-capabilities and scope. Pass one `--capability` per entry in
-`arsenal/session/surface_profile.json`, plus `access:browser` when a browser
-appears in this session's own tools — the probe sees the machine, not the
-session's connectors. `gate: false` in its output means the task has no runnable
+capabilities and scope. It reads `arsenal/session/surface_profile.json` itself;
+add `--capability access:browser` when a browser appears in this session's own
+tools — the probe sees the machine, not the session's connectors. `gate: false` in its output means the task has no runnable
 gate; fix the task file before working it, since a prose gate checks nothing.
 
 **3. Check nobody else holds it.** Read the task's issue and skip it if it is

@@ -18,8 +18,12 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
-## [5.0.2] - 2026-10-03
+## [5.1.0] - 2026-10-03
 
+- **Parked tasks keep their work.** New `bin/park_task.sh <task_id> "<reason>"` pushes a stopped task's uncommitted tree to `arsenal/wip/<task_id>` and prints a `resume:` command that restores it, still uncommitted, on any machine (#482). Workers now run it before returning `open` (gate failure, round cap, refused review), and the worker loop copies the `wip:`/`resume:` lines into the task notes, the issue and `handover.md`. Before this, a task stopped at the review cap on a cloud container was lost with the container.
+- **Round-cap messages only offer what you can do.** On a cloud surface, `adversarial_review.sh` now says only the repo owner can raise `review-max-rounds` and tells the agent to park the task. Under `pre-pr-review = "required"` it no longer suggests "fix and open the PR", which that gate refuses (#484).
+- **`requires:` now matches what the surface measured.** `task_select.py` reads `arsenal/session/surface_profile.json` by default; `--capability` adds to it, `--no-profile` ignores it. Declare your own probes under `[capabilities]` in `arsenal/config.toml` (e.g. `"net:example.com" = "curl -sf …"`, `"data" = "test -d data/raw"`); `detect_surface.sh` grants each one only where its command exits 0 (#481).
+- **Agent worktrees are no longer residue.** `worker_postcheck.sh` ignores registered git worktrees nested in your tree, so a worker run with `isolation: worktree` no longer trips a restore that stops the loop. `init.py` also adds `/.claude/worktrees/` to `.gitignore` (#485).
 - **The session-start refresh no longer dirties your tree.** `init.py --silent`, run from the copy vendored into your repo, rewrote the `# source:` line of `claude-arsenal/.arsenal-manifest` to your own repository's URL (#480, #483). It now keeps the recorded upstream. If an earlier refresh already rewrote it, restore the line with `git checkout -- claude-arsenal/.arsenal-manifest` (or set it back to the marketplace URL) before your next update.
 
 ## [5.0.1] - 2026-10-01

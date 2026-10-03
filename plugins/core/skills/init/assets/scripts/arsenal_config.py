@@ -496,6 +496,43 @@ def load(repo_root: Path | None = None) -> tuple[dict[str, Any], dict[str, str]]
     return values, sources
 
 
+# A capability name lands in surface_profile.json and in `requires:` lists, so
+# it is held to the shape those already use: `surface:cli`, `net:example.com`.
+CAPABILITY_NAME_REGEX = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]*$")
+
+
+def capability_probes(repo_root: Path | None = None) -> dict[str, str]:
+    """The host's `[capabilities]` table: capability name → probe command.
+
+    `detect_surface.sh` runs each probe and grants the capability only on exit
+    0. What differs between a laptop and a cloud container in a real repo —
+    network egress to one host, a gitignored data directory — is not on the
+    script's hard-coded list, and a hand-passed `--capability` is a claim
+    nothing checks (#481). Kept out of DEFAULTS because the keys are the host's
+    own, not settings this bundle knows.
+    """
+    root = repo_root or Path.cwd()
+    home = os.environ.get("ARSENAL_HOME") or DEFAULTS["home"]
+    path = _config_path(root, home)
+    if not path.is_file():
+        return {}
+    try:
+        raw = tomllib.loads(path.read_text(encoding="utf-8"))
+    except tomllib.TOMLDecodeError as exc:
+        raise ConfigError(f"{path}: not valid TOML — {exc}") from exc
+    table = raw.get("capabilities", {})
+    if not isinstance(table, dict):
+        raise ConfigError(f'{path}: [capabilities] must be a table of name = "command"')
+    probes: dict[str, str] = {}
+    for name, command in table.items():
+        if not CAPABILITY_NAME_REGEX.match(name):
+            raise ConfigError(f"{path}: capability name {name!r} — use letters, digits and ._:/-")
+        if not isinstance(command, str) or not command.strip():
+            raise ConfigError(f"{path}: capability {name!r} needs a non-empty probe command")
+        probes[name] = command
+    return probes
+
+
 def setting(key: str, repo_root: Path | None = None) -> Any:
     """One configured value, for a module that needs a single key.
 
@@ -518,7 +555,22 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--repo-root", type=Path, default=Path.cwd())
     parser.add_argument("--get", metavar="KEY", help="print a single value, bare")
     parser.add_argument("--explain", action="store_true", help="show each value and its source")
+    parser.add_argument(
+        "--probes",
+        action="store_true",
+        help="print the [capabilities] probes, one 'name<TAB>command' per line",
+    )
     args = parser.parse_args(argv)
+
+    if args.probes:
+        try:
+            probes = capability_probes(args.repo_root)
+        except ConfigError as exc:
+            print(f"arsenal_config: {exc}", file=sys.stderr)
+            return 2
+        for name, command in probes.items():
+            print(f"{name}\t{' '.join(command.splitlines())}")
+        return 0
 
     try:
         values, sources = load(args.repo_root)

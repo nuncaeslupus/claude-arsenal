@@ -45,6 +45,25 @@ rm -rf arsenal
 CLAUDE_CODE_REMOTE=true bash "${CANONICAL}" || fail "probe must exit 0 when uninitialised"
 [[ ! -e "${PROFILE}" ]] || fail "probe wrote a profile into an uninitialised repo"
 
+# --- 3b: host-declared [capabilities] probes are granted only on exit 0 (#481).
+# The probes are read through the arsenal_config.py beside the canonical copy.
+mkdir -p arsenal/session
+cat > arsenal/config.toml <<'TOML'
+[capabilities]
+"data:present" = "test -d datadir"
+"net:example.com" = "false"
+TOML
+mkdir -p datadir
+env -u CLAUDE_CODE_REMOTE bash "${CANONICAL}" || fail "probe exited non-zero with host probes"
+c=$(caps "${PROFILE}")
+grep -q 'data:present' <<<"${c}" || fail "a probe that exits 0 must grant its capability: '${c}'"
+grep -q 'net:example.com' <<<"${c}" && fail "a probe that fails must not grant its capability: '${c}'"
+rmdir datadir
+env -u CLAUDE_CODE_REMOTE bash "${CANONICAL}" || fail "probe exited non-zero with host probes"
+grep -q 'data:present' <<<"$(caps "${PROFILE}")" && fail "the probe must be re-run, not remembered"
+rm -f arsenal/config.toml
+echo "PASS: host-declared probes grant a capability only where they pass"
+
 # --- 4: the hook copy has not drifted from the canonical one ---
 diff -q "${CANONICAL}" "${HOOK_COPY}" >/dev/null \
     || fail "plugins/core/hooks/detect_surface.sh has drifted from the canonical copy"

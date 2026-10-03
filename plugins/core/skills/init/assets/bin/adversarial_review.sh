@@ -491,7 +491,7 @@ _max_rounds() {
 # the auto-mode classifier refuses, and arguably should. Offering "raise" there
 # sent an agent into that refusal and left two finished tasks parked (#484).
 _raise_hint() {
-    if [[ -n "${CLAUDE_CODE_REMOTE:-}" ]]; then
+    if [[ "${CLAUDE_CODE_REMOTE:-}" == "true" ]]; then
         printf 'only the repo owner can set review-max-rounds higher in arsenal/config.toml; an agent may not loosen its own guardrail. Do not try: park the task with bin/park_task.sh, give this message as the reason, and move on.\n'
     else
         printf 'set review-max-rounds higher in arsenal/config.toml, if this change genuinely needs more.\n'

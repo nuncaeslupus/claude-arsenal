@@ -16,6 +16,9 @@ done
 
 tmpdir=$(mktemp -d)
 trap 'rm -rf "${tmpdir}"' EXIT
+# The selector reads <session>/surface_profile.json by default; point it at an
+# empty scratch dir so the caller's own profile cannot leak into these cases.
+export ARSENAL_SESSION_DIR="${tmpdir}/session"
 
 TASKS="${tmpdir}/tasks"
 mkdir -p "${TASKS}"
@@ -653,6 +656,17 @@ grep -q 'detect_surface' <<<"${err}" \
 out=$(python3 "${SELECT_PY}" --tasks-dir "${gated}" --capability surface:cli </dev/null 2>/dev/null)
 grep -q 't-gate0001' <<<"${out}" \
     || fail "the task must be selectable once the capability is offered: ${out}"
+
+# --- 28b: the profile detect_surface.sh writes is read without any flag (#481).
+mkdir -p "${ARSENAL_SESSION_DIR}"
+printf '{"surface":"cli","capabilities":["surface:cli"]}\n' > "${ARSENAL_SESSION_DIR}/surface_profile.json"
+out=$(python3 "${SELECT_PY}" --tasks-dir "${gated}" </dev/null 2>/dev/null)
+grep -q 't-gate0001' <<<"${out}" \
+    || fail "a capability in surface_profile.json must be offered without --capability: ${out}"
+out=$(python3 "${SELECT_PY}" --tasks-dir "${gated}" --no-profile </dev/null 2>/dev/null)
+grep -q 't-gate0001' <<<"${out}" && fail "--no-profile must ignore the profile: ${out}"
+rm -f "${ARSENAL_SESSION_DIR}/surface_profile.json"
+echo "PASS: the selector offers what the surface profile recorded"
 
 # --- 29: the gated-task warning is scoped to what the caller asked for. Ahead
 #         of the workspace and tag filters it named the whole board, so a run
