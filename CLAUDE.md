@@ -17,10 +17,6 @@ marketplace-local conventions on top.
 The `skill-workshop` plugin is the meta-skill that gates every other edit
 inside a `skills/` folder.
 
-The migration plan that built this repo is preserved in the author's
-local `~/.claude/plans/` (historical reference only; v0.1.0 is the
-cutover).
-
 ---
 
 ## Working in this repo
@@ -32,7 +28,7 @@ cutover).
 | Adding a new plugin | Scaffold `plugins/<name>/.claude-plugin/plugin.json`, then add the entry to `.claude-plugin/marketplace.json`. |
 | Running the rule-drift check | `make audit-rule-drift` — diffs `references/skill-rules.md` against `docs/research/claude-skill-system_v1.17.md`. |
 | Checking what a change costs a consumer's context | `make context-budget` — reports the resident/on-invocation/on-demand tiers and fails over the resident cap. |
-| Checking this repo's own queue health | `make queue-doctor` — runs the queue consistency checker on `status/queue/` (dogfood). |
+| Checking this repo's own queue health | `make queue-doctor` — runs the queue consistency checker on `arsenal/tasks/` (dogfood). |
 | Updating dependencies | `uv sync`, then commit `uv.lock`. |
 | Bumping `.bundle-version` | Also add a `## [<version>]` entry to `plugins/core/skills/init/assets/CHANGELOG.md` — CI's `version-bump` job requires the heading; see § Versioning. |
 
@@ -201,12 +197,12 @@ reviewer should request it before merging.
   `~/.claude/CLAUDE.md` and apply automatically. **Not duplicated here.**
 - **Marketplace-local conventions** (plugin layout, branch policy, the
   `claude-arsenal:<plugin>:<skill>` cite form) live in **this** file.
-- **Skill rubric** (the ~98 author-checkable rule rows that the
+- **Skill rubric** (the author-checkable rule rows that the
   validator enforces) lives in
   `plugins/skill-workshop/skills/skill-workshop/references/skill-rules.md`.
   The validator cites rule IDs back to
   `docs/research/claude-skill-system_v1.17.md § <section>`.
-- **Deferred rules** (the ~91 meta-only governance IDs) live one-line-each
+- **Deferred rules** (the meta-only governance IDs) live one-line-each
   in `plugins/skill-workshop/skills/skill-workshop/references/research-coverage.md`
   with `§` anchors back to the research doc.
 

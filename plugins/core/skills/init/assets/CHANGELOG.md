@@ -18,6 +18,14 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [4.23.1] - 2026-10-03
+
+- **`AGENTS.md` and `agents/worker.md` no longer describe protocols that were
+  removed.** Two paragraphs told a session what the bundle *used to* do — gate
+  GitHub steps on `command -v gh`, ask a worker to add `Closes #N` by hand.
+  Each now states the rule and the failure it prevents, without the history.
+  No behaviour changes; `AGENTS.md` is one sentence shorter on every turn.
+
 ## [4.23.0] - 2026-09-23
 
 - **`open_task_pr.sh <task-id> --preflight` asks whether the run would refuse,

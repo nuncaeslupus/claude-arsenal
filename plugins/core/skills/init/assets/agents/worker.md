@@ -20,11 +20,9 @@ message, and moves the task file into `tasks/_history/` as part of the same diff
 — so the merge closes the task and archives it in one act. You do not add the
 keyword, check for it, or update anything afterwards.
 
-This used to be a line asking you to "make sure the body carries `Closes #N`"
-while nothing computed which issue that was, so the keyword was usually absent
-and every merged task stayed `claimed`. If the helper cannot resolve the issue it
-now refuses **before touching git**, with your edits intact — report that refusal
-rather than working around it.
+If the helper cannot resolve the issue it refuses **before touching git**, with
+your edits intact — report that refusal rather than working around it: a PR
+merged without the keyword leaves its task `claimed`.
 
 > **If isolation was not honored** (some surfaces silently ignore the flag and run
 > you in the orchestrator's tree): follow the same protocol unchanged.

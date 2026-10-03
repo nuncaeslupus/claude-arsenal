@@ -1,6 +1,6 @@
 # Claude Arsenal
 
-<!-- claude-arsenal v4.23.0 — imported via @claude-arsenal/AGENTS.md -->
+<!-- claude-arsenal v4.23.1 — imported via @claude-arsenal/AGENTS.md -->
 
 This file is imported by the host repo's `CLAUDE.md` via the session-protocol block
 that `/init` injects, so it sits in context on **every turn of every session**. It
@@ -51,9 +51,9 @@ At the start of every session (fresh start, context compaction, or cold restart)
 1. **Establish the GitHub channel** — `bash claude-arsenal/bin/github_channel.sh --detect`
    prints `gh`, `rest`, or `none`. **`none` is not a failure**: it means no scriptable
    channel exists on this surface, so every GitHub step below is performed with your own
-   built-in GitHub tools instead. What must not happen is skipping those steps. The
-   previous protocol gated them on `command -v gh`, which turned required work into silent
-   no-ops on Claude Code on the web, where `gh` is absent.
+   built-in GitHub tools instead. What must not happen is skipping those steps:
+   gating them on `command -v gh` makes required work a silent no-op wherever `gh` is
+   absent.
 
 2. **Fetch the task issues** — list issues labelled `arsenal:task`, **open and closed**,
    and save the JSON (e.g. to `/tmp/arsenal-issues.json`). Closed ones are not optional: a
