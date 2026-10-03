@@ -184,9 +184,14 @@ dispatches that many workers at once. Run when the queue has open tasks:
        line. A pushed branch is not an opened PR, and a task whose PR never
        opened can never close. The keyword-guard check in
        `.github/workflows/arsenal-queue.yml` fails the PR if you forget it.
-     - `open` (gate failed) → append the worker's `## Attempt N failure` notes to
-       the task file so the next attempt can read them, and leave the task for a
-       retry. The next attempt claims `<id>.a<n+1>`; past `max-attempts` it stops
+     - `open` (gate failed, round cap, refused review) → append the worker's
+       `## Attempt N failure` notes to the task file so the next attempt can read
+       them, and leave the task for a retry. Copy its `wip:` and `resume:` lines
+       into those notes, into a comment on the task issue and into `handover.md`:
+       the next attempt restores the work with the `resume:` command instead of
+       redoing it. No `wip:` line and the worker's worktree still exists → run
+       `park_task.sh <task_id>` from inside that worktree yourself before
+       anything removes it, and do not end the loop until it has pushed. The next attempt claims `<id>.a<n+1>`; past `max-attempts` it stops
        being offered and needs a human.
      - Remove `arsenal:claimed` and your assignment from the issue when you are
        not continuing, so the task is visibly free again.

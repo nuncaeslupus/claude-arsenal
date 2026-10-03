@@ -79,7 +79,9 @@ match the repository root. Check `pwd` if unsure.
    section (or, without one, the check that proves the Gate) and confirm it fails
    because the behaviour is missing — an import error or bad fixture is a setup
    problem to fix first. A test that already passes goes in your report.
-4. **Implement to green.** Leave the changes uncommitted. When the task says to
+4. **Implement to green.** Leave the changes uncommitted. If an earlier
+   attempt's failure notes carry a `resume:` line, run it first and continue
+   from that work rather than starting over. When the task says to
    follow an existing module, read its shape with
    `bash claude-arsenal/bin/outline.sh <file>` and open only the body you need
    with `sed -n 'START,ENDp' <file>`. While editing, run the suite covering what
@@ -135,7 +137,13 @@ match the repository root. Check `pwd` if unsure.
    pick up another task.
 
 For any other failure, return `open` with a failure note in the step 5 format
-and open no PR. For a code change, report it done only after one real check ran
+and open no PR.
+
+Before returning `open` for any reason (gate failure, round cap, a refused
+review, a quota stop), run `claude-arsenal/bin/park_task.sh <task_id> "<reason>"`
+and copy its `wip:` and `resume:` lines into the outcome. Your worktree is
+deleted when you return, and on a cloud surface so is the container; the pushed
+`arsenal/wip/<task_id>` branch is the only copy of the work that survives. For a code change, report it done only after one real check ran
 (the task gate, tests, a build); if none could run, say which and why.
 
 ## Rules

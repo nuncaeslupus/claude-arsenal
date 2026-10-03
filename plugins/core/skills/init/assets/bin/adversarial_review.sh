@@ -486,6 +486,18 @@ _max_rounds() {
     printf '%s\n' "${v}"
 }
 
+# How the round cap gets raised, said to whoever will read it. On a cloud
+# surface the agent cannot do it: an agent loosening its own guardrail is what
+# the auto-mode classifier refuses, and arguably should. Offering "raise" there
+# sent an agent into that refusal and left two finished tasks parked (#484).
+_raise_hint() {
+    if [[ -n "${CLAUDE_CODE_REMOTE:-}" ]]; then
+        printf 'only the repo owner can set review-max-rounds higher in arsenal/config.toml; an agent may not loosen its own guardrail. Do not try: park the task with bin/park_task.sh, give this message as the reason, and move on.\n'
+    else
+        printf 'set review-max-rounds higher in arsenal/config.toml, if this change genuinely needs more.\n'
+    fi
+}
+
 # A config value quoted in the packet header. Informational, so an unreadable
 # config falls back to the shipped default rather than blocking the review —
 # the round cap, which does gate, is read strictly by _max_rounds.
@@ -562,8 +574,12 @@ cmd_emit() {
         echo "adversarial_review: round ${round} would exceed review-max-rounds=${max_rounds} on this branch." >&2
         echo "adversarial_review: ${max_rounds} rounds without convergence is a finding about the change, not about the reviewer. Three ways out:" >&2
         echo "adversarial_review:   split    — drop the disputed part, open the rest, file the remainder as its own task" >&2
-        echo "adversarial_review:   override — say in the PR body which finding you judge a false positive, what you checked, and why" >&2
-        echo "adversarial_review:   raise    — set review-max-rounds higher in arsenal/config.toml, if this change genuinely needs more" >&2
+        if [[ "$(_cfg_or pre-pr-review warn)" == "required" ]]; then
+            echo "adversarial_review:   override — not here: pre-pr-review = required refuses a PR whose tree has no CLEAR receipt" >&2
+        else
+            echo "adversarial_review:   override — say in the PR body which finding you judge a false positive, what you checked, and why" >&2
+        fi
+        echo "adversarial_review:   raise    — $(_raise_hint)" >&2
         echo "adversarial_review: the count follows the branch, not the base. 'emit --reset' starts it over; so does a different branch." >&2
         exit 2
     fi
@@ -915,7 +931,14 @@ cmd_verdict() {
     fi
     if [[ "${max_rounds}" =~ ^[0-9]+$ ]] && (( round >= max_rounds )); then
         echo "adversarial_review: round ${round} of ${max_rounds} — the last one. Another emit on this branch is refused." >&2
-        echo "adversarial_review: fix the BLOCKER findings and open the PR declaring what you changed, split the disputed part out, or raise review-max-rounds in arsenal/config.toml." >&2
+        if [[ "$(_cfg_or pre-pr-review warn)" == "required" ]]; then
+            # A fix made now has no receipt, and `required` refuses exactly that
+            # tree — so "fix and open the PR" was a path that could not be taken
+            # (#484). Say the two that can.
+            echo "adversarial_review: pre-pr-review = required, so a fix made after this round cannot open a PR — its tree will have no CLEAR receipt. Split the disputed part out, or park the task with bin/park_task.sh. To get another round: $(_raise_hint)" >&2
+        else
+            echo "adversarial_review: fix the BLOCKER findings and open the PR declaring what you changed, or split the disputed part out. To get another round: $(_raise_hint)" >&2
+        fi
     else
         echo "adversarial_review: round ${round} of ${max_rounds}. Fix the BLOCKER findings and re-emit — round $((round + 1)) reads those findings plus what you changed, not the whole diff again." >&2
     fi

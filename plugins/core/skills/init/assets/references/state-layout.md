@@ -52,6 +52,7 @@ claude-arsenal/        ← upstream. /init refreshes what it ships and retires w
     worktree_probe.sh  ← probes whether git worktrees work here (fan-out safety)
     worker_postcheck.sh ← restores a clean tree after each worker
     rescue_snapshot.sh ← snapshots a dirty tree before any forced restore
+    park_task.sh      ← pushes a stopped task's uncommitted work to arsenal/wip/<id>
     host_setup.sh      ← runs the host's install command in a fresh worktree
     open_task_pr.sh    ← worker-side; branch → commit → push → PR
     adversarial_review.sh ← pre-PR review packet, verdict, and freshness receipt
