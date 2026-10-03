@@ -18,7 +18,9 @@ Two inputs, both cheap:
   trivially testable and cannot fail because a network call did.
 
 A task is eligible when it is `open`, every dep is `done`, and every
-`requires:` capability is offered by the current surface.
+`requires:` capability is offered by the current surface: the capabilities in
+`<session>/surface_profile.json` (what `detect_surface.sh` measured), plus any
+`--capability` passed.
 
 Output is one compact JSON object per line, best first — small on purpose,
 since every byte lands in a model's context:
@@ -634,8 +636,10 @@ def select(
         detail = ", ".join(sorted(gated)[:5]) + ("…" if len(gated) > 5 else "")
         warnings.append(
             f"{len(gated)} task(s) were filtered out by `requires:` against the current "
-            f"capabilities ({', '.join(sorted(capabilities)) or 'none'}): {detail}. Run "
-            "`bash claude-arsenal/bin/detect_surface.sh` if this surface has not been detected."
+            f"capabilities ({', '.join(sorted(capabilities)) or 'none'}): {detail}. They come "
+            "from surface_profile.json (`bash claude-arsenal/bin/detect_surface.sh`) plus "
+            "--capability; declare a host-specific one as a probe under [capabilities] in "
+            "arsenal/config.toml."
         )
 
     # Highest priority first, then by id so two agents reading the same graph
@@ -643,6 +647,23 @@ def select(
     # for the same task more often than necessary.
     eligible.sort(key=lambda t: (-int(t["priority"]), t["id"]))
     return eligible[:limit], warnings
+
+
+def _profile_capabilities() -> set[str]:
+    """What `detect_surface.sh` recorded for this surface, or nothing.
+
+    The profile had no reader: capabilities arrived only through `--capability`,
+    which the session-start protocol never passes, so a detected surface still
+    offered `(none)` and the hint told the session to run the probe it had just
+    run (#481). Unreadable or malformed reads as empty — an undetected surface
+    is exactly what the gated-task warning already explains.
+    """
+    try:
+        data = json.loads((_session_dir() / "surface_profile.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return set()
+    caps = data.get("capabilities") if isinstance(data, dict) else None
+    return {c for c in caps if isinstance(c, str)} if isinstance(caps, list) else set()
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -658,7 +679,15 @@ def main(argv: list[str] | None = None) -> int:
         "state is derived from them, so no --state is needed",
     )
     parser.add_argument(
-        "--capability", action="append", default=[], help="repeatable, e.g. surface:cli"
+        "--capability",
+        action="append",
+        default=[],
+        help="repeatable, e.g. surface:cli; adds to the surface profile",
+    )
+    parser.add_argument(
+        "--no-profile",
+        action="store_true",
+        help="ignore surface_profile.json; offer only the --capability values",
     )
     parser.add_argument("--workspace")
     parser.add_argument("--tag", action="append", default=[])
@@ -777,7 +806,8 @@ def main(argv: list[str] | None = None) -> int:
         selection, sel_warnings = select(
             tasks,
             state,
-            capabilities=set(args.capability),
+            capabilities=set(args.capability)
+            | (set() if args.no_profile else _profile_capabilities()),
             workspace=args.workspace,
             tags=set(args.tag) or None,
             limit=limit,

@@ -634,6 +634,17 @@ echo "print('cfg2')" >> app.py
 out=$(bash "${REVIEW}" emit 2>&1); st=$?
 (( st == 2 )) || fail "a configured cap of 1 must refuse round 2, got ${st}: ${out}"
 grep -q "review-max-rounds=1" <<<"${out}" || fail "the refusal should quote the configured value: ${out}"
+out=$(env -u CLAUDE_CODE_REMOTE bash "${REVIEW}" emit 2>&1)
+grep -q "only the repo owner" <<<"${out}" && fail "a local surface can raise the cap itself: ${out}"
+# On a cloud surface the agent cannot raise its own cap, and under `required`
+# an override in the PR body is not a way out either (#484).
+printf 'review-max-rounds = 1\npre-pr-review = "required"\n' > arsenal/config.toml
+out=$(CLAUDE_CODE_REMOTE=true bash "${REVIEW}" emit 2>&1); st=$?
+(( st == 2 )) || fail "the cloud refusal must still exit 2, got ${st}: ${out}"
+grep -q "only the repo owner" <<<"${out}" || fail "on a cloud surface 'raise' must name the owner: ${out}"
+grep -q "park_task.sh" <<<"${out}" || fail "on a cloud surface the refusal must say to park: ${out}"
+grep -q "override — not here" <<<"${out}" || fail "under required, override is not a way out: ${out}"
+echo "PASS: the cap refusal offers only the ways out this surface and mode allow"
 cd "${REPO}"
 echo "PASS: review-max-rounds is read from arsenal/config.toml"
 

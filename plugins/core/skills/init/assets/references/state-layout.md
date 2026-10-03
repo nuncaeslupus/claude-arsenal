@@ -52,6 +52,7 @@ claude-arsenal/        ← upstream. /init refreshes what it ships and retires w
     worktree_probe.sh  ← probes whether git worktrees work here (fan-out safety)
     worker_postcheck.sh ← restores a clean tree after each worker
     rescue_snapshot.sh ← snapshots a dirty tree before any forced restore
+    park_task.sh      ← pushes a stopped task's uncommitted work to arsenal/wip/<id>
     host_setup.sh      ← runs the host's install command in a fresh worktree
     open_task_pr.sh    ← worker-side; branch → commit → push → PR
     adversarial_review.sh ← pre-PR review packet, verdict, and freshness receipt
@@ -82,6 +83,21 @@ arsenal/               ← yours. Scaffolded once, then never written by an upgr
     handover.md        ← live; updated each session
     surface_profile.json, rate_limits.json, budget_iterations.json  ← gitignored
 ```
+
+`surface_profile.json` is what `task_select.py` offers against `requires:`, with any
+`--capability` added. `detect_surface.sh` writes it at session start: `surface:cli` or
+`surface:cloud`+`surface:web`, reachable services, and every host probe declared in
+`config.toml` that exits 0 here (5 s each):
+
+```toml
+[capabilities]
+"net:example.com" = "curl -sf -o /dev/null --max-time 5 https://example.com/"
+"data"            = "test -d data/raw"
+```
+
+`requires:` also gates on things that are not the surface — `[human:gate]` for "not for
+the worker loop", a name nobody grants for "not yet". A task asking for a capability no
+surface offers is listed in the selector's warning, never dispatched.
 
 The split is the point: upstream owns exactly one directory, so an upgrade can never touch
 your tasks, plans, or settings — and the vendored prefix contains only upstream content,

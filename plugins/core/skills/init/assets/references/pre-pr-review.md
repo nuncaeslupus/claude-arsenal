@@ -128,8 +128,8 @@ the packet prints the commands to pull it.
 | Exit | What it looks like |
 |---|---|
 | **split** | Drop the disputed part, open the rest, file the remainder as its own task. Usually the right one. |
-| **override** | Open the PR, naming in its body which finding you judge a false positive, what you checked, and why. |
-| **raise** | Set `review-max-rounds` higher in `arsenal/config.toml`, if this change genuinely needs it. |
+| **override** | Open the PR, naming in its body which finding you judge a false positive, what you checked, and why. Not available under `pre-pr-review = "required"`, which refuses a tree with no CLEAR receipt. |
+| **raise** | Set `review-max-rounds` higher in `arsenal/config.toml`, if this change genuinely needs it. On a cloud surface only the owner can: park the task with `bin/park_task.sh` and move on. |
 
 ## Tests during review
 
