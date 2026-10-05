@@ -38,6 +38,13 @@ if want hook; then
   out="$(run)" || fail "hook exited non-zero with no tmp/"
   [ -z "$out" ] || fail "hook not silent without notes: $out"
 
+  # Before compaction: instructions for the summary, with no notes file needed.
+  out="$(cd "$repo" && CLAUDE_PROJECT_DIR="$repo" bash "$HOOK" instruct </dev/null)" \
+    || fail "instruct exited non-zero"
+  for k in 'decisions taken' 'ruled out' 'next step'; do
+    echo "$out" | grep -q "$k" || fail "instruct does not ask the summary to keep '${k}'"
+  done
+
   # A notes file: its Resume block (minus the guidance quote) and git status.
   mkdir -p "${repo}/tmp"
   cp "$TEMPLATE" "${repo}/tmp/t-1234abcd-notes.md"
@@ -103,6 +110,8 @@ hits = [e for e in s["hooks"].get("SessionStart", []) if "compact_resume.sh" in 
 assert len(hits) == 1 and hits[0].get("matcher") == "compact", hits
 rec = [e for e in s["hooks"].get("PostToolUse", []) if "compact_resume.sh" in json.dumps(e)]
 assert len(rec) == 1 and "record" in json.dumps(rec[0]), rec
+pre = [e for e in s["hooks"].get("PreCompact", []) if "compact_resume.sh" in json.dumps(e)]
+assert len(pre) == 1 and "instruct" in json.dumps(pre[0]), pre
 EOF
   [ -x "$target/claude-arsenal/bin/compact_resume.sh" ] || fail "hook not vendored executable"
 
@@ -113,6 +122,8 @@ assert all("hooks" in e for e in s), "every entry needs a hooks list"
 assert any(e.get("matcher") == "compact" and "compact_resume.sh" in json.dumps(e) for e in s)
 p = json.load(open(sys.argv[1]))["hooks"]["PostToolUse"]
 assert any("compact_resume.sh" in json.dumps(e) and "record" in json.dumps(e) for e in p)
+c = json.load(open(sys.argv[1]))["hooks"]["PreCompact"]
+assert any("compact_resume.sh" in json.dumps(e) and "instruct" in json.dumps(e) for e in c)
 EOF
 fi
 

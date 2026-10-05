@@ -789,7 +789,9 @@ _MARK_PROMPT_HOOK = "claude-arsenal/bin/mark_skill_workshop_loaded_from_prompt.s
 _READER_HOOK = "claude-arsenal/bin/reader_hook.sh"
 # Also beside it: after compaction, re-injects the active task's Resume notes and
 # `git status`, the state a summary loses first. Silent when there are no notes.
-# Its `record` mode, on edits, remembers which notes file each session is on.
+# Its `record` mode, on edits, remembers which notes file each session is on;
+# its `instruct` mode, before compaction, asks the summary to keep the same state
+# for a session that has no notes file.
 _COMPACT_HOOK = "claude-arsenal/bin/compact_resume.sh"
 
 
@@ -1321,6 +1323,7 @@ def _register_gate_hook(repo_path: Path) -> None:
         ("UserPromptSubmit", None, _MARK_PROMPT_HOOK),
         ("SessionStart", "compact", _COMPACT_HOOK),
         ("PostToolUse", "Write|Edit|MultiEdit", f"{_COMPACT_HOOK} record"),
+        ("PreCompact", None, f"{_COMPACT_HOOK} instruct"),
     ]
     changed = False
     for event, matcher, command in wanted:
