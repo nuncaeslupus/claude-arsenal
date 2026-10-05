@@ -18,6 +18,10 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [5.3.0] - 2026-10-05
+
+- **Every longer session keeps resume notes, not only `execution`.** `AGENTS.md` now tells any session on work longer than a few steps to keep `tmp/<id-or-slug>-notes.md` with a `## Resume` section (Decided / Ruled out / Next step). The compaction hooks have always re-injected that section; until now only the `execution` skill said to write it, so other sessions had nothing to restore. Costs about 60 tokens of resident context. `/init` now adds `tmp/*-notes.md` and `tmp/.arsenal-sessions/` to `.gitignore` so the notes stay out of `git status`. Re-run `/init` to pick up both.
+
 ## [5.2.0] - 2026-10-05
 
 - **Compaction keeps your decisions even without a notes file.** A new `PreCompact` hook asks the summary to keep the task in progress, decisions taken, approaches ruled out, the next step, and your corrections. Before this, the resume hooks only helped a session that had written `tmp/<task-id>-notes.md`, which in practice meant only sessions running `execution`; any other session was left with whatever the default summary kept. Re-run `/init` to register the hook in `.claude/settings.json`; plugin installs get it on update.

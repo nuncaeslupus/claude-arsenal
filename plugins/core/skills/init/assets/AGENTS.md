@@ -1,6 +1,6 @@
 # Claude Arsenal
 
-<!-- claude-arsenal v5.2.0 — imported via @claude-arsenal/AGENTS.md -->
+<!-- claude-arsenal v5.3.0 — imported via @claude-arsenal/AGENTS.md -->
 
 This file is in context on every turn, so it holds only what a session needs before it
 knows what kind of session it is. The rest lives in `claude-arsenal/references/`: plain
@@ -77,6 +77,9 @@ At the start of every session (fresh start, context compaction, or cold restart)
 5. **Read handover** — read `arsenal/session/handover.md` if it has real content; it is a
    snapshot, so re-read the board before resuming anything it names.
    **After compaction mid-task**, the task's `tmp/<id>-notes.md` and `git status` are the state.
+   So keep that file on any work longer than a few steps, queue task or not
+   (`tmp/<id-or-slug>-notes.md`): a `## Resume` section with Decided / Ruled out / Next step,
+   refreshed after each decision. A hook re-injects that section after compaction.
 
 6. **Pick up work** — `claude-arsenal/references/worker-loop.md`. If the selector returns
    nothing and a plan exists, seed the queue from it

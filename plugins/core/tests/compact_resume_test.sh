@@ -114,6 +114,8 @@ pre = [e for e in s["hooks"].get("PreCompact", []) if "compact_resume.sh" in jso
 assert len(pre) == 1 and "instruct" in json.dumps(pre[0]), pre
 EOF
   [ -x "$target/claude-arsenal/bin/compact_resume.sh" ] || fail "hook not vendored executable"
+  grep -qxF 'tmp/*-notes.md' "$target/.gitignore" || fail "init does not gitignore resume notes"
+  grep -qxF 'tmp/.arsenal-sessions/' "$target/.gitignore" || fail "init does not gitignore session records"
 
   python3 - "${core}/hooks/hooks.json" <<'EOF' || fail "core hooks.json does not register it"
 import json, sys
@@ -130,6 +132,8 @@ fi
 if want agents; then
   grep -q 'After compaction mid-task' "${assets}/AGENTS.md" \
     || fail "AGENTS.md does not say how to resume after compaction"
+  grep -q '## Resume' "${assets}/AGENTS.md" \
+    || fail "AGENTS.md does not tell every session to keep a Resume section"
 fi
 
 echo "PASS: compact_resume_test (${which})"

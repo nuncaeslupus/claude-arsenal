@@ -2095,6 +2095,10 @@ def init_base(
     # Not derived from `home`: the report lives beside the skill, and
     # `.claude/skills/` does not move when ARSENAL_HOME relocates the host tree.
     _add_gitignore_entry(repo_path, ".claude/skills/*/findings.md")
+    # Resume notes and the per-session pointer to them (compact_resume.sh) are
+    # scratch; AGENTS.md asks every longer session to write one.
+    _add_gitignore_entry(repo_path, "tmp/*-notes.md")
+    _add_gitignore_entry(repo_path, "tmp/.arsenal-sessions/")
 
     # GitHub-side queue upkeep (see the function's docstring for why by default)
     _install_queue_workflow(repo_path, arsenal, silent=silent)
