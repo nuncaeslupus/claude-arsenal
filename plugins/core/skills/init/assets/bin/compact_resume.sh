@@ -1,15 +1,21 @@
 #!/usr/bin/env bash
-# Two hooks, registered by /init and by the core plugin:
+# Three hooks, registered by /init and by the core plugin:
 #
-#   compact_resume.sh          SessionStart, matcher `compact`
-#   compact_resume.sh record   PostToolUse on Write / Edit / MultiEdit
+#   compact_resume.sh            SessionStart, matcher `compact`
+#   compact_resume.sh record     PostToolUse on Write / Edit / MultiEdit
+#   compact_resume.sh instruct   PreCompact
 #
 # Compaction replaces the transcript with a summary, and a summary drops exactly
 # what a long task needs to continue: the decisions already taken, the approaches
 # already ruled out, and the next command. `execution` keeps those in the Resume
 # section of tmp/<task-id>-notes.md; the SessionStart hook prints that section and
-# a short `git status` so they land back in context right after compaction. (A
-# PreCompact hook cannot do this — its output never reaches the model.)
+# a short `git status` so they land back in context right after compaction.
+#
+# That only helps a session that kept a notes file, and one that never loaded
+# `execution` has none. `instruct` covers it: a PreCompact hook's stdout is
+# appended to the compaction instructions, so it asks the summary itself to keep
+# the same three things. It cannot put text in front of the model directly —
+# that is still the SessionStart hook's job — but it needs nothing on disk.
 #
 # Which task is this session on? `record` answers it at every moment: each edit
 # of a notes file writes tmp/.arsenal-sessions/<session_id> → that file. The
@@ -17,8 +23,21 @@
 # get their own notes back. Without a record it falls back to a notes file named
 # in the branch, then to the newest one — and says it guessed.
 #
-# Silent when there is no recent notes file, so a repo that never uses them pays
-# nothing. Never blocks: always exits 0.
+# The SessionStart hook is silent when there is no recent notes file, so a repo
+# that never uses them pays nothing after compaction. Never blocks: always exits 0.
+
+if [ "${1:-}" = instruct ]; then
+  cat <<'EOF_INSTRUCT'
+Keep these in the summary, verbatim where they are short:
+- the task in progress and its handles: task id, branch, PR, issue;
+- decisions taken, each with its reason;
+- approaches tried and ruled out, each with its reason, so they are not retried;
+- the exact next step, as a command where there is one;
+- instructions and corrections the user gave in this session;
+- paths of the files being edited, and of any notes file under tmp/.
+EOF_INSTRUCT
+  exit 0
+fi
 
 payload="$(cat 2>/dev/null || true)"
 field() { printf '%s' "$payload" | sed -n "s/.*\"$1\"[[:space:]]*:[[:space:]]*\"\\([^\"]*\\)\".*/\\1/p" | head -n 1; }

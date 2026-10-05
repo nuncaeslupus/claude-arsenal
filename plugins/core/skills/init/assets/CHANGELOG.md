@@ -18,6 +18,10 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [5.2.0] - 2026-10-05
+
+- **Compaction keeps your decisions even without a notes file.** A new `PreCompact` hook asks the summary to keep the task in progress, decisions taken, approaches ruled out, the next step, and your corrections. Before this, the resume hooks only helped a session that had written `tmp/<task-id>-notes.md`, which in practice meant only sessions running `execution`; any other session was left with whatever the default summary kept. Re-run `/init` to register the hook in `.claude/settings.json`; plugin installs get it on update.
+
 ## [5.1.0] - 2026-10-03
 
 - **Parked tasks keep their work.** New `bin/park_task.sh <task_id> "<reason>"` pushes a stopped task's uncommitted tree to `arsenal/wip/<task_id>` and prints a `resume:` command that restores it, still uncommitted, on any machine (#482). Workers now run it before returning `open` (gate failure, round cap, refused review), and the worker loop copies the `wip:`/`resume:` lines into the task notes, the issue and `handover.md`. Before this, a task stopped at the review cap on a cloud container was lost with the container.
