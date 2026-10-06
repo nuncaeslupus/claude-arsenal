@@ -18,6 +18,10 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [5.4.0] - 2026-10-06
+
+- **`github` no longer polls a PR in cloud sessions that get PR events.** When the session offers `subscribe_pr_activity` (claude.ai cloud sessions), the skill subscribes to the PR and acts on each CI, review and conflict event as it arrives, instead of running a `/loop` every 2 minutes. Local CLI sessions keep the `/loop` review loop unchanged. A silent review bot sends no event, so the skill schedules one check-in after `bot-wait-min` to catch it.
+
 ## [5.3.0] - 2026-10-05
 
 - **Every longer session keeps resume notes, not only `execution`.** `AGENTS.md` now tells any session on work longer than a few steps to keep `tmp/<id-or-slug>-notes.md` with a `## Resume` section (Decided / Ruled out / Next step). The compaction hooks have always re-injected that section; until now only the `execution` skill said to write it, so other sessions had nothing to restore. Costs about 60 tokens of resident context. `/init` now adds `tmp/*-notes.md` and `tmp/.arsenal-sessions/` to `.gitignore` so the notes stay out of `git status`. Re-run `/init` to pick up both.
