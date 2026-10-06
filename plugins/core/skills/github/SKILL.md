@@ -69,6 +69,17 @@ when its decision line calls for one: `claude-arsenal:core:init § references/pr
 
 ## The review loop
 
+**In a cloud session that offers PR activity events** (`subscribe_pr_activity` is in
+its tools), subscribe to the PR instead of starting `/loop`, then end the turn: CI
+results, reviews, comments and conflicts each wake the session, so polling only spends
+turns on what is already pushed. On each wake, run `query_pr_state.py --pr <N>
+--unresolved-only --trigger` once and act on its state as listed below and per the
+rubric in the loop command. Some changes send no event (a silent bot, a reaction, the
+quiet window, mergeability), so whenever the script exits 1 in a state other than
+`ci_running`, schedule one check-in rather than a loop. If the subscription result says
+another agent already receives the events, run the loop instead. Everywhere else, run
+the loop.
+
 After `gh pr create` returns the PR number, start the loop with the rubric inline, so
 each tick carries its own instructions, and with `--unresolved-only`, so handled
 comments drop out:

@@ -36,7 +36,7 @@ cat > "${tmp}/bin/gh" <<'SH'
 echo "$*" >> "${GH_LOG}"
 fx="${GH_FIXTURE}"
 case "$*" in
-  "pr comment"*|*requested_reviewers*) exit 0 ;;
+  *"-X POST"*) exit 0 ;;
   "repo view"*) echo '{"nameWithOwner":"acme/app"}' ;;
   "pr view"*) cat "${fx}/pr_view.json" ;;
   *"/reactions"*) echo '[]' ;;
@@ -222,20 +222,20 @@ fx="${tmp}/fx-skip"  # the skipped-status fixture from above, head ${HEAD}
 : > "${GH_LOG}"
 rs "${fx}" 5 --trigger >/dev/null || fail "first --trigger run failed"
 rs "${fx}" 6 --trigger >/dev/null || fail "second --trigger run failed"
-n=$(grep -c '^pr comment 7' "${GH_LOG}")
+n=$(grep -c '^api -X POST repos/.*/issues/7/comments' "${GH_LOG}")
 [[ "${n}" -eq 1 ]] || fail "two --trigger runs on one head must post once, posted ${n}:
 $(cat "${GH_LOG}")"
-grep -q -- '--body @coderabbitai review' "${GH_LOG}" || fail "the configured comment was not posted:
+grep -q -- 'body=@coderabbitai review' "${GH_LOG}" || fail "the configured comment was not posted:
 $(cat "${GH_LOG}")"
 fx3="${tmp}/fx-skip-new"; fixture "${fx3}" "${NEW}"; cp "${fx}/statuses.json" "${fx3}/"
 rs "${fx3}" 5 --trigger >/dev/null || fail "--trigger on a new head failed"
-n=$(grep -c '^pr comment 7' "${GH_LOG}")
+n=$(grep -c '^api -X POST repos/.*/issues/7/comments' "${GH_LOG}")
 [[ "${n}" -eq 2 ]] || fail "a new head gets its own trigger, total posted ${n}"
 # A bot with no configured trigger is never pinged.
 config 'review-bots = ["coderabbitai[bot]"]'
 rm -rf "${repo}/tmp"; : > "${GH_LOG}"
 rs "${fx}" 5 --trigger >/dev/null || fail "--trigger without a configured comment failed"
-grep -q '^pr comment' "${GH_LOG}" && fail "no bot-triggers entry must mean no comment"
+grep -q 'issues/7/comments -f' "${GH_LOG}" && fail "no bot-triggers entry must mean no comment"
 # A paused bot gets its resume command, not the review command.
 config 'review-bots = ["coderabbitai[bot]"]' 'bot-triggers = ["coderabbitai[bot]=@coderabbitai review"]'
 fx4="${tmp}/fx-paused"; fixture "${fx4}" "${HEAD}"
@@ -245,7 +245,7 @@ cat > "${fx4}/issue_comments.json" <<JSON
 JSON
 rm -rf "${repo}/tmp"; : > "${GH_LOG}"
 rs "${fx4}" 5 --trigger >/dev/null || fail "--trigger on a paused bot failed"
-grep -q -- '--body @coderabbitai resume' "${GH_LOG}" || fail "a paused bot must get its resume command:
+grep -q -- 'body=@coderabbitai resume' "${GH_LOG}" || fail "a paused bot must get its resume command:
 $(cat "${GH_LOG}")"
 echo "PASS: test_trigger_posts_once_per_head"
 
@@ -285,7 +285,7 @@ config 'review-bots = ["coderabbitai[bot]"]' 'bot-wait-min = 20' \
 rm -rf "${repo}/tmp"; : > "${GH_LOG}"
 st=$(qps "${fx}" 25 --trigger | jget state)
 [[ "${st}" == "waiting" ]] || fail "right after the trigger the bot gets one more wait, got ${st}"
-[[ $(grep -c '^pr comment 7' "${GH_LOG}") -eq 1 ]] || fail "the first absence sends the trigger once"
+[[ $(grep -c '^api -X POST repos/.*/issues/7/comments' "${GH_LOG}") -eq 1 ]] || fail "the first absence sends the trigger once"
 st=$(qps "${fx}" 35 --trigger | jget state)
 [[ "${st}" == "waiting" ]] || fail "10 min after the trigger is still inside the wait, got ${st}"
 out=$(qps "${fx}" 46 --trigger)
@@ -293,7 +293,7 @@ out=$(qps "${fx}" 46 --trigger)
     || fail "silence past wait + trigger + wait must be bot_absent:
 ${out}"
 [[ "$(jget decision.local_review <<<"${out}")" == "diff" ]] || fail "decision must be diff"
-[[ $(grep -c '^pr comment 7' "${GH_LOG}") -eq 1 ]] || fail "the trigger is sent once, not per tick"
+[[ $(grep -c '^api -X POST repos/.*/issues/7/comments' "${GH_LOG}") -eq 1 ]] || fail "the trigger is sent once, not per tick"
 echo "PASS: test_incident_replay_bounded (bot wait ends)"
 
 echo "PASS: review_sources_test — all gates passed"
