@@ -164,7 +164,8 @@ def _gh(*args: str) -> Any:
 
 
 def _gh_try(*args: str) -> tuple[bool, Any]:
-    """Like `_gh`, but returns (False, stderr) on failure instead of exiting.
+    """Like `_gh`, but returns (False, stderr) when GraphQL is refused (403);
+    any other failure still exits 2.
 
     Used for the GraphQL-backed calls (`gh repo view`, `gh pr view`, `gh api
     graphql`): some sandboxed sessions get a 403 on GraphQL while REST works,
@@ -176,7 +177,13 @@ def _gh_try(*args: str) -> tuple[bool, Any]:
     try:
         out = subprocess.check_output(["gh", *args], text=True, stderr=subprocess.PIPE)
     except subprocess.CalledProcessError as exc:
-        return False, exc.stderr or ""
+        err = exc.stderr or ""
+        if "graphql" not in err.lower() or "403" not in err:
+            # Only a refused GraphQL call has a REST fallback; anything else
+            # (network, rate limit, auth) is the permanent failure `_gh` reports.
+            sys.stderr.write(f"gh failed: gh {' '.join(args)}\nstderr: {err}\n")
+            sys.exit(2)
+        return False, err
     out = out.strip()
     return True, (json.loads(out) if out else None)
 
