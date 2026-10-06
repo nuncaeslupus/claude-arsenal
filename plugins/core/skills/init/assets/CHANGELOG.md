@@ -21,6 +21,7 @@ Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 ## [5.4.0] - 2026-10-06
 
 - **`github` no longer polls a PR in cloud sessions that get PR events.** When the session offers `subscribe_pr_activity` (claude.ai cloud sessions), the skill subscribes to the PR and acts on each CI, review and conflict event as it arrives, instead of running a `/loop` every 2 minutes. Local CLI sessions keep the `/loop` review loop unchanged. A silent review bot sends no event, so the skill schedules one check-in after `bot-wait-min` to catch it.
+- **`query_pr_state.py` now works where GitHub GraphQL is blocked.** Cloud sessions get a 403 on GraphQL, which made the script exit 2 on every call, so the review loop never ran there. It now falls back to REST for the repo name, PR state, CI rollup, reviews and review threads. One gap: REST cannot see whether a thread was resolved, so with `--unresolved-only` only threads whose latest reply is from a human drop out.
 
 ## [5.3.0] - 2026-10-05
 
