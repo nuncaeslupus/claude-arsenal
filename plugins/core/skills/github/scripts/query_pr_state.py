@@ -31,6 +31,7 @@ from __future__ import annotations
 import argparse
 import importlib
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -155,16 +156,36 @@ def _norm_user(name: str | None) -> str:
 
 def _gh(*args: str) -> Any:
     """Run a gh subcommand and parse JSON output. Exits 2 on failure."""
+    ok, data = _gh_try(*args)
+    if not ok:
+        sys.stderr.write(f"gh failed: gh {' '.join(args)}\nstderr: {data}\n")
+        sys.exit(2)
+    return data
+
+
+def _gh_try(*args: str) -> tuple[bool, Any]:
+    """Like `_gh`, but returns (False, stderr) when GraphQL is refused (403);
+    any other failure still exits 2.
+
+    Used for the GraphQL-backed calls (`gh repo view`, `gh pr view`, `gh api
+    graphql`): some sandboxed sessions get a 403 on GraphQL while REST works,
+    and each of those calls has a REST fallback below.
+    """
     if shutil.which("gh") is None:
         sys.stderr.write("gh CLI not found in PATH\n")
         sys.exit(2)
     try:
         out = subprocess.check_output(["gh", *args], text=True, stderr=subprocess.PIPE)
     except subprocess.CalledProcessError as exc:
-        sys.stderr.write(f"gh failed: gh {' '.join(args)}\nstderr: {exc.stderr or ''}\n")
-        sys.exit(2)
+        err = exc.stderr or ""
+        if "graphql" not in err.lower() or "403" not in err:
+            # Only a refused GraphQL call has a REST fallback; anything else
+            # (network, rate limit, auth) is the permanent failure `_gh` reports.
+            sys.stderr.write(f"gh failed: gh {' '.join(args)}\nstderr: {err}\n")
+            sys.exit(2)
+        return False, err
     out = out.strip()
-    return json.loads(out) if out else None
+    return True, (json.loads(out) if out else None)
 
 
 def _gh_paginated(*args: str) -> list[Any]:
@@ -214,8 +235,96 @@ def _gh_paginated(*args: str) -> list[Any]:
 
 
 def _default_repo() -> str:
-    data = _gh("repo", "view", "--json", "nameWithOwner")
-    return str(data["nameWithOwner"])
+    ok, data = _gh_try("repo", "view", "--json", "nameWithOwner")
+    if ok and data:
+        return str(data["nameWithOwner"])
+    # GraphQL refused: read owner/name from the origin remote's URL instead.
+    try:
+        url = subprocess.check_output(
+            ["git", "remote", "get-url", "origin"], text=True, stderr=subprocess.DEVNULL
+        ).strip()
+    except (OSError, subprocess.CalledProcessError):
+        url = ""
+    parts = [p for p in re.split(r"[/:]", url.removesuffix(".git")) if p]
+    if len(parts) >= 2:
+        return f"{parts[-2]}/{parts[-1]}"
+    sys.stderr.write(f"could not determine the repo; pass --repo owner/name\nstderr: {data}\n")
+    sys.exit(2)
+
+
+def _pr_view_rest(repo: str, pr_number: int) -> dict:
+    """The `gh pr view --json` fields main() reads, built from REST endpoints.
+
+    Field names and enum casing match `gh pr view` so the classifier sees one
+    shape whichever path produced it.
+    """
+    pr = _gh("api", f"repos/{repo}/pulls/{pr_number}")
+    if not pr:
+        return {}
+    state = "MERGED" if pr.get("merged_at") else str(pr.get("state") or "").upper()
+    mergeable = {True: "MERGEABLE", False: "CONFLICTING"}.get(pr.get("mergeable"), "UNKNOWN")
+    sha = (pr.get("head") or {}).get("sha") or ""
+    commits = [
+        {"committedDate": ((c.get("commit") or {}).get("committer") or {}).get("date")}
+        for c in _gh_paginated(f"repos/{repo}/pulls/{pr_number}/commits")
+    ]
+    checks: list[dict] = []
+    if sha:
+        for page in _gh_paginated(f"repos/{repo}/commits/{sha}/check-runs"):
+            for run in page.get("check_runs") or []:
+                checks.append(
+                    {
+                        "status": str(run.get("status") or "").upper(),
+                        "conclusion": str(run.get("conclusion") or "").upper(),
+                    }
+                )
+        combined = _gh("api", f"repos/{repo}/commits/{sha}/status") or {}
+        checks += [
+            {"state": str(st.get("state") or "").upper()} for st in combined.get("statuses") or []
+        ]
+    reviews = [
+        {
+            "author": r.get("user") or {},
+            "state": r.get("state"),
+            "submittedAt": r.get("submitted_at"),
+        }
+        for r in _gh_paginated(f"repos/{repo}/pulls/{pr_number}/reviews")
+    ]
+    return {
+        "state": state,
+        "mergedAt": pr.get("merged_at"),
+        "closedAt": pr.get("closed_at"),
+        "mergeable": mergeable,
+        "statusCheckRollup": checks,
+        "headRefOid": sha,
+        "reviews": reviews,
+        "commits": commits,
+    }
+
+
+def _threads_from_rest(line_comments: list[dict]) -> list[dict]:
+    """Review threads in the GraphQL shape, rebuilt from REST line comments.
+
+    REST groups replies under `in_reply_to_id` but does not expose whether a
+    thread is resolved, so a resolved thread with no human reply stays in the
+    loop: the safe side, as in `_addressed_comment_ids`.
+    """
+    threads: dict[int, list[dict]] = {}
+    for c in line_comments:
+        root = int(c.get("in_reply_to_id") or c.get("id") or 0)
+        threads.setdefault(root, []).append(c)
+    out = []
+    for comments in threads.values():
+        comments.sort(key=lambda c: c.get("created_at") or "")
+        latest_type = (comments[-1].get("user") or {}).get("type")
+        out.append(
+            {
+                "isResolved": False,
+                "all_comments": {"nodes": [{"databaseId": c.get("id")} for c in comments]},
+                "latest_comment": {"nodes": [{"author": {"__typename": latest_type}}]},
+            }
+        )
+    return out
 
 
 def _parse_ts(s: str | None) -> datetime | None:
@@ -247,8 +356,9 @@ def _aggregate_ci(checks: list[dict]) -> str:
     return "success"
 
 
-def _fetch_review_threads(owner: str, name: str, pr_number: int) -> list[dict]:
-    """Fetch PR review threads via GraphQL. Returns the threads list (possibly empty).
+def _fetch_review_threads(owner: str, name: str, pr_number: int) -> list[dict] | None:
+    """Fetch PR review threads via GraphQL. Returns the threads list (possibly empty),
+    or None when GraphQL is refused.
 
     Each thread has `isResolved` plus two aliased comment slices:
       - `all_comments` (first: 100) — used to collect `databaseId`s (the REST API
@@ -274,7 +384,7 @@ def _fetch_review_threads(owner: str, name: str, pr_number: int) -> list[dict]:
         "  }"
         "}"
     )
-    data = _gh(
+    ok, data = _gh_try(
         "api",
         "graphql",
         "-f",
@@ -286,6 +396,8 @@ def _fetch_review_threads(owner: str, name: str, pr_number: int) -> list[dict]:
         "-F",
         f"pr={pr_number}",
     )
+    if not ok:
+        return None
     if not data:
         return []
     return (((data.get("data") or {}).get("repository") or {}).get("pullRequest") or {}).get(
@@ -515,7 +627,7 @@ def main() -> int:
     repo = args.repo or _default_repo()
     owner, name = repo.split("/", 1)
 
-    pr = _gh(
+    ok, pr = _gh_try(
         "pr",
         "view",
         str(args.pr),
@@ -524,6 +636,8 @@ def main() -> int:
         "--json",
         "state,mergedAt,closedAt,mergeable,statusCheckRollup,headRefOid,reviews,commits",
     )
+    if not ok:
+        pr = _pr_view_rest(repo, args.pr)
     if not pr:
         sys.stderr.write(f"PR #{args.pr} not found in {repo}\n")
         return 2
@@ -562,6 +676,8 @@ def main() -> int:
 
     if args.unresolved_only:
         threads = _fetch_review_threads(owner, name, args.pr)
+        if threads is None:
+            threads = _threads_from_rest(line_comments)
         addressed = _addressed_comment_ids(threads)
         # Count only watched-bot comments toward "everything addressed" — a thread between
         # two humans being resolved should NOT trigger the bot-stale-eyes override.

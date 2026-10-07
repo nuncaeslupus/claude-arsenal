@@ -546,10 +546,10 @@ def post_triggers(
             command = BOTS[v.login].resume
         state_dir.mkdir(parents=True, exist_ok=True)
         marker.write_text(at.isoformat() + "\n", encoding="utf-8")
-        repo_args = ["--repo", repo] if repo else []
+        # REST, not `gh pr comment`: some sandboxed sessions refuse GraphQL.
+        if not repo:
+            repo = json.loads(_gh("repo", "view", "--json", "nameWithOwner"))["nameWithOwner"]
         if command == "request-reviewer":
-            if not repo:
-                repo = json.loads(_gh("repo", "view", "--json", "nameWithOwner"))["nameWithOwner"]
             _gh(
                 "api",
                 "-X",
@@ -559,7 +559,7 @@ def post_triggers(
                 f"reviewers[]={v.login}[bot]",
             )
         else:
-            _gh("pr", "comment", str(pr), *repo_args, "--body", command)
+            _gh("api", "-X", "POST", f"repos/{repo}/issues/{pr}/comments", "-f", f"body={command}")
         v.state, v.final, v.triggered_at = "pending", False, at.isoformat()
         v.detail = f"trigger sent ({command}); waiting one more bot-wait-min"
         posted.append(v.login)
