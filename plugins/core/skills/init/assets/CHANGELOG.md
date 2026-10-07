@@ -21,6 +21,7 @@ Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 ## [5.5.0] - 2026-10-07
 
 - **A ready-made test selector for `preflight-gate`.** `claude-arsenal/bin/select_tests.py` prints the tests a change could affect — the ones named after a changed file or naming it — and falls back to every test whenever it meets a file it cannot place, so review rounds stop paying for the whole suite without silently skipping anything it cannot see. Example: `preflight-gate = 'pytest $(python3 claude-arsenal/bin/select_tests.py --tests "**/test_*.py")'`. `--always`, `--ignore` and `--include` tune it; see `references/ci-minutes.md`. It does not follow imports, so keep it out of `host-gate`. No resident-context cost.
+
 ## [5.4.0] - 2026-10-06
 
 - **`github` no longer polls a PR in cloud sessions that get PR events.** When the session offers `subscribe_pr_activity` (claude.ai cloud sessions), the skill subscribes to the PR and acts on each CI, review and conflict event as it arrives, instead of running a `/loop` every 2 minutes. Local CLI sessions keep the `/loop` review loop unchanged. A silent review bot, a reaction or a quiet window sends no event, so the skill schedules one check-in whenever the PR is waiting on something other than running CI.
