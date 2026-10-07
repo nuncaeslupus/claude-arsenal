@@ -28,6 +28,7 @@ inside a `skills/` folder.
 | Adding a new plugin | Scaffold `plugins/<name>/.claude-plugin/plugin.json`, then add the entry to `.claude-plugin/marketplace.json`. |
 | Running the rule-drift check | `make audit-rule-drift` — diffs `references/skill-rules.md` against `docs/research/claude-skill-system_v1.17.md`. |
 | Checking what a change costs a consumer's context | `make context-budget` — reports the resident/on-invocation/on-demand tiers and fails over the resident cap. |
+| Running only the tests a change touches | `make test-changed` (`BASE=<ref>` to diff elsewhere) — the editing loop; `make test` and CI stay the bar. |
 | Checking this repo's own queue health | `make queue-doctor` — runs the queue consistency checker on `arsenal/tasks/` (dogfood). |
 | Updating dependencies | `uv sync`, then commit `uv.lock`. |
 | Bumping `.bundle-version` | Also add a `## [<version>]` entry to `plugins/core/skills/init/assets/CHANGELOG.md` — CI's `version-bump` job requires the heading; see § Versioning. |

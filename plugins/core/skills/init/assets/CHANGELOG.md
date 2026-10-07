@@ -18,6 +18,10 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [5.4.0] - 2026-10-07
+
+- **A ready-made test selector for `preflight-gate`.** `claude-arsenal/bin/select_tests.py` prints the tests a change could affect — the ones named after a changed file or naming it — and falls back to every test whenever it meets a file it cannot place, so review rounds stop paying for the whole suite without silently skipping anything it cannot see. Example: `preflight-gate = 'pytest $(python3 claude-arsenal/bin/select_tests.py --tests "**/test_*.py")'`. `--always`, `--ignore` and `--include` tune it; see `references/ci-minutes.md`. It does not follow imports, so keep it out of `host-gate`. No resident-context cost.
+
 ## [5.3.0] - 2026-10-05
 
 - **Every longer session keeps resume notes, not only `execution`.** `AGENTS.md` now tells any session on work longer than a few steps to keep `tmp/<id-or-slug>-notes.md` with a `## Resume` section (Decided / Ruled out / Next step). The compaction hooks have always re-injected that section; until now only the `execution` skill said to write it, so other sessions had nothing to restore. Costs about 60 tokens of resident context. `/init` now adds `tmp/*-notes.md` and `tmp/.arsenal-sessions/` to `.gitignore` so the notes stay out of `git status`. Re-run `/init` to pick up both.

@@ -1946,7 +1946,8 @@ def _report_gate_choices(repo_path: Path, private: bool = False) -> None:
         print(
             "  PREFLIGHT-GATE UNSET — review rounds after the first re-run the FULL host gate. "
             "Record a fast, change-scoped command as `preflight-gate` (it sees "
-            "$ARSENAL_CHANGED_FILES)." + (f" Suggested: `{fast_hint}`." if fast_hint else "")
+            "$ARSENAL_CHANGED_FILES; claude-arsenal/bin/select_tests.py picks its tests)."
+            + (f" Suggested: `{fast_hint}`." if fast_hint else "")
         )
     if not has_ci or private:
         why = "NO CI workflow found" if not has_ci else "private repo — Actions minutes are metered"

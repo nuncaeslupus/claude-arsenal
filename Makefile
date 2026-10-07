@@ -1,4 +1,4 @@
-.PHONY: validate-manifests help sync smoke test context-budget timings queue-doctor tag sync-version sync-version-check validate audit audit-rule-drift sync-dupes lint format dev new-skill update-skills clean
+.PHONY: validate-manifests help sync smoke test test-changed context-budget timings queue-doctor tag sync-version sync-version-check validate audit audit-rule-drift sync-dupes lint format dev new-skill update-skills clean
 
 PLUGIN_DIRS := $(wildcard plugins/*)
 PLUGIN_SKILL_LIBS := $(wildcard plugins/*/skills)
@@ -136,6 +136,19 @@ export ARSENAL_BRANCH_PROTECTION := 0
 test:  ## run every plugin's behaviour tests (plugins/*/tests/*.sh) + repo-tool tests (scripts/*_test.sh)
 	@set -e; for t in plugins/*/tests/*.sh scripts/*_test.sh; do \
 		[ -f "$$t" ] || continue; \
+		echo "=== test: $$t ==="; bash "$$t"; \
+	done
+
+# Tests that scan the tree (grep -r, find, a glob loop) depend on files they
+# never name, so select_tests.py cannot map a change to them; they ride along
+# with every selection. Derived, not listed, so a new scanner is not forgotten.
+TREE_TEST_RE := grep -r|find [^|]*(plugins|skills|assets|\$$\{?ROOT|\$$\{?REPO)|git ls-files|for [a-z_]+ in [^;]*\*|glob\(
+TREE_TESTS = $(shell grep -lE '$(TREE_TEST_RE)' plugins/*/tests/*.sh scripts/*_test.sh)
+
+test-changed:  ## run only the tests the change since BASE touches (default origin/main) — the editing loop; `make test` stays the bar
+	@set -e; for t in $$(python3 plugins/core/skills/init/assets/bin/select_tests.py \
+		--tests 'plugins/*/tests/*.sh' --tests 'scripts/*_test.sh' \
+		$(TREE_TESTS:%=--include %) $(if $(BASE),--base $(BASE))); do \
 		echo "=== test: $$t ==="; bash "$$t"; \
 	done
 

@@ -49,6 +49,20 @@ itself: `ruff check $ARSENAL_CHANGED_FILES`, `eslint $ARSENAL_CHANGED_FILES`,
 `pytest --picked`. Empty means "check everything", so a scoped command degrades
 safely. With no `preflight-gate` it runs `host-gate` and says so.
 
+For the tests, `bin/select_tests.py` is a ready-made selector: it maps each
+changed file to the tests named after it or naming it, and prints every test the
+moment it meets a file it cannot place, so it costs speed, never coverage.
+
+```toml
+preflight-gate = 'pytest $(python3 claude-arsenal/bin/select_tests.py --tests "**/test_*.py")'
+```
+
+`--always <glob>` for changes that need the whole suite (a lockfile, a shared
+fixture), `--ignore <glob>` for ones no test exercises, `--include <glob>` for
+tests that scan the whole tree and so never name the file they would catch. It
+cannot follow imports — a change to `foo` misses the test of `bar` that uses it
+— which is why it belongs in `preflight-gate` and never in `host-gate`.
+
 **Never re-run the full suite per review round.** The full gate already passed on
 everything the round did not touch. A round is: fix every comment it raised, run
 the fast gate once, push **once**. One push per round, not one per comment — each
