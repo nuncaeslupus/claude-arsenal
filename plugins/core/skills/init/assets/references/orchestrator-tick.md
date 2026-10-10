@@ -11,6 +11,7 @@ on a clock.
 - [What a tick is, and what owns the clock](#what-a-tick-is-and-what-owns-the-clock)
 - [The tick, in order](#the-tick-in-order)
 - [Merge preconditions — all three, every time](#merge-preconditions--all-three-every-time)
+- [Review before the full gate](#review-before-the-full-gate)
 - [Reporting — say nothing when nothing changed](#reporting--say-nothing-when-nothing-changed)
 - [A tick is not portable](#a-tick-is-not-portable)
 - [Dispatching a worker to another session](#dispatching-a-worker-to-another-session)
@@ -38,7 +39,11 @@ lost when the trigger is deleted.
    separate-session dispatch).
 3. **Review what came back.** Verify every review-bot finding against the code:
    confirm it reproduces, then fix it or say precisely why it does not hold.
-4. **Merge what qualifies**, per the preconditions below.
+4. **Merge what qualifies**, per the preconditions below, in this order for each
+   PR head (§ Review before the full gate):
+   1. New head → second reader (`bin/claim_review.sh <pr> <head-sha>`).
+   2. CLEAR on that exact head → start the full gate (`fast_gate.sh --full`).
+   3. Gate PASS, CI green, head unchanged → merge.
 5. **Regenerate evidence after each merge** with the tooling that owns it, since a
    hand-edited number is one nothing measured.
 6. **Report**, in the shape below, and **stop**. Remaining work belongs to the next
@@ -64,6 +69,19 @@ and anything that would widen a permission or change the merge policy.
 such as `after-review` does not look at CI; run it as well, since the policy may
 require more, never less. Read the policy each tick, because hosts change it. Each value's rule is in `references/github-automation.md` § Merge
 policy.
+
+## Review before the full gate
+
+Do not start the full clean-checkout gate on a head the second reader has not
+cleared. A BLOCK means a new head, and a gate run on the old one describes a tree
+nobody will merge: its CPU time is lost, and it slowed every other session that
+shared the cores. Measured on one host repo, a full gate took 13–37 minutes under
+load and most PRs took 2–3 review rounds, so starting both together discarded
+most of the gates it ran. Serialising costs a few minutes per merge.
+
+The cheap per-round gate (`preflight-gate`, `fast_gate.sh` without `--full`) is
+unaffected: implementers still run it on every fix. Only `--full` waits for
+CLEAR, and a fix pushed after CLEAR is a new head that goes back to step 1.
 
 ## Reporting — say nothing when nothing changed
 
