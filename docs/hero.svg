@@ -169,11 +169,11 @@
   <rect x="612" y="284" width="212" height="68" rx="4" fill="#1d2027" stroke="#3a3f4a"/>
   <rect x="612" y="284" width="5" height="68" rx="2" fill="#e07a45"/>
   <text x="632" y="314" font-family="Inter, 'DejaVu Sans', sans-serif" font-size="18" font-weight="600" fill="#e9e4da" text-anchor="start" letter-spacing="0" xml:space="preserve">core</text>
-  <text x="632" y="336" font-family="Inter, 'DejaVu Sans', sans-serif" font-size="12" font-weight="400" fill="#8a8f99" text-anchor="start" letter-spacing="0" xml:space="preserve">20 skills · task queue</text>
+  <text x="632" y="336" font-family="Inter, 'DejaVu Sans', sans-serif" font-size="12" font-weight="400" fill="#8a8f99" text-anchor="start" letter-spacing="0" xml:space="preserve">spec-driven skills · task queue</text>
   <rect x="612" y="364" width="212" height="68" rx="4" fill="#1d2027" stroke="#3a3f4a"/>
   <rect x="612" y="364" width="5" height="68" rx="2" fill="#e07a45"/>
   <text x="632" y="394" font-family="Inter, 'DejaVu Sans', sans-serif" font-size="18" font-weight="600" fill="#e9e4da" text-anchor="start" letter-spacing="0" xml:space="preserve">skill-workshop</text>
-  <text x="632" y="416" font-family="Inter, 'DejaVu Sans', sans-serif" font-size="12" font-weight="400" fill="#8a8f99" text-anchor="start" letter-spacing="0" xml:space="preserve">146-row rubric · validator</text>
+  <text x="632" y="416" font-family="Inter, 'DejaVu Sans', sans-serif" font-size="12" font-weight="400" fill="#8a8f99" text-anchor="start" letter-spacing="0" xml:space="preserve">rubric · validator · edit hook</text>
   <rect x="612" y="444" width="212" height="68" rx="4" fill="#1d2027" stroke="#3a3f4a"/>
   <rect x="612" y="444" width="5" height="68" rx="2" fill="#e07a45"/>
   <text x="632" y="474" font-family="Inter, 'DejaVu Sans', sans-serif" font-size="18" font-weight="600" fill="#e9e4da" text-anchor="start" letter-spacing="0" xml:space="preserve">repo-audit</text>
@@ -216,10 +216,7 @@
   <line x1="812" y1="528" x2="812" y2="592" stroke="#8a8f99"/>
   <text x="822" y="546" font-family="'DejaVu Sans Mono', monospace" font-size="9" font-weight="400" fill="#8a8f99" text-anchor="start" letter-spacing="1.5" xml:space="preserve">SHEET</text>
   <text x="822" y="574" font-family="'DejaVu Sans Mono', monospace" font-size="12" font-weight="400" fill="#e9e4da" text-anchor="start" letter-spacing="0" xml:space="preserve">Claude Code marketplace</text>
-  <line x1="1012" y1="528" x2="1012" y2="592" stroke="#8a8f99"/>
-  <text x="1022" y="546" font-family="'DejaVu Sans Mono', monospace" font-size="9" font-weight="400" fill="#8a8f99" text-anchor="start" letter-spacing="1.5" xml:space="preserve">LICENSE</text>
-  <text x="1022" y="574" font-family="'DejaVu Sans Mono', monospace" font-size="12" font-weight="400" fill="#e9e4da" text-anchor="start" letter-spacing="0" xml:space="preserve">MIT</text>
-  <line x1="1102" y1="528" x2="1102" y2="592" stroke="#8a8f99"/>
-  <text x="1112" y="546" font-family="'DejaVu Sans Mono', monospace" font-size="9" font-weight="400" fill="#8a8f99" text-anchor="start" letter-spacing="1.5" xml:space="preserve">REV</text>
-  <text x="1112" y="574" font-family="'DejaVu Sans Mono', monospace" font-size="12" font-weight="400" fill="#e07a45" text-anchor="start" letter-spacing="0" xml:space="preserve">v5.5.1</text>
+  <line x1="1052" y1="528" x2="1052" y2="592" stroke="#8a8f99"/>
+  <text x="1062" y="546" font-family="'DejaVu Sans Mono', monospace" font-size="9" font-weight="400" fill="#8a8f99" text-anchor="start" letter-spacing="1.5" xml:space="preserve">LICENSE</text>
+  <text x="1062" y="574" font-family="'DejaVu Sans Mono', monospace" font-size="12" font-weight="400" fill="#e9e4da" text-anchor="start" letter-spacing="0" xml:space="preserve">MIT</text>
 </svg>

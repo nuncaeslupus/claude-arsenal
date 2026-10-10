@@ -5,6 +5,9 @@ with a headless Chromium (the README shows the PNG: GitHub's `<img>` view of an
 SVG loads no fonts, so the PNG is what keeps the faces). Needs the Inter and
 DejaVu Sans Mono fonts installed for the PNG to match, and Pillow to crop.
 
+The sheet deliberately carries no version, skill count or rubric size: a PNG
+cannot follow the repo, so anything that changes on a release stays off it.
+
 Usage, from the repository root:
 
     python3 tools/hero.py                    # write docs/hero.svg and docs/hero.png
@@ -40,8 +43,6 @@ SANS = "Inter, 'DejaVu Sans', sans-serif"
 DISPLAY = "'Inter Display', Inter, sans-serif"
 MONO = "'DejaVu Sans Mono', monospace"
 
-VERSION = (ROOT / "plugins/core/skills/init/assets/.bundle-version").read_text().strip()
-CORE_SKILLS = sum(1 for p in (ROOT / "plugins/core/skills").iterdir() if p.is_dir())
 
 PIPELINE = [
     ("explore-idea", "idea.md"),
@@ -182,8 +183,8 @@ def rack() -> list[str]:
     """The three plugins as cartridges in a rack."""
     x, y = 612, 284  # rack column, left of the gate callout
     items = [
-        ("core", f"{CORE_SKILLS} skills · task queue"),
-        ("skill-workshop", "146-row rubric · validator"),
+        ("core", "spec-driven skills · task queue"),
+        ("skill-workshop", "rubric · validator · edit hook"),
         ("repo-audit", "explain · audit a repo"),
     ]
     out = [text(x, y - 10, "PLUGINS", size=10, fill=ACCENT, family=MONO, spacing=2)]
@@ -245,9 +246,8 @@ def title_block() -> list[str]:
     x, y, w, h = 612, 528, 586, 64
     cells = [
         (0, 200, "PROJECT", "claude-arsenal"),
-        (200, 200, "SHEET", "Claude Code marketplace"),
-        (400, 90, "LICENSE", "MIT"),
-        (490, 96, "REV", f"v{VERSION}"),
+        (200, 240, "SHEET", "Claude Code marketplace"),
+        (440, 146, "LICENSE", "MIT"),
     ]
     out = [
         f'<rect x="{x}" y="{y}" width="{w}" height="{h}" fill="{GROUND}" stroke="{DIM}" '
@@ -266,7 +266,7 @@ def title_block() -> list[str]:
                 size=19 if big else 12,
                 weight=700 if big else 400,
                 family=MONO,
-                fill=ACCENT if label == "REV" else INK,
+                fill=INK,
             )
         )
     return out
