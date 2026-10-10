@@ -127,10 +127,25 @@ def sheet() -> list[str]:
     return out
 
 
+LOGO_SIZE = 88  # the tile's height, standing on the wordmark's baseline
+LOGO_GAP = 20
+
+
+def logo() -> str:
+    """The approved logo (docs/logo.svg), nested so the hero stays generated from it."""
+    src = (ROOT / "docs" / "logo.svg").read_text().strip()
+    inner = src[src.index(">") + 1 : src.rindex("</svg>")]
+    return (
+        f'<svg x="64" y="{160 - LOGO_SIZE}" width="{LOGO_SIZE}" height="{LOGO_SIZE}" '
+        f'viewBox="0 0 64 64">{inner}</svg>'
+    )
+
+
 def wordmark() -> list[str]:
     return [
-        f'<text x="64" y="160" font-family="{DISPLAY}" font-size="104" font-weight="800" '
-        f'letter-spacing="-3"><tspan fill="{INK}">claude</tspan>'
+        logo(),
+        f'<text x="{64 + LOGO_SIZE + LOGO_GAP}" y="160" font-family="{DISPLAY}" '
+        f'font-size="104" font-weight="800" letter-spacing="-3"><tspan fill="{INK}">claude</tspan>'
         f'<tspan fill="{ACCENT}">-arsenal</tspan></text>',
         text(68, 210, "Make the agent work like an engineer.", size=27, fill="#b9c0cc"),
         text(
