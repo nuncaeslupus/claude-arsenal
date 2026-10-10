@@ -86,6 +86,10 @@ hand-written query, which tends to read an absent check as green or a summary
 line as the finding list. Without a scriptable GitHub channel it prints the exact
 calls to make and the command to pipe them into.
 
+Run it last: second reader on the head, then the full gate once that reader
+returns CLEAR on the same head, then `merge_ready.sh` (`references/orchestrator-tick.md`
+§ Review before the full gate).
+
 The host already decided, so both merging past the policy and asking a question
 it answers are failures:
 

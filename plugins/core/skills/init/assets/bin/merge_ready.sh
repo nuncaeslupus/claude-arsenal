@@ -20,6 +20,12 @@
 # on the previous push is evidence about the previous push. The distinction is
 # invisible in `gh pr checks`, which is why it kept being lost.
 #
+# ORDER: this is the last question, not the first. On a new head, the second
+# reader goes first; the full gate (`fast_gate.sh --full`) starts only once that
+# reader returns CLEAR on the exact head, and this runs after the gate passes.
+# A full gate started beside the review is wasted whenever the review BLOCKs
+# (references/orchestrator-tick.md § Review before the full gate).
+#
 # Stdout: the condition table, then the verdict. With `--body`, and only when
 # the PR is ready, the merge commit body to carry.
 #

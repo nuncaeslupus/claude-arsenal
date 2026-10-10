@@ -18,6 +18,10 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [5.5.1] - 2026-10-10
+
+- **The orchestrator tick starts the full gate only after the second reader clears the head.** `references/orchestrator-tick.md` now orders each PR head as: second reader → CLEAR on that exact head → `fast_gate.sh --full` → merge. Running the full clean-checkout gate beside the review wasted it on every BLOCKed round and slowed every other session sharing the cores. The cheap per-round `preflight-gate` is unchanged. `merge_ready.sh` and `references/github-automation.md` state the same order. No resident-context cost.
+
 ## [5.5.0] - 2026-10-07
 
 - **A ready-made test selector for `preflight-gate`.** `claude-arsenal/bin/select_tests.py` prints the tests a change could affect — the ones named after a changed file or naming it — and falls back to every test whenever it meets a file it cannot place, so review rounds stop paying for the whole suite without silently skipping anything it cannot see. Example: `preflight-gate = 'pytest $(python3 claude-arsenal/bin/select_tests.py --tests "**/test_*.py")'`. `--always`, `--ignore` and `--include` tune it; see `references/ci-minutes.md`. It does not follow imports, so keep it out of `host-gate`. No resident-context cost.
