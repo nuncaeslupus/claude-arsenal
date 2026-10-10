@@ -1,4 +1,4 @@
-.PHONY: validate-manifests help sync smoke test test-changed context-budget timings queue-doctor tag sync-version sync-version-check validate audit audit-rule-drift sync-dupes lint format dev new-skill update-skills clean
+.PHONY: validate-manifests help sync smoke test test-changed context-budget timings hero queue-doctor tag sync-version sync-version-check validate audit audit-rule-drift sync-dupes lint format dev new-skill update-skills clean
 
 PLUGIN_DIRS := $(wildcard plugins/*)
 PLUGIN_SKILL_LIBS := $(wildcard plugins/*/skills)
@@ -61,6 +61,9 @@ endif
 
 context-budget:  ## report what this marketplace costs a consumer's context, and cap the always-installed tier
 	uv run python scripts/context_budget.py --fail-over $(RESIDENT_TOKEN_BUDGET)
+
+hero:  ## redraw the README banner, docs/hero.svg and docs/hero.png (needs Chromium + Pillow)
+	uv run --with pillow python tools/hero.py
 
 timings:  ## report p50/p95 by boundary from tmp/arsenal-metrics/metrics.tsv
 	@uv run python plugins/core/skills/init/assets/scripts/arsenal_timings.py $(TIMINGS_ARGS) || [ $$? -eq 1 ]  # 1 = no data yet, not a failure
