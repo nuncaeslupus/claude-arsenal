@@ -1,5 +1,9 @@
 # claude-arsenal
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/nuncaeslupus/claude-arsenal/main/docs/hero.png" width="100%" alt="claude-arsenal: an engineering sheet with the wordmark, a terminal installing the marketplace and running a RED, GREEN, RECORD gate check, the three plugins, and the spec-driven pipeline from explore-idea to ship">
+</p>
+
 **A Claude Code marketplace for people who want the agent to work like an engineer.**
 
 Specs before code. Failing tests before implementations. Acceptance gates with
