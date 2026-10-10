@@ -19,6 +19,7 @@ Reads `status/specification.md` to know what should be shipping. Confirms scope 
 - Intended vs actual scope. Any drift? Any missing pieces?
 - If drift → decide: acceptable or split into separate PR?
 - If scope grew significantly → does the risk assessment need updating?
+- If the README carries a hero image, does it still match what ships? Load `references/readme-hero.md` when it might not, or when drawing one.
 
 ### Step 2: Confirm objective coverage
 

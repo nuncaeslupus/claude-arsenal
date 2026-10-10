@@ -18,6 +18,10 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [5.6.0] - 2026-10-10
+
+- **`ship` now checks the README's hero image.** Step 1 asks whether a hero (banner) image still matches what ships, and points to a new on-demand reference, `ship/references/readme-hero.md`: when a change means redrawing it (a renamed or removed headline feature, a new lead feature), and how to make one render everywhere (1280 × 640, the GitHub social-preview size; a PNG, since GitHub's `<img>` view of an SVG loads no fonts; an absolute URL so PyPI and mirrors show it; no versions or counts on it, so releases do not stale it). It says nothing about how a hero should look. One line added to the `ship` body; the reference loads only when needed. No resident-context cost.
+
 ## [5.5.1] - 2026-10-10
 
 - **The orchestrator tick starts the full gate only after the second reader clears the head.** `references/orchestrator-tick.md` now orders each PR head as: second reader → CLEAR on that exact head → `fast_gate.sh --full` → merge. Running the full clean-checkout gate beside the review wasted it on every BLOCKed round and slowed every other session sharing the cores. The cheap per-round `preflight-gate` is unchanged. `merge_ready.sh` and `references/github-automation.md` state the same order. No resident-context cost.
