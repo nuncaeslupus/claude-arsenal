@@ -127,10 +127,30 @@ def sheet() -> list[str]:
     return out
 
 
+#: One rule in every hero: the logo tile is 0.95 x the wordmark's font size, centred on
+#: its capital band (baseline to cap height, 0.727 em), with a quarter-em gap before it.
+WORD_SIZE, WORD_BASE, LOGO_X = 100, 160, 64
+LOGO_SIZE = round(0.95 * WORD_SIZE)
+LOGO_Y = round(WORD_BASE - 0.727 * WORD_SIZE / 2 - LOGO_SIZE / 2)
+TEXT_X = LOGO_X + LOGO_SIZE + round(0.25 * WORD_SIZE)
+
+
+def logo() -> str:
+    """The approved logo (docs/logo.svg), nested so the hero stays generated from it."""
+    src = (ROOT / "docs" / "logo.svg").read_text().strip()
+    inner = src[src.index(">") + 1 : src.rindex("</svg>")]
+    return (
+        f'<svg x="{LOGO_X}" y="{LOGO_Y}" width="{LOGO_SIZE}" height="{LOGO_SIZE}" '
+        f'viewBox="0 0 64 64">{inner}</svg>'
+    )
+
+
 def wordmark() -> list[str]:
     return [
-        f'<text x="64" y="160" font-family="{DISPLAY}" font-size="104" font-weight="800" '
-        f'letter-spacing="-3"><tspan fill="{INK}">claude</tspan>'
+        logo(),
+        f'<text x="{TEXT_X}" y="{WORD_BASE}" font-family="{DISPLAY}" '
+        f'font-size="{WORD_SIZE}" font-weight="800" letter-spacing="-3">'
+        f'<tspan fill="{INK}">claude</tspan>'
         f'<tspan fill="{ACCENT}">-arsenal</tspan></text>',
         text(68, 210, "Make the agent work like an engineer.", size=27, fill="#b9c0cc"),
         text(
