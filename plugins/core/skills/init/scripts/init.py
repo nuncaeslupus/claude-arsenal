@@ -66,6 +66,12 @@ plugin writes its output there too, not to its own default location.
 _CONFIG_TEMPLATE = """\
 # claude-arsenal host configuration — yours; upstream never rewrites this file.
 
+# The newest bundle version whose new settings you have looked at. When an
+# upgrade adds a key, every session start prints one `NEW SETTING` line for it
+# (its default and what it does) until you set that key here or raise this
+# value to its version. /init seeds it with the version that created the file.
+config-acknowledged = "@BUNDLE_VERSION@"
+
 # How far must a task PR get before an agent may merge it?
 #
 #   always               The gates open_task_pr.sh already ran are the whole bar.
@@ -1962,6 +1968,30 @@ def _report_gate_choices(repo_path: Path, private: bool = False) -> None:
     print(f"  MERGE-POLICY is `{policy}` — confirm it with the user ({advice}).")
 
 
+def _report_new_settings(repo_path: Path, arsenal: Path) -> None:
+    """Print the vendored arsenal_config.py's NEW SETTING lines, if any.
+
+    Delegated, not re-derived: the registry and the comparison both live in
+    arsenal_config.py, which is also what validates the file, so the notice
+    cannot disagree with the loader. Nothing is printed for a host with nothing
+    new — the common case costs a session zero lines. Never fatal: a notice
+    that cannot be computed is not a reason to fail the refresh.
+    """
+    script = arsenal / "scripts" / "arsenal_config.py"
+    if not script.is_file():
+        return
+    with contextlib.suppress(OSError, subprocess.SubprocessError):
+        out = subprocess.run(
+            [sys.executable, str(script), "--repo-root", str(repo_path), "--new-settings"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        ).stdout
+        if out.strip():
+            print(out.rstrip())
+
+
 def init_base(
     repo_path: Path,
     bundle_override: Path | None = None,
@@ -2037,7 +2067,11 @@ def init_base(
     # which is build output and gets replaced.
     config = home / "config.toml"
     if not config.exists():
-        config.write_text(_CONFIG_TEMPLATE, encoding="utf-8")
+        bundle_ver_file = bundle / ".bundle-version"
+        seeded = (
+            bundle_ver_file.read_text(encoding="utf-8").strip() if bundle_ver_file.is_file() else ""
+        )
+        config.write_text(_CONFIG_TEMPLATE.replace("@BUNDLE_VERSION@", seeded), encoding="utf-8")
         print(f"  created: {config.relative_to(repo_path)}")
 
     # Create session handover. This is the ONLY handover the bundle scaffolds.
@@ -2125,6 +2159,11 @@ def init_base(
     if not silent:
         private = _setup_branch_protection(repo_path, arsenal, branch_protection)
         _report_gate_choices(repo_path, private=private)
+
+    # Settings a newer bundle added that this host has neither set nor
+    # acknowledged — printed whatever --silent says, because session start is
+    # the only place a downstream repo would ever hear about them (#496).
+    _report_new_settings(repo_path, arsenal)
 
     ver_path = arsenal / ".bundle-version"
     if silent:

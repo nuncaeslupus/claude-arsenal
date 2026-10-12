@@ -40,7 +40,8 @@ At the start of every session (fresh start, context compaction, or cold restart)
       non-subtree install the report is `INERT` — the expected answer: say so once per
       session and open no work on it.
    b. Run `python3 .claude/skills/init/scripts/init.py --repo-path . --silent` and report
-      anything it refreshes. If it says the installed bundle is newer, report that and
+      anything it refreshes, and each `NEW SETTING` line once (`config-acknowledged` in
+      `arsenal/config.toml` silences them). If it says the installed bundle is newer, report that and
       update the plugin; never pass `--allow-downgrade`. Skip (b) if (a) reported
       `VENDORED SKILL BEHIND BUNDLE`. Skip (a) and (b) when the script is absent.
    c. Read the capability map: `python3 .claude/skills/init/scripts/init.py --list-sections`.

@@ -86,6 +86,29 @@ if ! grep -qF "${SENTINEL}" "${tmpdir}/arsenal/session/handover.md"; then
 fi
 echo "PASS: re-run preserves host-owned session/handover.md (no data loss)"
 
+# Gate 5c: a fresh config acknowledges the version that created it, so the
+# session-start NEW SETTING notice (#496) says nothing about keys the template
+# itself just showed — and the silent refresh prints none.
+BUNDLE_VER=$(tr -d '[:space:]' < "${BUNDLE_DIR}/.bundle-version")
+if ! grep -qx "config-acknowledged = \"${BUNDLE_VER}\"" "${tmpdir}/arsenal/config.toml"; then
+    echo "FAIL: a fresh config.toml must carry config-acknowledged = \"${BUNDLE_VER}\"" >&2; exit 1
+fi
+SILENT_OUT=$(python3 "${INIT_PY}" --repo-path "${tmpdir}" --bundle-dir "${BUNDLE_DIR}" --silent 2>&1)
+if grep -q "NEW SETTING" <<<"${SILENT_OUT}"; then
+    echo "FAIL: a freshly created config must not be told about new settings: ${SILENT_OUT}" >&2; exit 1
+fi
+# A host whose file predates the key and acknowledges an old version hears about it.
+sed -i.bak 's/^config-acknowledged = .*/config-acknowledged = "5.6.0"/' "${tmpdir}/arsenal/config.toml"
+SILENT_OUT=$(python3 "${INIT_PY}" --repo-path "${tmpdir}" --bundle-dir "${BUNDLE_DIR}" --silent 2>&1)
+NEWEST=$(cd "${BUNDLE_DIR}/scripts" && python3 -c "
+import arsenal_config as c
+print(max((s.since for k, s in c.SETTINGS.items() if k not in c.NOTICE_EXEMPT), key=c._version))")
+if [[ "${NEWEST}" != "5.6.0" ]] && ! grep -q "^NEW SETTING " <<<"${SILENT_OUT}"; then
+    echo "FAIL: --silent must print NEW SETTING for keys newer than config-acknowledged: ${SILENT_OUT}" >&2; exit 1
+fi
+mv "${tmpdir}/arsenal/config.toml.bak" "${tmpdir}/arsenal/config.toml"
+echo "PASS: config-acknowledged is seeded, and --silent announces only unacknowledged keys"
+
 # Gate 6: .gitignore has surface_profile.json entry
 if ! grep -q "arsenal/session/surface_profile.json" "${tmpdir}/.gitignore" 2>/dev/null; then
     echo "FAIL: .gitignore missing surface_profile.json entry" >&2; exit 1
