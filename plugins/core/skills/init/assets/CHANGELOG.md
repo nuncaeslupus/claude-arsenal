@@ -18,6 +18,14 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [5.7.0] - 2026-10-12
+
+- **explore-idea keeps a durable ideas backlog.** `/explore-idea capture <text>` (or pasting a list of ideas) sorts them into `status/ideas.md` with stable `I-N` ids and proposed sub-projects. The `D-N` decision log is saved there and never re-asked in later sessions; `specify` cites the `I-N` ids it covers, and the board prints one `ideas:` line when the file exists (#504).
+- **`open_task_pr.sh --branch <name>`** (or `ARSENAL_PR_BRANCH`) commits and pushes on a designated branch instead of creating `arsenal/<id>-<slug>`, with every check still run. With no PR tool available it prints the full PR body, including `Closes #N`, so you can open the PR yourself (#503).
+- **`claim_task.sh` manual hint** now names the branch to create and says to use your harness's GitHub tool (e.g. `create_branch`); a 403 from the shell token means "use the tool", not an error to stop on (#502).
+- **`create_task.py --body`** with its own `## Acceptance gate` fenced block no longer gets a second, placeholder gate appended; a body whose gate section has no fenced block is refused (#501).
+- **The skill-edit gate no longer blocks commands that only run a skill script**, including from a heredoc or `-c` program via `subprocess`, `sys.executable` or `os.system`. Writes into a skill folder are still blocked (#500).
+
 ## [5.6.0] - 2026-10-10
 
 - **`ship` now checks the README's hero image.** Step 1 asks whether a hero (banner) image still matches what ships, and points to a new on-demand reference, `ship/references/readme-hero.md`: when a change means redrawing it (a renamed or removed headline feature, a new lead feature), and how to make one render everywhere (1280 × 640, the GitHub social-preview size; a PNG, since GitHub's `<img>` view of an SVG loads no fonts; an absolute URL so PyPI and mirrors show it; no versions or counts on it, so releases do not stale it). It says nothing about how a hero should look. One line added to the `ship` body; the reference loads only when needed. No resident-context cost.
