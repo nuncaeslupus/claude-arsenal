@@ -277,5 +277,45 @@ if ! git log -1 --name-status | grep -q "_history/lo-x003.md"; then
 fi
 echo "PASS: the archive is repo-root-relative, not cwd-relative"
 
+# Gate 8 (#503): a session mandated to work on ONE designated branch reuses it.
+# --branch names the current branch: no checkout, no new branch cut off main —
+# the commit lands on top of what the session already committed there, and the
+# no-backend fallback prints the body (with Closes #N) for the caller's own tools.
+git checkout -q main 2>/dev/null || git checkout -q -B main origin/main
+cat > "${tmpwork}/issues4.json" <<'JSON'
+[{"number": 80, "state": "open", "body": "`arsenal-task: lo-x004`\n\nTask defined in `arsenal/tasks/lo-x004.md`"}]
+JSON
+printf -- '---\nid: lo-x004\ntitle: "Designated branch"\n---\n\n## Acceptance gate\n```bash\ntrue\n```\n' \
+    > arsenal/tasks/lo-x004.md
+git add -A && git commit -q -m "chore: seed designated-branch task" && git push -q origin main
+git checkout -q -b session/designated
+echo "earlier" > earlier.txt && git add earlier.txt && git commit -q -m "feat: earlier session work"
+prior=$(git rev-parse HEAD)
+echo "feature4" > feature4.txt
+err4="${tmpwork}/err4.txt"
+out=$(ARSENAL_ISSUES_JSON="${tmpwork}/issues4.json" ARSENAL_ALLOW_SHARED_ADD=1 ARSENAL_COAUTHOR="" \
+      bash "${HELPER}" lo-x004 "Designated branch" --branch session/designated 2>"${err4}") \
+    || { echo "FAIL: --branch run failed: $(cat "${err4}")" >&2; exit 1; }
+[[ "${out}" == "branch:session/designated" ]] \
+    || { echo "FAIL: --branch should report branch:session/designated, got '${out}'" >&2; exit 1; }
+[[ "$(git rev-parse --abbrev-ref HEAD)" == "session/designated" ]] \
+    || { echo "FAIL: --branch switched away from the designated branch" >&2; exit 1; }
+[[ "$(git rev-parse 'HEAD^')" == "${prior}" ]] \
+    || { echo "FAIL: --branch did not commit on top of the session's own work" >&2; exit 1; }
+git ls-remote --exit-code --heads origin session/designated >/dev/null 2>&1 \
+    || { echo "FAIL: the designated branch was not pushed" >&2; exit 1; }
+git ls-remote --heads origin 'arsenal/lo-x004*' | grep -q . \
+    && { echo "FAIL: --branch still pushed a generated arsenal/ branch" >&2; exit 1; }
+[[ -f arsenal/tasks/_history/lo-x004.md ]] \
+    || { echo "FAIL: --branch skipped the archive" >&2; exit 1; }
+grep -q "Closes #80" "${err4}" \
+    || { echo "FAIL: the no-backend fallback must print the body with Closes #80: $(cat "${err4}")" >&2; exit 1; }
+echo "PASS: --branch reuses the designated branch and prints the PR body for the caller"
+
+if ARSENAL_ALLOW_SHARED_ADD=1 ARSENAL_PR_BRANCH='bad..name' bash "${HELPER}" lo-x004 "x" >/dev/null 2>&1; then
+    echo "FAIL: an invalid ARSENAL_PR_BRANCH must be refused before anything runs" >&2; exit 1
+fi
+echo "PASS: an invalid branch name is refused up front"
+
 echo "PASS: open_task_pr_test — all gates passed"
 exit 0
