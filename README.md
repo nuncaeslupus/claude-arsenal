@@ -307,6 +307,19 @@ consumers). Full walkthrough: [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md).
 
 ---
 
+## Built with claude-arsenal
+
+Real repositories developed on this workflow — vendored skills, gated task
+files, the issue-backed queue. Read any of them to see what `/init` leaves
+behind in a project that has lived with it.
+
+- [drawspec](https://github.com/nuncaeslupus/drawspec) — declarative diagram spec → clean, themeable SVG; JSON with no coordinates, so an LLM can write it.
+- [integral-job-search](https://github.com/nuncaeslupus/integral-job-search) — a candidate-centred job search run as a conversation in Claude Code, one dimension model from what you need to the interview.
+- [literary-critic](https://github.com/nuncaeslupus/literary-critic) — lets an LLM index, analyse and advise on a full novel manuscript the way a professional editor would.
+- [doc-control](https://github.com/nuncaeslupus/doc-control) — a deterministic tool for AI agents to edit Word documents, every change a tracked change (in development).
+
+---
+
 ## License
 
 MIT — see [`LICENSE`](LICENSE).
