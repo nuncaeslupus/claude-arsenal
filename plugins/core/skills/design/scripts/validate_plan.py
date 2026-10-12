@@ -7,8 +7,12 @@ Implementation tasks, Evidence log, and Sign-off sections exist, that the task
 table carries the required columns (including the measurable Gate), and that the
 Evidence log table carries the columns gate-check's run_gate.py expects.
 
-It is deliberately shallow: gate values and evidence completeness are checked by
-the `gate-check` skill (run_gate.py), not here. This script only verifies the
+It also holds the `### Dependency graph` to the task table: the graph must be a
+```drawspec fence whose edges are exactly the Depends column's (sync_plan_graph.py
+draws it), and every edge one has and the other lacks is named.
+
+It is otherwise deliberately shallow: gate values and evidence completeness are
+checked by the `gate-check` skill (run_gate.py), not here. This script only verifies the
 plan is well-formed enough for that audit to run.
 
 It also reads the review record in the header (see _review_record.py): a notes
@@ -17,8 +21,9 @@ additionally demands a **Status** approving the current revision — run it
 before seeding tasks or starting execution from the plan.
 
 Human-readable on stdout; problems on stderr. Exit 0 = well-formed, 1 = missing
-sections or columns, a notes file not in the repo, or (with --require-approved)
-no backed approval, 2 = usage error (file missing).
+sections or columns, a dependency graph that disagrees with Depends, a notes file
+not in the repo, or (with --require-approved) no backed approval, 2 = usage error
+(file missing).
 """
 
 import argparse
@@ -28,6 +33,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import _review_record as review_record
+import sync_plan_graph as plan_graph
 
 REQUIRED_SECTIONS = ("Technical solution", "Implementation tasks", "Evidence log", "Sign-off")
 TASK_COLUMNS = ("t#", "description", "gate", "tests")
@@ -89,6 +95,7 @@ def lint(text: str) -> list[str]:
             if not any(col in c for c in ev_hdr):
                 problems.append(f"evidence table missing required column '{col}'")
 
+    problems += plan_graph.graph_problems(text)
     return problems
 
 

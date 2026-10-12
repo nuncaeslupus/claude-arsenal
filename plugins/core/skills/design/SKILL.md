@@ -78,13 +78,14 @@ Pay special attention to:
 
 Load `references/template-specification-tail.md` when appending contracts and risks (sections 5–6) to `status/specification.md`. Load `references/template-plan.md` when creating `status/plan.md`.
 
-After writing the files, confirm the plan's structure:
+After writing the files, draw the dependency graph from the task table and confirm the plan's structure:
 
 ```bash
+python3 "${CLAUDE_SKILL_DIR}/scripts/sync_plan_graph.py" --input status/plan.md --apply
 python3 "${CLAUDE_SKILL_DIR}/scripts/validate_plan.py" --input status/plan.md
 ```
 
-It checks shape only: the required sections and task-table columns, Gate included. `gate-check`'s `run_gate.py --strict` audits the gate values.
+The graph is generated, never hand-drawn; rerun `sync_plan_graph.py --apply` after any change to **Depends**. The validator checks shape — the required sections and task-table columns, Gate included — and that every Depends edge is in the graph. `gate-check`'s `run_gate.py --strict` audits the gate values.
 
 Draw any picture as a fenced `drawspec` block: `claude-arsenal:core:init § references/diagrams.md`.
 
