@@ -100,7 +100,7 @@ explicitly, since auto-discovery finds only specs, and send `--output-dir` with 
 create_reader.py --input status/plan.md --output-dir status   # in claude-arsenal/scripts/; uv run --with markdown
 ```
 
-It writes `plan-reader.html` and `plan-annotated.md` and prints both paths. The plan
+It writes `<repo>-plan-v<N>-<date>-reader.html` and `…-annotated.md` and prints both paths. The plan
 keeps the spec's review record (`**Revision**`, `**Status**`, `**Revision log**`);
 seeding tasks or starting `execution` waits for
 `validate_plan.py --input <plan> --require-approved`. Load

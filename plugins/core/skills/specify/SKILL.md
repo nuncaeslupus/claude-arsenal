@@ -119,7 +119,7 @@ create_reader.py   # in claude-arsenal/scripts/; run via `uv run --with markdown
 ```
 
 It finds the spec (`arsenal/project/*/spec.md` or `status/specification.md`), writes
-`spec-reader.html` and `spec-annotated.md` beside it, and prints both paths; commit
+`<repo>-spec-v<N>-<date>-reader.html` and `…-annotated.md` beside it, and prints both paths; commit
 them. Load `claude-arsenal:core:init § references/annotatable-reader.md` when a
 returned notes export arrives, when recording approval, or when another document
 needs a reader.
