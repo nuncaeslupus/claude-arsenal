@@ -18,6 +18,10 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [5.8.0] - 2026-10-12
+
+- **`/init` lists the repository housekeeping that is missing.** The first deliberate run (the one that protects the default branch) now also runs the new read-only `claude-arsenal/scripts/repo_health.py` and prints one `repo_health: GAP …` line per missing item, each with the command that fixes it: no description, topics or license; a default branch not called `main`; an unprotected default branch; secret scanning or push protection off; a Pages site or PyPI package with no homepage link; a newest version tag with no release; a PyPI version with no tag. A `NOTE` line flags a `pyproject.toml` package that is not on PyPI, or a same-named PyPI project that does not link back to your repo. It changes nothing by itself and is skipped with `--no-branch-protection`. Run it by hand at any time; `--fail-on-gaps` exits 1 for use in CI.
+
 ## [5.7.0] - 2026-10-12
 
 - **New settings are announced.** Session start (`init.py`, including `--silent`) prints `NEW SETTING <key> (since vX.Y.Z, default …): …` for each config key a release adds that your `arsenal/config.toml` neither sets nor acknowledges. Silence them by setting the key or `config-acknowledged = "X.Y.Z"`. Nothing is printed when nothing is pending (#496).
