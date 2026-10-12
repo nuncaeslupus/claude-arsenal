@@ -26,6 +26,8 @@
 
 <One clear paragraph describing what is happening, what should happen, and why it matters.>
 
+**Ideas covered**: <I-N ids from `status/ideas.md`, when the work came from `explore-idea`; otherwise delete this line>
+
 **Success criteria (measurable)** — the objective conditions that define "done"; each seeds a task **Gate** in the plan (`design`), and `review` / `ship` verify them:
 
 - [ ] `<metric> <op> <threshold>` (e.g. `p95_latency_ms <= 200`, `line_coverage >= 0.90`)

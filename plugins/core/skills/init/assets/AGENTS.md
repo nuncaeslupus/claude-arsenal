@@ -75,7 +75,8 @@ At the start of every session (fresh start, context compaction, or cold restart)
    → `claude-arsenal/references/queue-seeding.md`
 
 5. **Read handover** — read `arsenal/session/handover.md` if it has real content; it is a
-   snapshot, so re-read the board before resuming anything it names.
+   snapshot, so re-read the board before resuming anything it names. Also
+   `status/ideas.md` when the board's `ideas:` line counts exploring rows.
    **After compaction mid-task**, the task's `tmp/<id>-notes.md` and `git status` are the state.
    So keep that file on any work longer than a few steps, queue task or not
    (`tmp/<id-or-slug>-notes.md`): a `## Resume` section with Decided / Ruled out / Next step,

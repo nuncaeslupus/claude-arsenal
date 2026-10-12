@@ -18,7 +18,8 @@ Owns sections 1–4 of `status/specification.md`: problem statement, affected sy
 
 Clarify what is actually being asked. Separate symptoms from root causes. When the work
 started in the `explore-idea` skill, take its decisions log as input: each agreed decision is
-a constraint here, not a question to reopen.
+a constraint here, not a question to reopen. Cite the `I-N` ids from `status/ideas.md` the
+spec covers in section 1.
 
 - **What is happening?** — Observable behavior, errors, or gaps
 - **What should be happening?** — Expected behavior or desired outcome
