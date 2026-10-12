@@ -246,6 +246,32 @@ write_then_run=$(printf 'python3 - <<%s\nopen("plugins/core/skills/specify/scrip
     || fail "#467: a heredoc write to the script it then runs went through"
 echo "PASS: running a skill script after a heredoc is allowed; writing it is not"
 
+# #500: source that RUNS a skill script — subprocess argv, sys.executable, an
+# os.system string — named the path only to execute it, and was blocked as a
+# write. So were a script's own arguments that happened to read like source.
+SCRIPT="plugins/core/skills/specify/scripts/helper.py"
+while IFS= read -r cmd; do
+    [ -z "$cmd" ] && continue
+    [ "$(probe "$(printf '%b' "$cmd")")" = allowed ] || fail "#500: should have allowed: $cmd"
+done <<CMDS
+python3 - <<'PYEOF'\nimport subprocess\nsubprocess.run(["python3", "$SCRIPT", "--title", "x"], check=True)\nPYEOF
+python3 - <<'PYEOF'\nimport subprocess, sys\nsubprocess.run([sys.executable, "$SCRIPT"])\nPYEOF
+python3 -c "import subprocess; subprocess.check_call(['uv', 'run', 'python3', '$SCRIPT'])"
+python3 -c "import subprocess; subprocess.check_call(['python3', '-u', '$SCRIPT'])"
+python3 -c "import os; os.system('python3 $SCRIPT --title x')"
+python3 $SCRIPT --title 'fix write_text(x) in plugins/core/skills/specify'
+CMDS
+while IFS= read -r cmd; do
+    [ -z "$cmd" ] && continue
+    [ "$(probe "$(printf '%b' "$cmd")")" = blocked ] || fail "#500: should have blocked: $cmd"
+done <<CMDS
+python3 -c "import os; os.system('python3 $SCRIPT > $SKILL')"
+python3 - <<'PYEOF'\nimport subprocess\nsubprocess.run(["rm", "$SKILL"])\nPYEOF
+python3 - <<'PYEOF'\nimport subprocess\nsubprocess.run(["python3", "$SCRIPT"])\nopen("$SCRIPT", "w").write("")\nPYEOF
+python3 $SCRIPT > $SKILL
+CMDS
+echo "PASS: source running a skill script is allowed; a write beside it is not"
+
 # --- with the marker present, writes are allowed ---------------------------
 mkdir -p "$CLAUDE_PLUGIN_DATA" && touch "${CLAUDE_PLUGIN_DATA}/loaded-${SESSION}"
 [ "$(probe "sed -i 's/a/b/' $SKILL")" = allowed ] || fail "still blocked after the skill loaded"

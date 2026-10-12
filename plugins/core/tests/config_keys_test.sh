@@ -66,6 +66,77 @@ ${problems}"
 ${problems}"
 echo "PASS: every config key names the file that reads it"
 
+# --- 1b: every key is registered with a version and a description ----------
+#     The session-start notice (#496) tells a downstream repo about a key a
+#     release added. It can only do that for a key that says which release that
+#     was and what it does — a key without either is announced as nothing, and
+#     sits at its default everywhere until someone reads the changelog.
+problems=$(cd "${REPO_ROOT}" && python3 - 2>&1 <<'PY'
+import sys
+sys.path.insert(0, "plugins/core/skills/init/assets/scripts")
+import arsenal_config as cfg
+
+problems = []
+for key, entry in cfg.SETTINGS.items():
+    if not isinstance(entry, cfg.Setting):
+        problems.append(f"{key}: not a Setting(default, since, description)")
+        continue
+    if not isinstance(entry.since, str) or not cfg.VERSION_REGEX.match(entry.since):
+        problems.append(f"{key}: since must be a version like 5.7.0, got {entry.since!r}")
+    desc = entry.description
+    if not isinstance(desc, str) or not desc.strip():
+        problems.append(f"{key}: no description, so its NEW SETTING line would say nothing")
+    elif "\n" in desc or len(desc) > 110:
+        problems.append(f"{key}: the description must be one short line (it is printed per session)")
+if set(cfg.DEFAULTS) != set(cfg.SETTINGS):
+    problems.append("DEFAULTS is not derived from SETTINGS")
+print("\n".join(problems))
+PY
+)
+probe=$?
+[[ ${probe} -eq 0 ]] || fail "the registry probe itself failed (exit ${probe}):
+${problems}"
+[[ -z "${problems}" ]] || fail "registry entries missing a version or description:
+${problems}"
+echo "PASS: every config key carries since and a one-line description"
+
+# --- 1c: the session-start notice is derived from the registry --------------
+#     A key newer than config-acknowledged and unset in the file is announced,
+#     once per session, until the host sets it or acknowledges its version.
+notice_dir=$(mktemp -d)
+mkdir -p "${notice_dir}/arsenal"
+notice() {  # notice <config.toml body> — prints the NEW SETTING lines
+    printf '%b' "$1" > "${notice_dir}/arsenal/config.toml"
+    (cd "${REPO_ROOT}" && python3 - "${notice_dir}" <<'PY'
+import sys
+from pathlib import Path
+sys.path.insert(0, "plugins/core/skills/init/assets/scripts")
+import arsenal_config as cfg
+cfg.SETTINGS["probe-key"] = cfg.Setting(3, "9.1.0", "A key a future release adds.")
+cfg.DEFAULTS["probe-key"] = 3
+print("\n".join(cfg.new_settings(Path(sys.argv[1]))))
+PY
+)
+}
+out=$(notice '')
+grep -q '^NEW SETTING probe-key (since v9.1.0, default 3): A key a future release adds.$' <<<"${out}" \
+    || fail "an unset key newer than the host's acknowledged version must be announced:
+${out}"
+grep -q 'config-acknowledged = "9.1.0"' <<<"${out}" || fail "the notice must name how to acknowledge:
+${out}"
+grep -q 'NEW SETTING merge-policy' <<<"${out}" \
+    && fail "a key from the baseline must not be announced to a host that predates the registry"
+notice 'probe-key = 4\n' | grep -q 'probe-key' && fail "a key the host set is not new to it"
+[[ -z "$(notice 'config-acknowledged = "9.1.0"\n')" ]] || fail "an acknowledged version silences its keys"
+[[ -n "$(notice 'config-acknowledged = "9.0.9"\n')" ]] || fail "acknowledging an older version must not silence a newer key"
+out=$(notice 'config-acknowledged = "soon"\n')
+[[ -z "${out}" ]] || fail "an invalid file prints no notice (the loader reports it): ${out}"
+printf 'config-acknowledged = "soon"\n' > "${notice_dir}/arsenal/config.toml"
+(cd "${notice_dir}" && python3 "${CONFIG_PY}" --get merge-policy >/dev/null 2>&1); code=$?
+[[ ${code} -eq 2 ]] || fail "config-acknowledged that is not a version must exit 2, got ${code}"
+rm -rf "${notice_dir}"
+echo "PASS: NEW SETTING lines come from the registry and stop once acknowledged"
+
 # --- 2: the three that were dead now actually change behaviour --------------
 tmp=$(mktemp -d)
 trap 'rm -rf "${tmp}"' EXIT

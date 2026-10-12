@@ -104,8 +104,8 @@ cat > "${fx}/statuses.json" <<JSON
   "creator":{"login":"coderabbitai[bot]"}}]
 JSON
 out=$(rs "${fx}" 5) || fail "skip fixture: exit $?"
-line "bot:coderabbitai" <<<"${out}" | grep -q "skipped" \
-    || fail "a SUCCESS status saying 'Review skipped' must classify skipped:
+line "bot:coderabbitai" <<<"${out}" | grep -q "unavailable *skipped:" \
+    || fail "a SUCCESS status saying 'Review skipped' must classify unavailable (skipped):
 ${out}"
 line "ci" <<<"${out}" | grep -q " ok " || fail "the bot's own status is not CI:
 ${out}"
@@ -116,7 +116,7 @@ cat > "${fx2}/issue_comments.json" <<JSON
   "updated_at":"$(at 2)","body":"<!-- summary -->\nThis repository does not receive automatic reviews."}]
 JSON
 out=$(rs "${fx2}" 5) || fail "edited-comment fixture: exit $?"
-line "bot:coderabbitai" <<<"${out}" | grep -q 'skipped .*5929979667' \
+line "bot:coderabbitai" <<<"${out}" | grep -q 'unavailable *skipped: .*5929979667' \
     || fail "an edited summary comment carrying a skip notice must classify skipped:
 ${out}"
 echo "PASS: test_classify_skip_notice_returns_skipped"
@@ -147,9 +147,48 @@ cat > "${fx}/issue_comments.json" <<JSON
   "updated_at":"$(at 3)","body":"You have reached your daily quota limit. Please try again later."}]
 JSON
 out=$(rs "${fx}" 5) || fail "rate-limit fixture: exit $?"
-line "bot:gemini-code-assist" <<<"${out}" | grep -q "rate-limited" \
-    || fail "a quota notice must classify rate-limited:
+line "bot:gemini-code-assist" <<<"${out}" | grep -q "unavailable *rate-limited:" \
+    || fail "a quota notice must classify unavailable (rate-limited):
 ${out}"
+# --- test_unavailable_bot_is_never_pending (#507) -----------------------------
+# A free-tier cap or a "fewer than N stars" skip is the bot saying it will not
+# review this head. Reading either as silence held the merge for bot-wait-min
+# per PR; the decision has to fall through to the local review at once.
+config 'review-bots = ["reviewer-a[bot]"]' 'bot-wait-min = 20'
+fx="${tmp}/fx-cap"; fixture "${fx}" "${HEAD}"
+cat > "${fx}/issue_comments.json" <<JSON
+[{"id":51,"user":{"login":"reviewer-a[bot]"},"created_at":"$(at 1)","updated_at":"$(at 1)",
+  "body":"Your free tier review cap has been reached for this hour."}]
+JSON
+out=$(rs "${fx}" 2) || fail "free-tier fixture: exit $?"
+line "bot:reviewer-a" <<<"${out}" | grep -q "unavailable *rate-limited:" \
+    || fail "a free-tier cap must be unavailable two minutes in, not pending:
+${out}"
+line "decision" <<<"${out}" | grep -q "local-review=diff" || fail "the decision must fall through to a local review:
+${out}"
+grep -q "provisional" <<<"${out}" && fail "an unavailable bot must not leave the decision provisional:
+${out}"
+cat > "${fx}/issue_comments.json" <<JSON
+[{"id":52,"user":{"login":"reviewer-a[bot]"},"created_at":"$(at 1)","updated_at":"$(at 1)",
+  "body":"Reviews are skipped for repositories with fewer than 10 stars."}]
+JSON
+line "bot:reviewer-a" <<<"$(rs "${fx}" 2)" | grep -q "unavailable *skipped:" \
+    || fail "a 'fewer than N stars' skip must be unavailable"
+# A host's own phrase, via bot-unavailable-notices, joins the shipped table.
+cat > "${fx}/issue_comments.json" <<JSON
+[{"id":53,"user":{"login":"reviewer-a[bot]"},"created_at":"$(at 1)","updated_at":"$(at 1)",
+  "body":"Out of review credits for this billing period."}]
+JSON
+line "bot:reviewer-a" <<<"$(rs "${fx}" 2)" | grep -q "pending" \
+    || fail "an unknown phrase is silence until configured"
+config 'review-bots = ["reviewer-a[bot]"]' 'bot-unavailable-notices = ["out of review credits"]'
+line "bot:reviewer-a" <<<"$(rs "${fx}" 2)" | grep -q "unavailable" \
+    || fail "a bot-unavailable-notices phrase must mark the bot unavailable"
+config 'review-bots = ["reviewer-a[bot]"]' 'bot-unavailable-notices = ["(unclosed"]'
+(cd "${repo}" && python3 "${RS}" --pr 7 --fixture "${fx}" >/dev/null 2>&1); code=$?
+[[ ${code} -eq 2 ]] || fail "an invalid bot-unavailable-notices regex must exit 2, got ${code}"
+config 'review-bots = ["gemini-code-assist[bot]"]'
+echo "PASS: test_unavailable_bot_is_never_pending"
 # A review on an OLDER head is not a review of this one (gemini does not re-review on push).
 fx="${tmp}/fx-old-review"; fixture "${fx}" "${NEW}"
 cat > "${fx}/reviews.json" <<JSON
@@ -276,6 +315,18 @@ ${out}"
 st=$(qps "${fx}" 25 --local-review-done | jget state)
 [[ "${st}" == "ready_to_merge" ]] || fail "a recorded local review clears bot_absent, got ${st}"
 echo "PASS: test_silent_bot_after_wait_is_not_waiting"
+
+# The loop keeps its finer states for an `unavailable` bot, from its reason.
+got=$(python3 -c "
+import sys
+sys.path.insert(0, '$(dirname "${QPS}")'); sys.path.insert(0, '$(dirname "${RS}")')
+import query_pr_state as q, review_sources as r
+for reason in ('rate-limited', 'skipped', 'paused'):
+    v = r.Verdict('unavailable', 'x', 'b', extra={'reason': reason})
+    print(q._BOT_STATES[q._bot_reason(v)], end=' ')")
+[[ "${got}" == "bot_rate_limited bot_skipped bot_skipped " ]] \
+    || fail "an unavailable bot must map to bot_rate_limited / bot_skipped by reason, got '${got}'"
+echo "PASS: test_unavailable_maps_to_the_loop_states"
 
 # --- test_incident_replay_bounded (bot half) ---------------------------------
 # Silent bot with a trigger configured: wait → one trigger → wait → absent, and

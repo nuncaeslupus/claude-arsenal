@@ -40,7 +40,9 @@ out="$(hook "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$repo/docs
 case "$out" in *create_reader.py*specify*) ;; *) fail "hook silent on another plugin's docs/**/specs path: $out" ;; esac
 out="$(hook "{\"tool_name\":\"Edit\",\"tool_input\":{\"file_path\":\"$repo/arsenal/project/API/spec.md\"}}")"
 [ -n "$out" ] || fail "hook silent on a workspace spec"
-for quiet in "$repo/src/app.txt" "$repo/status/spec-annotated.md" "$repo/status/yourproject-spec-notes-2026-01-01-r1.md" "$repo/docs/plan-of-record.txt"; do
+for quiet in "$repo/src/app.txt" "$repo/status/spec-annotated.md" "$repo/status/yourproject-spec-notes-2026-01-01-r1.md" \
+        "$repo/docs/brainstorm/specs/yourproject-spec-v2-2026-01-01-notes.md" \
+        "$repo/docs/brainstorm/specs/yourproject-spec-v2-2026-01-01-annotated.md" "$repo/docs/plan-of-record.txt"; do
     out="$(hook "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$quiet\"}}")"
     [ -z "$out" ] || fail "hook fired on a non-spec path $quiet: $out"
 done
@@ -74,10 +76,13 @@ if [ ${#PY[@]} -gt 0 ]; then
     echo "edited" >> "$repo/status/plan.md"
     (cd "$repo" && "${PY[@]}" "$assets/scripts/create_reader.py" --input status/plan.md \
         --output-dir status --name yourproject >/dev/null 2>&1) || fail "create_reader failed"
-    gate >/dev/null 2>&1 || fail "gate refused the reader create_reader just built"
-    grep -q "yourproject-plan-notes-'+today()+'-r1.md" "$repo/status/plan-reader.html" \
-        || fail "#468: the export name does not carry the plan's revision"
-    echo "PASS: create_reader's reader satisfies the gate and names its export -r<N>"
+    rm -f "$repo/status/plan-reader.html"
+    gate >/dev/null 2>&1 || fail "gate refused the dated reader create_reader just built"
+    plan_html="$repo/status/yourproject-plan-v1-$(date +%F)-reader.html"
+    [ -f "$plan_html" ] || fail "#505: the plan reader is not named <repo>-plan-v<N>-<date>: $(ls "$repo/status")"
+    grep -q "'yourproject-plan-v1-'+today()+'-notes.md'" "$plan_html" \
+        || fail "#468/#505: the export name does not carry the plan's revision"
+    echo "PASS: create_reader's dated reader satisfies the gate and names its export v<N>"
 
     # Two design docs in one docs/**/specs/ folder each get their own reader;
     # a shared spec-reader.html left one of them stale forever.
@@ -89,11 +94,13 @@ if [ ${#PY[@]} -gt 0 ]; then
         (cd "$repo" && "${PY[@]}" "$assets/scripts/create_reader.py" --input "$d"/2026-*-"$f"-design.md \
             --output-dir "$d" --name yourproject >/dev/null 2>&1) || fail "create_reader failed on $f"
     done
-    [ -f "$repo/$d/2026-01-01-a-design-reader.html" ] && [ -f "$repo/$d/2026-01-02-b-design-reader.html" ] \
+    ra="$repo/$d/yourproject-2026-01-01-a-design-v1-$(date +%F)-reader.html"
+    rb="$repo/$d/yourproject-2026-01-02-b-design-v1-$(date +%F)-reader.html"
+    [ -f "$ra" ] && [ -f "$rb" ] \
         || fail "a non-canonical doc's reader is not named for its stem: $(ls "$repo/$d")"
-    [ ! -e "$repo/$d/spec-reader.html" ] || fail "a non-canonical doc still writes spec-reader.html"
-    ns_a=$(grep -o "var NS = '[^']*'" "$repo/$d/2026-01-01-a-design-reader.html")
-    ns_b=$(grep -o "var NS = '[^']*'" "$repo/$d/2026-01-02-b-design-reader.html")
+    ls "$repo/$d" | grep -q -- "-spec-v" && fail "a non-canonical doc still writes a spec reader"
+    ns_a=$(grep -o "var NS = '[^']*'" "$ra")
+    ns_b=$(grep -o "var NS = '[^']*'" "$rb")
     [ -n "$ns_a" ] && [ "$ns_a" != "$ns_b" ] \
         || fail "two readers in one folder share a notes namespace: $ns_a"
     (cd "$repo" && python3 "$CHECK" branch --all >/dev/null 2>&1) \
@@ -166,6 +173,12 @@ out="$(cd "$repo" && HOME="$fake_home" XDG_DOWNLOAD_DIR= python3 "$CHECK" downlo
 case "$out" in *"yourproject-spec-notes-2026-01-05-r2.md"*) ;; *) fail "downloads missed an uncommitted export in ~/Descargas: $out" ;; esac
 case "$out" in *otherproject*) fail "downloads reported another project's export: $out" ;; esac
 case "$out" in *"2026-01-02-r1"*) fail "downloads reported an export the repo already tracks: $out" ;; esac
+# The reader's own naming (#505): <repo>-<doc>-v<N>-<date>-notes.md
+echo n > "$fake_home/Descargas/yourproject-plan-v2-2026-01-06-notes.md"
+echo n > "$fake_home/Descargas/otherproject-plan-v2-2026-01-06-notes.md"
+out="$(cd "$repo" && HOME="$fake_home" XDG_DOWNLOAD_DIR= python3 "$CHECK" downloads)"
+case "$out" in *"yourproject-plan-v2-2026-01-06-notes.md"*) ;; *) fail "downloads missed a dated export: $out" ;; esac
+case "$out" in *otherproject*) fail "downloads reported another project's dated export: $out" ;; esac
 echo "PASS: an uncommitted export left in a Downloads folder is named"
 
 # --- 5: init registers the hook and scaffolds no unused specs/ plans/ ---

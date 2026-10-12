@@ -1,6 +1,6 @@
 # Claude Arsenal
 
-<!-- claude-arsenal v5.6.0 — imported via @claude-arsenal/AGENTS.md -->
+<!-- claude-arsenal v5.7.0 — imported via @claude-arsenal/AGENTS.md -->
 
 This file is in context on every turn, so it holds only what a session needs before it
 knows what kind of session it is. The rest lives in `claude-arsenal/references/`: plain
@@ -40,7 +40,8 @@ At the start of every session (fresh start, context compaction, or cold restart)
       non-subtree install the report is `INERT` — the expected answer: say so once per
       session and open no work on it.
    b. Run `python3 .claude/skills/init/scripts/init.py --repo-path . --silent` and report
-      anything it refreshes. If it says the installed bundle is newer, report that and
+      anything it refreshes, and each `NEW SETTING` line once (`config-acknowledged` in
+      `arsenal/config.toml` silences them). If it says the installed bundle is newer, report that and
       update the plugin; never pass `--allow-downgrade`. Skip (b) if (a) reported
       `VENDORED SKILL BEHIND BUNDLE`. Skip (a) and (b) when the script is absent.
    c. Read the capability map: `python3 .claude/skills/init/scripts/init.py --list-sections`.
@@ -75,7 +76,8 @@ At the start of every session (fresh start, context compaction, or cold restart)
    → `claude-arsenal/references/queue-seeding.md`
 
 5. **Read handover** — read `arsenal/session/handover.md` if it has real content; it is a
-   snapshot, so re-read the board before resuming anything it names.
+   snapshot, so re-read the board before resuming anything it names. Also
+   `status/ideas.md` when the board's `ideas:` line counts exploring rows.
    **After compaction mid-task**, the task's `tmp/<id>-notes.md` and `git status` are the state.
    So keep that file on any work longer than a few steps, queue task or not
    (`tmp/<id-or-slug>-notes.md`): a `## Resume` section with Decided / Ruled out / Next step,

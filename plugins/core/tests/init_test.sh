@@ -86,6 +86,40 @@ if ! grep -qF "${SENTINEL}" "${tmpdir}/arsenal/session/handover.md"; then
 fi
 echo "PASS: re-run preserves host-owned session/handover.md (no data loss)"
 
+# Gate 5c: a fresh config acknowledges the version that created it, so the
+# session-start NEW SETTING notice (#496) says nothing about keys the template
+# itself just showed — and the silent refresh prints none.
+# Seeded with the installing version, or the registry's newest `since` when a
+# pre-release tree already names a later one.
+ACK_VER=$(cd "${BUNDLE_DIR}/scripts" && python3 -c "
+import arsenal_config as c
+v = open('../.bundle-version').read().strip()
+print(max([v, *(s.since for s in c.SETTINGS.values())], key=c._version))")
+if ! grep -qx "config-acknowledged = \"${ACK_VER}\"" "${tmpdir}/arsenal/config.toml"; then
+    echo "FAIL: a fresh config.toml must carry config-acknowledged = \"${ACK_VER}\"" >&2; exit 1
+fi
+SILENT_OUT=$(python3 "${INIT_PY}" --repo-path "${tmpdir}" --bundle-dir "${BUNDLE_DIR}" --silent 2>&1)
+if grep -q "NEW SETTING" <<<"${SILENT_OUT}"; then
+    echo "FAIL: a freshly created config must not be told about new settings: ${SILENT_OUT}" >&2; exit 1
+fi
+# A host whose file predates every post-baseline key, and says nothing about
+# acknowledging them, hears about each one — and only those.
+mv "${tmpdir}/arsenal/config.toml" "${tmpdir}/arsenal/config.toml.bak"
+printf 'merge-policy = "after-ci"\n' > "${tmpdir}/arsenal/config.toml"
+SILENT_OUT=$(python3 "${INIT_PY}" --repo-path "${tmpdir}" --bundle-dir "${BUNDLE_DIR}" --silent 2>&1)
+EXPECTED=$(cd "${BUNDLE_DIR}/scripts" && python3 -c "
+import arsenal_config as c
+print(sorted(k for k, s in c.SETTINGS.items()
+             if k not in c.NOTICE_EXEMPT and c._version(s.since) > c._version(c.BASELINE)))")
+GOT=$(python3 -c "
+import re, sys
+print(sorted(re.findall(r'^NEW SETTING (\S+) ', sys.stdin.read(), re.M)))" <<<"${SILENT_OUT}")
+if [[ "${GOT}" != "${EXPECTED}" ]]; then
+    echo "FAIL: --silent must announce exactly the post-baseline keys (${EXPECTED}), got ${GOT}: ${SILENT_OUT}" >&2; exit 1
+fi
+mv "${tmpdir}/arsenal/config.toml.bak" "${tmpdir}/arsenal/config.toml"
+echo "PASS: config-acknowledged is seeded, and --silent announces only unacknowledged keys"
+
 # Gate 6: .gitignore has surface_profile.json entry
 if ! grep -q "arsenal/session/surface_profile.json" "${tmpdir}/.gitignore" 2>/dev/null; then
     echo "FAIL: .gitignore missing surface_profile.json entry" >&2; exit 1

@@ -25,9 +25,16 @@ else
     echo "SKIP: no python3 with markdown, and no uv to supply it" >&2; exit 0
 fi
 
-tmp=$(mktemp -d)
-trap 'rm -rf "${tmp}"' EXIT
+# The directory is the "repo" the output names carry; mktemp's own is not a git
+# repo, so its name is what create_reader falls back to.
+base=$(mktemp -d)
+tmp="${base}/yourproject"
+mkdir -p "${tmp}"
+trap 'rm -rf "${base}"' EXIT
 fail() { echo "FAIL: $1" >&2; exit 1; }
+today=$(date +%F)
+SPEC_HTML="${tmp}/status/yourproject-spec-v1-${today}-reader.html"
+SPEC_MD="${tmp}/status/yourproject-spec-v1-${today}-annotated.md"
 
 mkdir -p "${tmp}/status"
 cat > "${tmp}/status/specification.md" <<'EOF'
@@ -46,44 +53,50 @@ EOF
 
 run_reader() { (cd "${tmp}" && "${PY[@]}" "${READER}" "$@" 2>&1); }
 
-# --- 1: the export is named for the reader, not just the document kind ---
+# --- 1: the reader and its export say what they are: repo, doc, version, date (#505) ---
+echo "an older reader" > "${tmp}"/status/spec-reader.html
 run_reader --input status/specification.md --output-dir status --name "Widget Overhaul" >/dev/null \
     || fail "generating a reader failed"
-grep -q "widget-overhaul-spec-notes-" "${tmp}/status/spec-reader.html" \
-    || fail "the export filename does not carry the project slug"
+[[ -f "${SPEC_HTML}" && -f "${SPEC_MD}" ]] \
+    || fail "outputs are not named <repo>-<doc>-v<N>-<date>: $(ls "${tmp}/status")"
+grep -q "'yourproject-spec-v1-'+today()+'-notes.md'" "${SPEC_HTML}" \
+    || fail "the export filename does not follow the reader's naming"
+[[ ! -e "${tmp}"/status/spec-reader.html ]] || fail "the undated reader it supersedes was left behind"
 
 # --- 2: a title that strips to nothing still names a file ---
 #     `--name "项目"` left file_slug as `-spec`, and the download as
 #     `-spec-notes-<date>.md` — a dotfile-adjacent name on some systems and
 #     meaningless on all of them.
+#     The export is named for the repo now, but the title still keys the notes'
+#     storage namespace, which has the same failure.
 run_reader --input status/specification.md --output-dir status --name "项目" >/dev/null \
     || fail "generating a reader with a non-ASCII title failed"
-grep -q "'-spec-notes-'" "${tmp}/status/spec-reader.html" \
-    && fail "an empty slug still produces a leading-dash export name"
-grep -qE "doc-[0-9a-f]{8}-spec-notes-" "${tmp}/status/spec-reader.html" \
+grep -q "var NS = '-spec" "${SPEC_HTML}" \
+    && fail "an empty slug still produces a leading-dash namespace"
+grep -qE "var NS = 'doc-[0-9a-f]{8}-spec-v1:'" "${SPEC_HTML}" \
     || fail "an empty slug did not fall back to a usable stem"
 
 # --- 2b: and two such titles do not share that stem ---
 #     A fixed `doc` named every one of them the same, so two readers exported
 #     the same filename and shared a localStorage namespace: one project's
 #     notes came up under another project's headings.
-first=$(grep -o "doc-[0-9a-f]\{8\}-spec-notes-" "${tmp}/status/spec-reader.html" | head -1)
+first=$(grep -o "doc-[0-9a-f]\{8\}-spec-v1:" "${SPEC_HTML}" | head -1)
 run_reader --input status/specification.md --output-dir status --name "項目乙" >/dev/null \
     || fail "generating a reader with a second non-ASCII title failed"
-second=$(grep -o "doc-[0-9a-f]\{8\}-spec-notes-" "${tmp}/status/spec-reader.html" | head -1)
+second=$(grep -o "doc-[0-9a-f]\{8\}-spec-v1:" "${SPEC_HTML}" | head -1)
 [[ -n "${first}" && -n "${second}" ]] || fail "no fallback stem found in one of the readers"
 [[ "${first}" != "${second}" ]] \
     || fail "two titles that strip to nothing still share a stem: ${first}"
 # ...and the stem is stable, or the notes stored under it are lost on the next run.
 run_reader --input status/specification.md --output-dir status --name "項目乙" >/dev/null
-[[ "$(grep -o "doc-[0-9a-f]\{8\}-spec-notes-" "${tmp}/status/spec-reader.html" | head -1)" == "${second}" ]] \
+[[ "$(grep -o "doc-[0-9a-f]\{8\}-spec-v1:" "${SPEC_HTML}" | head -1)" == "${second}" ]] \
     || fail "the fallback stem changed between runs — the storage namespace would not survive"
 
 # --- 3: seeding accepts what the page actually exports ---
 #     buildExport() returns Markdown with the note data in a trailing
 #     SPEC-NOTES-DATA comment. The instructions said to hand it back as
 #     notes.json, which is a JSON decode error on the file the page produced.
-domid=$(grep -o 'data-key="[^"]*"' "${tmp}/status/spec-reader.html" | head -1 | sed 's/data-key="//; s/"//')
+domid=$(grep -o 'data-key="[^"]*"' "${SPEC_HTML}" | head -1 | sed 's/data-key="//; s/"//')
 [[ -n "${domid}" ]] || fail "no annotatable section found in the generated reader"
 cat > "${tmp}/status/returned-export.md" <<EOF
 # Specification notes
@@ -102,16 +115,16 @@ EOF
 out=$(run_reader --input status/specification.md --output-dir status \
         --name "Widget Overhaul" --notes status/returned-export.md)
 grep -q "seeding from" <<<"${out}" || fail "the returned export was not read as a seed: ${out}"
-grep -q "the note a reviewer wrote" "${tmp}/status/spec-annotated.md" \
+grep -q "the note a reviewer wrote" "${SPEC_MD}" \
     || fail "the seeded note did not reach the annotated Markdown"
-grep -q "the note a reviewer wrote" "${tmp}/status/spec-reader.html" \
+grep -q "the note a reviewer wrote" "${SPEC_HTML}" \
     || fail "the seeded note did not reach the HTML reader"
 
 # --- 4: a plain JSON object still seeds, and a bad file is reported ---
 printf '{"%s": "from plain json"}\n' "${domid}" > "${tmp}/status/notes.json"
 out=$(run_reader --input status/specification.md --output-dir status --name "Widget Overhaul")
 grep -q "seeding from" <<<"${out}" || fail "notes.json is still the default seed: ${out}"
-grep -q "from plain json" "${tmp}/status/spec-annotated.md" || fail "the JSON seed did not apply"
+grep -q "from plain json" "${SPEC_MD}" || fail "the JSON seed did not apply"
 
 printf 'just prose, no notes anywhere\n' > "${tmp}/status/notes.json"
 out=$(run_reader --input status/specification.md --output-dir status --name "Widget Overhaul")
@@ -132,7 +145,7 @@ EOF
 out=$(run_reader --input status/specification.md --output-dir status \
         --name "Widget Overhaul" --notes status/marker-export.md)
 grep -q "seeding from" <<<"${out}" || fail "a note quoting the marker broke the seed: ${out}"
-grep -q "or so I assumed" "${tmp}/status/spec-annotated.md" \
+grep -q "or so I assumed" "${SPEC_MD}" \
     || fail "the note quoting the marker did not reach the annotated Markdown"
 
 # --- 6b: a note that quotes the export MARKER still round-trips ---
@@ -153,11 +166,11 @@ EOF
 out=$(run_reader --input status/specification.md --output-dir status \
         --name "Widget Overhaul" --notes status/quoted-marker.md)
 grep -q "seeding from" <<<"${out}" || fail "a note quoting the marker broke the seed: ${out}"
-grep -q "went looking for" "${tmp}/status/spec-annotated.md" \
+grep -q "went looking for" "${SPEC_MD}" \
     || fail "the note quoting the marker did not survive the round trip"
 # The page's own Import button parses the same file with its own scanner, and it
 # had the same defect — a plain lastIndexOf lands inside that note's JSON string.
-grep -q "SPEC-NOTES-DATA/gm" "${tmp}/status/spec-reader.html" \
+grep -q "SPEC-NOTES-DATA/gm" "${SPEC_HTML}" \
     || fail "the in-page importer does not anchor the marker to a line start"
 
 # --- 7: a note that is not text is reported, not raised ---
@@ -172,12 +185,12 @@ grep -q "must be strings" <<<"${out}" || fail "a non-string note value should be
 #     at it always fails to parse — and continuing rewrote the very file whose
 #     notes could not be read.
 printf 'notes a reviewer typed straight into the annotated file\n' \
-    > "${tmp}/status/spec-annotated.md"
+    > "${SPEC_MD}"
 out=$(run_reader --input status/specification.md --output-dir status \
-        --name "Widget Overhaul" --notes status/spec-annotated.md); rc=$?
+        --name "Widget Overhaul" --notes "${SPEC_MD#"${tmp}/"}"); rc=$?
 [[ ${rc} -ne 0 ]] || fail "overwriting an unreadable seed with this run's own output must fail"
 grep -q "refusing to overwrite" <<<"${out}" || fail "the refusal should say why: ${out}"
-grep -q "reviewer typed straight" "${tmp}/status/spec-annotated.md" \
+grep -q "reviewer typed straight" "${SPEC_MD}" \
     || fail "the file that could not be read was overwritten anyway"
 
 # --- 5: --notes pointing at nothing is an error, not a silent empty seed ---
@@ -188,15 +201,21 @@ out=$(run_reader --input status/specification.md --output-dir status --notes sta
 #     No `**Revision**` line (the spec above) keeps the old name; one adds -r<N>.
 run_reader --input status/specification.md --output-dir status --name "Widget Overhaul" >/dev/null \
     || fail "regenerating the reader failed"
-grep -q "widget-overhaul-spec-notes-'+today()+'.md" "${tmp}/status/spec-reader.html" \
-    || fail "a spec with no Revision header should keep the unsuffixed export name"
+grep -q "'yourproject-spec-v1-'+today()+'-notes.md'" "${SPEC_HTML}" \
+    || fail "a spec with no Revision header should be named version 1"
 sed -i 's/^Intro prose.$/**Revision**: 3\n\nIntro prose./' "${tmp}/status/specification.md"
 run_reader --input status/specification.md --output-dir status --name "Widget Overhaul" >/dev/null \
     || fail "generating a revisioned reader failed"
-grep -q "widget-overhaul-spec-notes-'+today()+'-r3.md" "${tmp}/status/spec-reader.html" \
+V3_HTML="${tmp}/status/yourproject-spec-v3-${today}-reader.html"
+[[ -f "${V3_HTML}" ]] || fail "the reader filename does not carry the spec's revision: $(ls "${tmp}/status")"
+[[ ! -e "${SPEC_HTML}" ]] || fail "the v1 reader was left beside the v3 one"
+grep -q "'yourproject-spec-v3-'+today()+'-notes.md'" "${V3_HTML}" \
     || fail "the export filename does not carry the spec's revision"
-grep -q '<meta name="arsenal-source-sha256" content="[0-9a-f]\{64\}">' "${tmp}/status/spec-reader.html" \
+grep -q '<meta name="arsenal-source-sha256" content="[0-9a-f]\{64\}">' "${V3_HTML}" \
     || fail "the reader does not record the digest of the source it rendered"
+sed -i '/^\*\*Revision\*\*: 3$/,+1d' "${tmp}/status/specification.md"
+run_reader --input status/specification.md --output-dir status --name "Widget Overhaul" >/dev/null \
+    || fail "regenerating the unrevisioned reader failed"
 
 # --- 9: ```drawspec fences render to inline SVG (#466) ---
 #     A fake drawspec via ARSENAL_DRAWSPEC, so none of this needs the network.
@@ -249,7 +268,7 @@ After the picture.
 EOF
 out=$(ARSENAL_DRAWSPEC="${fake}" run_reader --input diagrams/plan.md --output-dir diagrams --name demo) \
     || fail "a document with a valid drawspec fence failed: ${out}"
-html="${tmp}/diagrams/plan-reader.html"
+html="${tmp}/diagrams/yourproject-plan-v1-${today}-reader.html"
 grep -q '<figure class="drawspec"><svg xmlns="http://www.w3.org/2000/svg" data-fake="drawspec">' "${html}" \
     || fail "the drawspec fence was not rendered to inline SVG"
 grep -q 'DRAWSPEC-FIGURE' "${html}" && fail "a drawspec placeholder leaked into the reader"
@@ -258,7 +277,7 @@ grep -q '&quot;kind&quot;: &quot;flow&quot;' "${html}" \
 grep -q '<code class="language-json">' "${html}" || fail "an ordinary JSON fence stopped rendering as code"
 grep -q '^validate -$' "${calls}" || fail "drawspec validate was not run before render: $(cat "${calls}")"
 [[ "$(head -1 "${calls}")" == "validate -" ]] || fail "render ran before validate: $(cat "${calls}")"
-grep -q '^```drawspec$' "${tmp}/diagrams/plan-annotated.md" \
+grep -q '^```drawspec$' "${tmp}/diagrams/yourproject-plan-v1-${today}-annotated.md" \
     || fail "the annotated Markdown lost the drawspec source"
 
 #     A diagram drawspec refuses fails the run, names the block, and writes nothing.
@@ -282,7 +301,7 @@ if command -v drawspec >/dev/null 2>&1 || { command -v uvx >/dev/null 2>&1 && co
         timeout 180 uvx --quiet --from git+https://github.com/nuncaeslupus/drawspec drawspec --version \
         >/dev/null 2>&1; }; then
     sed -i 's/"BROKEN step"/"A step"/' "${tmp}/diagrams/plan.md"
-    out=$(env -u ARSENAL_DRAWSPEC "${PY[@]}" "${READER}" --input "${tmp}/diagrams/plan.md" \
+    out=$(cd "${tmp}" && env -u ARSENAL_DRAWSPEC "${PY[@]}" "${READER}" --input "${tmp}/diagrams/plan.md" \
             --output-dir "${tmp}/diagrams" --name demo 2>&1) || fail "a real drawspec render failed: ${out}"
     grep -q '<figure class="drawspec"><svg[^>]*viewBox=' "${html}" \
         || fail "the real drawspec render did not land in the reader"
@@ -327,7 +346,7 @@ fi
 #        rejected write still toasted "Copied to clipboard".
 run_reader --input status/specification.md --output-dir status --name "Widget Overhaul" >/dev/null \
     || fail "generating a reader for the #477 checks failed"
-r477="${tmp}/status/spec-reader.html"
+r477="${SPEC_HTML}"
 grep -q "localStorage.removeItem(k)" "${r477}" \
     && fail "save() still removes the key for an empty note — a seeded note returns after a clear"
 grep -q "if(v!=null){t.value=v;}" "${r477}" \
