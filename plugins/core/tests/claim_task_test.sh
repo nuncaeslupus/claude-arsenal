@@ -78,4 +78,25 @@ python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); sys.exit(0 if "quo\
     || fail "the ref payload is not valid JSON carrying the id: $(cat "${payload}" 2>/dev/null)"
 echo "PASS: the claim payload survives a task id with a quote in it"
 
+# --- #502: a refused write hands back a call whose 403 is explained ---------
+#     `--detect` says `rest` when reads work; the claim POST is then refused and
+#     handed back as `manual`. Repeating it with the same token answers 403, so
+#     the hint has to say that is not an error and name the branch to create.
+cat > "${STUB}" <<'EOF'
+#!/usr/bin/env bash
+case "${1:-}" in
+    --slug)   echo "o/r" ;;
+    --detect) echo "rest" ;;
+    --api)    echo "channel:none"; exit 5 ;;
+esac
+EOF
+stdout=$(ARSENAL_DEFAULT_BRANCH=main bash "${CLAIM}" t-manual 2>/dev/null); rc=$?
+[[ ${rc} -eq 5 ]] || fail "#502: a handed-back claim should exit 5, got ${rc}"
+grep -q '^manual POST /repos/o/r/git/refs ' <<<"${stdout}" \
+    || fail "#502: stdout must stay the parseable manual line: ${stdout}"
+hint=$(ARSENAL_DEFAULT_BRANCH=main bash "${CLAIM}" t-manual 2>&1 >/dev/null)
+grep -q '403' <<<"${hint}" || fail "#502: the manual hint must explain a 403: ${hint}"
+grep -q "branch '[^']*/t-manual'" <<<"${hint}" || fail "#502: the hint must name the branch: ${hint}"
+echo "PASS: a manual claim explains 403 and names the branch to create"
+
 echo "PASS: claim_task_test — all gates passed"
