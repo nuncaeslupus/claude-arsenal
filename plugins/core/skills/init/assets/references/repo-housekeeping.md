@@ -57,6 +57,72 @@ Before the first publish, which claims the name permanently:
   page cannot link back, and `repo_health.py` cannot tell the package is yours.
 - **A license file exists** — see above. An index will accept a package with
   none; its users cannot legally install it into anything.
+- **The archive holds only the package.** Build once and list the source
+  archive (`uv build && tar tzf dist/*.tar.gz`). A build backend's default is
+  often "everything tracked", so vendored tooling, data and agent configuration
+  ship to every installer until the backend is told what to include.
+
+### The first publish, in order
+
+Trusted publishing is set up before the project exists on the index, and two of
+its steps belong to the owner:
+
+1. **The owner registers a pending publisher** on the index (PyPI: account →
+   Publishing → add a pending publisher). It asks for the project name, the
+   repository owner and name, the workflow *filename* and an environment name.
+   This needs their sign-in; give them the five values rather than attempting it.
+2. **Add the release workflow under exactly that filename**, with the publish
+   job in exactly that environment. Renaming either later breaks publishing with
+   an authentication error that does not mention the name.
+3. **Say that merging publishes.** A version number on an index is used once:
+   it can be yanked, never replaced. The owner merges the workflow knowing the
+   current version goes out with it.
+4. **Verify** with `repo_health.py`: the index page links back, the version is
+   tagged, the tag has a release, the homepage is set.
+
+A workflow that releases whenever the default branch carries a version with no
+tag, so a release is a version bump merged through the usual review:
+
+```yaml
+on:
+  push: {branches: [main]}
+permissions: {contents: read}
+concurrency: {group: release, cancel-in-progress: false}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      release: ${{ steps.v.outputs.release }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - id: v
+        run: |
+          ver=$(python3 -c "import tomllib,pathlib; print(tomllib.loads(pathlib.Path('pyproject.toml').read_text())['project']['version'])")
+          echo "version=$ver" >> "$GITHUB_OUTPUT"
+          git ls-remote --tags --exit-code origin "refs/tags/v$ver" || echo "release=true" >> "$GITHUB_OUTPUT"
+      - if: steps.v.outputs.release
+        run: make lint test && uv build
+      - if: steps.v.outputs.release
+        uses: actions/upload-artifact@v4
+        with: {name: dist, path: dist/, if-no-files-found: error}
+  publish:
+    needs: build
+    if: needs.build.outputs.release
+    runs-on: ubuntu-latest
+    environment: pypi            # the name registered in step 1
+    permissions: {id-token: write, contents: write}
+    steps:
+      - uses: actions/download-artifact@v4
+        with: {name: dist, path: dist/}
+      - uses: pypa/gh-action-pypi-publish@release/v1
+      - env: {GH_TOKEN: "${{ github.token }}", VER: "${{ needs.build.outputs.version }}"}
+        run: gh release create "v$VER" -R "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --generate-notes dist/*
+```
+
+The tag is created last, by the release, so a failed publish leaves no tag and
+the next push retries. Replace `make lint test` with the project's own checks.
 
 On every release:
 
