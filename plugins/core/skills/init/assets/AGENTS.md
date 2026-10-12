@@ -1,6 +1,6 @@
 # Claude Arsenal
 
-<!-- claude-arsenal v5.8.0 — imported via @claude-arsenal/AGENTS.md -->
+<!-- claude-arsenal v5.9.0 — imported via @claude-arsenal/AGENTS.md -->
 
 This file is in context on every turn, so it holds only what a session needs before it
 knows what kind of session it is. The rest lives in `claude-arsenal/references/`: plain
@@ -187,5 +187,6 @@ or ASCII art → `claude-arsenal/references/diagrams.md`.
 | `references/pre-pr-review.md` | About to open a PR: the cold-start adversarial review and its verdicts |
 | `references/performance-tuning.md` | The loop feels slow: recorded timings and their remedies |
 | `references/state-layout.md` | A lookup: where a file lives, what a task state means |
+| `references/repo-housekeeping.md` | Choosing a license, or publishing a package: the questions to ask, the metadata an index needs |
 | `references/annotatable-reader.md` | Handing over a spec or plan: which documents need a reader |
 | `references/capability-map.md` | A task looks like something a skill would do |

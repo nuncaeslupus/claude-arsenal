@@ -87,6 +87,9 @@ Init runs non-interactively, so it prints what is undecided and the session asks
   scanning, a release for the newest tag, a PyPI page that links back), each with
   its fix command. Show the list and run only the fixes the user confirms; a
   `NOTE` line is a decision for them, not a fix. `repo_health.py` re-runs it.
+  Load `claude-arsenal:core:init § references/repo-housekeeping.md` when a gap is
+  a missing license (the user chooses it; the reference has the questions to ask)
+  or names a package index, and before a package's first publish.
 - **A skill folder "is not arsenal-vendored — left alone"** — init replaces and
   prunes only folders carrying the `.arsenal-vendored` marker, so a same-named
   folder without it keeps the shipped skill out. Ask the user whether to remove or
