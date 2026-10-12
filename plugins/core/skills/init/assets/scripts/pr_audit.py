@@ -132,21 +132,21 @@ def read_policy(repo_root: Path) -> str:
 
 
 def read_reviewer_identity(repo_root: Path) -> str:
-    """`[review] reviewer-identity` from arsenal/config.toml, or `distinct-login`.
+    """`[review] reviewer-identity` from arsenal/config.toml, or `distinct-session`.
 
     Validated as strictly as merge-policy: an unknown value is an error (exit 2),
-    never quietly read as the default — a typo for `distinct-session` that fell
-    back to `distinct-login` would block every PR with no hint why.
+    never quietly read as the default — a typo for `distinct-login` that fell
+    back to `distinct-session` would silently loosen who may clear a PR.
     """
     config = repo_root / "arsenal" / "config.toml"
     if not config.is_file():
-        return "distinct-login"
+        return "distinct-session"
     try:
         raw = tomllib.loads(config.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as exc:
         raise AuditError(f"cannot read {config}: {exc}") from exc
     table = raw.get("review", {})
-    value = table.get("reviewer-identity", "distinct-login") if isinstance(table, dict) else table
+    value = table.get("reviewer-identity", "distinct-session") if isinstance(table, dict) else table
     if not isinstance(value, str) or value not in IDENTITIES:
         raise AuditError(
             f"[review] reviewer-identity must be one of {sorted(IDENTITIES)}, got {value!r}"
@@ -324,7 +324,7 @@ def check_state(pr: dict[str, Any], head: str) -> tuple[str, str]:
 
 
 def review_state(
-    pr: dict[str, Any], head: str, identity: str = "distinct-login"
+    pr: dict[str, Any], head: str, identity: str = "distinct-session"
 ) -> tuple[str, str]:
     """(state, detail) for review on `head`: GitHub's reviews, then the markers.
 
@@ -442,7 +442,7 @@ def _next_action(pr: dict[str, Any], audit: dict[str, Any], policy: str) -> str:
     return "merge"
 
 
-def audit_pr(pr: dict[str, Any], policy: str, identity: str = "distinct-login") -> dict[str, Any]:
+def audit_pr(pr: dict[str, Any], policy: str, identity: str = "distinct-session") -> dict[str, Any]:
     head = _dig(pr, "head", "sha") or ""
     ci, ci_detail = check_state(pr, str(head))
     review, review_detail = review_state(pr, str(head), identity)

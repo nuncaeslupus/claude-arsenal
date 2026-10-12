@@ -214,20 +214,21 @@ reviewers = ""
 # `claude-arsenal/bin/adversarial_review.sh marker --post <pr>` — and this
 # decides whether a CLEAR marker from the author's own login counts.
 #
-#   distinct-login    It never does: the marker must come from another login.
-#                     Right when the second reader is a person or a bot account.
-#   distinct-session  It does when the marker names a reviewer session that is
-#                     none of the sessions in the PR's `Claude-Session:` commit
-#                     trailers. For a fleet where every session shares one
-#                     credential. A marker with no session, or one an
-#                     implementer used, never clears. Known gap: a subagent
-#                     reports its parent's session id, so the reviewer has to
-#                     run as its own session, not as a subagent of the
+#   distinct-session  (default) It does when the marker names a reviewer
+#                     session that is none of the sessions in the PR's
+#                     `Claude-Session:` commit trailers. For a fleet where every
+#                     session shares one credential. A marker with no session,
+#                     or one an implementer used, never clears. Known gap: a
+#                     subagent reports its parent's session id, so the reviewer
+#                     has to run as its own session, not as a subagent of the
 #                     implementer.
+#   distinct-login    It never does: the marker must come from another login.
+#                     Set this when the second reader is a person or a bot
+#                     account posting on its own login.
 #
 # A BLOCK marker blocks the head it names under either value.
 [review]
-reviewer-identity = "distinct-login"
+reviewer-identity = "distinct-session"
 """
 
 # Permissive on purpose: until the probe runs, every `surface:` task stays

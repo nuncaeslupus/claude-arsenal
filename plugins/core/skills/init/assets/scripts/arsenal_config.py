@@ -344,20 +344,20 @@ SETTINGS: dict[str, Setting] = {
     # Whose reviewer marker may clear a PR head for the review half of
     # merge-policy. Read by scripts/pr_audit.py (via bin/merge_ready.sh), which
     # documents the marker and the rule; `[review]` table in the file.
-    #   distinct-login    (default) the marker must be written by a login other
-    #                     than the PR author's. Right for a repo whose second
-    #                     reader is a human or a bot account.
-    #   distinct-session  the author's own login also counts, when the marker
-    #                     names a reviewer session that is none of the sessions
-    #                     in the PR's `Claude-Session:` commit trailers. For an
-    #                     agent fleet where every session posts with one
-    #                     credential, which made distinct-login unsatisfiable.
-    #                     A subagent shares its parent's session id, so the
-    #                     reviewer must run as its own session (#495).
+    #   distinct-session  (default) the author's own login also counts, when
+    #                     the marker names a reviewer session that is none of
+    #                     the sessions in the PR's `Claude-Session:` commit
+    #                     trailers. For an agent fleet where every session
+    #                     posts with one credential, which makes distinct-login
+    #                     unsatisfiable. A subagent shares its parent's session
+    #                     id, so the reviewer must run as its own session (#495).
+    #   distinct-login    the marker must be written by a login other than the
+    #                     PR author's. Right for a repo whose second reader is a
+    #                     human or a bot account on another login.
     "review.reviewer-identity": Setting(
-        "distinct-login",
+        "distinct-session",
         "5.7.0",
-        "Whose review marker clears a PR: distinct-login, or distinct-session for one-login fleets",
+        "Whose review marker clears a PR: distinct-session, or distinct-login for other logins",
     ),
     # The newest bundle version whose new settings this host has looked at.
     # `--new-settings` (run by `init.py` at every session start) prints one

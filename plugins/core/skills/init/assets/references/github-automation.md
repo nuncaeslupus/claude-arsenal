@@ -133,8 +133,8 @@ counts is `[review] reviewer-identity`:
 
 | Value | A CLEAR from the PR author's login |
 |---|---|
-| `distinct-login` (default) | never counts — the marker must come from another login |
-| `distinct-session` | counts when its `session=` is none of the `Claude-Session:` trailers on the PR's commits; no session, a match, or no trailer to compare against is `unresolvable`, never clear, and the reason says the head was cleared via distinct-session |
+| `distinct-login` | never counts — the marker must come from another login |
+| `distinct-session` (default) | counts when its `session=` is none of the `Claude-Session:` trailers on the PR's commits; no session, a match, or no trailer to compare against is `unresolvable`, never clear, and the reason says the head was cleared via distinct-session |
 
 Known gap: a subagent reports its parent's session id, so a reviewer spawned as a
 subagent of the implementing session is refused. Run the reviewer as its own

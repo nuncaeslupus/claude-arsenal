@@ -133,9 +133,12 @@ printf 'merge-policy = "after-ci-and-review"\n[review]\nreviewer-identity = "dis
 out=$(run 42); rc=$?
 [[ ${rc} -eq 0 ]] || fail "a distinct-session CLEAR on the head should make the PR ready: ${out}"
 grep -q "distinct-session" <<<"${out}" || fail "the reason must say which rule cleared it: ${out}"
+printf 'merge-policy = "after-ci-and-review"\n[review]\nreviewer-identity = "distinct-login"\n' > arsenal/config.toml
+out=$(run 42); rc=$?
+[[ ${rc} -eq 1 ]] || fail "under distinct-login the author's own marker must not clear: ${out}"
 printf 'merge-policy = "after-ci-and-review"\n' > arsenal/config.toml
 out=$(run 42); rc=$?
-[[ ${rc} -eq 1 ]] || fail "with the key unset the author's own marker must not clear: ${out}"
+[[ ${rc} -eq 0 ]] || fail "with the key unset (distinct-session) the distinct-session CLEAR should clear: ${out}"
 printf 'merge-policy = "after-ci-and-review"\n[review]\nreviewer-identity = "anyone"\n' > arsenal/config.toml
 run 42 >/dev/null; rc=$?
 [[ ${rc} -eq 2 ]] || fail "an unknown reviewer-identity must exit 2, got ${rc}"

@@ -7,10 +7,9 @@
 # `pr_audit.py` (behind merge_ready.sh) reads it under `[review]
 # reviewer-identity`:
 #
-#   * distinct-login (the default): a CLEAR from the author's login never
-#     clears — and a repo that sets nothing sees exactly what it saw before,
-#     because a PR with no marker reads as it always did;
-#   * distinct-session: it clears when its session is none of the PR's
+#   * distinct-login: a CLEAR from the author's login never clears — and a PR
+#     with no marker reads as it always did under either value;
+#   * distinct-session (the default): it clears when its session is none of the PR's
 #     Claude-Session trailers, and is `unresolvable` — never clear — when the
 #     session is missing, matches an implementer, or there is nothing to compare;
 #   * a BLOCK on the head blocks under either value;
@@ -64,7 +63,8 @@ pr '[]'
 audit --require-ready >/dev/null; [[ $? -eq 1 ]] || fail "no review must not be ready under after-ci-and-review"
 echo "PASS: a PR without markers is judged as before"
 
-# distinct-login (default): the author's own CLEAR never clears; another login's does.
+# distinct-login: the author's own CLEAR never clears; another login's does.
+identity distinct-login
 pr "[$(marker owner OWNER CLEAR session_01Reviewer)]"
 [[ "$(audit --json | field review)" == "unresolvable" ]] \
     || fail "under distinct-login a CLEAR from the author's login must not clear"
@@ -80,8 +80,8 @@ pr "[$(marker passer-by NONE CLEAR)]"
 [[ "$(audit --json | field review)" == "absent" ]] || fail "a marker from an untrusted commenter must be ignored"
 echo "PASS: distinct-login — the author cannot clear their own PR; another trusted login can"
 
-# distinct-session.
-identity distinct-session
+# distinct-session (the default, so the key is left unset).
+rm -f "${tmp}/root/arsenal/config.toml"
 pr "[$(marker owner OWNER CLEAR session_01Reviewer)]"
 [[ "$(audit --json | field review)" == "clear" ]] \
     || fail "a CLEAR from the author's login with a distinct session must clear"
@@ -125,8 +125,8 @@ python3 "${AUDIT}" --repo-root "${tmp}/root" --prs "${tmp}/prs.json" >/dev/null 
 (cd "${tmp}/root" && python3 "${CFG}" --get review.reviewer-identity >/dev/null 2>&1)
 [[ $? -eq 2 ]] || fail "arsenal_config must exit 2 on an unknown reviewer-identity"
 rm -f "${tmp}/root/arsenal/config.toml"
-[[ "$(cd "${tmp}/root" && python3 "${CFG}" --get review.reviewer-identity)" == "distinct-login" ]] \
-    || fail "the default must be distinct-login"
+[[ "$(cd "${tmp}/root" && python3 "${CFG}" --get review.reviewer-identity)" == "distinct-session" ]] \
+    || fail "the default must be distinct-session"
 echo "PASS: an unknown reviewer-identity exits 2"
 
 # --- adversarial_review.sh marker: the writer --------------------------------
