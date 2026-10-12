@@ -423,7 +423,12 @@ def _next_action(pr: dict[str, Any], audit: dict[str, Any], policy: str) -> str:
                 f"re-read the head: claim_review.sh {pr.get('number')} <head-sha> ({review_detail})"
             )
         if review == "absent":
-            return f"dispatch a second reader: claim_review.sh {pr.get('number')} <head-sha>"
+            # No bot or human review on the head: a clearing adversarial review
+            # published for it is the review (#507).
+            return (
+                f"dispatch a second reader: claim_review.sh {pr.get('number')} <head-sha>, "
+                f"then adversarial_review.sh marker --post {pr.get('number')}"
+            )
         if review == "blocked":
             return "fix the adversarial review's BLOCK findings, then have the new head re-read"
         if review == "unresolvable":

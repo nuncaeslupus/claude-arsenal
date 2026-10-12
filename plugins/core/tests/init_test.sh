@@ -89,9 +89,14 @@ echo "PASS: re-run preserves host-owned session/handover.md (no data loss)"
 # Gate 5c: a fresh config acknowledges the version that created it, so the
 # session-start NEW SETTING notice (#496) says nothing about keys the template
 # itself just showed — and the silent refresh prints none.
-BUNDLE_VER=$(tr -d '[:space:]' < "${BUNDLE_DIR}/.bundle-version")
-if ! grep -qx "config-acknowledged = \"${BUNDLE_VER}\"" "${tmpdir}/arsenal/config.toml"; then
-    echo "FAIL: a fresh config.toml must carry config-acknowledged = \"${BUNDLE_VER}\"" >&2; exit 1
+# Seeded with the installing version, or the registry's newest `since` when a
+# pre-release tree already names a later one.
+ACK_VER=$(cd "${BUNDLE_DIR}/scripts" && python3 -c "
+import arsenal_config as c
+v = open('../.bundle-version').read().strip()
+print(max([v, *(s.since for s in c.SETTINGS.values())], key=c._version))")
+if ! grep -qx "config-acknowledged = \"${ACK_VER}\"" "${tmpdir}/arsenal/config.toml"; then
+    echo "FAIL: a fresh config.toml must carry config-acknowledged = \"${ACK_VER}\"" >&2; exit 1
 fi
 SILENT_OUT=$(python3 "${INIT_PY}" --repo-path "${tmpdir}" --bundle-dir "${BUNDLE_DIR}" --silent 2>&1)
 if grep -q "NEW SETTING" <<<"${SILENT_OUT}"; then

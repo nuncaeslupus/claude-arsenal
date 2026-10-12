@@ -197,6 +197,15 @@ SETTINGS: dict[str, Setting] = {
     "risk-lines": Setting(
         400, BASELINE, "Changed-line count above which a diff always gets a local review round."
     ),
+    # Extra phrases, as case-insensitive regexes, that mean a review bot will
+    # not review this head. review_sources.py ships a starting table (rate
+    # limits, free-tier and plan caps, "fewer than N stars" skips, pauses);
+    # these are appended to it, for a reviewer that words its notice another
+    # way. A match reads as `unavailable` (skipped): one trigger, then the
+    # decision falls through to the local review rather than waiting (#507).
+    "bot-unavailable-notices": Setting(
+        [], "5.7.0", "Extra regexes that mark a review bot unavailable (beyond the shipped table)."
+    ),
     # Which review bots the PR review loop waits on, by GitHub username. Read
     # by the github skill's query_pr_state.py, which watches for their :eyes:,
     # their line comments and their approval before a PR is callable.
@@ -413,6 +422,7 @@ READERS = {
     "risk-paths": "plugins/core/skills/init/assets/scripts/review_sources.py",
     "risk-lines": "plugins/core/skills/init/assets/scripts/review_sources.py",
     "review-bots": "plugins/core/skills/github/scripts/query_pr_state.py",
+    "bot-unavailable-notices": "plugins/core/skills/init/assets/scripts/review_sources.py",
     "listing-budget": "plugins/skill-workshop/skills/skill-workshop/scripts/audit_library.py",
     "queue-automation": "plugins/core/skills/init/scripts/init.py",
     "branch-protection": "plugins/core/skills/init/scripts/init.py",
@@ -571,11 +581,19 @@ def load(repo_root: Path | None = None) -> tuple[dict[str, Any], dict[str, str]]
             raise ConfigError(
                 f"{key} must be an integer >= 1, got {values[key]!r} (from {sources[key]})"
             )
-    for key in ("risk-paths", "bot-triggers"):
+    for key in ("risk-paths", "bot-triggers", "bot-unavailable-notices"):
         if not isinstance(values[key], list) or not all(isinstance(v, str) for v in values[key]):
             raise ConfigError(
                 f"{key} must be a list of strings, got {values[key]!r} (from {sources[key]})"
             )
+    for pattern in values["bot-unavailable-notices"]:
+        try:
+            re.compile(pattern)
+        except re.error as exc:
+            raise ConfigError(
+                f"bot-unavailable-notices: {pattern!r} is not a valid regex ({exc}) "
+                f"(from {sources['bot-unavailable-notices']})"
+            ) from exc
     for entry in values["bot-triggers"]:
         login, sep, comment = entry.partition("=")
         if not sep or not login.strip() or not comment.strip():

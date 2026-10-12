@@ -72,6 +72,10 @@ audit --json | field review_detail | grep -q "distinct-login" || fail "the refus
 pr "[$(marker second-reader COLLABORATOR CLEAR)]"
 [[ "$(audit --json | field review)" == "clear" ]] || fail "a CLEAR from another trusted login must clear"
 audit --require-ready >/dev/null || fail "green CI + a distinct reader's CLEAR must be ready"
+# after-ci-and-review (#507): the adversarial CLEAR stands in for the review,
+# never for CI — a red head stays blocked.
+sed -i.bak 's/"conclusion":"success"/"conclusion":"failure"/' "${tmp}/prs.json"
+audit --require-ready >/dev/null; [[ $? -eq 1 ]] || fail "a CLEAR marker must not stand in for green CI"
 pr "[$(marker passer-by NONE CLEAR)]"
 [[ "$(audit --json | field review)" == "absent" ]] || fail "a marker from an untrusted commenter must be ignored"
 echo "PASS: distinct-login — the author cannot clear their own PR; another trusted login can"

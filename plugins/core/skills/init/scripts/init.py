@@ -87,6 +87,14 @@ config-acknowledged = "@BUNDLE_VERSION@"
 #                        comments are all addressed. The usual choice for a repo
 #                        that has CI and a review bot — pick this one if you
 #                        expect "wait for green, answer the bot, then merge".
+#
+# For both review policies, when no bot or human review is available on the
+# head — the bot is rate-limited, over a free-tier cap, skipped the repo, or
+# silent past bot-wait-min — a CLEARING ADVERSARIAL REVIEW recorded for the
+# head SHA is the review: `claude-arsenal/bin/adversarial_review.sh marker
+# --post <pr>` after its verdict (see [review] at the end for whose marker
+# counts). A bot review that lands after the merge still gets its findings
+# fixed or answered, in a follow-up PR.
 #   never                An agent never merges. It reports the PR ready and
 #                        stops; a human merges.
 #
@@ -1989,6 +1997,32 @@ def _report_gate_choices(repo_path: Path, private: bool = False) -> None:
     print(f"  MERGE-POLICY is `{policy}` — confirm it with the user ({advice}).")
 
 
+def _acknowledged_at_install(bundle: Path) -> str:
+    """The `config-acknowledged` a freshly created config.toml starts at.
+
+    The installing version — or the newest `since` in the bundle's registry, if
+    that is later (a pre-release tree whose keys already name the release they
+    will ship in). A fresh host has every key this bundle knows about in front of
+    it for the first time; announcing them as "new" on its first session would
+    teach it to ignore the line that later matters.
+    """
+    ver_file = bundle / ".bundle-version"
+    seeded = ver_file.read_text(encoding="utf-8").strip() if ver_file.is_file() else ""
+    script = bundle / "scripts" / "arsenal_config.py"
+    spec = importlib.util.spec_from_file_location("_arsenal_config_registry", script)
+    if spec is None or spec.loader is None:
+        return seeded
+    try:
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        versions = [entry.since for entry in module.SETTINGS.values()]
+        if seeded:
+            versions.append(seeded)
+        return str(max(versions, key=module._version))
+    except (OSError, AttributeError, ValueError, SyntaxError, ImportError):
+        return seeded
+
+
 def _report_new_settings(repo_path: Path, arsenal: Path) -> None:
     """Print the vendored arsenal_config.py's NEW SETTING lines, if any.
 
@@ -2088,10 +2122,7 @@ def init_base(
     # which is build output and gets replaced.
     config = home / "config.toml"
     if not config.exists():
-        bundle_ver_file = bundle / ".bundle-version"
-        seeded = (
-            bundle_ver_file.read_text(encoding="utf-8").strip() if bundle_ver_file.is_file() else ""
-        )
+        seeded = _acknowledged_at_install(bundle)
         config.write_text(_CONFIG_TEMPLATE.replace("@BUNDLE_VERSION@", seeded), encoding="utf-8")
         print(f"  created: {config.relative_to(repo_path)}")
 
