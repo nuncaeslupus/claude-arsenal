@@ -332,6 +332,24 @@ SETTINGS: dict[str, Setting] = {
         BASELINE,
         "Model adversarial reviewer subagents are dispatched with; empty = models.workers.",
     ),
+    # Whose reviewer marker may clear a PR head for the review half of
+    # merge-policy. Read by scripts/pr_audit.py (via bin/merge_ready.sh), which
+    # documents the marker and the rule; `[review]` table in the file.
+    #   distinct-login    (default) the marker must be written by a login other
+    #                     than the PR author's. Right for a repo whose second
+    #                     reader is a human or a bot account.
+    #   distinct-session  the author's own login also counts, when the marker
+    #                     names a reviewer session that is none of the sessions
+    #                     in the PR's `Claude-Session:` commit trailers. For an
+    #                     agent fleet where every session posts with one
+    #                     credential, which made distinct-login unsatisfiable.
+    #                     A subagent shares its parent's session id, so the
+    #                     reviewer must run as its own session (#495).
+    "review.reviewer-identity": Setting(
+        "distinct-login",
+        "5.7.0",
+        "Whose review marker clears a PR: distinct-login, or distinct-session for one-login fleets",
+    ),
     # The newest bundle version whose new settings this host has looked at.
     # `--new-settings` (run by `init.py` at every session start) prints one
     # NEW SETTING line per key added after it that the file does not set, and
@@ -368,6 +386,7 @@ ENUMS: dict[str, set[str]] = {
     "verification": {"fast", "balanced", "strict"},
     "autonomy": {"ask-often", "ask-when-blocked", "autonomous"},
     "branch-protection": {"", "applied", "existing", "unavailable", "off"},
+    "review.reviewer-identity": {"distinct-login", "distinct-session"},
 }
 
 CONFIG_RELPATH = "config.toml"
@@ -408,6 +427,7 @@ READERS = {
     "models.orchestrator": "plugins/core/skills/init/assets/AGENTS.md",
     "models.workers": "plugins/core/skills/init/assets/agents/worker.md",
     "models.reviewers": "plugins/core/skills/init/assets/agents/reviewer.md",
+    "review.reviewer-identity": "plugins/core/skills/init/assets/scripts/pr_audit.py",
     # Read here, by new_settings() below; init.py prints what it returns.
     "config-acknowledged": "plugins/core/skills/init/assets/scripts/arsenal_config.py",
     # `home` is the exception, and the only one: it names the directory holding

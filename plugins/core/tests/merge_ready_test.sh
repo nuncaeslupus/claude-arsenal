@@ -48,6 +48,8 @@ case "${1:-}" in
         [[ "${STUB_CHANNEL:-rest}" == "none" ]] && exit 5
         case "$3" in
             */pulls/[0-9]*/reviews) cat "${STUB_DIR}/reviews.json" ;;
+            */issues/[0-9]*/comments*) cat "${STUB_DIR}/comments.json" 2>/dev/null || exit 4 ;;
+            */pulls/[0-9]*/commits*)   cat "${STUB_DIR}/commits.json" 2>/dev/null || exit 4 ;;
             */pulls/[0-9]*)         cat "${STUB_DIR}/pr.json" ;;
             */check-runs)           cat "${STUB_DIR}/checks.json" 2>/dev/null || exit 4 ;;
             *) exit 4 ;;
@@ -110,6 +112,36 @@ out=$(run 42); rc=$?
 [[ ${rc} -eq 1 ]] || fail "after-ci-and-review with no review should exit 1: ${out}"
 printf 'merge-policy = "after-ci"\n' > arsenal/config.toml
 echo "PASS: the host's merge-policy decides, and never is its own exit code"
+
+# --- a reviewer marker on the author's login reaches the evaluator (#495) ---
+#     The comments and the commits' trailers have to be fetched for the reader
+#     to apply reviewer-identity at all; pr_audit_test owns the rule itself.
+world "${HEAD}"
+python3 - "${tmp}" "${HEAD}" <<'PY'
+import json, sys
+d, head = sys.argv[1], sys.argv[2]
+pr = json.load(open(f"{d}/pr.json"))
+pr["user"] = {"login": "owner"}
+json.dump(pr, open(f"{d}/pr.json", "w"))
+json.dump([{"id": 5, "author_association": "OWNER", "user": {"login": "owner", "type": "User"},
+            "body": f"<!-- arsenal-review: verdict=CLEAR head={head} session=session_R -->"}],
+          open(f"{d}/comments.json", "w"))
+json.dump([{"sha": head, "commit": {"message": "x\n\nClaude-Session: https://claude.ai/code/session_I"}}],
+          open(f"{d}/commits.json", "w"))
+PY
+printf 'merge-policy = "after-ci-and-review"\n[review]\nreviewer-identity = "distinct-session"\n' > arsenal/config.toml
+out=$(run 42); rc=$?
+[[ ${rc} -eq 0 ]] || fail "a distinct-session CLEAR on the head should make the PR ready: ${out}"
+grep -q "distinct-session" <<<"${out}" || fail "the reason must say which rule cleared it: ${out}"
+printf 'merge-policy = "after-ci-and-review"\n' > arsenal/config.toml
+out=$(run 42); rc=$?
+[[ ${rc} -eq 1 ]] || fail "with the key unset the author's own marker must not clear: ${out}"
+printf 'merge-policy = "after-ci-and-review"\n[review]\nreviewer-identity = "anyone"\n' > arsenal/config.toml
+run 42 >/dev/null; rc=$?
+[[ ${rc} -eq 2 ]] || fail "an unknown reviewer-identity must exit 2, got ${rc}"
+rm -f "${tmp}/comments.json" "${tmp}/commits.json"
+printf 'merge-policy = "after-ci"\n' > arsenal/config.toml
+echo "PASS: merge_ready fetches the markers and trailers reviewer-identity needs"
 
 # --- no scriptable channel is handed the calls, not skipped -----------------
 out=$(STUB_CHANNEL=none STUB_DIR="${tmp}" bash "${READY}" 42 2>&1); rc=$?

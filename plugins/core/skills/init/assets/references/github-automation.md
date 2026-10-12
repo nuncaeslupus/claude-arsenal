@@ -117,6 +117,25 @@ repo changes bots. A PR with no reviews does not satisfy `after-review`. "Fixed 
 answered" means a fix paired with a reply, or a reply explaining the
 disagreement; an unresolved thread is an unmet policy.
 
+**A second reader that cannot approve.** GitHub refuses an approval from the PR's
+author, so a reviewer posting with the author's credential (every session in a
+one-account fleet) records its verdict as a marker comment instead:
+`adversarial_review.sh marker --post <pr>`, run in the reviewer's own checkout of
+the head after its `verdict`. It writes
+`<!-- arsenal-review: verdict=CLEAR head=<sha> session=<id> -->` for the
+committed head. Only markers from an OWNER/MEMBER/COLLABORATOR commenter or an App
+are read; a BLOCK on the head blocks. Whether a CLEAR from the author's own login
+counts is `[review] reviewer-identity`:
+
+| Value | A CLEAR from the PR author's login |
+|---|---|
+| `distinct-login` (default) | never counts — the marker must come from another login |
+| `distinct-session` | counts when its `session=` is none of the `Claude-Session:` trailers on the PR's commits; no session, a match, or no trailer to compare against is `unresolvable`, never clear, and the reason says the head was cleared via distinct-session |
+
+Known gap: a subagent reports its parent's session id, so a reviewer spawned as a
+subagent of the implementing session is refused. Run the reviewer as its own
+session (claim the head with `claim_review.sh`).
+
 **Who fixes, and who merges.** The findings are the session's work: verify each
 against the code, fix the real ones, and reply with what changed and what was
 rejected and why. Under `after-review` that loop is the whole gate, so merge

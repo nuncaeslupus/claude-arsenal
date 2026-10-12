@@ -7,7 +7,7 @@ protocol; the skills point here.
 
 ## Contents
 
-- [The protocol](#the-protocol) — decide, run a round, record the verdict
+- [The protocol](#the-protocol) — decide, run a round, record the verdict, publish it
 - [Rounds](#rounds) — follow-ups, the cap, and the three ways out
 - [Tests during review](#tests-during-review)
 - [Handling BLOCK](#handling-block)
@@ -106,6 +106,25 @@ judged by the edited rubric; review such changes with that in mind.
 exits 0 for a CLEAR receipt on the current tree. A new round runs only when
 commits landed after the last reviewed tree (`check` exits 3) or none is on
 record.
+
+### 5. Publish the verdict on the PR
+
+A receipt lives in one checkout; a merge decided elsewhere cannot see it. When
+the verdict is about an open PR's head, publish it:
+
+```bash
+bash claude-arsenal/bin/adversarial_review.sh marker [--task <id>] --post <N>
+```
+
+It refuses unless the receipt is fresh and the reviewed tree is exactly the
+committed `HEAD` (exit 2 on uncommitted changes, 3 when stale), then posts
+`<!-- arsenal-review: verdict=… head=<sha> session=<id> -->` as a PR comment
+(exit 5 with the body and the call to make when there is no GitHub channel).
+`merge_ready.sh` reads it for the review half of `merge-policy`. When the comment
+is posted with the PR author's login, `[review] reviewer-identity` decides
+whether a CLEAR counts: run this in the **reviewer's own session**, since a
+subagent reports its parent's session id —
+`references/github-automation.md` § A second reader that cannot approve.
 
 ## Rounds
 
