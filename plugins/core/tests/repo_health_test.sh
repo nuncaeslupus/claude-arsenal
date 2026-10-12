@@ -53,7 +53,9 @@ export ARSENAL_PYPI_JSON="file://${tmp}/pypi"
 repo="${tmp}/repo"
 git -C "${repo}" init -q
 git -C "${repo}" remote add origin git@github.com:o/r.git
-printf '[project]\nname = "pkg"\n' > "${repo}/pyproject.toml"
+bare_toml() { printf '[project]\nname = "pkg"\n' > "${repo}/pyproject.toml"; }
+full_toml() { printf '[project]\nname = "pkg"\ndescription = "d"\nreadme = "README.md"\nlicense = "MIT"\nrequires-python = ">=3.12"\n[project.urls]\nRepository = "https://github.com/o/r"\n' > "${repo}/pyproject.toml"; }
+bare_toml
 rh() { python3 "${RH}" --repo-root "${repo}" "$@"; }
 
 # --- 1: a bare repo reports every gap ---------------------------------------
@@ -62,13 +64,15 @@ out=$(FAKE_STATE=bare rh) || fail "exit non-zero without --fail-on-gaps"
 for want in "not \`main\`" "is unprotected" "no description" "no topics" "no license" \
     "secret_scanning and secret_scanning_push_protection disabled" \
     "--homepage https://o.example.com/r/" "tag v0.10.0 has no release" \
-    "PyPI has pkg 0.11.0 but no tag" "outcome: gaps"; do
+    "PyPI has pkg 0.11.0 but no tag" "pyproject.toml lacks: description, readme, requires-python, license, [project.urls]" \
+    "outcome: gaps"; do
     [[ "${out}" == *"${want}"* ]] || fail "missing '${want}' in: ${out}"
 done
 FAKE_STATE=bare rh --fail-on-gaps >/dev/null && fail "--fail-on-gaps exited 0 with gaps"
 echo "PASS: a bare repo reports every gap with its fix"
 
 # --- 2: a complete repo reports nothing --------------------------------------
+full_toml
 echo '{"info":{"version":"0.10.0","home_page":"https://github.com/O/R"}}' > "${tmp}/pypi/pkg/json"
 out=$(FAKE_STATE=full rh --fail-on-gaps) || fail "complete repo failed: ${out}"
 [[ "${out}" == *"nothing missing"* && "${out}" == *"outcome: ok"* && "${out}" != *GAP* ]] \
@@ -78,12 +82,16 @@ echo "PASS: a complete repo is clean"
 # --- 3: somebody else's PyPI name, and an unpublished one, are NOTEs ----------
 echo '{"info":{"version":"9.0.0","project_urls":{"Source":"https://github.com/x/y"}}}' > "${tmp}/pypi/pkg/json"
 out=$(FAKE_STATE=full rh)
-[[ "${out}" == *"NOTE a PyPI project named \`pkg\` exists but does not link"* && "${out}" == *"outcome: ok"* ]] \
+[[ "${out}" == *"NOTE the PyPI project \`pkg\` does not link to o/r"* && "${out}" == *"outcome: ok"* ]] \
     || fail "foreign PyPI project not a NOTE: ${out}"
 rm "${tmp}/pypi/pkg/json"
 out=$(FAKE_STATE=full rh)
 [[ "${out}" == *"NOTE package \`pkg\`"*"is not on PyPI"* && "${out}" == *"outcome: ok"* ]] \
     || fail "unpublished package not a NOTE: ${out}"
+bare_toml
+out=$(FAKE_STATE=full rh)
+[[ "${out}" == *"Before a first publish, pyproject.toml needs: description"* && "${out}" == *"outcome: ok"* ]] \
+    || fail "unpublished package's missing metadata not listed: ${out}"
 echo "PASS: PyPI uncertainty is a NOTE, not a GAP"
 
 # --- 4: read-only, and soft on an unreadable repo ----------------------------

@@ -111,3 +111,17 @@ jobs:
           git tag "${tag}" -m "Release ${tag}"
           git push origin "${tag}"
           echo "Created tag ${tag}"
+
+      # A tag alone leaves the repository page showing an older "Latest" release.
+      # Separate and idempotent, so a release missed on one run is made by the next.
+      - name: Publish the GitHub Release for the tag
+        if: steps.guard.outputs.verdict == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="v$(tr -d '[:space:]' < plugins/core/skills/init/assets/.bundle-version)"
+          if gh release view "${tag}" >/dev/null 2>&1; then
+            echo "Release ${tag} already exists." ; exit 0
+          fi
+          gh release create "${tag}" --verify-tag --generate-notes --latest

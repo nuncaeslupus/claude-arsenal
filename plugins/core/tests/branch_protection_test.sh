@@ -54,6 +54,7 @@ case "${method} ${path}" in
             exists) echo '{"required_status_checks":{"strict":true,"contexts":["legacy"]},"required_pull_request_reviews":{"required_approving_review_count":2}}' ;;
         esac ;;
     "GET repos/o/r/pulls"*)
+        if [[ "${FAKE_PULLS:-some}" == none ]]; then echo '[]'; exit 0; fi
         echo '[{"head":{"sha":"a1"}},{"head":{"sha":"a2"}},{"head":{"sha":"a3"}}]' ;;
     "GET repos/o/r/commits/a3/check-runs"*)
         echo '{"check_runs":[]}' ;;
@@ -155,6 +156,17 @@ PY
 )
 [[ "${out}" == "['Build']" ]] || fail "workflow fallback: ${out}"
 echo "PASS: workflow fallback names plain pull_request jobs only"
+
+# `--repo` naming another repository than the checkout: this checkout's job names
+# are not that repository's checks, and requiring them would block every PR there.
+git -C "${fb}" init -q; git -C "${fb}" remote add origin https://github.com/o/r.git
+rm -f "${FAKE_PUT}"; FAKE_PULLS=none python3 "${BP}" --repo-root "${fb}" --repo o/r >/dev/null || fail "own-repo fallback exit"
+grep -q '"Build"' "${FAKE_PUT}" || fail "own checkout's workflow jobs not used: $(cat "${FAKE_PUT}")"
+git -C "${fb}" remote set-url origin https://github.com/other/x.git
+rm -f "${FAKE_PUT}"; FAKE_PULLS=none python3 "${BP}" --repo-root "${fb}" --repo o/r >/dev/null || fail "foreign --repo exit"
+[[ -e "${FAKE_PUT}" ]] && ! grep -q '"Build"' "${FAKE_PUT}" \
+    || fail "--repo for another repository required this checkout's jobs: $(cat "${FAKE_PUT}" 2>&1)"
+echo "PASS: --repo for another repository ignores this checkout's workflows"
 
 # --- 6: init integration -----------------------------------------------------
 rm -f "${FAKE_PUT}"

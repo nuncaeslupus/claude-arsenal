@@ -20,7 +20,9 @@ What it looks at:
   * newest version tag has a release
   * a `pyproject.toml` package: whether it is on PyPI, whether that PyPI
     project links back here (a same-named project that does not is somebody
-    else's), and whether its published version is tagged
+    else's), whether its published version is tagged, and whether `[project]`
+    carries what an index page needs — description, readme, license,
+    requires-python and a `[project.urls]` entry pointing at this repository
 
 `GAP` is something to fix; `NOTE` is a decision this script cannot make for you
 (a package that is simply not meant to be published).
@@ -70,13 +72,25 @@ def _newest_version_tag(slug: str) -> str | None:
     return max(versioned, key=_version_key) if versioned else None
 
 
-def _package(repo_root: Path) -> str | None:
+def _project(repo_root: Path) -> dict[str, Any]:
+    """The `[project]` table of pyproject.toml, {} when there is none."""
     try:
         data = tomllib.loads((repo_root / "pyproject.toml").read_text(encoding="utf-8"))
     except (OSError, tomllib.TOMLDecodeError):
-        return None
-    name = data.get("project", {}).get("name")
-    return name if isinstance(name, str) else None
+        return {}
+    project = data.get("project")
+    return project if isinstance(project, dict) else {}
+
+
+def _metadata_missing(project: dict[str, Any], slug: str) -> list[str]:
+    """What a package index page needs from `[project]` and does not find."""
+    missing = [key for key in ("description", "readme", "requires-python") if not project.get(key)]
+    if not (project.get("license") or project.get("license-files")):
+        missing.append("license")
+    urls = " ".join(str(u) for u in (project.get("urls") or {}).values())
+    if slug.lower() not in urls.lower():
+        missing.append(f'[project.urls] Repository = "https://github.com/{slug}"')
+    return missing
 
 
 def _pypi(name: str) -> dict[str, Any] | None:
@@ -122,7 +136,10 @@ def check(repo_root: Path, slug: str) -> list[str]:
         if not info.get("topics"):
             gap("no topics (how the repo is found in search)", f"gh repo edit {slug} --add-topic …")
         if not info.get("license"):
-            gap("no license file GitHub recognises", "add a LICENSE at the repo root")
+            gap(
+                "no license file GitHub recognises: nobody may legally reuse this code",
+                "choose one with the owner (references/repo-housekeeping.md), add LICENSE",
+            )
         security = info.get("security_and_analysis") or {}
         off = [
             key
@@ -157,21 +174,29 @@ def check(repo_root: Path, slug: str) -> list[str]:
                     f"gh release create {tag} -R {slug} --verify-tag --generate-notes",
                 )
 
-    name = _package(repo_root) if public else None
+    project = _project(repo_root) if public else {}
+    name = project.get("name") if isinstance(project.get("name"), str) else None
     pypi = _pypi(name) if name else None
+    missing = ", ".join(_metadata_missing(project, slug))
     if name and pypi == {}:
         out.append(
             f"NOTE package `{name}` (pyproject.toml) is not on PyPI — publish it if it is "
             "meant to be installed; nothing to do otherwise"
+            + (f". Before a first publish, pyproject.toml needs: {missing}" if missing else "")
         )
     elif name and pypi:
+        if missing:
+            gap(
+                f"`{name}` is a published name and pyproject.toml lacks: {missing}",
+                "add them under [project], then publish a new version",
+            )
         links = " ".join(
             [str(pypi.get("home_page") or ""), *(pypi.get("project_urls") or {}).values()]
         )
         if slug.lower() not in links.lower():
             out.append(
-                f"NOTE a PyPI project named `{name}` exists but does not link to {slug} — "
-                "somebody else's name, or yours without [project.urls] in pyproject.toml"
+                f"NOTE the PyPI project `{name}` does not link to {slug} — publish a version "
+                "built with [project.urls] set, or the name is somebody else's and needs changing"
             )
         else:
             version = str(pypi.get("version") or "")
