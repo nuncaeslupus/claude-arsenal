@@ -18,6 +18,14 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [5.9.1] - 2026-10-13
+
+- `references/repo-housekeeping.md` now walks a package's **first publish** in
+  order — the pending trusted publisher the owner has to register, the release
+  workflow that must match it by filename and environment, the warning that
+  merging it publishes — with a workflow that releases on a version bump, and a
+  check that the built archive does not ship vendored tooling.
+
 ## [5.9.0] - 2026-10-12
 
 - **`repo_health.py` checks packaging metadata.** For a package whose name is on PyPI it reports a `GAP` when `pyproject.toml`'s `[project]` lacks a description, readme, license, `requires-python`, or a `[project.urls]` entry pointing at the repository (without it the index page cannot link back). For an unpublished package the same list is appended to the `NOTE`, as what to add before a first publish.
