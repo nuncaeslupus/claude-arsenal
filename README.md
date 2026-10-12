@@ -317,6 +317,10 @@ behind in a project that has lived with it.
 - [integral-job-search](https://github.com/nuncaeslupus/integral-job-search) — a candidate-centred job search run as a conversation in Claude Code, one dimension model from what you need to the interview.
 - [literary-critic](https://github.com/nuncaeslupus/literary-critic) — lets an LLM index, analyse and advise on a full novel manuscript the way a professional editor would.
 - [doc-control](https://github.com/nuncaeslupus/doc-control) — a deterministic tool for AI agents to edit Word documents, every change a tracked change (in development).
+- [image-to-svg](https://github.com/nuncaeslupus/image-to-svg) — raster images to SVG in the browser: VTracer on WebAssembly, installable, nothing uploaded.
+- [ai-chat-exporter](https://github.com/nuncaeslupus/ai-chat-exporter) — a browser extension that exports ChatGPT, Claude and Gemini conversations to several formats.
+- [comparador-luz-gas](https://github.com/nuncaeslupus/comparador-luz-gas) — queries Spain's CNMC energy-offer comparator and returns JSON ready for an LLM.
+- [html-cleaner](https://github.com/nuncaeslupus/html-cleaner) — a bookmarklet that strips clutter from web pages with per-site JSON rules.
 
 ---
 

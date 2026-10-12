@@ -1894,6 +1894,26 @@ def _setup_branch_protection(repo_path: Path, arsenal: Path, enabled: bool) -> b
     return any("visibility: private" in line for line in lines)
 
 
+def _report_repo_health(repo_path: Path, arsenal: Path) -> None:
+    """Print the repository housekeeping that is missing (repo_health.py, read-only)."""
+    script = arsenal / "scripts" / "repo_health.py"
+    if os.environ.get("ARSENAL_BRANCH_PROTECTION", "1") == "0" or not script.is_file():
+        return
+    try:
+        proc = subprocess.run(
+            [sys.executable, str(script), "--repo-root", str(repo_path)],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=120,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return
+    for line in proc.stdout.strip().splitlines()[:-1]:
+        print(f"  {line}")
+
+
 def _suggest_host_gate(repo_path: Path) -> str | None:
     """A starting value for `host-gate`, from the tooling the repo visibly has."""
     makefile = repo_path / "Makefile"
@@ -2210,7 +2230,11 @@ def init_base(
     # The GitHub-side and config-side safety nets. Deliberate runs only: the
     # session-start refresh is --silent and must stay cheap and offline.
     if not silent:
+        # Once, with branch protection: a re-run must not cost a GitHub round trip.
+        first = not _config_value(_home(repo_path) / "config.toml", "branch-protection")
         private = _setup_branch_protection(repo_path, arsenal, branch_protection)
+        if first and branch_protection:
+            _report_repo_health(repo_path, arsenal)
         _report_gate_choices(repo_path, private=private)
 
     # Settings a newer bundle added that this host has neither set nor
