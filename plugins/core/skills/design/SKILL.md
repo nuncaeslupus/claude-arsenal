@@ -85,7 +85,7 @@ python3 "${CLAUDE_SKILL_DIR}/scripts/sync_plan_graph.py" --input status/plan.md 
 python3 "${CLAUDE_SKILL_DIR}/scripts/validate_plan.py" --input status/plan.md
 ```
 
-The graph is generated, never hand-drawn; rerun `sync_plan_graph.py --apply` after any change to **Depends**. The validator checks shape — the required sections and task-table columns, Gate included — and that every Depends edge is in the graph. `gate-check`'s `run_gate.py --strict` audits the gate values.
+The graph is generated, never hand-drawn; rerun `sync_plan_graph.py --apply` after any change to **Depends**. The validator checks shape — the required sections and task-table columns, Gate included — and that every Depends edge is in the graph. A graph that is not a drawspec fence (an older plan's ASCII art) only warns, with the `--apply` fix. `gate-check`'s `run_gate.py --strict` audits the gate values.
 
 Draw any picture as a fenced `drawspec` block: `claude-arsenal:core:init § references/diagrams.md`.
 

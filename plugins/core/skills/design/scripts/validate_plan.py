@@ -7,9 +7,11 @@ Implementation tasks, Evidence log, and Sign-off sections exist, that the task
 table carries the required columns (including the measurable Gate), and that the
 Evidence log table carries the columns gate-check's run_gate.py expects.
 
-It also holds the `### Dependency graph` to the task table: the graph must be a
-```drawspec fence whose edges are exactly the Depends column's (sync_plan_graph.py
-draws it), and every edge one has and the other lacks is named.
+It also holds the `### Dependency graph` to the task table: a ```drawspec graph's
+edges must be exactly the Depends column's (sync_plan_graph.py draws it), and
+every edge one has and the other lacks is named. A graph that is not a drawspec
+fence (the ASCII art earlier templates seeded) is a warning — printed as a
+`  ! ` line with the fix, exit code unaffected.
 
 It is otherwise deliberately shallow: gate values and evidence completeness are
 checked by the `gate-check` skill (run_gate.py), not here. This script only verifies the
@@ -21,7 +23,7 @@ additionally demands a **Status** approving the current revision — run it
 before seeding tasks or starting execution from the plan.
 
 Human-readable on stdout; problems on stderr. Exit 0 = well-formed, 1 = missing
-sections or columns, a dependency graph that disagrees with Depends, a notes file
+sections or columns, a drawspec dependency graph that disagrees with Depends, a notes file
 not in the repo, or (with --require-approved) no backed approval, 2 = usage error
 (file missing).
 """
@@ -127,6 +129,8 @@ def main() -> int:
     problems = lint(text) + review_record.notes_problems(text, path)
     if review_record.revision(text) is None:
         print("  · no **Revision** header line yet — see the template's header block")
+    for w in plan_graph.graph_warnings(text):
+        print(f"  ! {w}")
     if args.require_approved:
         problems += review_record.approval_problems(text, path)
     if problems:

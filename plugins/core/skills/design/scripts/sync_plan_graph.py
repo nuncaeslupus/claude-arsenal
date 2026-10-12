@@ -144,22 +144,41 @@ def find_graph(text: str) -> tuple[int, int, str, str] | None:
     return None
 
 
-def graph_problems(text: str) -> list[str]:
-    """Where the plan's dependency graph disagrees with its Depends column; [] when it agrees.
+FIX_HINT = "regenerate it: sync_plan_graph.py --input <plan> --apply"
 
-    A plan without a dependency-graph section has nothing to disagree with. One
-    whose graph is not a drawspec fence (the ASCII art earlier templates seeded)
-    is a problem, because nothing can check it against the table.
+
+def graph_warnings(text: str) -> list[str]:
+    """Advisories about the plan's dependency graph that should not fail validation.
+
+    A graph that is not a drawspec fence (the ASCII art earlier templates seeded)
+    cannot be checked against the table, but a plan written before the drawspec
+    graph is still a valid plan: it is flagged with the fix, not refused.
+    """
+    found = find_graph(text)
+    if found is None or task_edges(text) is None:
+        return []
+    lang = found[2]
+    if lang == "drawspec":
+        return []
+    what = f"a ```{lang} block" if lang and lang != "plain" else "no ```drawspec block"
+    return [f"dependency graph is {what}, not a ```drawspec fence — {FIX_HINT}"]
+
+
+def graph_problems(text: str) -> list[str]:
+    """Where a drawspec dependency graph disagrees with the Depends column; [] when it agrees.
+
+    A plan without a dependency-graph section has nothing to disagree with, and
+    one whose graph is not a drawspec fence is a warning (graph_warnings), not a
+    problem. Only a real drawspec graph is held to the table.
     """
     found = find_graph(text)
     table = task_edges(text)
     if found is None or table is None:
         return []
-    fix = "regenerate it: sync_plan_graph.py --input <plan> --apply"
+    fix = FIX_HINT
     _, _, lang, body = found
     if lang != "drawspec":
-        what = f"a ```{lang} block" if lang and lang != "plain" else "no ```drawspec block"
-        return [f"dependency graph is {what}, not a ```drawspec fence — {fix}"]
+        return []
     try:
         doc = json.loads(body)
     except ValueError as exc:

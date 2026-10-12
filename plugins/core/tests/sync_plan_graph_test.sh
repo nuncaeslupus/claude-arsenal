@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # sync_plan_graph_test.sh — a plan's dependency graph is a drawspec block generated
-# from the task table, and validate_plan.py holds the two together (#506).
+# from the task table, and validate_plan.py holds the two together (#506). A
+# graph that is not drawspec (the old ASCII art) only warns; drift inside a
+# drawspec graph fails.
 #
 # The template used to seed an ASCII ```text``` diagram: hand-drawn arrows that
 # drifted from the Depends column the moment a task moved, and broke the rule
@@ -58,18 +60,20 @@ python3 "$GRAPH" --input "$tmp/drift.md" --apply >/dev/null || fail "regeneratin
 out="$(python3 "$PLAN_V" --input "$tmp/drift.md" 2>&1)" || fail "a regenerated graph still fails: $out"
 echo "PASS: validate_plan names missing and extra edges, and plan_graph --apply fixes them"
 
-# --- 4: an ASCII graph is refused with the fix; no graph section is not a problem ---
+# --- 4: an ASCII graph is a warning with the fix, not a failure; no graph section is not a problem ---
 python3 - "$TEMPLATE" "$tmp/ascii.md" <<'PY'
 import re, sys
 t = open(sys.argv[1], encoding="utf-8").read()
 t = re.sub(r"```drawspec\n.*?\n```", "```text\nT1 ──> T2\n```", t, flags=re.S)
 open(sys.argv[2], "w", encoding="utf-8").write(t)
 PY
-out="$(python3 "$PLAN_V" --input "$tmp/ascii.md" 2>&1)" && fail "an ASCII dependency graph passed: $out"
-case "$out" in *"not a \`\`\`drawspec fence"*sync_plan_graph.py*) ;; *) fail "the ASCII graph refusal does not name the fix: $out" ;; esac
+out="$(python3 "$PLAN_V" --input "$tmp/ascii.md" 2>&1)" || fail "an ASCII dependency graph failed validation (it is a warning): $out"
+case "$out" in *"  ! dependency graph is a \`\`\`text block, not a \`\`\`drawspec fence"*sync_plan_graph.py*--apply*) ;; *) fail "the ASCII graph warning does not name the fix: $out" ;; esac
+case "$out" in *"✗"*) fail "an ASCII graph was reported as a problem: $out" ;; esac
 python3 "$GRAPH" --input "$tmp/ascii.md" --apply >/dev/null || fail "plan_graph could not replace an ASCII graph"
 grep -q '^```text' "$tmp/ascii.md" && fail "plan_graph --apply left the ASCII block in place"
-python3 "$PLAN_V" --input "$tmp/ascii.md" >/dev/null 2>&1 || fail "a replaced ASCII graph still fails"
+out="$(python3 "$PLAN_V" --input "$tmp/ascii.md" 2>&1)" || fail "a replaced ASCII graph still fails: $out"
+case "$out" in *"  ! "*) fail "a replaced ASCII graph still warns: $out" ;; esac
 
 python3 - "$TEMPLATE" "$tmp/nograph.md" <<'PY'
 import re, sys
@@ -86,7 +90,7 @@ t = open(sys.argv[1], encoding="utf-8").read()
 assert t.index("| T# | Description") < t.index("### Dependency graph") < t.index("## Evidence log"), t
 PY
 python3 "$PLAN_V" --input "$tmp/nograph.md" >/dev/null 2>&1 || fail "the added graph does not validate"
-echo "PASS: an ASCII graph is refused with its fix; a missing one is added in place"
+echo "PASS: an ASCII graph warns with its fix (exit 0); a missing one is added in place"
 
 # --- 5: a plan reader draws the graph (fake drawspec, no network) ---
 if python3 -c "import markdown" 2>/dev/null; then PY=(python3)
