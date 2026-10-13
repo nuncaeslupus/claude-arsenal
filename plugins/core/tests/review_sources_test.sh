@@ -347,4 +347,54 @@ ${out}"
 [[ $(grep -c '^api -X POST repos/.*/issues/7/comments' "${GH_LOG}") -eq 1 ]] || fail "the trigger is sent once, not per tick"
 echo "PASS: test_incident_replay_bounded (bot wait ends)"
 
+# --- test_trigger_acknowledgement_is_not_a_skip (#513) ------------------------
+# A bot that reviews only on request answers our trigger with an acknowledgement
+# before the review. Its explanatory text ("only when automatic reviews are
+# paused") matched a skip row, and a skip after a trigger read as final — so the
+# loop ended `bot_skipped` while the review was on its way.
+config 'review-bots = ["coderabbitai[bot]"]' 'bot-wait-min = 20' \
+       'bot-triggers = ["coderabbitai[bot]=@coderabbitai review"]'
+rm -rf "${repo}/tmp"; : > "${GH_LOG}"
+fx="${tmp}/fx-ack"; fixture "${fx}" "${HEAD}"
+st=$(qps "${fx}" 25 --trigger | jget state)
+[[ "${st}" == "waiting" ]] || fail "the trigger leaves the bot one more wait, got ${st}"
+cat > "${fx}/issue_comments.json" <<JSON
+[{"id":6134631698,"user":{"login":"coderabbitai[bot]"},"created_at":"$(at 26)","updated_at":"$(at 26)",
+  "body":"Review triggered.\n\n> Note: the bot is an incremental review system and does not re-review already reviewed commits. This command is applicable only when automatic reviews are paused."}]
+JSON
+out=$(rs "${fx}" 27) || fail "acknowledgement fixture: exit $?"
+line "bot:coderabbitai" <<<"${out}" | grep -q "pending" \
+    || fail "an acknowledgement of our trigger must keep the bot pending:
+${out}"
+st=$(qps "${fx}" 27 --trigger | jget state)
+[[ "${st}" == "waiting" ]] || fail "an acknowledged trigger must not end the loop, got ${st}"
+out=$(qps "${fx}" 50 --trigger)
+[[ "$(jget state <<<"${out}")" == "bot_absent" ]] \
+    || fail "silence one wait past the acknowledgement is bot_absent, not bot_skipped:
+${out}"
+[[ $(grep -c '^api -X POST repos/.*/issues/7/comments' "${GH_LOG}") -eq 1 ]] || fail "the trigger is sent once"
+# Any skip-worded notice after our trigger is an answer to it, not a final skip...
+cat > "${fx}/issue_comments.json" <<JSON
+[{"id":61,"user":{"login":"coderabbitai[bot]"},"created_at":"$(at 26)","updated_at":"$(at 26)",
+  "body":"Automatic reviews are disabled for this repository."}]
+JSON
+line "bot:coderabbitai" <<<"$(rs "${fx}" 27)" | grep -q "pending" \
+    || fail "a skip notice after our trigger must wait one bot-wait-min, not end the loop"
+# ...but a rate limit after it is final: the bot said it will not review.
+cat > "${fx}/issue_comments.json" <<JSON
+[{"id":62,"user":{"login":"coderabbitai[bot]"},"created_at":"$(at 26)","updated_at":"$(at 26)",
+  "body":"Rate limit exceeded: try again in 42 minutes."}]
+JSON
+line "bot:coderabbitai" <<<"$(rs "${fx}" 27)" | grep -q "unavailable *rate-limited:" \
+    || fail "a rate limit after our trigger stays final"
+# Without a trigger on record, the acknowledgement wording alone reads in-progress.
+rm -rf "${repo}/tmp"
+cat > "${fx}/issue_comments.json" <<JSON
+[{"id":63,"user":{"login":"coderabbitai[bot]"},"created_at":"$(at 2)","updated_at":"$(at 2)",
+  "body":"Review triggered. This command is applicable only when automatic reviews are paused."}]
+JSON
+line "bot:coderabbitai" <<<"$(rs "${fx}" 5)" | grep -q "pending" \
+    || fail "an acknowledgement row must classify in-progress ahead of the skip rows"
+echo "PASS: test_trigger_acknowledgement_is_not_a_skip"
+
 echo "PASS: review_sources_test — all gates passed"
