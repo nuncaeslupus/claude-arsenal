@@ -18,6 +18,35 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [5.10.0] - 2026-10-13
+
+- **`design` plans past drawspec's budget can be drawn again.** `sync_plan_graph.py`
+  now draws the Depends column's transitive reduction (an edge a longer path
+  already implies is left out), and a plan still past 15 nodes / 16 edges is
+  split into a phase overview plus one graph per phase, each within the budget.
+  `validate_plan.py` accepts a path for each dependency instead of a literal
+  edge, reads a split graph as one, and only **warns** on a fence too big to draw
+  — it no longer demands a graph `create_reader.py` refuses. Rerun
+  `sync_plan_graph.py --apply` on a plan whose reader stopped building.
+- **`create_reader.py` runs drawspec from PyPI.** The fallback after
+  `$ARSENAL_DRAWSPEC` and `drawspec` on PATH is now
+  `uvx --from 'drawspec>=0.2,<0.3' drawspec`, pinned so your reader does not
+  change under you; faster to fetch, and works where git over HTTPS is blocked.
+  `pip install drawspec` puts it on PATH.
+- **Review loop: a bot acknowledging your trigger is no longer read as a skip.**
+  `review_sources.py` classifies acknowledgements ("Review triggered", "review
+  requested/queued/started") as in progress, and anything a bot posts after the
+  loop's own trigger on the same head waits one `bot-wait-min` instead of ending
+  the loop `bot_skipped`; only a rate limit there is final. `pr-review-loop.md`
+  notes per-hour on-demand quotas: with several PRs open, trigger the one a bot
+  review is worth most on first.
+- **`pypi-release` documents an automated release** (`references/automated-release.md`):
+  a `release.yml` that publishes on a merged version bump (or a pushed `v*` tag,
+  checked against the version) with `twine check --strict`, PyPI trusted
+  publishing behind a `pypi` environment with a required reviewer, then
+  `gh release create` — plus the owner's one-time setup, SHA-pinned actions and
+  how to gate the release on green CI.
+
 ## [5.9.1] - 2026-10-13
 
 - `references/repo-housekeeping.md` now walks a package's **first publish** in
