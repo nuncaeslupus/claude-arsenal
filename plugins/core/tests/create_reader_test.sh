@@ -298,7 +298,7 @@ echo "PASS: drawspec fences render, validate first, fail loudly, and cost fence-
 
 #     One real render, when drawspec can be had here (PATH, or uvx and a network).
 if command -v drawspec >/dev/null 2>&1 || { command -v uvx >/dev/null 2>&1 && command -v timeout >/dev/null 2>&1 && \
-        timeout 180 uvx --quiet --from git+https://github.com/nuncaeslupus/drawspec drawspec --version \
+        timeout 180 uvx --quiet --from 'drawspec>=0.2,<0.3' drawspec --version \
         >/dev/null 2>&1; }; then
     sed -i 's/"BROKEN step"/"A step"/' "${tmp}/diagrams/plan.md"
     out=$(cd "${tmp}" && env -u ARSENAL_DRAWSPEC "${PY[@]}" "${READER}" --input "${tmp}/diagrams/plan.md" \
