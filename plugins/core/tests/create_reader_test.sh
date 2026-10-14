@@ -80,6 +80,10 @@ done
     || fail "workspace reader beta failed"
 names=$(find "${tmp}/ws" -name '*-reader.html' -printf '%f\n' | sort -u | wc -l)
 [[ ${names} -eq 2 ]] || fail "two specs built the same day share a file name: $(find "${tmp}/ws" -name '*-reader.html')"
+# ...and their notes must not share browser storage: every file:// page has one
+# localStorage origin, so one workspace's notes came up in the other's reader.
+ns_ws=$(find "${tmp}/ws" -name '*-reader.html' -exec grep -o "var NS = '[^']*'" {} \; | sort -u | wc -l)
+[[ ${ns_ws} -eq 2 ]] || fail "two workspace specs share a note namespace"
 
 # --- 1c: a bare <title> placeholder does not swallow the rest of the document (#517) ---
 printf '# T\n\n## One\n\nContinue with <title> here.\n\nAfter <script>x</script> it.\n\n## Two\n\nStill visible.\n' \
@@ -89,6 +93,15 @@ tags_html=$(find "${tmp}/tags" -name '*-reader.html' | head -1)
 grep -q 'Continue with &lt;title> here' "${tags_html}" || fail "a bare <title> was not escaped"
 grep -q 'After &lt;script>x&lt;/script> it' "${tags_html}" || fail "a bare <script> was not escaped"
 grep -q 'Still visible' "${tags_html}" || fail "content after a raw tag is missing"
+
+# --- 1d: a single document reads as one: flat contents, no repeated part band,
+#     and its `**Key**: value` header lines stay one per line ---
+grep -q 'class="toc-flat"' "${SPEC_HTML}" || fail "a single document's contents are nested under a part"
+grep -q 'class="part-title"' "${SPEC_HTML}" && fail "a single document repeats its title in a part band"
+printf '# H\n\n**Revision**: 2\n**Status**: draft\n\n## A\n\nText.\n' > "${tmp}/ws/fields.md"
+run_reader --input ws/fields.md --output-dir fields >/dev/null || fail "a document with header fields failed"
+grep -q '<strong>Revision</strong>: 2<br' "$(find "${tmp}/fields" -name '*-reader.html' | head -1)" \
+    || fail "header field lines ran together into one sentence"
 
 # --- 2: a title that strips to nothing still names a file ---
 #     `--name "项目"` left file_slug as `-spec`, and the download as
@@ -236,6 +249,8 @@ run_reader --input status/specification.md --output-dir status --name "Widget Ov
 V3_HTML="${tmp}/status/yourproject-spec-v3-${today}-reader.html"
 [[ -f "${V3_HTML}" ]] || fail "the reader filename does not carry the spec's revision: $(ls "${tmp}/status")"
 [[ ! -e "${SPEC_HTML}" ]] || fail "the v1 reader was left beside the v3 one"
+grep -q "var NS = '[^']*-spec-v3:'" "${V3_HTML}" \
+    || fail "revision 3 reuses an earlier revision's note namespace — applied notes come back"
 grep -q "'yourproject-spec-v3-'+stamp()+'-notes.md'" "${V3_HTML}" \
     || fail "the export filename does not carry the spec's revision"
 grep -q '<meta name="arsenal-source-sha256" content="[0-9a-f]\{64\}">' "${V3_HTML}" \

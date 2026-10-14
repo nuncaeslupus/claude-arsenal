@@ -206,10 +206,26 @@ def escape_swallowing_tags(html: str) -> str:
     return SWALLOWING_TAG_RE.sub(r"&lt;\1\2", html)
 
 
+FIELD_LINE_RE = re.compile(r"^\*\*[^*\n]+\*\*:")
+
+
+def break_field_lines(text: str) -> str:
+    """Keep a run of `**Key**: value` header lines one per line in HTML.
+
+    Markdown joins consecutive lines into one paragraph, so a spec's
+    `**Revision**` / `**Status**` lines rendered as a single run-on sentence.
+    """
+    lines = text.split("\n")
+    for i in range(len(lines) - 1):
+        if FIELD_LINE_RE.match(lines[i]) and FIELD_LINE_RE.match(lines[i + 1]):
+            lines[i] = lines[i].rstrip() + "  "
+    return "\n".join(lines)
+
+
 def render_md(text: str, where: str = "") -> str:
     text, diagrams = extract_drawspec(text)
     _md.reset()
-    html = escape_swallowing_tags(_md.convert(normalize_list_indent(text)))
+    html = escape_swallowing_tags(_md.convert(normalize_list_indent(break_field_lines(text))))
     for n, (token, source) in enumerate(diagrams, 1):
         label = f"{where}, drawspec block {n}" if where else f"drawspec block {n}"
         run_drawspec("validate", source, label)
@@ -653,10 +669,23 @@ def build_html(
     # `ns_key` is the output stem when it is not the kind: two design docs in
     # one folder are two readers, and a namespace keyed on the kind alone let
     # one's notes surface under the other's headings.
-    ls_ns = slug(title) + f"-{ns_key or doc_slug}-v1:"
+    # The revision is part of it too. Every file:// page shares one localStorage
+    # origin, so a namespace fixed at `-v1` brought revision N's notes, already
+    # applied, back into revision N+1's empty fields. A rebuild of the same
+    # revision keeps its notes; carrying unapplied ones forward is `--notes`.
+    ls_ns = slug(title) + f"-{ns_key or doc_slug}-v{doc_version(parts)}:"
 
+    # One document is one part: its sections go straight into the contents and
+    # under the page title, without a part band repeating the title a third time.
+    single = len(parts) == 1
     toc = ['<details class="toc" open><summary>Contents</summary>']
-    for _kind, p in parts:
+    if single:
+        toc.append('<ul class="toc-flat">')
+        for it in parts[0][1]["items"]:
+            cls = "" if it["level"] == 2 else ' class="sub"'
+            toc.append(f'<li{cls}><a href="#{it["domid"]}">{esc(it["toc"])}</a></li>')
+        toc.append("</ul>")
+    for _kind, p in [] if single else parts:
         head = esc(p["title"])
         if p["part_label"] != single_label:
             head = f"{esc(p['part_label'])} — {head}"
@@ -676,10 +705,11 @@ def build_html(
         badge_cls = kind
         badge_label = p["part_label"]
         body.append('<section class="part">')
-        body.append(
-            f'<h2 class="part-title"><span class="badge {badge_cls}">{esc(badge_label)}</span>'
-            f"{part_head}</h2>"
-        )
+        if not single:
+            body.append(
+                f'<h2 class="part-title"><span class="badge {badge_cls}">{esc(badge_label)}</span>'
+                f"{part_head}</h2>"
+            )
         for it in p["items"]:
             tag = "h3" if it["level"] == 2 else "h4"
             noted = has_note_field(it, seed_notes)
@@ -807,6 +837,8 @@ CSS = r"""
   --card:#ffffff;--accent:#0f766e;--accent2:#9a4a0b;--chip:#e8efed;
   --note:#fffaf0;--note-line:#d9a441;--note-fg:#7a3b06;--code:#f1eee8;--link:#0f766e;
   --measure:70ch;
+  --serif:Charter,"Bitstream Charter","Iowan Old Style","Sitka Text",Cambria,Georgia,serif;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
 }
 @media(prefers-color-scheme:dark){
   :root{
@@ -819,9 +851,14 @@ CSS = r"""
 html{-webkit-text-size-adjust:100%}
 body{
   margin:0;background:var(--bg);color:var(--fg);
-  font:17px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  font:17px/1.65 var(--sans);
   padding-bottom:96px;
 }
+/* The document reads in a book face; the reader's own chrome (bars, buttons,
+   headings, notes) stays in the UI face, so the two never blur together. */
+.sec-body{font-family:var(--serif);font-size:1.06em;line-height:1.7}
+.sec-body table,.sec-body pre{font-family:var(--sans)}
+.sec-body pre{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
 .wrap{max-width:calc(var(--measure) + 120px);margin:0 auto;padding:0 16px}
 a{color:var(--link);text-underline-offset:2px}
 code{background:var(--code);padding:.08em .35em;border-radius:5px;font-size:.86em;
@@ -850,8 +887,8 @@ pre code{background:none;padding:0;font-size:1em}
 #warnbar{display:none;background:#fff4e5;border-bottom:1px solid var(--note-line);color:#7c2d12}
 #warnbar .wrap{padding:10px 16px;font-size:13px;line-height:1.45}
 @media(prefers-color-scheme:dark){#warnbar{background:#3a2a0e;color:#fde68a;border-color:#6b531c}}
-.hero{padding:26px 0 6px}
-.hero h1{font-size:1.75rem;line-height:1.2;margin:.1em 0 .3em;letter-spacing:-.01em}
+.hero{padding:34px 0 8px}
+.hero h1{font-size:2rem;line-height:1.15;margin:.1em 0 .3em;letter-spacing:-.02em}
 .hero p{color:var(--muted);margin:.3em 0;max-width:var(--measure)}
 .help{border:1px solid var(--line);background:var(--card);border-radius:12px;padding:4px 14px;margin:14px 0}
 .help summary{cursor:pointer;font-weight:600;padding:10px 0}
@@ -863,7 +900,11 @@ pre code{background:none;padding:0;font-size:1em}
 .toc-part>summary{cursor:pointer;padding:9px 2px;font-weight:600;font-size:14px}
 .toc-part ul{margin:.1em 0 .7em;padding-left:1.1em}
 .toc-part li{margin:.22em 0;font-size:13.5px;line-height:1.4}
-.toc-part a{text-decoration:none}
+.toc-part a,.toc-flat a{text-decoration:none}
+.toc-flat{margin:.1em 0 .8em;padding-left:1.1em}
+.toc-flat li{margin:.25em 0;font-size:14px;line-height:1.4;break-inside:avoid}
+.toc-flat li.sub{margin-left:1.1em;font-size:13px}
+.toc-flat a:hover{text-decoration:underline}
 .toc-part a:hover{text-decoration:underline}
 .part{margin:30px 0}
 .part-title{font-size:1.45rem;line-height:1.25;border-bottom:2px solid var(--accent);
@@ -875,7 +916,7 @@ pre code{background:none;padding:0;font-size:1em}
 /* Two heading levels, told apart by size, weight and a rule: a ## section opens
    with a full-width rule; a ### section sits indented under it on a side rule. */
 .sec{scroll-margin-top:72px}
-.sec.l2{padding:14px 0 4px;border-top:1px solid var(--line);margin-top:10px}
+.sec.l2{padding:22px 0 6px;border-top:1px solid var(--line);margin-top:18px}
 .part>.sec.l2:first-of-type{border-top:none;margin-top:0}
 .sec.l3{margin:6px 0 6px 2px;padding:2px 0 2px 14px;border-left:3px solid var(--line)}
 .sec-h{margin:6px 0 8px;line-height:1.3}
@@ -897,25 +938,38 @@ h4 .chip{font-size:11px;color:var(--muted)}
 .sec-body blockquote p{margin:.3em 0}
 .sec-body figure.drawspec{margin:.8em 0;overflow-x:auto}
 .sec-body figure.drawspec svg{display:block;max-width:100%;height:auto;margin:0 auto}
-.sec-body table{border-collapse:collapse;font-size:13.5px;line-height:1.45;margin:.6em 0;
-  display:block;max-width:100%;overflow-x:auto}
-.sec-body th,.sec-body td{border:1px solid var(--line);padding:6px 9px;text-align:left;vertical-align:top}
-.sec-body th{background:var(--chip);font-weight:700}
+.sec-body table{border-collapse:separate;border-spacing:0;font-size:14px;line-height:1.45;margin:.8em 0;
+  display:block;width:max-content;max-width:100%;overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--card)}
+.sec-body th,.sec-body td{border-bottom:1px solid var(--line);padding:8px 12px;text-align:left;vertical-align:top}
+.sec-body tr:last-child td{border-bottom:none}
+.sec-body tbody tr:nth-child(even) td{background:color-mix(in srgb,var(--chip) 45%,transparent)}
+.sec-body th{background:var(--chip);font-weight:700;font-size:12.5px;letter-spacing:.02em}
 .sec-body strong{font-weight:700}
 /* The note field: the one thing on the page that is the reviewer's, so it must
-   not read as more document. Dashed while empty, solid once written in. */
-.note{max-width:var(--measure);background:var(--note);border:1.5px dashed var(--note-line);
-  border-left:4px solid var(--note-line);border-radius:10px;padding:8px 12px;margin:12px 0 18px}
-.note:focus-within{border-style:solid;box-shadow:0 0 0 3px color-mix(in srgb,var(--note-line) 30%,transparent)}
-.note-head{display:flex;align-items:center;gap:8px;margin-bottom:2px;cursor:text}
+   not read as more document — but an empty one must not shout over the text
+   either. Empty: a quiet dashed margin slip. Focused: it opens into a writing
+   card. Written in: a solid amber card that stands out on a skim. */
+.note{max-width:var(--measure);background:transparent;border:1.5px dashed var(--note-line);
+  border-radius:10px;padding:6px 12px;margin:14px 0 20px;opacity:.78;
+  transition:background .15s,box-shadow .15s,opacity .15s,padding .15s}
+.note:hover{opacity:1}
+.note:focus-within,.note.filled{opacity:1;background:var(--note);border-style:solid;
+  border-left:4px solid var(--note-line);padding:10px 14px}
+.note:focus-within{box-shadow:0 0 0 3px color-mix(in srgb,var(--note-line) 28%,transparent),0 6px 20px #0000000f}
+.note-head{display:flex;align-items:center;gap:8px;cursor:text}
 .note-ico{color:var(--note-fg);font-weight:800}
-.note-label{font-size:11.5px;font-weight:800;color:var(--note-fg);text-transform:uppercase;letter-spacing:.06em}
+.note-label{font-size:11px;font-weight:800;color:var(--note-fg);text-transform:uppercase;letter-spacing:.07em}
 .note-ref{margin-left:auto;font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:var(--muted);
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
-.note-ta{width:100%;border:none;background:transparent;color:var(--fg);font:inherit;font-size:16px;
-  resize:none;outline:none;line-height:1.5;padding:2px 0;overflow:hidden;min-height:1.6em}
-.note-ta::placeholder{color:var(--muted);opacity:1}
-.note.filled{border-style:solid}
+/* While empty the label row collapses into the placeholder line beside the icon. */
+.note:not(.filled):not(:focus-within){display:flex;align-items:center;gap:8px}
+.note:not(.filled):not(:focus-within) .note-label,
+.note:not(.filled):not(:focus-within) .note-ref{display:none}
+.note:focus-within .note-head,.note.filled .note-head{margin-bottom:4px}
+.note-ta{display:block;width:100%;border:none;background:transparent;color:var(--fg);font:inherit;font-size:16px;
+  resize:none;outline:none;line-height:1.55;padding:2px 0;overflow:hidden;min-height:1.6em}
+.note:focus-within .note-ta{min-height:4.8em}
+.note-ta::placeholder{color:var(--muted);opacity:1;font-style:italic}
 .fab{position:fixed;right:14px;bottom:16px;z-index:40;display:flex;flex-direction:column;gap:8px;align-items:flex-end}
 .fab .btn{box-shadow:0 4px 14px #0003}
 .modal{position:fixed;inset:0;z-index:60;background:#0008;display:none;align-items:center;justify-content:center;padding:16px}
@@ -1236,6 +1290,7 @@ def _main() -> int:
     cwd = Path.cwd()
     single_label, doc_slug = DEFAULT_DOC_KIND[1], DEFAULT_DOC_KIND[2]
     out_base = ""
+    ns_key = ""
 
     if args.input:
         spec_path = Path(args.input)
@@ -1249,6 +1304,12 @@ def _main() -> int:
         # one `spec-reader.html`, and each regeneration would stale the other.
         if spec_path.stem.lower() not in CANONICAL_STEMS:
             out_base = spec_path.stem
+        # Workspace specs are all `spec.md`: without the workspace in the key,
+        # one workspace's notes came up in another's reader.
+        ws_name = spec_path.resolve().parent.name
+        ns_key = out_base or (
+            f"{slug(ws_name)}-{doc_slug}" if ws_name not in ("status", cwd.resolve().name) else ""
+        )
         default_out = spec_path.parent
     elif args.input_dir:
         ws_dir = Path(args.input_dir)
@@ -1327,7 +1388,7 @@ def _main() -> int:
         seed_notes,
         single_label,
         doc_slug,
-        ns_key=out_base or None,
+        ns_key=ns_key or out_base or None,
         export_stem=export_stem,
     )
     md_out = build_markdown(parts, title, gen_date, seed_notes, single_label)
