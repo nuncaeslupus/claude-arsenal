@@ -22,6 +22,9 @@ init_py="${here}/../skills/init/scripts/init.py"
 tmp="$(mktemp -d)" || { echo "FAIL: mktemp -d failed" >&2; exit 1; }
 trap 'rm -rf "$tmp"' EXIT
 fail() { echo "FAIL: $1" >&2; exit 1; }
+# Pin the clock (read as UTC) so the reader's `<YYYY-MM-DD-HHMM>` stamp is known.
+export SOURCE_DATE_EPOCH=1760462100
+stamp=$(date -u -d "@${SOURCE_DATE_EPOCH}" +%F-%H%M)
 
 repo="$tmp/yourproject"
 mkdir -p "$repo/status" "$repo/src"
@@ -78,9 +81,9 @@ if [ ${#PY[@]} -gt 0 ]; then
         --output-dir status --name yourproject >/dev/null 2>&1) || fail "create_reader failed"
     rm -f "$repo/status/plan-reader.html"
     gate >/dev/null 2>&1 || fail "gate refused the dated reader create_reader just built"
-    plan_html="$repo/status/yourproject-plan-v1-$(date +%F)-reader.html"
+    plan_html="$repo/status/yourproject-plan-v1-${stamp}-reader.html"
     [ -f "$plan_html" ] || fail "#505: the plan reader is not named <repo>-plan-v<N>-<date>: $(ls "$repo/status")"
-    grep -q "'yourproject-plan-v1-'+today()+'-notes.md'" "$plan_html" \
+    grep -q "'yourproject-plan-v1-'+stamp()+'-notes.md'" "$plan_html" \
         || fail "#468/#505: the export name does not carry the plan's revision"
     echo "PASS: create_reader's dated reader satisfies the gate and names its export v<N>"
 
@@ -94,8 +97,8 @@ if [ ${#PY[@]} -gt 0 ]; then
         (cd "$repo" && "${PY[@]}" "$assets/scripts/create_reader.py" --input "$d"/2026-*-"$f"-design.md \
             --output-dir "$d" --name yourproject >/dev/null 2>&1) || fail "create_reader failed on $f"
     done
-    ra="$repo/$d/yourproject-2026-01-01-a-design-v1-$(date +%F)-reader.html"
-    rb="$repo/$d/yourproject-2026-01-02-b-design-v1-$(date +%F)-reader.html"
+    ra="$repo/$d/yourproject-2026-01-01-a-design-v1-${stamp}-reader.html"
+    rb="$repo/$d/yourproject-2026-01-02-b-design-v1-${stamp}-reader.html"
     [ -f "$ra" ] && [ -f "$rb" ] \
         || fail "a non-canonical doc's reader is not named for its stem: $(ls "$repo/$d")"
     ls "$repo/$d" | grep -q -- "-spec-v" && fail "a non-canonical doc still writes a spec reader"
@@ -176,8 +179,10 @@ case "$out" in *"2026-01-02-r1"*) fail "downloads reported an export the repo al
 # The reader's own naming (#505): <repo>-<doc>-v<N>-<date>-notes.md
 echo n > "$fake_home/Descargas/yourproject-plan-v2-2026-01-06-notes.md"
 echo n > "$fake_home/Descargas/otherproject-plan-v2-2026-01-06-notes.md"
+echo n > "$fake_home/Descargas/yourproject-spec-v3-2026-01-07-1735-notes.md"
 out="$(cd "$repo" && HOME="$fake_home" XDG_DOWNLOAD_DIR= python3 "$CHECK" downloads)"
 case "$out" in *"yourproject-plan-v2-2026-01-06-notes.md"*) ;; *) fail "downloads missed a dated export: $out" ;; esac
+case "$out" in *"yourproject-spec-v3-2026-01-07-1735-notes.md"*) ;; *) fail "downloads missed an HHMM-stamped export: $out" ;; esac
 case "$out" in *otherproject*) fail "downloads reported another project's dated export: $out" ;; esac
 echo "PASS: an uncommitted export left in a Downloads folder is named"
 

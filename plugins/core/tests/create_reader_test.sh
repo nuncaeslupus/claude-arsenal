@@ -32,7 +32,9 @@ tmp="${base}/yourproject"
 mkdir -p "${tmp}"
 trap 'rm -rf "${base}"' EXIT
 fail() { echo "FAIL: $1" >&2; exit 1; }
-today=$(date +%F)
+# Pin the clock (read as UTC) so the `<YYYY-MM-DD-HHMM>` stamp in every name is known.
+export SOURCE_DATE_EPOCH=1760462100
+today=$(date -u -d "@${SOURCE_DATE_EPOCH}" +%F-%H%M)
 SPEC_HTML="${tmp}/status/yourproject-spec-v1-${today}-reader.html"
 SPEC_MD="${tmp}/status/yourproject-spec-v1-${today}-annotated.md"
 
@@ -55,13 +57,38 @@ run_reader() { (cd "${tmp}" && "${PY[@]}" "${READER}" "$@" 2>&1); }
 
 # --- 1: the reader and its export say what they are: repo, doc, version, date (#505) ---
 echo "an older reader" > "${tmp}"/status/spec-reader.html
+echo "a date-only reader" > "${tmp}"/status/yourproject-spec-v1-2026-01-02-reader.html
 run_reader --input status/specification.md --output-dir status --name "Widget Overhaul" >/dev/null \
     || fail "generating a reader failed"
 [[ -f "${SPEC_HTML}" && -f "${SPEC_MD}" ]] \
-    || fail "outputs are not named <repo>-<doc>-v<N>-<date>: $(ls "${tmp}/status")"
-grep -q "'yourproject-spec-v1-'+today()+'-notes.md'" "${SPEC_HTML}" \
+    || fail "outputs are not named <repo>-<doc>-v<N>-<YYYY-MM-DD-HHMM>: $(ls "${tmp}/status")"
+grep -q "'yourproject-spec-v1-'+stamp()+'-notes.md'" "${SPEC_HTML}" \
     || fail "the export filename does not follow the reader's naming"
 [[ ! -e "${tmp}"/status/spec-reader.html ]] || fail "the undated reader it supersedes was left behind"
+[[ ! -e "${tmp}"/status/yourproject-spec-v1-2026-01-02-reader.html ]] \
+    || fail "a date-only reader from before the HHMM stamp was left behind"
+
+# --- 1b: two workspace specs built the same day get different names (#517) ---
+for ws in alpha beta; do
+    mkdir -p "${tmp}/ws/${ws}"; printf '# %s\n\n## Goal\n\nText.\n' "${ws}" > "${tmp}/ws/${ws}/spec.md"
+done
+# Each lands beside its own spec; the collision was in the Downloads folder both
+# end up in, so it is the basenames that must differ.
+(SOURCE_DATE_EPOCH=1760462100 run_reader --input ws/alpha/spec.md >/dev/null) \
+    || fail "workspace reader alpha failed"
+(SOURCE_DATE_EPOCH=1760462400 run_reader --input ws/beta/spec.md >/dev/null) \
+    || fail "workspace reader beta failed"
+names=$(find "${tmp}/ws" -name '*-reader.html' -printf '%f\n' | sort -u | wc -l)
+[[ ${names} -eq 2 ]] || fail "two specs built the same day share a file name: $(find "${tmp}/ws" -name '*-reader.html')"
+
+# --- 1c: a bare <title> placeholder does not swallow the rest of the document (#517) ---
+printf '# T\n\n## One\n\nContinue with <title> here.\n\nAfter <script>x</script> it.\n\n## Two\n\nStill visible.\n' \
+    > "${tmp}/ws/tags.md"
+run_reader --input ws/tags.md --output-dir tags >/dev/null || fail "a document with raw tags failed"
+tags_html=$(find "${tmp}/tags" -name '*-reader.html' | head -1)
+grep -q 'Continue with &lt;title> here' "${tags_html}" || fail "a bare <title> was not escaped"
+grep -q 'After &lt;script>x&lt;/script> it' "${tags_html}" || fail "a bare <script> was not escaped"
+grep -q 'Still visible' "${tags_html}" || fail "content after a raw tag is missing"
 
 # --- 2: a title that strips to nothing still names a file ---
 #     `--name "项目"` left file_slug as `-spec`, and the download as
@@ -201,7 +228,7 @@ out=$(run_reader --input status/specification.md --output-dir status --notes sta
 #     No `**Revision**` line (the spec above) keeps the old name; one adds -r<N>.
 run_reader --input status/specification.md --output-dir status --name "Widget Overhaul" >/dev/null \
     || fail "regenerating the reader failed"
-grep -q "'yourproject-spec-v1-'+today()+'-notes.md'" "${SPEC_HTML}" \
+grep -q "'yourproject-spec-v1-'+stamp()+'-notes.md'" "${SPEC_HTML}" \
     || fail "a spec with no Revision header should be named version 1"
 sed -i 's/^Intro prose.$/**Revision**: 3\n\nIntro prose./' "${tmp}/status/specification.md"
 run_reader --input status/specification.md --output-dir status --name "Widget Overhaul" >/dev/null \
@@ -209,7 +236,7 @@ run_reader --input status/specification.md --output-dir status --name "Widget Ov
 V3_HTML="${tmp}/status/yourproject-spec-v3-${today}-reader.html"
 [[ -f "${V3_HTML}" ]] || fail "the reader filename does not carry the spec's revision: $(ls "${tmp}/status")"
 [[ ! -e "${SPEC_HTML}" ]] || fail "the v1 reader was left beside the v3 one"
-grep -q "'yourproject-spec-v3-'+today()+'-notes.md'" "${V3_HTML}" \
+grep -q "'yourproject-spec-v3-'+stamp()+'-notes.md'" "${V3_HTML}" \
     || fail "the export filename does not carry the spec's revision"
 grep -q '<meta name="arsenal-source-sha256" content="[0-9a-f]\{64\}">' "${V3_HTML}" \
     || fail "the reader does not record the digest of the source it rendered"
