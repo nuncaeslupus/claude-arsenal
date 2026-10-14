@@ -246,6 +246,36 @@ done
     || { echo "FAIL: autonomy should default to ask-when-blocked" >&2; exit 1; }
 echo "PASS: test_init_interview_skipped_writes_defaults"
 
+# test_init_attribution_badge — the README gets the "built with claude-arsenal"
+# badge under its title once; a re-run refreshes it in place, a host that deletes
+# it keeps it deleted, and `attribution = false` keeps it out.
+credited="${tmpdir}/attribution"
+mkdir -p "${credited}"; printf '# Proj\nIntro.\n' > "${credited}/README.md"
+run_init() { python3 "${INIT_PY}" --repo-path "$1" --bundle-dir "${BUNDLE_DIR}" --silent >/dev/null; }
+run_init "${credited}"
+[[ "$(sed -n 3p "${credited}/README.md")" == "<!-- claude-arsenal:attribution"* ]] \
+    || { echo "FAIL: badge not placed under the title" >&2; cat "${credited}/README.md" >&2; exit 1; }
+grep -q 'github.com/nuncaeslupus/claude-arsenal' "${credited}/README.md" \
+    || { echo "FAIL: badge does not link the project" >&2; exit 1; }
+[[ "$(sed -n 6,7p "${credited}/README.md")" == $'\nIntro.' ]] \
+    || { echo "FAIL: badge runs into the next paragraph" >&2; cat "${credited}/README.md" >&2; exit 1; }
+[[ "$(python3 "${CFG_PY}" --repo-root "${credited}" --get attribution)" == "True" ]] \
+    || { echo "FAIL: attribution not recorded" >&2; exit 1; }
+run_init "${credited}"
+[[ "$(grep -c 'claude-arsenal:attribution' "${credited}/README.md")" == "2" ]] \
+    || { echo "FAIL: a re-run duplicated the badge" >&2; exit 1; }
+printf '# Proj\nIntro.\n' > "${credited}/README.md"
+run_init "${credited}"
+! grep -q 'claude-arsenal:attribution' "${credited}/README.md" \
+    || { echo "FAIL: a deleted badge was put back" >&2; exit 1; }
+declined="${tmpdir}/attribution-off"
+mkdir -p "${declined}/arsenal"; printf '# Proj\n' > "${declined}/README.md"
+echo 'attribution = false' > "${declined}/arsenal/config.toml"
+run_init "${declined}"
+! grep -q 'claude-arsenal:attribution' "${declined}/README.md" \
+    || { echo "FAIL: attribution = false still added the badge" >&2; exit 1; }
+echo "PASS: test_init_attribution_badge"
+
 # test_init_interview_answers_written
 answered="${tmpdir}/interview-answered"
 mkdir -p "${answered}"; echo "# Answered" > "${answered}/CLAUDE.md"

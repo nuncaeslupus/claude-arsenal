@@ -20,6 +20,12 @@ Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
 ## [5.10.0] - 2026-10-13
 
+- **`/init` credits claude-arsenal in your README.** It adds a "built with
+  claude-arsenal" badge, linking the project, under `README.md`'s title, once,
+  between `claude-arsenal:attribution` markers that later refreshes update in
+  place. It works like a license notice you are free to drop: delete the block
+  and it is not put back, or set `attribution = false` in `arsenal/config.toml`
+  before it is added. Commit the README change with the refresh.
 - **`design` plans past drawspec's budget can be drawn again.** `sync_plan_graph.py`
   now draws the Depends column's transitive reduction (an edge a longer path
   already implies is left out), and a plan still past 15 nodes / 16 edges is
