@@ -26,7 +26,7 @@ The Export button names its download the same way, with the export's date:
 A fenced ```drawspec block (a drawspec JSON document) is validated and rendered to
 inline SVG in the HTML; the annotated Markdown keeps the JSON source. The command is
 $ARSENAL_DRAWSPEC when set, else `drawspec` on PATH, else `uvx --from
-git+https://github.com/nuncaeslupus/drawspec drawspec`. A diagram that fails
+'drawspec>=0.2,<0.3' drawspec` (PyPI). A diagram that fails
 validation, or no way to run drawspec, fails the run — nothing is written. A document
 with no drawspec fence never runs it.
 The HTML carries a digest of every source it rendered, which is how
@@ -103,7 +103,8 @@ def normalize_list_indent(text: str) -> str:
 # diagram means, laid out and rendered by the tool — rather than as hand-written SVG
 # or ASCII art. The HTML reader shows the render; the Markdown keeps the source.
 DRAWSPEC_ENV = "ARSENAL_DRAWSPEC"
-DRAWSPEC_REPO = "git+https://github.com/nuncaeslupus/drawspec"
+# PyPI, pinned to a known-good range so a host's reader does not change under it.
+DRAWSPEC_PACKAGE = "drawspec>=0.2,<0.3"
 DRAWSPEC_OPEN_RE = re.compile(r"^(?P<ind>[ \t]*)(?P<fence>`{3,}|~{3,})[ \t]*drawspec[ \t]*$")
 _drawspec_cmd: list[str] | None = None
 
@@ -113,7 +114,7 @@ class DrawspecError(Exception):
 
 
 def drawspec_command() -> list[str]:
-    """$ARSENAL_DRAWSPEC, else `drawspec` on PATH, else uvx from the git repo."""
+    """$ARSENAL_DRAWSPEC, else `drawspec` on PATH, else uvx from PyPI (pinned range)."""
     global _drawspec_cmd
     if _drawspec_cmd is not None:
         return _drawspec_cmd
@@ -125,12 +126,12 @@ def drawspec_command() -> list[str]:
     elif shutil.which("drawspec"):
         cmd = ["drawspec"]
     elif shutil.which("uvx"):
-        cmd = ["uvx", "--quiet", "--from", DRAWSPEC_REPO, "drawspec"]
+        cmd = ["uvx", "--quiet", "--from", DRAWSPEC_PACKAGE, "drawspec"]
     else:
         raise DrawspecError(
             "this document has ```drawspec diagrams, and drawspec cannot be run here. "
-            f"Install uv (uvx runs it from {DRAWSPEC_REPO}), put `drawspec` on PATH, "
-            f"or set ${DRAWSPEC_ENV} to the command"
+            f"Install uv (uvx runs {DRAWSPEC_PACKAGE!r} from PyPI), `pip install drawspec` "
+            f"to put it on PATH, or set ${DRAWSPEC_ENV} to the command"
         )
     _drawspec_cmd = cmd
     return cmd

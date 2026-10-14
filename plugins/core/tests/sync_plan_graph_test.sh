@@ -124,9 +124,9 @@ fi
 real=()
 if command -v drawspec >/dev/null 2>&1; then real=(drawspec)
 elif command -v uvx >/dev/null 2>&1 && command -v timeout >/dev/null 2>&1 && \
-        timeout 180 uvx --quiet --from git+https://github.com/nuncaeslupus/drawspec drawspec --version \
+        timeout 180 uvx --quiet --from 'drawspec>=0.2,<0.3' drawspec --version \
         >/dev/null 2>&1; then
-    real=(uvx --quiet --from git+https://github.com/nuncaeslupus/drawspec drawspec)
+    real=(uvx --quiet --from 'drawspec>=0.2,<0.3' drawspec)
 fi
 if [ ${#real[@]} -gt 0 ]; then
     sed '1d;$d' "$tmp/block.txt" > "$tmp/graph.json"
