@@ -63,7 +63,7 @@ import shlex
 import shutil
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 try:
@@ -451,7 +451,7 @@ def generation_time() -> datetime:
     """Now, local time — or $SOURCE_DATE_EPOCH (UTC) when set, for reproducible output."""
     epoch = os.environ.get("SOURCE_DATE_EPOCH", "").strip()
     if epoch.isdigit():
-        return datetime.fromtimestamp(int(epoch), tz=timezone.utc)
+        return datetime.fromtimestamp(int(epoch), tz=UTC)
     return datetime.now()
 
 
