@@ -18,6 +18,30 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [5.10.1] - 2026-10-14
+
+- **Spec and plan readers no longer share a name across documents (#517).**
+  Readers and their exports are stamped to the minute,
+  `<repo>-<doc>-v<N>-<YYYY-MM-DD-HHMM>-reader.html` / `-notes.md`, so two
+  workspace specs reviewed the same day stay apart in Downloads. Earlier
+  date-only readers are still cleaned up and still recognised by the
+  validators. `SOURCE_DATE_EPOCH` pins the stamp.
+- **A bare placeholder no longer hides the rest of the reader.** Raw
+  `<title>`, `<script>`, `<style>`, `<textarea>` and similar tags outside code
+  are shown as text instead of swallowing everything after them.
+- **Opening a reader no longer fills it with old notes.** Notes saved in the
+  browser are keyed on the document's revision and, for workspace specs, the
+  workspace. Notes already applied to revision N no longer reappear in revision
+  N+1's reader, and one workspace's notes no longer show up in another's. To
+  carry unapplied notes forward, use `--notes <export>` as before. Notes typed
+  into a reader built before this update are not shown by a rebuilt one, so
+  export them first.
+- **The reader is easier to read and to annotate.** The document is set in a
+  book face. Empty note fields are a quiet single line that opens into a
+  writing card on focus, and a written note stands out as a solid card. A
+  single document gets flat contents with no repeated title band. Tables are
+  tidier, and `**Revision**` / `**Status**` header lines stay one per line.
+
 ## [5.10.0] - 2026-10-13
 
 - **`/init` credits claude-arsenal in your README.** It adds a "built with
