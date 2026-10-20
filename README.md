@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/nuncaeslupus/claude-arsenal/main/docs/hero.png" width="100%" alt="claude-arsenal: an engineering sheet with the wordmark, a terminal installing the marketplace and running a RED, GREEN, RECORD gate check, the three plugins, and the spec-driven pipeline from explore-idea to ship">
+  <img src="https://raw.githubusercontent.com/nuncaeslupus/claude-arsenal/main/docs/hero.png" width="100%" alt="claude-arsenal: an engineering sheet with the wordmark, a terminal installing the marketplace and running a RED, GREEN, RECORD gate check, the plugins, and the spec-driven pipeline from explore-idea to ship">
 </p>
 
 **A Claude Code plugin marketplace that makes the agent work like an engineer: specs before code, tests before implementations, and a gated task queue several agents can work in parallel.**
@@ -142,7 +142,7 @@ Merging follows `merge-policy` in `arsenal/config.toml`. Full protocol:
 - **Queue as a DAG.** Tasks are files under `arsenal/tasks/`, read from the default branch, so every agent computes the same order. Issues are handles, not copies. A shipped Actions workflow releases abandoned claims and creates missing handles.
 - **Parallel workers.** An orchestrator runs up to `ARSENAL_MAX_WORKERS` workers, each in its own git worktree, behind a quota guard that stops before a rate-limit window is exhausted.
 - **Skill rubric.** `skill-workshop` checks skills against structural and content-quality rubrics drawn from [a research archive](docs/research/claude-skill-system_v1.17.md). A PreToolUse hook blocks edits inside `skills/` until it is loaded.
-- **Context budget.** `make context-budget` measures what an install costs every session; CI fails above 5,000 resident tokens.
+- **Context budget.** `make context-budget` measures what an install costs every session; CI fails when it goes over the set budget.
 
 ## Usage
 
