@@ -544,6 +544,35 @@ grep -q "over1000 count=1000 truncated=True" <<<"${out}" \
     || fail "more than 1,000 records must still be reported as truncated: ${out}"
 echo "PASS: truncation is proven by page 11, not guessed from a full page 10"
 
+# Gate 13b: matching-refs ignores `page`, so it is read with ONE request. Paged,
+# 121 claim refs came back as 1,210 records flagged truncated, and prune-claims
+# 422'd on every duplicate DELETE.
+out=$(HOOKS="${HOOKS}" python3 - <<'PY' 2>&1
+import importlib.util, os, sys
+
+spec = importlib.util.spec_from_file_location("queue_hooks", os.environ["HOOKS"])
+mod = importlib.util.module_from_spec(spec)
+sys.modules["queue_hooks"] = mod
+spec.loader.exec_module(mod)
+
+api = mod.Api.__new__(mod.Api)
+api.repo, api.token, api.truncated = "o/r", "t", False
+whole = [{"ref": f"refs/heads/arsenal/claims/t-{n:04x}"} for n in range(121)]
+calls = []
+api.request = lambda method, path, data=None: calls.append(path) or list(whole)
+refs = api.matching_refs("arsenal/claims")
+print(f"refs={len(refs)} calls={len(calls)} truncated={api.truncated}")
+plan = mod.plan_prune_claims(
+    whole + whole, [{"id": "t-0000", "status": "done"}], prefix="arsenal/claims"
+)
+print(f"deletes={len(plan)}")
+PY
+)
+grep -q "refs=121 calls=1 truncated=False" <<<"${out}" \
+    || fail "matching-refs must be one request, never paged: ${out}"
+grep -q "deletes=1$" <<<"${out}" || fail "a ref listed twice must be deleted once: ${out}"
+echo "PASS: matching-refs is read in one request; duplicate refs plan one delete"
+
 # Gate 14: pr-closed never reads a truncated listing as "this task has no
 # handle". The handle may simply have sat past the pagination cap, and treating
 # it as absent leaves a merged task closing nothing and its issue open and
