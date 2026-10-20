@@ -15,6 +15,7 @@ number points to, and holds the ones for a slow gate and a slow review round.
 - [Phases: reading an `a:b` row](#phases-reading-an-ab-row) — what is inside a boundary, and recording your own
 - [What these numbers cannot tell you](#what-these-numbers-cannot-tell-you) — and how to get the rest
 - [Making the gate faster](#making-the-gate-faster) — parallel tests, the long pole, spawn-bound suites, caching inputs, cheaper tests, not adding tests the suite has to carry
+- [Time from PR to merge](#time-from-pr-to-merge) — what a change waits for, measured, and what cut it
 - [Making a review round cheaper](#making-a-review-round-cheaper) — recording checks already run, scoping mutation runs
 
 ---
@@ -255,6 +256,18 @@ of all test time. The repeated fixes, in the order they paid:
   code point, every combination) is worth it when the property cannot be
   sampled. Note its runtime beside it, keep the per-item work minimal, and
   prefer a derived representative set when the space has a known structure.
+- **Regenerate only what the test reads.** A test that rebuilds every
+  generated artefact before checking one of them pays for all of them. Rebuild
+  only the inputs it reads; on one suite that took a file from 47 s to 15 s.
+- **Rank files serially.** Per-file times taken under parallel workers include
+  CPU contention and overstate each file's cost. Rank with one worker (`-n0`),
+  then confirm the saving under the real worker count.
+- **Leave a test alone when its cost is the product's own measurement.** A
+  timing, a corpus pass or a benchmark that the product ships is the thing
+  being tested; shrinking it tests something else.
+- **Run locally on the interpreter CI runs.** A newer standard library can
+  change behaviour (one suite failed fifteen tests on a newer minor version),
+  and the time goes on chasing differences CI never sees.
 
 ### Not adding tests the suite has to carry forever
 
@@ -276,6 +289,31 @@ catches.
   nothing else.
 - **Scope runs while editing.** Run the touched module's tests during the edit
   loop and leave the full suite to CI; the full suite once per push is enough.
+
+## Time from PR to merge
+
+The wall time a change waits is mostly process, not CI. Measured on one
+consumer repo, median time from opening a PR to its merge:
+
+| period | PRs | median |
+|---|---|---|
+| local full gate before every push, merge parked for a later event | 17 | 54 min |
+| CI as the only gate, scoped local checks, merge on green | 7 | 9 min |
+| same, after the suite went from 202 s to 131 s wall time | 10 | 5 min |
+
+What moved it, largest first:
+
+- **One gate, and it is CI.** A local run of the full gate before each push
+  repeats what CI runs on the merged tree anyway. Run scoped checks locally
+  (lint and type-check on changed files, the touched module's tests) and let
+  CI be the evidence.
+- **Merge on green without waiting.** Enable auto-merge or merge as soon as the
+  conditions hold; parking a ready PR for a later wake-up costs more than any
+  test.
+- **Cap review rounds.** Past the second round, file non-security findings as a
+  follow-up task and merge.
+- **A cheaper suite** (above): with the process cost gone, CI time becomes most
+  of what remains, so the test work then shows up directly in merge time.
 
 ## Making a review round cheaper
 
