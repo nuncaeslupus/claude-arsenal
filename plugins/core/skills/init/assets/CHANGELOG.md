@@ -18,6 +18,15 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [5.10.2] - 2026-10-20
+
+- **The scheduled queue job prunes finished claim refs again.** `prune-claims`
+  sent its `DELETE` to `git/heads/<claim>` instead of `git/refs/heads/<claim>`,
+  which GitHub answers with 404, so the "release abandoned claims, prune
+  finished ones" job failed on every run and claim refs piled up. After
+  updating, the next runs delete the backlog (a run capped by the truncation
+  guard leaves the rest to the next one).
+
 ## [5.10.1] - 2026-10-14
 
 - **Spec and plan readers no longer share a name across documents (#517).**
