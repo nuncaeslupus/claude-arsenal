@@ -1,328 +1,201 @@
 # claude-arsenal
 
+[![CI](https://github.com/nuncaeslupus/claude-arsenal/actions/workflows/ci.yml/badge.svg)](https://github.com/nuncaeslupus/claude-arsenal/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/tag/nuncaeslupus/claude-arsenal?label=release&sort=semver)](https://github.com/nuncaeslupus/claude-arsenal/tags)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 <p align="center">
   <img src="https://raw.githubusercontent.com/nuncaeslupus/claude-arsenal/main/docs/hero.png" width="100%" alt="claude-arsenal: an engineering sheet with the wordmark, a terminal installing the marketplace and running a RED, GREEN, RECORD gate check, the three plugins, and the spec-driven pipeline from explore-idea to ship">
 </p>
 
-**A Claude Code marketplace for people who want the agent to work like an engineer.**
+**A Claude Code plugin marketplace that makes the agent work like an engineer: specs before code, tests before implementations, and a gated task queue several agents can work in parallel.**
 
-Specs before code. Failing tests before implementations. Acceptance gates with
-numbers behind them. A task queue that several agents can work in parallel
-without stepping on each other. And a meta-skill that holds every skill in your
-repo — including its own — to a rubric drawn from published research.
+Agent sessions tend to start coding before the problem is agreed, call work "done"
+because they said so, and lose track of what is in flight between sessions.
+claude-arsenal ships skills for a spec-driven workflow, acceptance gates that a
+script runs against committed evidence, and a task queue stored as files in your
+repo and coordinated through GitHub. `/init` vendors all of it into the repository,
+so every session, local or cloud, loads the same skills.
 
-```text
-/plugin marketplace add github:nuncaeslupus/claude-arsenal
-/plugin install core@claude-arsenal
-/plugin install skill-workshop@claude-arsenal
-```
-
-[![CI](https://github.com/nuncaeslupus/claude-arsenal/actions/workflows/ci.yml/badge.svg)](https://github.com/nuncaeslupus/claude-arsenal/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-
----
-
-## Why this exists
-
-Most agent setups fail the same four ways. This is what each of them is answered
-with.
-
-| The failure | The answer here |
-|---|---|
-| The agent writes code before anyone agreed what the problem was | **Spec-driven**: `explore-idea` → `specify` → `design` → `execution` → `review` → `ship`, each with its own output document |
-| "Done" means the agent said so | **Gates with numbers**: a task's acceptance gate is a fenced block a script runs, against a committed measurement |
-| Tests get written after the code, to fit it | **RED → GREEN → RECORD**: the check that proves the gate fails must fail first, for the expected reason |
-| Skills that sound useful but never load | **A rubric and a validator**: 146 checkable rows, a mechanical pass, and a hook that blocks unguarded edits |
-
----
-
-## The four things you actually get
-
-### 1. `skill-workshop` — a skill author that has read the literature
-
-Writing a skill is easy. Writing one that *fires when it should*, doesn't
-collide with its siblings, and doesn't quietly cost every session tokens it
-never earns back — that's the hard part, and it has a research answer.
-
-`skill-workshop` distills [a 4,658-line research
-archive](docs/research/claude-skill-system_v1.17.md) — Anthropic's official skill
-documentation, the `anthropics/skills` shipping repository, and academic sources
-— into two rubrics it walks on every edit:
-
-- **121 structural rows** ([`skill-rules.md`](plugins/skill-workshop/skills/skill-workshop/references/skill-rules.md)) — frontmatter, naming, workspace topology, script CLI conventions, reference chunking.
-- **25 content-quality rows** ([`content-quality-rules.md`](plugins/skill-workshop/skills/skill-workshop/references/content-quality-rules.md)) — prose shape, trigger quality, example currency, and procedural shape.
-
-That last one is grounded in measurement, not taste. Across ~8,100 agent trial
-records, *procedural anchoring* — stable action sequences, setup steps,
-verification routines — carried the large majority of cases where a skill
-changed the outcome, while explicit knowledge injection carried a small minority
-(Jiang et al., [*Demystifying Agent
-Skills*](https://arxiv.org/abs/2608.14036)). So the rubric requires that every
-step names how to confirm it worked. "Run the tests" fails the check; "run `make
-test`; it exits 0" passes it.
-
-Three things enforce it, in increasing order of teeth:
-
-```bash
-validate.py <skill>          # sub-second mechanical pass — frontmatter, links, CLI canon
-audit_library.py <library>   # whole-library: description-overlap matrix, listing budget
-```
-
-…and a **PreToolUse hook** that blocks an edit inside any `skills/` folder unless
-`skill-workshop` is loaded first. It keys on what a Bash command *writes*, not
-what it mentions, so `sed -i`, `tee`, a heredoc and a `python3 -c` one-liner are
-all covered — the routes a session naturally reaches for.
-
-Rules that predict failures nobody has observed don't get to stay. Every row
-traces to something that actually went wrong.
-
-### 2. Spec-driven development, with documents you can hand to a human
-
-```text
-explore-idea  →  specify  →  design  →  execution  →  review  →  ship
-```
-
-`explore-idea` talks a vague idea into an agreed direction and a numbered
-decisions log, one question at a time, and hands that log to `specify`. From
-there each stage owns one artifact and one validator. `specify` produces the
-problem analysis and options; `design` produces contracts, the task split, the
-risk register, and the sequencing.
-
-Both of them **publish an annotatable reader** before they report done — a
-self-contained HTML page with a note field per section, notes auto-saving in the
-browser and an Export button that writes them back out as Markdown. Re-run it
-with those notes in hand and they land back in the document. A spec nobody read
-is a spec nobody agreed to.
-
-### 3. Test-first execution, and gates that hold a number
-
-`execution` works each task through three motions:
-
-- **RED** — write the check that proves the gate, and confirm it fails *for the expected reason*. A bug fix starts as a regression test; a metric gate starts as a measurement that misses the threshold.
-- **GREEN** — implement, reading before writing and matching existing patterns.
-- **RECORD** — commit the evidence before starting the next task.
-
-`<!-- test-discipline: test-after -->` in your `CLAUDE.md` switches the
-discipline if your project genuinely works that way. It's a per-repo flag, not a
-per-session argument.
-
-The gate itself is mechanical. A task declares it as a fenced block:
-
-````markdown
-```gate
-line_coverage >= 0.90
-evidence: coverage.json
-key: totals.percent_covered
-```
-````
-
-`gate_run.sh` asserts `measured <op> threshold` against the committed file. A
-declared gate with no evidence file — or evidence that violates it — is a hard
-failure. It can never pass vacuously, which is the whole point: **`done` means
-the gate passed, and the number is in the repo.**
-
-There is a third outcome besides pass and fail. `status-key` lets evidence say
-`unmeasured` — the check ran, and what it found is that this can't be scored
-yet. Without that, honest "not yet" reads as failure and pressures the author
-into weakening the gate to something measurable, which is exactly the pressure
-gates exist to remove.
-
-### 4. A task queue that is a DAG, and agents that run it in parallel
-
-Two ideas, and everything else follows.
-
-**The repository defines the work.** Tasks are files in `arsenal/tasks/` —
-versioned, reviewed in the PR that adds them, readable with no network,
-identical for every agent. `deps:` between them makes the board a dependency
-graph, so `/queue-next` picks the next **unblocked** task rather than the next one
-in a list.
-
-**GitHub coordinates who is doing it.** An issue is a *handle* for a task, not a
-copy of it. A claim is an atomic ref creation that GitHub itself arbitrates —
-two agents racing for the same task, one ref push wins, the loser moves on. No
-coordination branch, no side worktree, no ledger file two sessions have to keep
-in step.
-
-```bash
-/queue-add --title "Extract the surface probe" --deps t-3f8a91c2 --size M
-/queue-next                # claim the next unblocked task and work it
-/queue-next CLI            # …scoped to a tag
-/queue-status              # counts, plus an audit for missing gates and broken deps
-```
-
-Each task ends in its own PR, opened only if its gate passed and the host's own
-gate passed. Abandoned claims are released by a shipped GitHub Actions workflow,
-so a session that dies mid-task doesn't wedge the board.
-
-**One orchestrator can run several of these at once.** Up to
-`ARSENAL_MAX_WORKERS` workers, each in its own git worktree, each claiming,
-gating, and opening its own PR — behind a quota guard that stops the round
-*before* it burns through a rate-limit window, not after.
-
-Full model, including the migration path for an existing repo:
-[`docs/queue.md`](docs/queue.md). Parallel dispatch, the quota guard, and
-unattended ticks: [`docs/fleet.md`](docs/fleet.md).
-
----
-
-## Install
+## Quick start
 
 Inside a Claude Code session:
 
 ```text
 /plugin marketplace add github:nuncaeslupus/claude-arsenal
-/plugin install skill-workshop@claude-arsenal   # turns on the skill-edit gate
-/plugin install core@claude-arsenal             # engineering workflows + queue
+/plugin install core@claude-arsenal
 ```
 
-Verify it took:
+Then, in the project you want set up:
 
 ```text
-Help me create a new skill          # loads skill-workshop (announces a canary phrase)
-Investigate why login is slow       # loads core:specify
+/init
 ```
-
-Separately — not part of the engineering-workflow pitch above, its own tool
-in the same toolbox:
-
-```text
-/plugin install repo-audit@claude-arsenal       # find problems, explain results
-```
-
-Point `repo-audit` at any repository, not just this one, and it hunts across
-a real checklist — correctness, security, concurrency, error handling,
-tests, docs — verifies every candidate, then queues confirmed findings as
-gated work instead of a list nobody acts on:
-[`plugins/repo-audit/skills/repo-audit/SKILL.md`](plugins/repo-audit/skills/repo-audit/SKILL.md).
-`explain-repo`, in the same plugin, turns those results into whichever
-human-facing document is actually needed — a pitch, a deep-dive, interview
-prep, an onboarding guide, a status brief — always for the person who asked,
-never committed to the repo:
-[`plugins/repo-audit/skills/explain-repo/SKILL.md`](plugins/repo-audit/skills/explain-repo/SKILL.md).
-
-### Then vendor it — this is the part that matters
-
-A cloud session — web, `claude --cloud`, the desktop and mobile apps, Claude
-Tag, routines — runs on a fresh clone on another machine. It never sees your
-`~/.claude/`, and it does not install the plugins your repo asks for. **It reads
-what you committed.**
-
-`/init` handles that: it copies the skills into `.claude/skills/`, wires the
-skill-edit gate into `.claude/settings.json`, and creates `claude-arsenal/` with
-the scripts, references, and workflows.
 
 ```bash
-/init
 git add .claude claude-arsenal arsenal .github CLAUDE.md .gitignore
 git commit -m "chore: add claude-arsenal"
 ```
 
-Now every surface gets the same skills, because they're in the repo.
+Without Claude Code on the machine (CI, a fresh container), run the same installer
+from a clone pinned to a release tag:
 
-Without Claude Code on the machine, the same script runs from a clone — see
-[`docs/INSTALL.md`](docs/INSTALL.md#2-set-up-a-project).
+```bash
+git clone --depth 1 --branch v5.10.1 https://github.com/nuncaeslupus/claude-arsenal.git /tmp/arsenal
+python3 /tmp/arsenal/plugins/core/skills/init/scripts/init.py --repo-path . --profile general
+```
 
+## Example
+
+Two task files in `arsenal/tasks/`, the second depending on the first:
+
+````markdown
+---
+id: t-aaaa1111
+title: "Add a --json flag to the CLI"
+priority: 5
+deps: []
 ---
 
-## The skills
+## Acceptance gate
+```bash
+make test
+```
+````
 
-| | |
-|---|---|
-| **Workflow** | `explore-idea` · `specify` · `design` · `execution` · `review` · `ship` |
-| **Queue** | `init` · `queue-add` · `queue-status` · `queue-next` · `gate-check` · `pin-check` |
-| **Git / GitHub** | `github` (Conventional Commits, branch naming, the PR review loop) |
-| **Session** | `session-end` (handoff, retrospective, PR audit) |
-| **Python toolchain** | `python-bootstrap` · `pypi-release` · `dep-upgrade` · `coverage-gaps` · `mutmut-report` |
-| **Applied example** | `har` — a HAR/network-capture analysis toolkit built with this workflow, gate and all |
-| **Meta** | `skill-workshop` |
-
+````markdown
+---
+id: t-bbbb2222
+title: "Document the JSON output"
+priority: 10
+deps: [t-aaaa1111]
 ---
 
-## Context budget is a review criterion, not an afterthought
+## Acceptance gate
+```bash
+grep -q -- '--json' README.md
+```
+````
 
-This is a skill set for working *better* with Claude, and a session's context
-window is the resource it spends to do that. A skill occupying context it does
-not earn back makes every session slightly worse at everything else.
+With their GitHub issues saved as JSON (`number`, `title`, `state`, `labels`,
+`assignees`), the board shows one open task and one blocked, and the selector
+returns the unblocked one:
 
-So the cost is measured, and CI fails over it:
+```text
+$ python3 claude-arsenal/scripts/query_status.py --issues issues.json
+tasks: 2 — open 1, claimed 0, done 0, blocked 1
 
-| Tier | What's in it | Paid |
+$ python3 claude-arsenal/scripts/task_select.py --issues issues.json
+{"id":"t-aaaa1111","title":"Add a --json flag to the CLI","label":"Add a --json flag to…","display":"Add a --json flag to… (t-aaaa1111)","path":"arsenal/tasks/t-aaaa1111.md","priority":5,"gate":true}
+```
+
+`/queue-next` runs this for you, claims the task, works it test-first, and opens a
+PR with `Closes #<issue>` once the gate passes.
+
+## Use with AI agents
+
+claude-arsenal is built for Claude Code. There is no MCP server; the interface is
+skills, a vendored `AGENTS.md`, and scripts with line-oriented or JSON output.
+
+### Plugins
+
+| Plugin | Install | Contents |
 |---|---|---|
-| **Resident** | vendored `AGENTS.md` + the name and description of every installed skill | every turn, every session, forever |
-| **On invocation** | one `SKILL.md` body | once, when that skill triggers |
-| **On demand** | `references/`, agent definitions | only when something opens them |
+| `core` | `/plugin install core@claude-arsenal` | Workflow, queue, GitHub, session and Python toolchain skills |
+| `skill-workshop` | `/plugin install skill-workshop@claude-arsenal` | Meta-skill for writing and editing skills: rubric, validator, library auditor |
+| `repo-audit` | `/plugin install repo-audit@claude-arsenal` | `repo-audit` finds and verifies problems in any repo and queues them as gated tasks; `explain-repo` turns the results into a pitch, deep-dive, onboarding guide or status brief |
 
-`make context-budget` reports all three, and breaks the resident listing down by
-what a consumer actually installed — a default-off section costs nothing to
-anyone who did not ask for it. The cap of 5,000 tokens applies to the widest
-install. When a change pushes it over, what grew moves behind a reference or into
-a script — the cap does not get raised.
+### Skills
 
-The same discipline shapes the skills themselves. Anything deterministic —
-ordering, resolution, parsing, a consistency check — is a script whose output is
-a line or two, not prose the model is asked to re-derive on every run.
+| Group | Skills |
+|---|---|
+| Workflow | `explore-idea` · `specify` · `design` · `execution` · `review` · `ship` · `gate-check` |
+| Queue | `init` · `queue-add` · `queue-next` · `queue-status` |
+| Git / session | `github` (Conventional Commits, PR review loop) · `session-end` (handoff, retrospective, PR audit) |
+| Python | `python-bootstrap` · `pypi-release` · `dep-upgrade` · `coverage-gaps` · `mutmut-report` · `pin-check` |
+| Extract | `har` (HAR / network-capture analysis) |
+| Meta | `skill-workshop` |
 
----
+`/init` installs skills by section (`core`, `workflow`, `python`, `extract`), chosen
+with `--profile minimal|general|python|all` or `--sections`, and records the choice
+in `arsenal/config.toml`. `init.py --list-sections` shows what is installed.
 
-## Known limits
+### How a session uses it
 
-Honest, not exhaustive — full detail is in the docs linked below.
+`/init` writes a session-protocol block into the host `CLAUDE.md` that imports
+`claude-arsenal/AGENTS.md`. Every session then, without being asked:
 
-- **GitHub only.** Claims, task handles, and hygiene all run on GitHub's own
-  APIs (issues, git refs, Actions) — no GitLab, Bitbucket, or plain git remote.
-- **Parallel dispatch is CLI-first.** Worktree isolation and unrestricted
-  pushes are confirmed there; cloud surfaces (web, desktop, mobile, Claude
-  Tag, routines) lose pieces of both — see [`docs/fleet.md`](docs/fleet.md).
-- **The queue's cleanup needs GitHub Actions turned on** (off by default on a
-  fork). Without it, claiming and gating still work session to session, but
-  abandoned claims stop being released and new task files stop getting issue
-  handles.
-- **bash/POSIX tooling.** No native Windows support — WSL or Git Bash.
+1. Detects its GitHub channel: `claude-arsenal/bin/github_channel.sh --detect` prints `gh`, `rest` or `none` (`none` means use the agent's own GitHub tools).
+2. Fetches the `arsenal:task` issues and reads the board with `query_status.py`, reporting tasks with no gate, no issue handle, or unknown deps.
+3. Picks the next unblocked task with `task_select.py` and claims it with `claude-arsenal/bin/claim_task.sh <id>`, which creates a git ref on GitHub. The result is `won`, `lost` (take the next task), `manual` (make the call with your own tools) or `error`. Exactly one caller wins.
+4. Works the task (`execution`: RED, GREEN, RECORD), runs its gate, and opens a PR with `claude-arsenal/bin/open_task_pr.sh`. Merging closes the issue, archives the task file and unblocks dependents.
+5. Writes `arsenal/session/handover.md` for the next session.
 
----
+Merging follows `merge-policy` in `arsenal/config.toml`. Full protocol:
+[`plugins/core/skills/init/assets/AGENTS.md`](plugins/core/skills/init/assets/AGENTS.md).
 
-## For contributors
+## How it works
+
+- **Spec-driven pipeline.** `explore-idea` → `specify` → `design` → `execution` → `review` → `ship`; each stage owns one document and one validator. `specify` and `design` also publish an HTML reader with a note field per section; the exported notes feed the next revision.
+- **Test-first execution.** RED (the check fails for the expected reason), GREEN (implement), RECORD (commit the evidence). `<!-- test-discipline: test-after -->` in `CLAUDE.md` switches it per repo.
+- **Gates with numbers.** A task's gate is a fenced `bash` block, or a `gate` block (`line_coverage >= 0.90`, `evidence: coverage.json`) that `gate_run.sh` checks against a committed file. Missing evidence fails; `unmeasured` is a third outcome, distinct from fail.
+- **Queue as a DAG.** Tasks are files under `arsenal/tasks/`, read from the default branch, so every agent computes the same order. Issues are handles, not copies. A shipped Actions workflow releases abandoned claims and creates missing handles.
+- **Parallel workers.** An orchestrator runs up to `ARSENAL_MAX_WORKERS` workers, each in its own git worktree, behind a quota guard that stops before a rate-limit window is exhausted.
+- **Skill rubric.** `skill-workshop` checks skills against structural and content-quality rubrics drawn from [a research archive](docs/research/claude-skill-system_v1.17.md). A PreToolUse hook blocks edits inside `skills/` until it is loaded.
+- **Context budget.** `make context-budget` measures what an install costs every session; CI fails above 5,000 resident tokens.
+
+## Usage
+
+| Command | What it does |
+|---|---|
+| `/init` | Vendor skills, scripts and workflows into the repo; safe to re-run |
+| `/queue-add --title "..." --priority 5 --deps t-xxxxxxxx` | Add a task file |
+| `/queue-next [TAG \| WORKSPACE \| text]` | Claim and work the next unblocked task |
+| `/queue-status` | Counts plus an audit for missing gates and broken deps |
+| `/session-end` | Handoff, retrospective, PR audit |
+
+Configuration lives in `arsenal/config.toml`: `host-gate`, `preflight-gate`,
+`merge-policy`, `[models]`, `[skills]`. Updating and uninstalling:
+[`docs/UPDATE.md`](docs/UPDATE.md).
+
+## Limitations
+
+- GitHub only: claims, handles and cleanup use GitHub issues, refs and Actions.
+- Parallel dispatch is CLI-first; cloud surfaces lose parts of worktree isolation and pushes ([`docs/fleet.md`](docs/fleet.md)).
+- Queue cleanup needs GitHub Actions enabled (off by default on forks).
+- bash/POSIX tooling; on Windows use WSL or Git Bash.
+
+## Documentation
+
+[Install](docs/INSTALL.md) ·
+[Update & uninstall](docs/UPDATE.md) ·
+[Task queue](docs/queue.md) ·
+[Fleet](docs/fleet.md) ·
+[Models](docs/MODELS.md) ·
+[Contributing](docs/CONTRIBUTING.md) ·
+[Research archive](docs/research/claude-skill-system_v1.17.md)
+
+## Development
 
 ```bash
 git clone https://github.com/nuncaeslupus/claude-arsenal
 cd claude-arsenal
 uv sync
-make help            # every target
-make smoke           # validate all plugins
-make test            # 58 behaviour tests
-make dev             # run Claude with both plugins loaded from the working tree
+make help    # every target
+make smoke   # validate manifests and skills, audit the library
+make test    # behaviour tests
+make lint    # ruff + mypy
+make dev     # Claude Code with the plugins loaded from the working tree
 ```
 
-The repo dogfoods its own queue and its own gate: editing a skill here goes
-through `skill-workshop` like anywhere else. Layout, branch policy, and
-versioning rules are in [`CLAUDE.md`](CLAUDE.md) (internal — not shipped to
-consumers). Full walkthrough: [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md).
+Layout, versioning and branch policy: [`CLAUDE.md`](CLAUDE.md).
 
-**Docs:** [install](docs/INSTALL.md) ·
-[update & uninstall](docs/UPDATE.md) ·
-[the task queue](docs/queue.md) ·
-[the fleet](docs/fleet.md) ·
-[contributing](docs/CONTRIBUTING.md) ·
-[the research archive](docs/research/claude-skill-system_v1.17.md)
+## Related projects
 
----
-
-## Built with claude-arsenal
-
-Real repositories developed on this workflow — vendored skills, gated task
-files, the issue-backed queue. Read any of them to see what `/init` leaves
-behind in a project that has lived with it.
-
-- [drawspec](https://github.com/nuncaeslupus/drawspec) — declarative diagram spec → clean, themeable SVG; JSON with no coordinates, so an LLM can write it.
-- [integral-job-search](https://github.com/nuncaeslupus/integral-job-search) — a candidate-centred job search run as a conversation in Claude Code, one dimension model from what you need to the interview.
-- [literary-critic](https://github.com/nuncaeslupus/literary-critic) — lets an LLM index, analyse and advise on a full novel manuscript the way a professional editor would.
-- [doc-control](https://github.com/nuncaeslupus/doc-control) — a deterministic tool for AI agents to edit Word documents, every change a tracked change (in development).
-- [image-to-svg](https://github.com/nuncaeslupus/image-to-svg) — raster images to SVG in the browser: VTracer on WebAssembly, installable, nothing uploaded.
-- [ai-chat-exporter](https://github.com/nuncaeslupus/ai-chat-exporter) — a browser extension that exports ChatGPT, Claude and Gemini conversations to several formats.
-- [comparador-luz-gas](https://github.com/nuncaeslupus/comparador-luz-gas) — queries Spain's CNMC energy-offer comparator and returns JSON ready for an LLM.
-- [html-cleaner](https://github.com/nuncaeslupus/html-cleaner) — a bookmarklet that strips clutter from web pages with per-site JSON rules.
-
----
+- [drawspec](https://github.com/nuncaeslupus/drawspec) — declarative diagram spec → clean SVG/PNG/text, writable by LLMs; MCP server included.
+- [doc-control](https://github.com/nuncaeslupus/doc-control) — lets AI agents edit Word documents as tracked changes.
+- [literary-critic](https://github.com/nuncaeslupus/literary-critic) — LLM manuscript analysis the way a professional editor would.
+- [integral-job-search](https://github.com/nuncaeslupus/integral-job-search) — candidate-centred job search run in Claude Code.
 
 ## License
 
