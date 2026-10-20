@@ -18,6 +18,15 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [5.10.3] - 2026-10-20
+
+- **`references/performance-tuning.md` covers the tests themselves.** Two new
+  sections: making slow tests cheaper (reuse the product's own selection,
+  memoise pure helpers per module, one end-to-end pipeline test, exhaustive
+  sweeps state their cost) and not adding tests the suite has to carry (one
+  test per behaviour rather than per finding, no tests about the process
+  itself, scoped runs while editing).
+
 ## [5.10.2] - 2026-10-20
 
 - **The scheduled queue job prunes finished claim refs again.** `prune-claims`
