@@ -18,6 +18,14 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [5.10.5] - 2026-10-20
+
+- `references/performance-tuning.md` gains **Time from PR to merge**: measured
+  medians (54 → 9 → 5 min) and what cut them — CI as the only gate, scoped local
+  checks, merge on green, capped review rounds, a cheaper suite. **Making the
+  tests themselves cheaper** adds: regenerate only the inputs a test reads, rank
+  files serially, leave product-measurement tests alone, match CI's interpreter.
+
 ## [5.10.4] - 2026-10-20
 
 - **`prune-claims` no longer fails on more than 100 claim refs.** GitHub's
