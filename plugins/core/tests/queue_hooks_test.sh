@@ -267,8 +267,19 @@ assert any(m == "POST" and p.endswith("/issues") for m, p, _ in calls), calls
 # And an action that genuinely needs a number is still refused without one.
 assert not mod.apply_action({"kind": "close-issue", "task": "t-x", "comment": "c"},
                             StubApi(), tasks_dir=Path("."))
+
+# prune-claims' delete addresses the git refs endpoint with the full ref.
+# `git/heads/...` (the ref with `refs/` stripped) is a 404 on GitHub, so every
+# prune failed and finished claim refs piled up.
+calls.clear()
+assert mod.apply_action(
+    {"kind": "delete-ref", "ref": "refs/heads/arsenal/claims/t-x", "task": "t-x"},
+    StubApi(), tasks_dir=Path("."),
+)
+assert calls == [("DELETE", "/repos/o/r/git/refs/heads/arsenal/claims/t-x", None)], calls
 PY
 echo "PASS: create-issue reaches the API; close-issue without a number does not"
+echo "PASS: delete-ref DELETEs /git/refs/heads/<claim>"
 
 # Gate 8b (#239): the unattended planner does not CREATE an ambiguous handle.
 # Two task files folding to one unresolved issue's loose title means that issue
