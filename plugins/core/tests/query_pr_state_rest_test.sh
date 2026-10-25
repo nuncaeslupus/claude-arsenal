@@ -52,6 +52,7 @@ run() { PATH="${tmp}/bin:${PATH}" python3 "${QPS}" --pr 7 --repo o/r --watch-bot
 out=$(run --unresolved-only); rc=$?
 [[ ${rc} -eq 2 ]] || fail "conflicting PR via REST: want exit 2, got ${rc}"
 echo "${out}" | grep >/dev/null '"state": "conflicts"' || fail "REST fallback did not report conflicts: ${out}"
+echo "${out}" | grep >/dev/null '"next": "Rebase onto' || fail "the state's next action was not printed: ${out}"
 echo "PASS: GraphQL 403 falls back to REST (state conflicts, CI read from check-runs)"
 
 # 2. A human reply addresses the bot thread rebuilt from REST comments.
