@@ -15,7 +15,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ASSETS="${SCRIPT_DIR}/../skills/init/assets"
 BUDGET="${ASSETS}/bin/budget_check.sh"
 DOC="${ASSETS}/references/quota-governance.md"
-KNOBS="${ASSETS}/references/worker-loop.md"
+KNOBS="${ASSETS}/references/performance-tuning.md"
 
 [[ -f "${BUDGET}" ]] || { echo "SKIP: budget_check.sh not found" >&2; exit 0; }
 

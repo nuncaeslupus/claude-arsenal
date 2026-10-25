@@ -1,6 +1,6 @@
 ---
 name: session-end
-description: Wraps up a session — opt-in status/handoff.md, repeated errors worth a skill update, and a CI/review/conflict audit of its PRs. Use when the user signals the end of the job or its opt-in auto-fire hook runs. Not for mid-job checkpoints or cross-session memory.
+description: Wraps up a session — optional handoff, skill-update proposals from repeated errors, a PR audit. Use when the user signals the job is done. Not for mid-job checkpoints.
 metadata:
   type: workflow
 ---

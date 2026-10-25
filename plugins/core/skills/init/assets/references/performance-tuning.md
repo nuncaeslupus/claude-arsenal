@@ -17,6 +17,7 @@ number points to, and holds the ones for a slow gate and a slow review round.
 - [Making the gate faster](#making-the-gate-faster) — parallel tests, the long pole, spawn-bound suites, caching inputs, cheaper tests, not adding tests the suite has to carry
 - [Time from PR to merge](#time-from-pr-to-merge) — what a change waits for, measured, and what cut it
 - [Making a review round cheaper](#making-a-review-round-cheaper) — recording checks already run, scoping mutation runs
+- [Tuning knobs](#tuning-knobs) — every `ARSENAL_*` / `LOOP_*` env var the worker loop reads
 
 ---
 
@@ -362,3 +363,18 @@ patch that did not apply reads exactly like a test that passed.
 **On the task-PR path** `open_task_pr.sh` runs the review check before the host
 gate, so there is no gate result to record yet; `--checks` belongs to the
 editing loop, where the author ran the checks before emitting.
+
+## Tuning knobs
+
+| Env var | Default | Effect |
+|---------|---------|--------|
+| `ARSENAL_MAX_WORKERS` | `2` | Workers per batch. `2` is the validated git-push concurrency ceiling; higher N raises claim-race churn and PR/merge-conflict surface. **Forced to `1` when worktree isolation is unavailable** (loop step 0): parallel workers are unsafe sharing one tree. |
+| `ARSENAL_QUOTA_STOP_PCT` | `90` | Stop the loop before dispatch at/above this used-percentage on either window. |
+| `ARSENAL_MAX_ITERATIONS` | `50` | Always-available per-session dispatch-round cap (quota-independent). `0` disables it. |
+| `ARSENAL_RATE_LIMITS_FILE` | `<session>/rate_limits.json` | Where the quota guard reads its snapshot. Override it to feed quota from a surface with no statusLine — a cloud session writes this file for itself or the percentage guard never engages. See `references/quota-governance.md`. |
+| `ARSENAL_GATE_INHERIT_ENV` | _(unset)_ | Set `1` to run gate blocks with the caller's full environment instead of the hardened throwaway HOME + restricted PATH. |
+| `LOOP_WORKSPACE` | _(unset)_ | Workspace scope; set by `/queue-next` token inference. |
+| `LOOP_TAGS` | _(unset)_ | Comma/space-separated tag scope (ANDed); set by `/queue-next` token inference. |
+| `ARSENAL_QUEUE_REMOTE` | `origin` | Remote for claim refs + per-task pushes. |
+| `ARSENAL_CLAIM_PREFIX` | `arsenal/claims` | Ref namespace for atomic claim refs. |
+| `ARSENAL_HOME` | `arsenal` | Host-owned tree (tasks, specs, plans, config, session). |

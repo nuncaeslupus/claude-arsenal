@@ -1,6 +1,6 @@
 ---
 name: design
-description: Defines the technical solution after discovery — contracts, task split, risks, sequencing (validate_plan). Use when the user is planning how to build scoped work. Not for investigation (specify), implementation (execution) or PR review (review).
+description: Turns an approved spec into contracts, risks and a gated task plan. Use when the user plans how to build scoped work. Not for investigation (specify).
 metadata:
   section: workflow
   type: workflow

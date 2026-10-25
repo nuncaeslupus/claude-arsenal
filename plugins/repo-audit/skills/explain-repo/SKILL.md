@@ -1,6 +1,6 @@
 ---
 name: explain-repo
-description: Writes a human-facing document about a repository — pitch, deep-dive, interview Q&A, onboarding guide or status brief. Use when the user wants a repo explained or written up. Not for finding bugs (repo-audit).
+description: Creates a human-facing doc about a repo — pitch, deep-dive, interview prep, onboarding or status brief. Use when the user wants a repo explained. Not for finding bugs.
 ---
 
 # explain-repo

@@ -1,6 +1,6 @@
 ---
 name: python-bootstrap
-description: Scaffolds or retrofits a Python project to the arsenal defaults (uv, ruff, strict mypy, standard Makefile, 3.12+). Use when the user sets up Python tooling. Not for publishing (pypi-release) or dependency upgrades (dep-upgrade).
+description: Scaffolds or retrofits a Python project with uv, ruff, strict mypy and a standard Makefile. Use when the user sets up Python tooling. Not for publishing.
 argument-hint: "[project_dir]"
 metadata:
   section: python

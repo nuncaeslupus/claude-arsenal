@@ -1,6 +1,6 @@
 ---
 name: repo-audit
-description: Finds real problems in a repository (bugs, security issues, missing edge cases and tests), rated by severity and confidence, and queues the worthwhile ones. Use when the user wants a repo audited. Not for a write-up (explain-repo) or diff review (code-review).
+description: Audits a whole repo for bugs, security gaps and missing tests, rated by severity and confidence, and queues the real ones. Use when the user wants a repo audited. Not for one diff.
 ---
 
 # repo-audit
@@ -17,7 +17,7 @@ CANARY: repo-audit-loaded-2026-09-20-fb78d23e-6a5b7d83932f7e55
 
 Load this when the ask is about the repo (or a real subset) as a whole —
 "audit this for bugs", "what would break here". For one diff, one bug, or one
-feature, use `code-review` or `execution`.
+feature, use `review` or `execution`.
 
 ## How to use
 

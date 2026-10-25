@@ -1,6 +1,6 @@
 # Claude Arsenal
 
-<!-- claude-arsenal v5.10.7 — imported via @claude-arsenal/AGENTS.md -->
+<!-- claude-arsenal v5.10.8 — imported via @claude-arsenal/AGENTS.md -->
 
 This file is in context on every turn, so it holds only what a session needs before it
 knows what kind of session it is. The rest lives in `claude-arsenal/references/`: plain
@@ -98,26 +98,10 @@ At the start of every session (fresh start, context compaction, or cold restart)
 
 ## Task format
 
-A task is a file — `arsenal/tasks/<id>.md` — with front matter and a body:
-
-````markdown
----
-id: t-3f8a91c2
-label: "extract surface probe"
-title: "Extract the surface probe into its own script"
-priority: 5
-deps: [t-aaaa1111, t-bbbb2222]
-requires: [surface:cli]
-tags: [CLI]
-workspace: BACKEND
-max-attempts: 3
----
-
-## Acceptance gate
-```bash
-bash tests/surface_probe_test.sh
-```
-````
+A task is a file — `arsenal/tasks/<id>.md` — with front matter (`id`, `title`, optional
+`label`, `priority`, `deps`, `requires`, `tags`, `workspace`, `max-attempts`) and an
+`## Acceptance gate` section. `/queue-add` writes one; a full example is in
+`claude-arsenal/references/state-layout.md` § Task format.
 
 Task files are read from the **default branch**, so every agent computes the same order.
 `deps` is the build order; `priority` encodes task size only (S=10, M=5, L=1, larger runs
@@ -177,7 +161,7 @@ or ASCII art → `claude-arsenal/references/diagrams.md`.
 
 | File | Read it when |
 |---|---|
-| `references/worker-loop.md` | Dispatching workers: the loop, worktree isolation, `worker_postcheck.sh`, per-task PRs, credit guards, every `ARSENAL_*` knob |
+| `references/worker-loop.md` | Dispatching workers: the loop, worktree isolation, `worker_postcheck.sh`, per-task PRs, credit guards |
 | `references/orchestrator-tick.md` | Running the board unattended: one tick's steps, the merge preconditions |
 | `references/queue-seeding.md` | The queue is empty: seeding from a plan, importing filed issues, handle markers, a `D-N` divergence |
 | `references/evidence-gates.md` | Writing or trusting a gate: the fence rule, hardened execution, numeric evidence, `unmeasured` |
@@ -185,7 +169,7 @@ or ASCII art → `claude-arsenal/references/diagrams.md`.
 | `references/github-automation.md` | Completion: `merge-policy`, the transitions GitHub runs, ending a session. Actions minutes short → `references/ci-minutes.md` |
 | `references/quota-governance.md` | The loop stopped before dispatch: quota windows, fail-open, the round cap |
 | `references/pre-pr-review.md` | About to open a PR: the cold-start adversarial review and its verdicts |
-| `references/performance-tuning.md` | The loop feels slow: recorded timings and their remedies |
+| `references/performance-tuning.md` | The loop feels slow: recorded timings, their remedies, every `ARSENAL_*` knob |
 | `references/state-layout.md` | A lookup: where a file lives, what a task state means |
 | `references/repo-housekeeping.md` | Choosing a license, or publishing a package: the questions to ask, the metadata an index needs |
 | `references/annotatable-reader.md` | Handing over a spec or plan: which documents need a reader |
