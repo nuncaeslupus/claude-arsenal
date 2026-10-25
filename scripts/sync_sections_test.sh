@@ -43,6 +43,14 @@ echo "PASS: committed manifest matches the shipped skills"
 echo "  skills on disk: $(find "$root/plugins/core/skills" -mindepth 2 -maxdepth 2 \
     -name SKILL.md | wc -l | tr -d ' ') SKILL.md files"
 
+# Everything below mutates the manifest and adds a probe skill, so it runs on a
+# copy: `make test` runs files in parallel, and other tests read the real tree.
+sandbox="$(mktemp -d)"
+cp -R "$root/scripts" "$root/plugins" "$sandbox/"
+root="$sandbox"
+script="$root/scripts/sync_sections.py"
+manifest="$root/plugins/core/skills/init/assets/sections.json"
+
 # --- drift is detected ------------------------------------------------------
 backup="$(mktemp)"; cp "$manifest" "$backup"
 restore() { cp "$backup" "$manifest"; rm -f "$backup"; }
@@ -103,3 +111,5 @@ echo "PASS: a newline-only difference is named, not shown as two identical lines
 
 cp "$backup" "$manifest"; rm -f "$backup"; trap - EXIT
 run_check --check >/dev/null 2>&1 || fail "cleanup left the manifest drifted"
+
+rm -rf "$sandbox"
