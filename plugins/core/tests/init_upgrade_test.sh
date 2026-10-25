@@ -196,6 +196,19 @@ middle_at=$(grep -n "Middle entry" <<<"${out}" | cut -d: -f1)
     || fail "changelog entries must print newest first: ${out}"
 echo "PASS: the upgrade banner prints CHANGELOG entries strictly between installed and new"
 
+# --- 7a': far behind — the banner caps at the newest entries, not the whole file
+cap_bundle="${tmpdir}/cap-bundle"
+mkdir -p "${cap_bundle}"
+for minor in 1 2 3 4 5 6 7; do printf '## [1.%s.0] - 2026-01-0%s\n\n- entry %s\n\n' "${minor}" "${minor}" "${minor}"; done \
+    > "${cap_bundle}/CHANGELOG.md"
+out=$(python3 -c 'import sys, importlib.util as u
+s = u.spec_from_file_location("init", sys.argv[1]); m = u.module_from_spec(s); s.loader.exec_module(m)
+from pathlib import Path; print(m._changelog_since(Path(sys.argv[2]), "1.0.0", "1.7.0"))' "${INIT_PY}" "${cap_bundle}")
+grep -q "entry 7" <<<"${out}" && grep -q "entry 3" <<<"${out}" || fail "the newest five entries must print: ${out}"
+grep -q "entry 2" <<<"${out}" && fail "entries past the cap must not print: ${out}"
+grep -q "2 older entries (back to 1.1.0)" <<<"${out}" || fail "the cap must say what it left out: ${out}"
+echo "PASS: the upgrade banner caps the changelog at the newest five entries"
+
 # --- 7b: no CHANGELOG.md in the bundle — the banner still prints, just without it
 no_changelog_repo="${tmpdir}/no-changelog-repo"
 no_changelog_bundle="${tmpdir}/no-changelog-bundle"

@@ -565,6 +565,7 @@ def _parse_version(text: str) -> tuple[int, ...] | None:
         return None
 
 
+_CHANGELOG_MAX_ENTRIES = 5
 _CHANGELOG_HEADING = re.compile(r"(?m)^## \[(\d+\.\d+\.\d+)\][^\n]*\n")
 
 
@@ -593,7 +594,13 @@ def _changelog_since(bundle: Path, installed_ver: str, bundle_ver: str) -> str:
         if version is not None and since < version <= upto and body:
             entries.append((version, parts[i], body))
     entries.sort(reverse=True)
-    return "\n\n".join(f"## {ver}\n{body}" for _, ver, body in entries)
+    # Capped for the same reason as check_update.sh: a far-behind consumer would
+    # otherwise get the whole file printed into the session.
+    shown, rest = entries[:_CHANGELOG_MAX_ENTRIES], entries[_CHANGELOG_MAX_ENTRIES:]
+    out = "\n\n".join(f"## {ver}\n{body}" for _, ver, body in shown)
+    if rest:
+        out += f"\n\n… {len(rest)} older entries (back to {rest[-1][1]}) — see {changelog}"
+    return out
 
 
 # Where released versions are tagged. `_check_bundle_version` only compares the
