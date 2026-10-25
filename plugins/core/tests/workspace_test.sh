@@ -38,7 +38,7 @@ python3 "${INIT_PY}" --repo-path "${tmpdir}" --workspace FRONTEND --bundle-dir "
 
 # Gate 3: workspace_list.sh lists FRONTEND
 WS_LIST=$(bash "${LIST_SH}")
-if ! echo "${WS_LIST}" | grep -q "FRONTEND"; then
+if ! echo "${WS_LIST}" | grep >/dev/null "FRONTEND"; then
     echo "FAIL: workspace_list.sh did not list FRONTEND; got: ${WS_LIST}" >&2; exit 1
 fi
 

@@ -77,7 +77,7 @@ echo "PASS: the dispatch step names what a spawned worker cannot resolve for its
 push_only="$(grep -n 'branch:\${BRANCH}' "${OPEN_PR}" | head -1 | cut -d: -f1)"
 [[ -n "${push_only}" ]] \
     || fail "open_task_pr.sh no longer prints branch:<name> — the push-only handoff the docs promise is gone"
-tail -n +"${push_only}" "${OPEN_PR}" | grep -qE '^exit 0' \
+tail -n +"${push_only}" "${OPEN_PR}" | grep -E >/dev/null '^exit 0' \
     || fail "the push-only outcome does not exit 0, so a successful handoff reports as a failure"
 echo "PASS: the push-only handoff is exit 0 with branch:<name> on stdout"
 

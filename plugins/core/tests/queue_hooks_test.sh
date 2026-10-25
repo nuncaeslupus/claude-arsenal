@@ -63,9 +63,9 @@ JSON
 pr_event "arsenal/t-aaaa1111-do-the-thing" true > "${tmp}/event.json"
 plan=$(python3 "${HOOKS}" pr-closed --tasks-dir "${tasks}" --issues "${tmp}/issues.json" \
         --event "${tmp}/event.json" --dry-run)
-echo "${plan}" | grep -q '"kind":"close-issue"' || fail "merged PR did not plan to close its issue: ${plan}"
-echo "${plan}" | grep -q '"issue":10' || fail "closed the wrong issue: ${plan}"
-echo "${plan}" | grep -q '"kind":"archive-task"' || fail "merged PR did not plan to archive its task file: ${plan}"
+echo "${plan}" | grep >/dev/null '"kind":"close-issue"' || fail "merged PR did not plan to close its issue: ${plan}"
+echo "${plan}" | grep >/dev/null '"issue":10' || fail "closed the wrong issue: ${plan}"
+echo "${plan}" | grep >/dev/null '"kind":"archive-task"' || fail "merged PR did not plan to archive its task file: ${plan}"
 echo "PASS: a merged task PR closes and archives its task"
 
 # Gate 1b: a merge into a NON-default branch completes nothing. A stacked PR
@@ -80,10 +80,10 @@ cat > "${tmp}/event.json" <<'JSON'
 JSON
 plan=$(python3 "${HOOKS}" pr-closed --tasks-dir "${tasks}" --issues "${tmp}/issues.json" \
         --event "${tmp}/event.json" --dry-run)
-if echo "${plan}" | grep -qE '"kind":"(close-issue|archive-task)"'; then
+if echo "${plan}" | grep -E >/dev/null '"kind":"(close-issue|archive-task)"'; then
     fail "a stacked merge completed the task before it reached the default branch: ${plan}"
 fi
-echo "${plan}" | grep -q '"kind":"note"' || fail "stacked merge should plan a note: ${plan}"
+echo "${plan}" | grep >/dev/null '"kind":"note"' || fail "stacked merge should plan a note: ${plan}"
 echo "PASS: a merge into a non-default branch completes nothing"
 
 # Gate 2: a PR closed WITHOUT merging releases the claim. The task is not done,
@@ -91,16 +91,16 @@ echo "PASS: a merge into a non-default branch completes nothing"
 pr_event "arsenal/t-aaaa1111-do-the-thing" false > "${tmp}/event.json"
 plan=$(python3 "${HOOKS}" pr-closed --tasks-dir "${tasks}" --issues "${tmp}/issues.json" \
         --event "${tmp}/event.json" --dry-run)
-echo "${plan}" | grep -q '"kind":"release-claim"' || fail "abandoned PR did not release the claim: ${plan}"
-if echo "${plan}" | grep -q '"kind":"close-issue"'; then fail "abandoned PR must not close the task: ${plan}"; fi
+echo "${plan}" | grep >/dev/null '"kind":"release-claim"' || fail "abandoned PR did not release the claim: ${plan}"
+if echo "${plan}" | grep >/dev/null '"kind":"close-issue"'; then fail "abandoned PR must not close the task: ${plan}"; fi
 echo "PASS: a PR closed without merging releases the claim"
 
 # Gate 3: a PR on a non-task branch is left entirely alone.
 pr_event "feat/unrelated-work" true > "${tmp}/event.json"
 plan=$(python3 "${HOOKS}" pr-closed --tasks-dir "${tasks}" --issues "${tmp}/issues.json" \
         --event "${tmp}/event.json" --dry-run)
-echo "${plan}" | grep -q '"kind":"note"' || fail "non-task PR should plan only a note: ${plan}"
-if echo "${plan}" | grep -qE '"kind":"(close-issue|release-claim)"'; then fail "non-task PR touched the queue: ${plan}"; fi
+echo "${plan}" | grep >/dev/null '"kind":"note"' || fail "non-task PR should plan only a note: ${plan}"
+if echo "${plan}" | grep -E >/dev/null '"kind":"(close-issue|release-claim)"'; then fail "non-task PR touched the queue: ${plan}"; fi
 echo "PASS: a PR outside arsenal/ never touches the queue"
 
 # Gate 4: branch matching prefers the longest task id, so a short id cannot
@@ -117,7 +117,7 @@ JSON
 pr_event "arsenal/t-aaaa1111-do-the-thing" true > "${tmp}/event.json"
 plan=$(python3 "${HOOKS}" pr-closed --tasks-dir "${tasks}" --issues "${tmp}/issues-prefix.json" \
         --event "${tmp}/event.json" --dry-run)
-echo "${plan}" | grep -q '"issue":10' || fail "prefix collision addressed the wrong task: ${plan}"
+echo "${plan}" | grep >/dev/null '"issue":10' || fail "prefix collision addressed the wrong task: ${plan}"
 rm "${tasks}/t-aaaa.md"
 echo "PASS: the longest matching task id wins a branch-name collision"
 
@@ -128,8 +128,8 @@ cat > "${tmp}/prs.json" <<'JSON'
 JSON
 plan=$(python3 "${HOOKS}" sweep-claims --tasks-dir "${tasks}" --issues "${tmp}/issues.json" \
         --prs "${tmp}/prs.json" --now "2026-06-02T00:00:00Z" --max-age-hours 24 --dry-run)
-echo "${plan}" | grep -q '"issue":10' || fail "stale claim on #10 was not released: ${plan}"
-if echo "${plan}" | grep -q '"issue":11'; then fail "claim with an open PR must not be released: ${plan}"; fi
+echo "${plan}" | grep >/dev/null '"issue":10' || fail "stale claim on #10 was not released: ${plan}"
+if echo "${plan}" | grep >/dev/null '"issue":11'; then fail "claim with an open PR must not be released: ${plan}"; fi
 echo "PASS: stale claims are released, claims with open PRs are not"
 
 # Gate 5b: a hand-opened PR names its task in the body, not the branch — that is
@@ -139,18 +139,18 @@ cat > "${tmp}/prs-body.json" <<'JSON'
 JSON
 plan=$(python3 "${HOOKS}" sweep-claims --tasks-dir "${tasks}" --issues "${tmp}/issues.json" \
         --prs "${tmp}/prs-body.json" --now "2026-06-02T00:00:00Z" --max-age-hours 24 --dry-run)
-if echo "${plan}" | grep -q '"issue":10'; then fail "a claim whose PR names it in the body was released: ${plan}"; fi
+if echo "${plan}" | grep >/dev/null '"issue":10'; then fail "a claim whose PR names it in the body was released: ${plan}"; fi
 echo "PASS: a PR naming its task by body marker keeps the claim"
 
 # Gate 6: a task file with no issue gets a handle planned; one already handled
 # does not. This is what stops a new session from opening with queue chores.
 write_task t-cccc3333 "${tasks}"
 plan=$(python3 "${HOOKS}" sync-handles --tasks-dir "${tasks}" --issues "${tmp}/issues.json" --dry-run)
-echo "${plan}" | grep -q '"task":"t-cccc3333"' || fail "missing handle was not planned: ${plan}"
-if echo "${plan}" | grep '"kind":"create-issue"' | grep -q '"task":"t-aaaa1111"'; then
+echo "${plan}" | grep >/dev/null '"task":"t-cccc3333"' || fail "missing handle was not planned: ${plan}"
+if echo "${plan}" | grep '"kind":"create-issue"' | grep >/dev/null '"task":"t-aaaa1111"'; then
     fail "already-handled task proposed again: ${plan}"
 fi
-echo "${plan}" | grep -q '"labels":\["arsenal:task","arsenal-id:t-cccc3333"\]' \
+echo "${plan}" | grep >/dev/null '"labels":\["arsenal:task","arsenal-id:t-cccc3333"\]' \
     || fail "a new handle must carry its id label: ${plan}"
 echo "PASS: only task files without an issue get a handle"
 
@@ -159,7 +159,7 @@ echo "PASS: only task files without an issue get a handle"
 # title the moment anything renames either side. An issue that already has the
 # label is left alone — this runs on every push, so a plan that re-stamps is a
 # plan that never converges.
-echo "${plan}" | grep -q '"issue":10,"kind":"stamp-id","task":"t-aaaa1111"' \
+echo "${plan}" | grep >/dev/null '"issue":10,"kind":"stamp-id","task":"t-aaaa1111"' \
     || fail "a handle with no id label was not stamped: ${plan}"
 cat > "${tmp}/issues-stamped.json" <<'JSON'
 [
@@ -169,7 +169,7 @@ cat > "${tmp}/issues-stamped.json" <<'JSON'
 ]
 JSON
 plan=$(python3 "${HOOKS}" sync-handles --tasks-dir "${tasks}" --issues "${tmp}/issues-stamped.json" --dry-run)
-if echo "${plan}" | grep -q '"kind":"stamp-id"'; then fail "a stamped handle was stamped again: ${plan}"; fi
+if echo "${plan}" | grep >/dev/null '"kind":"stamp-id"'; then fail "a stamped handle was stamped again: ${plan}"; fi
 echo "PASS: a body-marked handle is stamped with its id label exactly once"
 
 # Gate 6c: a task whose id label alone identifies its issue — no body at all,
@@ -185,7 +185,7 @@ cat > "${tmp}/issues-bodyless.json" <<'JSON'
 ]
 JSON
 plan=$(python3 "${HOOKS}" sync-handles --tasks-dir "${tasks}" --issues "${tmp}/issues-bodyless.json" --dry-run)
-if echo "${plan}" | grep '"kind":"create-issue"' | grep -q '"task":"t-aaaa1111"'; then
+if echo "${plan}" | grep '"kind":"create-issue"' | grep >/dev/null '"task":"t-aaaa1111"'; then
     fail "a retitled, body-less handle was duplicated: ${plan}"
 fi
 echo "PASS: an id label pairs a handle to its task with no body and a drifted title"
@@ -205,12 +205,12 @@ cat > "${tmp}/refs.json" <<'JSON'
 ]
 JSON
 plan=$(python3 "${HOOKS}" prune-claims --tasks-dir "${tasks}" --refs "${tmp}/refs.json" --dry-run)
-echo "${plan}" | grep -q '"ref":"refs/heads/arsenal/claims/t-eeee5555"' \
+echo "${plan}" | grep >/dev/null '"ref":"refs/heads/arsenal/claims/t-eeee5555"' \
     || fail "a merged task's claim ref was not pruned: ${plan}"
-echo "${plan}" | grep -q '"ref":"refs/heads/arsenal/claims/t-eeee5555.a3"' \
+echo "${plan}" | grep >/dev/null '"ref":"refs/heads/arsenal/claims/t-eeee5555.a3"' \
     || fail "a retry attempt ref belongs to the same task and must be pruned too: ${plan}"
-if echo "${plan}" | grep -q 't-aaaa1111'; then fail "a live task's claim is the lock: ${plan}"; fi
-if echo "${plan}" | grep -q 'feature/unrelated'; then fail "prune reached outside the claim prefix: ${plan}"; fi
+if echo "${plan}" | grep >/dev/null 't-aaaa1111'; then fail "a live task's claim is the lock: ${plan}"; fi
+if echo "${plan}" | grep >/dev/null 'feature/unrelated'; then fail "prune reached outside the claim prefix: ${plan}"; fi
 echo "PASS: finished tasks lose their claim refs, live ones keep theirs"
 
 # Gate 7: query_status reports completion drift in both directions. Merging is
@@ -234,9 +234,9 @@ if out=$(python3 "${STATUS}" --tasks-dir "${drift}" --issues "${tmp}/drift-issue
          --fail-on-problems 2>&1); then
     fail "query_status should fail on completion drift, exited 0: ${out}"
 fi
-echo "${out}" | grep -q "archived as merged but #20 is still open" \
+echo "${out}" | grep >/dev/null "archived as merged but #20 is still open" \
     || fail "merged-but-issue-open drift not reported: ${out}"
-echo "${out}" | grep -q "#21 is closed as completed but the task file is still live" \
+echo "${out}" | grep >/dev/null "#21 is closed as completed but the task file is still live" \
     || fail "closed-but-not-archived drift not reported: ${out}"
 echo "PASS: query_status fails on a task and its issue disagreeing"
 
@@ -345,11 +345,11 @@ write_task t-size1 "${mixed}"
 write_task t-rank1 "${mixed}"
 sed -i.bak 's/^priority: 5$/priority: 95/' "${mixed}/t-rank1.md" && rm -f "${mixed}"/*.bak
 out=$(python3 "${STATUS}" --tasks-dir "${mixed}" 2>&1 >/dev/null)
-echo "${out}" | grep -q "mixed-priority-convention" || fail "a mixed board was not reported: ${out}"
+echo "${out}" | grep >/dev/null "mixed-priority-convention" || fail "a mixed board was not reported: ${out}"
 # A board on one scale throughout stays clean — the finding is about the mix.
 sed -i.bak 's/^priority: 95$/priority: 10/' "${mixed}/t-rank1.md" && rm -f "${mixed}"/*.bak
 out=$(python3 "${STATUS}" --tasks-dir "${mixed}" 2>&1 >/dev/null)
-if echo "${out}" | grep -q "mixed-priority-convention"; then
+if echo "${out}" | grep >/dev/null "mixed-priority-convention"; then
     fail "a single-convention board must not be reported: ${out}"
 fi
 echo "PASS: a board mixing size and rank priorities is reported; one scale is not"
@@ -369,11 +369,11 @@ cat > "${tmp}/derived-issues.json" <<'JSON'
  {"number":31,"state":"closed","state_reason":"completed","body":"`arsenal-task: t-live`"}]
 JSON
 rows=$(python3 "${STATUS}" --tasks-dir "${derived}" --issues "${tmp}/derived-issues.json" --json 2>/dev/null)
-echo "${rows}" | grep -q '"id":"t-arch".*"terminal":true' \
+echo "${rows}" | grep >/dev/null '"id":"t-arch".*"terminal":true' \
     || fail "a file-archived task must read terminal even with an open issue: ${rows}"
-echo "${rows}" | grep -q '"id":"t-live".*"terminal":true' \
+echo "${rows}" | grep >/dev/null '"id":"t-live".*"terminal":true' \
     || fail "a task whose issue closed as completed must read terminal without a status: field: ${rows}"
-echo "${rows}" | grep -q '"issue":31' || fail "--json should carry the issue number: ${rows}"
+echo "${rows}" | grep >/dev/null '"issue":31' || fail "--json should carry the issue number: ${rows}"
 echo "PASS: --json reports terminality derived from either the issue or the file"
 
 # Gate 12: the unattended caller surfaces what it held back. `missing_handles`
@@ -400,12 +400,12 @@ cat > "${tmp}/near-issues.json" <<'JSON'
   "title": "Broaden the corpus - annotations/.json, \u22656 job families"}]
 JSON
 plan=$(python3 "${HOOKS}" sync-handles --tasks-dir "${near}" --issues "${tmp}/near-issues.json" --dry-run)
-if echo "${plan}" | grep -q '"task":"t-9999aaaa"'; then
+if echo "${plan}" | grep >/dev/null '"task":"t-9999aaaa"'; then
     fail "a near-match must still not draw a second handle: ${plan}"
 fi
-echo "${plan}" | grep -q '"kind":"note"' \
+echo "${plan}" | grep >/dev/null '"kind":"note"' \
     || fail "holding a task back unattended must produce a note, not silence: ${plan}"
-echo "${plan}" | grep -q '#70' || fail "the note must name the issue to fix: ${plan}"
+echo "${plan}" | grep >/dev/null '#70' || fail "the note must name the issue to fix: ${plan}"
 echo "PASS: a suppressed handle is reported by the unattended planner"
 
 # --- a fork PR decides nothing about this queue (#265, #302) ----------------
@@ -424,10 +424,10 @@ cat > "${tmp}/fork-event.json" <<'JSON'
 JSON
 plan=$(python3 "${HOOKS}" pr-closed --tasks-dir "${tasks}" --issues "${tmp}/issues.json" \
         --event "${tmp}/fork-event.json" --dry-run)
-if echo "${plan}" | grep -qE '"kind":"(release-claim|close-issue|archive-task)"'; then
+if echo "${plan}" | grep -E >/dev/null '"kind":"(release-claim|close-issue|archive-task)"'; then
     fail "a FORK PR reached a queue mutation: ${plan}"
 fi
-echo "${plan}" | grep -q 'opened from fork' || fail "the fork refusal does not say why: ${plan}"
+echo "${plan}" | grep >/dev/null 'opened from fork' || fail "the fork refusal does not say why: ${plan}"
 
 # ...and the same PR from the repo itself still works, so the check is a fork
 # check and not a blanket refusal.
@@ -440,7 +440,7 @@ cat > "${tmp}/same-event.json" <<'JSON'
 JSON
 plan=$(python3 "${HOOKS}" pr-closed --tasks-dir "${tasks}" --issues "${tmp}/issues.json" \
         --event "${tmp}/same-event.json" --dry-run)
-echo "${plan}" | grep -q '"kind":"release-claim"' \
+echo "${plan}" | grep >/dev/null '"kind":"release-claim"' \
     || fail "a same-repo PR must still release its claim: ${plan}"
 # A deleted or newly-private fork is sent as `head.repo: null`, which is not
 # proof of a same-repo PR — it is the same fork with its provenance missing. A
@@ -455,7 +455,7 @@ cat > "${tmp}/gone-fork-event.json" <<'JSON'
 JSON
 plan=$(python3 "${HOOKS}" pr-closed --tasks-dir "${tasks}" --issues "${tmp}/issues.json" \
         --event "${tmp}/gone-fork-event.json" --dry-run)
-if echo "${plan}" | grep -qE '"kind":"(release-claim|close-issue|archive-task)"'; then
+if echo "${plan}" | grep -E >/dev/null '"kind":"(release-claim|close-issue|archive-task)"'; then
     fail "a fork PR with a deleted head repo reached a queue mutation: ${plan}"
 fi
 

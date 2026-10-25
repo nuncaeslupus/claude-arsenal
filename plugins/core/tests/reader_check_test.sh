@@ -101,7 +101,7 @@ if [ ${#PY[@]} -gt 0 ]; then
     rb="$repo/$d/yourproject-2026-01-02-b-design-v1-${stamp}-reader.html"
     [ -f "$ra" ] && [ -f "$rb" ] \
         || fail "a non-canonical doc's reader is not named for its stem: $(ls "$repo/$d")"
-    ls "$repo/$d" | grep -q -- "-spec-v" && fail "a non-canonical doc still writes a spec reader"
+    ls "$repo/$d" | grep >/dev/null -- "-spec-v" && fail "a non-canonical doc still writes a spec reader"
     ns_a=$(grep -o "var NS = '[^']*'" "$ra")
     ns_b=$(grep -o "var NS = '[^']*'" "$rb")
     [ -n "$ns_a" ] && [ "$ns_a" != "$ns_b" ] \

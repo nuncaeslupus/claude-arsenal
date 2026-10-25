@@ -190,7 +190,7 @@ n=$(python3 "${SELECT_PY}" --tasks-dir "${TASKS}" --capability surface:cli --max
 
 # the reason is reported, not silently applied
 python3 "${SELECT_PY}" --tasks-dir "${TASKS}" --capability surface:cli --max 9 --isolation-sentinel "${sentinel}" \
-    </dev/null 2>&1 >/dev/null | grep -q "capped at 1" \
+    </dev/null 2>&1 >/dev/null | grep >/dev/null "capped at 1" \
     || fail "the clamp must say why the batch shrank"
 
 # A missing sentinel DOES clamp, and this expectation is the inverse of what it

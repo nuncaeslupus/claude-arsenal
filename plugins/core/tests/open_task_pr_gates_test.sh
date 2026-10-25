@@ -526,7 +526,7 @@ if pgrep -P "${pre_pid}" -f 'sleep 30' >/dev/null 2>&1; then
     [[ -f "arsenal/tasks/_history/t-pre.md" ]] \
         || fail "fixture error: the task file is not archived while the gate runs"
     gate_kids="$(pgrep -P "${pre_pid}" || true)"
-    kill -TERM "${pre_pid}"; wait "${pre_pid}"; rc=$?
+    kill -TERM "${pre_pid}" ${gate_kids}; wait "${pre_pid}"; rc=$?
     #     Killing the script does not reap the gate it spawned, and a 30-second
     #     orphan outlives this test by more than the test takes.
     [[ -n "${gate_kids}" ]] && kill -TERM ${gate_kids} 2>/dev/null

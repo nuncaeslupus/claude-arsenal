@@ -70,7 +70,7 @@ echo "feature" > feature.txt
 if err=$(ARSENAL_COAUTHOR="" bash "${HELPER}" lo-guard-unset "Guard test" 2>&1); then
     echo "FAIL: expected non-zero exit on a shared checkout, got exit 0 with output: ${err}" >&2; exit 1
 fi
-if ! echo "${err}" | grep -q "git add -A refused on shared checkout"; then
+if ! echo "${err}" | grep >/dev/null "git add -A refused on shared checkout"; then
     echo "FAIL: expected 'git add -A refused on shared checkout' in stderr, got: ${err}" >&2; exit 1
 fi
 echo "PASS: guard refuses git add -A on a shared checkout"
@@ -80,7 +80,7 @@ echo "PASS: guard refuses git add -A on a shared checkout"
 if err=$(ARSENAL_SURFACE="worktree" ARSENAL_COAUTHOR="" bash "${HELPER}" lo-guard-selfcert "Guard test" 2>&1); then
     echo "FAIL: ARSENAL_SURFACE=worktree self-certification still unlocks the guard: ${err}" >&2; exit 1
 fi
-if ! echo "${err}" | grep -q "git add -A refused on shared checkout"; then
+if ! echo "${err}" | grep >/dev/null "git add -A refused on shared checkout"; then
     echo "FAIL: expected 'git add -A refused on shared checkout' in stderr, got: ${err}" >&2; exit 1
 fi
 echo "PASS: guard is not unlocked by the caller's own ARSENAL_SURFACE claim"
@@ -109,7 +109,7 @@ if err=$(ARSENAL_ISSUES_JSON=/nonexistent-issues.json ARSENAL_ALLOW_SHARED_ADD=1
          ARSENAL_COAUTHOR="" bash "${HELPER}" lo-noissue "No handle" 2>&1); then
     echo "FAIL: expected refusal when no issue handle resolves, got exit 0: ${err}" >&2; exit 1
 fi
-if ! echo "${err}" | grep -q "cannot resolve the issue handle"; then
+if ! echo "${err}" | grep >/dev/null "cannot resolve the issue handle"; then
     echo "FAIL: expected 'cannot resolve the issue handle' in stderr, got: ${err}" >&2; exit 1
 fi
 if [[ "$(git rev-parse HEAD)" != "${before_head}" ]]; then
@@ -177,7 +177,7 @@ subj=$(git log -1 --format=%s)
 if [[ "${subj}" != "feat: Add feature thing" ]]; then
     echo "FAIL: expected Conventional subject 'feat: Add feature thing', got '${subj}'" >&2; exit 1
 fi
-if ! git log -1 --format=%b | grep -q "Co-Authored-By: Test Bot <noreply@anthropic.com>"; then
+if ! git log -1 --format=%b | grep >/dev/null "Co-Authored-By: Test Bot <noreply@anthropic.com>"; then
     echo "FAIL: Co-Authored-By trailer missing" >&2; exit 1
 fi
 echo "PASS: Conventional Commit message + Co-Authored-By trailer"
@@ -185,7 +185,7 @@ echo "PASS: Conventional Commit message + Co-Authored-By trailer"
 # Gate 4b: `Closes #<issue>` is in the commit message. The PR body carries it
 # too, but only the commit form survives a squash merge and fires for a stacked
 # PR whose base is not the default branch.
-if ! git log -1 --format=%b | grep -q "Closes #77"; then
+if ! git log -1 --format=%b | grep >/dev/null "Closes #77"; then
     echo "FAIL: commit message missing 'Closes #77' — merging would not close the task" >&2; exit 1
 fi
 echo "PASS: commit message carries Closes #<issue>"
@@ -201,7 +201,7 @@ fi
 if ! grep -q "^status: merged$" arsenal/tasks/_history/lo-x001.md; then
     echo "FAIL: archived task file does not record 'status: merged'" >&2; exit 1
 fi
-if ! git log -1 --name-status | grep -q "_history/lo-x001.md"; then
+if ! git log -1 --name-status | grep >/dev/null "_history/lo-x001.md"; then
     echo "FAIL: the archive is not part of the PR commit" >&2; exit 1
 fi
 echo "PASS: task file archived to _history with status: merged, inside the PR"
@@ -237,10 +237,10 @@ if err=$(ARSENAL_ISSUES_JSON="${tmpwork}/issues2.json" ARSENAL_ALLOW_SHARED_ADD=
          ARSENAL_COAUTHOR="" bash "${HELPER}" lo-x002 "Blocked archive" 2>&1); then
     echo "FAIL: expected a failed archive to abort, got exit 0: ${err}" >&2; exit 1
 fi
-if ! echo "${err}" | grep -q "could not be archived"; then
+if ! echo "${err}" | grep >/dev/null "could not be archived"; then
     echo "FAIL: expected a 'could not be archived' refusal, got: ${err}" >&2; exit 1
 fi
-if git log --oneline "${before}..HEAD" 2>/dev/null | grep -q .; then
+if git log --oneline "${before}..HEAD" 2>/dev/null | grep >/dev/null .; then
     echo "FAIL: a commit was made despite the archive failing" >&2; exit 1
 fi
 echo "PASS: a task file that cannot be archived aborts before committing"
@@ -272,7 +272,7 @@ fi
 if [[ ! -f arsenal/tasks/_history/lo-x003.md ]]; then
     echo "FAIL: run from a subdirectory did not archive the task file" >&2; exit 1
 fi
-if ! git log -1 --name-status | grep -q "_history/lo-x003.md"; then
+if ! git log -1 --name-status | grep >/dev/null "_history/lo-x003.md"; then
     echo "FAIL: the subdirectory run's archive is not part of the PR commit" >&2; exit 1
 fi
 echo "PASS: the archive is repo-root-relative, not cwd-relative"
@@ -304,7 +304,7 @@ out=$(ARSENAL_ISSUES_JSON="${tmpwork}/issues4.json" ARSENAL_ALLOW_SHARED_ADD=1 A
     || { echo "FAIL: --branch did not commit on top of the session's own work" >&2; exit 1; }
 git ls-remote --exit-code --heads origin session/designated >/dev/null 2>&1 \
     || { echo "FAIL: the designated branch was not pushed" >&2; exit 1; }
-git ls-remote --heads origin 'arsenal/lo-x004*' | grep -q . \
+git ls-remote --heads origin 'arsenal/lo-x004*' | grep >/dev/null . \
     && { echo "FAIL: --branch still pushed a generated arsenal/ branch" >&2; exit 1; }
 [[ -f arsenal/tasks/_history/lo-x004.md ]] \
     || { echo "FAIL: --branch skipped the archive" >&2; exit 1; }

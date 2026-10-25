@@ -67,12 +67,12 @@ git checkout -q -b arsenal/t-def456-another
 echo "PRECIOUS UNCOMMITTED WORK" > precious.txt
 bash "${POSTCHECK}" >/dev/null 2>&1
 [[ -f precious.txt ]] && fail "test setup: the file should have been cleaned"
-if ! git for-each-ref --format='%(refname)' | grep -q 'arsenal-rescue'; then
+if ! git for-each-ref --format='%(refname)' | grep >/dev/null 'arsenal-rescue'; then
     fail "a dirty tree must be snapshotted to a rescue ref before the restore"
 fi
 found_precious=0
 for ref in $(git for-each-ref --format='%(refname)' | grep 'arsenal-rescue'); do
-    if git ls-tree -r --name-only "${ref}" 2>/dev/null | grep -q 'precious.txt'; then
+    if git ls-tree -r --name-only "${ref}" 2>/dev/null | grep >/dev/null 'precious.txt'; then
         found_precious=1; break
     fi
 done
@@ -131,7 +131,7 @@ echo "PASS: an unreported worker root records nothing rather than 'available'"
 mkdir -p arsenal/tasks
 echo '{}' > "${tmp}/state.json"
 sel=$(python3 "${SELECT}" --tasks-dir arsenal/tasks --state "${tmp}/state.json" --max 4 2>&1 >/dev/null </dev/null || true)
-echo "${sel}" | grep -q "batch capped at 1 task" \
+echo "${sel}" | grep >/dev/null "batch capped at 1 task" \
     || fail "unknown isolation must clamp the batch, stderr was: ${sel}"
 echo "PASS: unknown isolation clamps the batch to one worker"
 

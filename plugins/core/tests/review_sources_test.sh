@@ -104,10 +104,10 @@ cat > "${fx}/statuses.json" <<JSON
   "creator":{"login":"coderabbitai[bot]"}}]
 JSON
 out=$(rs "${fx}" 5) || fail "skip fixture: exit $?"
-line "bot:coderabbitai" <<<"${out}" | grep -q "unavailable *skipped:" \
+line "bot:coderabbitai" <<<"${out}" | grep >/dev/null "unavailable *skipped:" \
     || fail "a SUCCESS status saying 'Review skipped' must classify unavailable (skipped):
 ${out}"
-line "ci" <<<"${out}" | grep -q " ok " || fail "the bot's own status is not CI:
+line "ci" <<<"${out}" | grep >/dev/null " ok " || fail "the bot's own status is not CI:
 ${out}"
 # ...and the same notice arriving as an EDIT of an older summary comment.
 fx2="${tmp}/fx-skip-edit"; fixture "${fx2}" "${HEAD}"
@@ -116,7 +116,7 @@ cat > "${fx2}/issue_comments.json" <<JSON
   "updated_at":"$(at 2)","body":"<!-- summary -->\nThis repository does not receive automatic reviews."}]
 JSON
 out=$(rs "${fx2}" 5) || fail "edited-comment fixture: exit $?"
-line "bot:coderabbitai" <<<"${out}" | grep -q 'unavailable *skipped: .*5929979667' \
+line "bot:coderabbitai" <<<"${out}" | grep >/dev/null 'unavailable *skipped: .*5929979667' \
     || fail "an edited summary comment carrying a skip notice must classify skipped:
 ${out}"
 echo "PASS: test_classify_skip_notice_returns_skipped"
@@ -130,11 +130,11 @@ cat > "${fx}/issue_comments.json" <<JSON
   "updated_at":"$(at 2)","body":"<!-- This is an auto-generated comment: review in progress by coderabbit.ai -->\nCurrently processing new changes in this PR."}]
 JSON
 out=$(rs "${fx}" 5) || fail "in-progress fixture: exit $?"
-line "bot:coderabbitai" <<<"${out}" | grep -q "pending" \
+line "bot:coderabbitai" <<<"${out}" | grep >/dev/null "pending" \
     || fail "a review-in-progress summary must classify pending:
 ${out}"
 out=$(rs "${fx}" 40) || fail "stale in-progress fixture: exit $?"
-line "bot:coderabbitai" <<<"${out}" | grep -q "absent" \
+line "bot:coderabbitai" <<<"${out}" | grep >/dev/null "absent" \
     || fail "in progress past bot-wait-min must end as absent:
 ${out}"
 echo "PASS: test_classify_in_progress_is_pending_then_bounded"
@@ -147,7 +147,7 @@ cat > "${fx}/issue_comments.json" <<JSON
   "updated_at":"$(at 3)","body":"You have reached your daily quota limit. Please try again later."}]
 JSON
 out=$(rs "${fx}" 5) || fail "rate-limit fixture: exit $?"
-line "bot:gemini-code-assist" <<<"${out}" | grep -q "unavailable *rate-limited:" \
+line "bot:gemini-code-assist" <<<"${out}" | grep >/dev/null "unavailable *rate-limited:" \
     || fail "a quota notice must classify unavailable (rate-limited):
 ${out}"
 # --- test_unavailable_bot_is_never_pending (#507) -----------------------------
@@ -161,10 +161,10 @@ cat > "${fx}/issue_comments.json" <<JSON
   "body":"Your free tier review cap has been reached for this hour."}]
 JSON
 out=$(rs "${fx}" 2) || fail "free-tier fixture: exit $?"
-line "bot:reviewer-a" <<<"${out}" | grep -q "unavailable *rate-limited:" \
+line "bot:reviewer-a" <<<"${out}" | grep >/dev/null "unavailable *rate-limited:" \
     || fail "a free-tier cap must be unavailable two minutes in, not pending:
 ${out}"
-line "decision" <<<"${out}" | grep -q "local-review=diff" || fail "the decision must fall through to a local review:
+line "decision" <<<"${out}" | grep >/dev/null "local-review=diff" || fail "the decision must fall through to a local review:
 ${out}"
 grep -q "provisional" <<<"${out}" && fail "an unavailable bot must not leave the decision provisional:
 ${out}"
@@ -172,17 +172,17 @@ cat > "${fx}/issue_comments.json" <<JSON
 [{"id":52,"user":{"login":"reviewer-a[bot]"},"created_at":"$(at 1)","updated_at":"$(at 1)",
   "body":"Reviews are skipped for repositories with fewer than 10 stars."}]
 JSON
-line "bot:reviewer-a" <<<"$(rs "${fx}" 2)" | grep -q "unavailable *skipped:" \
+line "bot:reviewer-a" <<<"$(rs "${fx}" 2)" | grep >/dev/null "unavailable *skipped:" \
     || fail "a 'fewer than N stars' skip must be unavailable"
 # A host's own phrase, via bot-unavailable-notices, joins the shipped table.
 cat > "${fx}/issue_comments.json" <<JSON
 [{"id":53,"user":{"login":"reviewer-a[bot]"},"created_at":"$(at 1)","updated_at":"$(at 1)",
   "body":"Out of review credits for this billing period."}]
 JSON
-line "bot:reviewer-a" <<<"$(rs "${fx}" 2)" | grep -q "pending" \
+line "bot:reviewer-a" <<<"$(rs "${fx}" 2)" | grep >/dev/null "pending" \
     || fail "an unknown phrase is silence until configured"
 config 'review-bots = ["reviewer-a[bot]"]' 'bot-unavailable-notices = ["out of review credits"]'
-line "bot:reviewer-a" <<<"$(rs "${fx}" 2)" | grep -q "unavailable" \
+line "bot:reviewer-a" <<<"$(rs "${fx}" 2)" | grep >/dev/null "unavailable" \
     || fail "a bot-unavailable-notices phrase must mark the bot unavailable"
 config 'review-bots = ["reviewer-a[bot]"]' 'bot-unavailable-notices = ["(unclosed"]'
 (cd "${repo}" && python3 "${RS}" --pr 7 --fixture "${fx}" >/dev/null 2>&1); code=$?
@@ -196,7 +196,7 @@ cat > "${fx}/reviews.json" <<JSON
   "commit_id":"${HEAD}","submitted_at":"2026-09-30T09:00:00Z","body":"looks fine"}]
 JSON
 out=$(rs "${fx}" 5) || fail "old-review fixture: exit $?"
-line "bot:gemini-code-assist" <<<"${out}" | grep -q " ok " \
+line "bot:gemini-code-assist" <<<"${out}" | grep >/dev/null " ok " \
     && fail "a review of an older head must not count as ok for this head:
 ${out}"
 echo "PASS: test_classify_rate_limit_returns_rate_limited"
@@ -205,11 +205,11 @@ echo "PASS: test_classify_rate_limit_returns_rate_limited"
 config 'review-bots = ["coderabbitai[bot]"]' 'bot-wait-min = 20'
 fx="${tmp}/fx-silent"; fixture "${fx}" "${HEAD}"
 out=$(rs "${fx}" 10) || fail "silent fixture: exit $?"
-line "bot:coderabbitai" <<<"${out}" | grep -q "pending" \
+line "bot:coderabbitai" <<<"${out}" | grep >/dev/null "pending" \
     || fail "10 min of silence under a 20 min wait is still pending:
 ${out}"
 out=$(rs "${fx}" 25) || fail "silent fixture: exit $?"
-line "bot:coderabbitai" <<<"${out}" | grep -q "absent" \
+line "bot:coderabbitai" <<<"${out}" | grep >/dev/null "absent" \
     || fail "25 min of silence under a 20 min wait must be absent:
 ${out}"
 # A bot check that finished neutral with no output is a timeout, not a review.
@@ -221,7 +221,7 @@ cat > "${fx}/check_runs.json" <<JSON
   "started_at":"${PUSH}","app":{"slug":"claude"},"output":{"title":null,"summary":null}}]
 JSON
 out=$(rs "${fx}" 5) || fail "neutral fixture: exit $?"
-line "bot:claude" <<<"${out}" | grep -q "absent" \
+line "bot:claude" <<<"${out}" | grep >/dev/null "absent" \
     || fail "a neutral bot check with no output must classify absent:
 ${out}"
 echo "PASS: test_classify_silence_past_wait_returns_absent"
@@ -250,7 +250,7 @@ cat > "${fx}/reviews.json" <<JSON
   "commit_id":"${HEAD}","submitted_at":"$(at 4)","body":"Actionable comments posted: 0"}]
 JSON
 out=$(rs "${fx}" 5) || fail "ok fixture: exit $?"
-line "decision" <<<"${out}" | grep -q "local-review=none  full-suite=skip" \
+line "decision" <<<"${out}" | grep >/dev/null "local-review=none  full-suite=skip" \
     || fail "CI ok + bot reviewed this head + small diff must decide none/skip:
 ${out}"
 echo "PASS: test_decide_ci_ok_bot_ok_low_risk_returns_none"
@@ -363,7 +363,7 @@ cat > "${fx}/issue_comments.json" <<JSON
   "body":"Review triggered.\n\n> Note: the bot is an incremental review system and does not re-review already reviewed commits. This command is applicable only when automatic reviews are paused."}]
 JSON
 out=$(rs "${fx}" 27) || fail "acknowledgement fixture: exit $?"
-line "bot:coderabbitai" <<<"${out}" | grep -q "pending" \
+line "bot:coderabbitai" <<<"${out}" | grep >/dev/null "pending" \
     || fail "an acknowledgement of our trigger must keep the bot pending:
 ${out}"
 st=$(qps "${fx}" 27 --trigger | jget state)
@@ -378,14 +378,14 @@ cat > "${fx}/issue_comments.json" <<JSON
 [{"id":61,"user":{"login":"coderabbitai[bot]"},"created_at":"$(at 26)","updated_at":"$(at 26)",
   "body":"Automatic reviews are disabled for this repository."}]
 JSON
-line "bot:coderabbitai" <<<"$(rs "${fx}" 27)" | grep -q "pending" \
+line "bot:coderabbitai" <<<"$(rs "${fx}" 27)" | grep >/dev/null "pending" \
     || fail "a skip notice after our trigger must wait one bot-wait-min, not end the loop"
 # ...but a rate limit after it is final: the bot said it will not review.
 cat > "${fx}/issue_comments.json" <<JSON
 [{"id":62,"user":{"login":"coderabbitai[bot]"},"created_at":"$(at 26)","updated_at":"$(at 26)",
   "body":"Rate limit exceeded: try again in 42 minutes."}]
 JSON
-line "bot:coderabbitai" <<<"$(rs "${fx}" 27)" | grep -q "unavailable *rate-limited:" \
+line "bot:coderabbitai" <<<"$(rs "${fx}" 27)" | grep >/dev/null "unavailable *rate-limited:" \
     || fail "a rate limit after our trigger stays final"
 # Without a trigger on record, the acknowledgement wording alone reads in-progress.
 rm -rf "${repo}/tmp"
@@ -393,7 +393,7 @@ cat > "${fx}/issue_comments.json" <<JSON
 [{"id":63,"user":{"login":"coderabbitai[bot]"},"created_at":"$(at 2)","updated_at":"$(at 2)",
   "body":"Review triggered. This command is applicable only when automatic reviews are paused."}]
 JSON
-line "bot:coderabbitai" <<<"$(rs "${fx}" 5)" | grep -q "pending" \
+line "bot:coderabbitai" <<<"$(rs "${fx}" 5)" | grep >/dev/null "pending" \
     || fail "an acknowledgement row must classify in-progress ahead of the skip rows"
 echo "PASS: test_trigger_acknowledgement_is_not_a_skip"
 
