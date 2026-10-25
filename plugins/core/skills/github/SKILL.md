@@ -1,6 +1,6 @@
 ---
 name: github
-description: Applies Conventional Commits and branch naming, opens PRs, and polls review bots and CI until the PR can merge. Use when the user commits, opens a PR or addresses review feedback. Not for reviewing a diff (review) or plain git mechanics (execution).
+description: Applies commit and PR conventions, then polls review bots and CI until the PR can merge. Use when the user commits, opens a PR or handles review feedback. Not for judging a diff.
 metadata:
   type: workflow
 ---

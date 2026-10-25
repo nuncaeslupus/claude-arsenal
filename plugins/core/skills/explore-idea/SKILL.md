@@ -1,6 +1,6 @@
 ---
 name: explore-idea
-description: Shapes a vague idea one question at a time, with pros and cons and a kept decision log, then hands off to specify. Use when the user has an idea but no stated problem yet, or a list of ideas to sort or keep for later. Not for a problem already stated (specify).
+description: Shapes a vague idea one question at a time with a decision log, then hands off to specify. Use when the user has an idea but no stated problem, or ideas to sort. Not for a stated problem.
 metadata:
   section: workflow
   type: workflow

@@ -18,6 +18,14 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [5.10.8] - 2026-10-25
+
+### Changed
+- **Smaller skills listing:** every skill description was tightened (5550 → 3998 chars across all 23), keeping each one's "Use when" trigger and "Not for" exclusion. Every session pays this listing on every turn.
+- The `ARSENAL_*` tuning-knob table moved from `references/worker-loop.md` (read on every task pickup) to `references/performance-tuning.md` § Tuning knobs.
+- Examples and pointers no longer name a specific review bot or skills this bundle does not ship (`engineering-core`, `code-review`).
+- Removed leftover references to the coordination branch retired in v0.25.0.
+
 ## [5.10.7] - 2026-10-25
 
 ### Fixed

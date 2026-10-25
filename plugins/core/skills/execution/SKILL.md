@@ -1,6 +1,6 @@
 ---
 name: execution
-description: Implements code changes from a design, with tests and merge-ready output. Use when the user is building what a design or task describes. Not for investigation (specify), design (design) or one-off scripts.
+description: Implements a planned task test-first, through to a merge-ready PR. Use when the user is building what a plan describes. Not for one-off scripts.
 metadata:
   section: workflow
   type: workflow

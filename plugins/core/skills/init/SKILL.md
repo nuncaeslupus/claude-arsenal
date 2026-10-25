@@ -1,6 +1,6 @@
 ---
 name: init
-description: Sets up claude-arsenal/ in a host repo or registers a workspace (--workspace); safe to re-run. Use when the user wants the arsenal installed, refreshed or a workspace added. Not for adding tasks (queue-add) or resuming work (queue-next).
+description: Installs or refreshes claude-arsenal/ in a host repo, or adds a workspace. Use when the user wants the arsenal set up, updated or a workspace added. Not for queueing tasks.
 user-invocable: true
 argument-hint: "[--repo-path PATH] [--profile NAME] [--sections A,B] [--no-branch-protection] [--interview] [--workspace NAME] [--root PATH] [--spec PATH] [--plan PATH]"
 ---
@@ -56,7 +56,7 @@ Pass only what was answered; a skipped question writes nothing and keeps its def
 ```bash
 python3 "${CLAUDE_SKILL_DIR}/scripts/init.py" --repo-path . --autonomy autonomous \
   --verification balanced --review-budget-min 10 --bot-wait-min 20 \
-  --bot-triggers "coderabbitai[bot]=@coderabbitai review"
+  --bot-triggers "reviewbot[bot]=@reviewbot review"
 ```
 
 ## After a first install — questions init prints

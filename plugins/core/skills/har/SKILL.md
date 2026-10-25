@@ -1,6 +1,6 @@
 ---
 name: har
-description: Records, reads, searches and filters HAR captures and turns them into scrapers — which request returned a string, how results page, what to send. Use when the user has or needs a HAR capture. Not for a JSON or HTML file with no capture.
+description: Records, searches, filters and redacts HAR captures and turns them into scrapers. Use when the user has or needs a HAR capture. Not for non-capture JSON or HTML.
 argument-hint: "--input capture.har"
 user-invocable: true
 metadata:

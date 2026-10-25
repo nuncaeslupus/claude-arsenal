@@ -1,6 +1,6 @@
 ---
 name: skill-workshop
-description: Authors, edits, reviews, validates and audits Claude Code skills; opens before any SKILL.md, reference, script or eval is touched. Use when the user is working on a skill. Not for routine code edits, feature work or unrelated debugging.
+description: Authors, validates and audits Claude Code skills; required before any SKILL.md, reference, script or eval changes. Use when the user is working on a skill. Not for routine code edits.
 ---
 
 # skill-workshop

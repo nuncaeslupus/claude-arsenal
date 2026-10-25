@@ -1,6 +1,6 @@
 ---
 name: review
-description: Reviews a PR, diff, design doc or proposal for risks, tech debt and standards. Use when the user wants something reviewed. Not for implementation (execution), design (design) or release sign-off (ship).
+description: Reviews a PR, diff, design doc or proposal for risks and standards. Use when the user wants something reviewed. Not for release sign-off (ship).
 metadata:
   section: workflow
   type: workflow
@@ -23,7 +23,7 @@ If the intention is unclear, ask before reviewing code.
 
 ### Step 2: Check engineering standards compliance
 
-If engineering standards exist in the host repo (a project-level `engineering-core` skill or equivalent), verify:
+If engineering standards exist in the host repo (a project-level engineering-standards skill or equivalent), verify:
 
 - [ ] Code structure follows repo conventions
 - [ ] Tech stack follows the approved stack
