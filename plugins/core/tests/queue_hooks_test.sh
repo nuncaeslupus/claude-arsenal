@@ -132,6 +132,16 @@ echo "${plan}" | grep -q '"issue":10' || fail "stale claim on #10 was not releas
 if echo "${plan}" | grep -q '"issue":11'; then fail "claim with an open PR must not be released: ${plan}"; fi
 echo "PASS: stale claims are released, claims with open PRs are not"
 
+# Gate 5b: a hand-opened PR names its task in the body, not the branch — that is
+# just as live, and releasing it hands the task to a second session.
+cat > "${tmp}/prs-body.json" <<'JSON'
+[{"head": {"ref": "fix-thing"}, "body": "`arsenal-task: t-aaaa1111`"}]
+JSON
+plan=$(python3 "${HOOKS}" sweep-claims --tasks-dir "${tasks}" --issues "${tmp}/issues.json" \
+        --prs "${tmp}/prs-body.json" --now "2026-06-02T00:00:00Z" --max-age-hours 24 --dry-run)
+if echo "${plan}" | grep -q '"issue":10'; then fail "a claim whose PR names it in the body was released: ${plan}"; fi
+echo "PASS: a PR naming its task by body marker keeps the claim"
+
 # Gate 6: a task file with no issue gets a handle planned; one already handled
 # does not. This is what stops a new session from opening with queue chores.
 write_task t-cccc3333 "${tasks}"

@@ -18,6 +18,16 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [5.10.6] - 2026-10-25
+
+### Fixed
+- **Session start no longer reprints the whole pending changelog.** `check_update.sh --check-only` (run at every session start while an update is pending) and the `/init` upgrade banner now show the newest 5 entries and one line counting the rest. A consumer a month behind was paying 15–40k tokens of release notes per session.
+- `sweep-claims` no longer releases a claim whose task has a hand-opened PR naming it by the `arsenal-task:` body marker (it only recognised `arsenal/<id>-…` branches), which handed the task to a second session.
+- `handle_sync.py` defaults `--label` to your `task-label` setting instead of a hardcoded `arsenal:task`, so a renamed label no longer yields duplicate handles. `create_task.py` prints the `arsenal-id:<id>` label too.
+- `branch_protection.py --force` now keeps linear history, conversation resolution, last-push approval, branch lock and block-creations; the PUT used to switch them off.
+- The post-merge archive step no longer reports "archived" when its `git add`/`commit` failed.
+- `handle_sync.py` no longer claims tasks were "held back" when the only warning was the by-title notice.
+
 ## [5.10.5] - 2026-10-20
 
 - `references/performance-tuning.md` gains **Time from PR to merge**: measured
