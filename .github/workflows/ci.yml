@@ -20,7 +20,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04, macos-latest]
+        os: [ubuntu-22.04]  # macOS runs make test in macos.yml
     steps:
       - name: Checkout
         uses: actions/checkout@v4

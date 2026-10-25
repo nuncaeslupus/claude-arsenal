@@ -81,7 +81,7 @@ echo "PASS: upgrade preserves the sections already in use, and records them"
 repo="$tmp/optout"; mkdir -p "$repo"
 python3 "$init_py" --repo-path "$repo" --profile python >/dev/null 2>&1 || fail "optout fixture failed"
 have "$repo" mutmut-report || fail "optout fixture missing python skills"
-sed -i 's/^python = true/python = false/' "$repo/arsenal/config.toml"
+perl -pi -e 's/^python = true/python = false/' "$repo/arsenal/config.toml"
 
 python3 "$init_py" --repo-path "$repo" --silent >/dev/null 2>&1 || fail "optout init exited non-zero"
 have "$repo" mutmut-report && fail "a section switched off in config.toml was still installed"
@@ -113,7 +113,7 @@ echo 'PASS: --sections "" means core only, not "unset"'
 # `workflow = treu` used to read as false and silently delete six skills.
 repo="$tmp/malformed"; mkdir -p "$repo"
 python3 "$init_py" --repo-path "$repo" --profile general >/dev/null 2>&1 || fail "fixture failed"
-sed -i 's/^workflow = true/workflow = "treu"/' "$repo/arsenal/config.toml"
+perl -pi -e 's/^workflow = true/workflow = "treu"/' "$repo/arsenal/config.toml"
 python3 "$init_py" --repo-path "$repo" --silent >/dev/null 2>&1 \
     && fail "a non-boolean [skills] value was accepted"
 have "$repo" specify || fail "a refused install pruned skills anyway"
@@ -125,7 +125,7 @@ echo "PASS: non-boolean [skills] value is fatal, and prunes nothing"
 # name absent from the table falls back to its shipped default, not to off.
 repo="$tmp/typokey"; mkdir -p "$repo"
 python3 "$init_py" --repo-path "$repo" --profile general >/dev/null 2>&1 || fail "fixture failed"
-sed -i 's/^workflow = true/worklfow = true/' "$repo/arsenal/config.toml"
+perl -pi -e 's/^workflow = true/worklfow = true/' "$repo/arsenal/config.toml"
 python3 "$init_py" --repo-path "$repo" --silent >/dev/null 2>&1 || fail "typo key exited non-zero"
 have "$repo" specify || fail "a misspelled key silently pruned the workflow skills"
 echo "PASS: a misspelled [skills] key does not prune anything"

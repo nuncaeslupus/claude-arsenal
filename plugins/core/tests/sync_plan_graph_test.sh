@@ -52,7 +52,7 @@ echo "PASS: nodes are tasks, edges are the Depends column"
 # --- 3: the validator names an edge the graph is missing, and one nobody declared ---
 sed 's/^| T4 | <description> | <service> | S\/M\/L | T2, T3 |/| T4 | <description> | <service> | S\/M\/L | T2 |/' \
     "$TEMPLATE" > "$tmp/drift.md"
-sed -i 's/^| T3 | <description> | <service> | S\/M\/L | T1 |/| T3 | <description> | <service> | S\/M\/L | T1, T2 |/' "$tmp/drift.md"
+perl -pi -e 's/^\| T3 \| <description> \| <service> \| S\/M\/L \| T1 \|/| T3 | <description> | <service> | S\/M\/L | T1, T2 |/' "$tmp/drift.md"
 out="$(python3 "$PLAN_V" --input "$tmp/drift.md" 2>&1)" && fail "a graph that drifted from Depends passed: $out"
 case "$out" in *"missing edge T2 → T3"*) ;; *) fail "the missing edge T2 → T3 was not named: $out" ;; esac
 case "$out" in *"has edge T3 → T4, which no Depends cell declares"*) ;; *) fail "the extra edge T3 → T4 was not named: $out" ;; esac
@@ -209,7 +209,7 @@ n1=$(grep -c '^```drawspec$' "$tmp/big.md")
 python3 "$GRAPH" --input "$tmp/big.md" --apply >/dev/null
 [[ "$(grep -c '^```drawspec$' "$tmp/big.md")" == "${n1}" ]] || fail "a second --apply duplicated fences"
 # A drift across phases is still named (T3 reaches nothing in phase 3 before this).
-sed -i 's/^| T13 | task T13 | svc | S | \([^|]*\) |/| T13 | task T13 | svc | S | \1, T3 |/' "$tmp/big.md"
+perl -pi -e 's/^\| T13 \| task T13 \| svc \| S \| ([^|]*) \|/| T13 | task T13 | svc | S | $1, T3 |/' "$tmp/big.md"
 grep -q '^| T13 .*, T3 |' "$tmp/big.md" || fail "test setup: T13 did not gain T3"
 out="$(python3 "$PLAN_V" --input "$tmp/big.md" 2>&1)" && fail "a cross-phase dependency missing from the split graph passed: $out"
 case "$out" in *"missing edge T3 → T13"*) ;; *) fail "the missing cross-phase edge was not named: $out" ;; esac

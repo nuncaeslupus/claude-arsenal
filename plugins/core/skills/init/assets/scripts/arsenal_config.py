@@ -210,20 +210,15 @@ SETTINGS: dict[str, Setting] = {
     # by the github skill's query_pr_state.py, which watches for their :eyes:,
     # their line comments and their approval before a PR is callable.
     #
-    # The three shipped here are a starting value, not a claim about your repo:
-    # they are the ones this bundle was exercised against. A repo running a
-    # different reviewer had no way to say so short of passing --watch-bots at
-    # every call, and a repo running none at all had the loop wait for a signal
-    # that was never coming.
-    #
-    # An empty list is the documented way to say "no review bot here": the loop
-    # then runs CI-only, and `ready_to_merge` rests on green CI alone. That is
-    # the weaker gate, which is why it is opt-in rather than the default — a
-    # host that has a bot should not lose it by upgrading.
+    # Empty by default since 5.11.0: a shipped list of vendor bots made every
+    # repo running none of them wait on a signal that was never coming. Empty
+    # means CI-only — `ready_to_merge` rests on green CI alone — so a host with
+    # a bot lists it here (the setup interview asks); `since` is 5.11.0 so an
+    # existing host is told once that the default changed.
     "review-bots": Setting(
-        ["gemini-code-assist[bot]", "coderabbitai[bot]", "claude[bot]"],
-        BASELINE,
-        "Review bots the PR review loop waits on, by GitHub username; empty means CI-only.",
+        [],
+        "5.11.0",
+        "Review bots the PR loop waits on; empty (default since 5.11.0) means CI-only.",
     ),
     # The skills-listing character budget the auditor enforces. It is a real
     # constraint, but its value differs by surface and has changed over time,

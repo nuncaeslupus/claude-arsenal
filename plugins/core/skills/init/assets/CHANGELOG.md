@@ -18,6 +18,16 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [5.11.0] - 2026-10-25
+
+### Changed
+- **`review-bots` now defaults to none (CI-only).** It used to list three vendor bots, so a repo running none of them had the PR loop wait for a signal that never came. **If your repo uses a review bot, list it:** `review-bots = ["yourbot[bot]"]` in `arsenal/config.toml`, or `init.py --review-bots yourbot[bot]`. Existing installs see one `NEW SETTING review-bots` line until they set it. The `/init` setup interview now asks which bots review the repo.
+- **Uncommitted edits to vendored files are kept.** `init.py` (run at every session start) used to overwrite a changed bundle file and replace a vendored skill folder outright, destroying edits nobody had committed yet. It now leaves such a file or folder alone and prints `MODIFIED LOCALLY — left as is: <path>`; commit or discard it, then re-run. Committed edits are still replaced: the bundle is upstream's.
+- **Hooks no longer run twice** when the plugin is installed and `/init` also registered them in `.claude/settings.json`: each duplicated plugin hook (skill-edit gate, compaction resume) stands down when the project's settings run the same script.
+
+### Added
+- `init.py --review-bots LOGIN,...` writes the `review-bots` list.
+
 ## [5.10.9] - 2026-10-25
 
 ### Changed

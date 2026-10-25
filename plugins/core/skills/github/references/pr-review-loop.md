@@ -39,16 +39,9 @@ hand between ticks is. Read the comments, not the check.
 
 ## Which bots are watched
 
-Three are shipped as the starting value — the ones this bundle was exercised
-against, not a claim about your repo:
+None by default (since 5.11.0): the loop runs CI-only until the repo names its bots.
 
-```text
-gemini-code-assist[bot]
-coderabbitai[bot]
-claude[bot]
-```
-
-Say otherwise once, in `arsenal/config.toml`:
+Name them once, in `arsenal/config.toml`:
 
 ```toml
 review-bots = ["reviewer[bot]"]
@@ -56,10 +49,10 @@ review-bots = ["reviewer[bot]"]
 
 `--watch-bots reviewer[bot],custom-bot[bot]` still overrides it per call.
 
-**A repo with no review bot at all sets `review-bots = []`.** Leaving the
-default in place there is the expensive failure: every tick waits for a signal
-nothing will ever send, and the loop sits at `waiting` until someone reads the
-JSON and works out why. An empty list is the same CI-only mode as
+**Name only bots that actually review here.** A listed bot that never posts is
+the expensive failure: every tick waits for a signal nothing will ever send, and
+the loop sits at `waiting` until someone reads the JSON and works out why. The
+empty default is the same CI-only mode as
 `--watch-bots ""` — green CI plus the quiet window is enough to reach
 `ready_to_merge`, and nothing ever reports `bot_commented`.
 

@@ -734,10 +734,11 @@ echo "PASS: an arsenal-id label resolves a handle with no body and a drifted tit
 fifo="${tmpdir}/never-closes"
 mkfifo "${fifo}"
 ( sleep 20 > "${fifo}" & ) 2>/dev/null
-timeout 10 python3 "${SELECT_PY}" --tasks-dir "${TASKS}" < "${fifo}" >/dev/null 2>&1
-code=$?
+# Stock macOS has no `timeout`; perl's alarm is the portable stand-in (exit 142).
+perl -e 'alarm shift; exec @ARGV' 10 python3 "${SELECT_PY}" --tasks-dir "${TASKS}" < "${fifo}" >/dev/null 2>&1 \
+    && code=0 || code=$?
 rm -f "${fifo}"
-[[ ${code} -ne 124 ]] \
+[[ ${code} -ne 124 && ${code} -ne 142 ]] \
     || fail "task_select.py hung on an inherited stdin that never closes"
 echo "PASS: an inherited stdin that never closes does not hang the selector"
 
