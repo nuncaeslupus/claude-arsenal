@@ -48,8 +48,23 @@ jobs:
           # tagged can be two different changes.
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
+      # A tag that already exists is not a release decision: the commit was
+      # published (by this workflow or `make tag`). Gating it on CI anyway made
+      # every scheduled run red until the next bump whenever that commit's CI
+      # ended non-green for reasons outside the code (a runner that never came).
+      - name: Skip the gate when the version is already tagged
+        id: existing
+        run: |
+          set -euo pipefail
+          tag="v$(tr -d '[:space:]' < plugins/core/skills/init/assets/.bundle-version)"
+          if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
+            echo "Tag ${tag} already exists — nothing to release."
+            echo "tagged=true" >> "${GITHUB_OUTPUT}"
+          fi
+
       - name: Require a green CI run on this commit
         id: guard
+        if: steps.existing.outputs.tagged != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -115,7 +130,7 @@ jobs:
       # A tag alone leaves the repository page showing an older "Latest" release.
       # Separate and idempotent, so a release missed on one run is made by the next.
       - name: Publish the GitHub Release for the tag
-        if: steps.guard.outputs.verdict == 'tag'
+        if: steps.guard.outputs.verdict == 'tag' || steps.existing.outputs.tagged == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
