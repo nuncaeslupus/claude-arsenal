@@ -92,7 +92,7 @@ echo "PASS: duplicate ids, missing ids, unknown statuses and dangling refs are p
 ) || fail "could not seed a git repo"
 (cd "${repo}" && python3 "${IL}" check --base HEAD >/dev/null 2>&1) \
     || fail "--base HEAD failed on an unchanged file"
-sed -i '/(I-2)$/d' "${ideas}"
+perl -ni -e 'print unless /\(I-2\)$/' "${ideas}"
 python3 "${IL}" check --file "${ideas}" --base HEAD >/dev/null 2>"${tmp}/base.err"
 [[ $? -eq 1 ]] || fail "--base did not catch a removed id"
 grep -q "I-2 was in HEAD and is gone" "${tmp}/base.err" || fail "wrong message: $(cat "${tmp}/base.err")"
@@ -133,7 +133,7 @@ grep -q "agreed decision(s) D-1 .* are not in this spec" <<<"${out}" \
 printf '\n| D-1 | Web app first, mobile later | agreed | 2026-09-29 |\n' >> "${spec}"
 out=$(cd "${repo}" && python3 "${VS}" --input status/specification.md) || fail "validate_spec failed: ${out}"
 grep -q "are not in this spec" <<<"${out}" && fail "validate_spec warned after D-1 was cited: ${out}"
-sed -i '$d' "${spec}"   # D-1 uncited again
+perl -ni -e 'print unless eof' "${spec}"   # D-1 uncited again
 mv "${ideas}" "${tmp}/ideas.aside"
 out=$(cd "${tmp}/bare" && python3 "${VS}" --input "${spec}") || fail "validate_spec failed: ${out}"
 grep -q "are not in this spec" <<<"${out}" && fail "validate_spec warned with no ideas file: ${out}"

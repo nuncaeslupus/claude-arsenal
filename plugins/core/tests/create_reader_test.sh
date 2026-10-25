@@ -34,7 +34,7 @@ trap 'rm -rf "${base}"' EXIT
 fail() { echo "FAIL: $1" >&2; exit 1; }
 # Pin the clock (read as UTC) so the `<YYYY-MM-DD-HHMM>` stamp in every name is known.
 export SOURCE_DATE_EPOCH=1760462100
-today=$(date -u -d "@${SOURCE_DATE_EPOCH}" +%F-%H%M)
+today=$(python3 -c 'import sys,time; print(time.strftime("%Y-%m-%d-%H%M", time.gmtime(int(sys.argv[1]))))' "${SOURCE_DATE_EPOCH}")
 SPEC_HTML="${tmp}/status/yourproject-spec-v1-${today}-reader.html"
 SPEC_MD="${tmp}/status/yourproject-spec-v1-${today}-annotated.md"
 
@@ -243,7 +243,7 @@ run_reader --input status/specification.md --output-dir status --name "Widget Ov
     || fail "regenerating the reader failed"
 grep -q "'yourproject-spec-v1-'+stamp()+'-notes.md'" "${SPEC_HTML}" \
     || fail "a spec with no Revision header should be named version 1"
-sed -i 's/^Intro prose.$/**Revision**: 3\n\nIntro prose./' "${tmp}/status/specification.md"
+perl -0pi -e 's/^Intro prose\.$/**Revision**: 3\n\nIntro prose./m' "${tmp}/status/specification.md"
 run_reader --input status/specification.md --output-dir status --name "Widget Overhaul" >/dev/null \
     || fail "generating a revisioned reader failed"
 V3_HTML="${tmp}/status/yourproject-spec-v3-${today}-reader.html"
@@ -255,7 +255,7 @@ grep -q "'yourproject-spec-v3-'+stamp()+'-notes.md'" "${V3_HTML}" \
     || fail "the export filename does not carry the spec's revision"
 grep -q '<meta name="arsenal-source-sha256" content="[0-9a-f]\{64\}">' "${V3_HTML}" \
     || fail "the reader does not record the digest of the source it rendered"
-sed -i '/^\*\*Revision\*\*: 3$/,+1d' "${tmp}/status/specification.md"
+perl -0pi -e 's/^\*\*Revision\*\*: 3\n[^\n]*\n//m' "${tmp}/status/specification.md"
 run_reader --input status/specification.md --output-dir status --name "Widget Overhaul" >/dev/null \
     || fail "regenerating the unrevisioned reader failed"
 
@@ -324,7 +324,7 @@ grep -q '^```drawspec$' "${tmp}/diagrams/yourproject-plan-v1-${today}-annotated.
 
 #     A diagram drawspec refuses fails the run, names the block, and writes nothing.
 rm -f "${html}"
-sed -i 's/"A step"/"BROKEN step"/' "${tmp}/diagrams/plan.md"
+perl -pi -e 's/"A step"/"BROKEN step"/' "${tmp}/diagrams/plan.md"
 out=$(ARSENAL_DRAWSPEC="${fake}" run_reader --input diagrams/plan.md --output-dir diagrams --name demo); rc=$?
 [[ ${rc} -ne 0 ]] || fail "an invalid drawspec diagram did not fail the build"
 grep -q "diagrams/plan.md § Flow, drawspec block 1" <<<"${out}" || fail "the failure does not name the block: ${out}"
@@ -342,7 +342,7 @@ echo "PASS: drawspec fences render, validate first, fail loudly, and cost fence-
 if command -v drawspec >/dev/null 2>&1 || { command -v uvx >/dev/null 2>&1 && command -v timeout >/dev/null 2>&1 && \
         timeout 180 uvx --quiet --from 'drawspec>=0.2,<0.3' drawspec --version \
         >/dev/null 2>&1; }; then
-    sed -i 's/"BROKEN step"/"A step"/' "${tmp}/diagrams/plan.md"
+    perl -pi -e 's/"BROKEN step"/"A step"/' "${tmp}/diagrams/plan.md"
     out=$(cd "${tmp}" && env -u ARSENAL_DRAWSPEC "${PY[@]}" "${READER}" --input "${tmp}/diagrams/plan.md" \
             --output-dir "${tmp}/diagrams" --name demo 2>&1) || fail "a real drawspec render failed: ${out}"
     grep -q '<figure class="drawspec"><svg[^>]*viewBox=' "${html}" \

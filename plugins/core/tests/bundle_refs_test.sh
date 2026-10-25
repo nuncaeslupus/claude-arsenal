@@ -46,12 +46,14 @@ resolve() {  # $1 = referenced path, e.g. claude-arsenal/bin/gate_run.sh
 
 # Search the shipped bundle and the init skill's own files. `docs/` is excluded
 # on purpose: this checks what a running session is told to execute.
-mapfile -t sources < <(
+sources=()
+while IFS= read -r line; do sources+=("${line}"); done < <(
     find "${ASSETS}" "${INIT_SKILL}/scripts" "${INIT_SKILL}/SKILL.md" \
         -type f \( -name '*.md' -o -name '*.py' -o -name '*.sh' -o -name '*.json' \) 2>/dev/null
 )
 
-declare -A seen=()
+# Not `declare -A`/`mapfile`: macOS ships bash 3.2, which has neither.
+seen=$'\n'
 for src in "${sources[@]}"; do
     # Only flag a reference that names a concrete file, so prose about a
     # directory ("claude-arsenal/bin/") is left alone.
@@ -59,8 +61,8 @@ for src in "${sources[@]}"; do
         [[ -z "${ref}" ]] && continue
         if ! resolve "${ref}"; then
             key="${ref}|${src}"
-            [[ -n "${seen[${key}]:-}" ]] && continue
-            seen[${key}]=1
+            [[ "${seen}" == *$'\n'"${key}"$'\n'* ]] && continue
+            seen+="${key}"$'\n'
             note "${src#"${SCRIPT_DIR}/../"} references ${ref}, which the bundle does not ship"
         fi
     done < <(grep -oE 'claude-arsenal/(bin|scripts|references)/[A-Za-z0-9_.-]+\.(sh|py|md)' "${src}" | sort -u)
@@ -137,11 +139,12 @@ fi
 # copy cannot do without, so it is what this counts.
 test_review_protocol_has_one_home() {
     local plugins="${SCRIPT_DIR}/../.." homes
-    mapfile -t homes < <(
+    homes=()
+    while IFS= read -r line; do homes+=("${line}"); done < <(
         grep -rlE --include='*.md' --exclude='CHANGELOG.md' \
             'adversarial_review\.sh"? verdict|\$REVIEW"? verdict' "${plugins}" 2>/dev/null
     )
-    if (( ${#homes[@]} != 1 )); then
+    if (( ${#homes[@]} != 1 )); then  # bash 3.2: ${homes[*]} below is safe, [@] on empty is not
         note "the adversarial_review.sh verdict snippet appears in ${#homes[@]} shipped .md \
 files (want 1, references/pre-pr-review.md): ${homes[*]#"${plugins}/"}"
     fi

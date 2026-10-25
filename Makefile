@@ -140,8 +140,8 @@ export ARSENAL_BRANCH_PROTECTION := 0
 # serial); a failing file's full output is printed, a passing one is one line.
 TEST_JOBS ?= 4
 test:  ## run every plugin's behaviour tests (plugins/*/tests/*.sh) + repo-tool tests (scripts/*_test.sh), TEST_JOBS in parallel
-	@ls plugins/*/tests/*.sh scripts/*_test.sh | xargs -P $(TEST_JOBS) -I{} sh -c \
-		'o=$$(bash {} 2>&1) && echo "ok   {}" || { printf "=== FAIL %s ===\n%s\n" {} "$$o"; exit 1; }'
+	@ls plugins/*/tests/*.sh scripts/*_test.sh | xargs -P $(TEST_JOBS) -n 1 sh -c \
+		'o=$$(bash "$$1" 2>&1) && echo "ok   $$1" || { printf "=== FAIL %s ===\n%s\n" "$$1" "$$o"; exit 1; }' sh
 
 # Tests that scan the tree (grep -r, find, a glob loop) depend on files they
 # never name, so select_tests.py cannot map a change to them; they ride along
