@@ -98,26 +98,10 @@ At the start of every session (fresh start, context compaction, or cold restart)
 
 ## Task format
 
-A task is a file — `arsenal/tasks/<id>.md` — with front matter and a body:
-
-````markdown
----
-id: t-3f8a91c2
-label: "extract surface probe"
-title: "Extract the surface probe into its own script"
-priority: 5
-deps: [t-aaaa1111, t-bbbb2222]
-requires: [surface:cli]
-tags: [CLI]
-workspace: BACKEND
-max-attempts: 3
----
-
-## Acceptance gate
-```bash
-bash tests/surface_probe_test.sh
-```
-````
+A task is a file — `arsenal/tasks/<id>.md` — with front matter (`id`, `title`, optional
+`label`, `priority`, `deps`, `requires`, `tags`, `workspace`, `max-attempts`) and an
+`## Acceptance gate` section. `/queue-add` writes one; a full example is in
+`claude-arsenal/references/state-layout.md` § Task format.
 
 Task files are read from the **default branch**, so every agent computes the same order.
 `deps` is the build order; `priority` encodes task size only (S=10, M=5, L=1, larger runs

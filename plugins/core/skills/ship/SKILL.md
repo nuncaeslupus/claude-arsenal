@@ -39,34 +39,12 @@ Reads `status/specification.md` to know what should be shipping. Confirms scope 
   ```
 - If partial delivery → is the partial state safe and functional?
 
-### Step 3: Compatibility check
+### Steps 3–6: Compatibility, tests, observability, deployment
 
-- [ ] Backwards compatible with previous API version (if API changes)
-- [ ] Database migration is forward-compatible (no destructive changes in same deploy)
-- [ ] Inter-service contracts maintained or migrated
-- [ ] Client notification sent (if public API changes)
-
-### Step 4: Test confirmation
-
-- [ ] All unit/integration tests pass (including the new tests written for this change). A gate receipt for this tree or green CI on the PR head is the evidence; run the full suite only when neither covers the tree.
-- [ ] E2E tests pass (if applicable)
-- [ ] Manual testing completed for high-risk paths
-- [ ] No flaky tests introduced
-
-### Step 5: Observability check
-
-- [ ] New endpoints have tracing instrumentation
-- [ ] Error conditions produce meaningful log entries
-- [ ] Business metrics updated (if applicable)
-- [ ] Alerts configured for new failure modes (if applicable)
-
-### Step 6: Deployment plan
-
-- [ ] Deployment order defined (if multi-service)
-- [ ] Feature flags configured (if gradual rollout)
-- [ ] Data migration tested (if applicable)
-- [ ] Rollback plan documented
-- [ ] On-call team aware (if high-risk)
+Before ticking anything, load `references/template.md` and walk its **Compatibility**, **Tests**,
+**Observability** and **Mitigation and rollback** checklists against the change; tick
+only what has evidence. For tests, a gate receipt for this tree or green CI on the PR head
+is the evidence — run the full suite only when neither covers the tree.
 
 ### Step 7: Adversarial reviewer gate
 
@@ -84,13 +62,13 @@ only if commits landed after the last reviewed tree. Protocol and exits:
 
 ### Step 8: Produce ship output
 
-Load `references/template.md` when producing the ship output document.
+When producing the ship output, fill in `references/template.md` (loaded at Step 3).
 
 ---
 
 ## Abbreviation
 
-**Abbreviated ship** = Steps 2 + 4 + 7 + Go/No-Go, where the host repo's
+**Abbreviated ship** = Step 2 + the Tests checklist from Steps 3–6 + Step 7 + Go/No-Go, where the host repo's
 `CLAUDE.md` allows it. Step 7 may be skipped only when that file carries
 `<!-- ship: adversarial-review=skip -->` and the change is docs-only or
 config-only; every code change runs it.

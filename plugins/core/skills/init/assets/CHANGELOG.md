@@ -25,6 +25,10 @@ Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 - The `ARSENAL_*` tuning-knob table moved from `references/worker-loop.md` (read on every task pickup) to `references/performance-tuning.md` § Tuning knobs.
 - Examples and pointers no longer name a specific review bot or skills this bundle does not ship (`engineering-core`, `code-review`).
 - Removed leftover references to the coordination branch retired in v0.25.0.
+- `queue-next` points at AGENTS.md for the fetch, claim and PR rules instead of restating them (~300 tokens less per invocation).
+- `ship` walks the checklists in `references/template.md` instead of keeping a second, drifted copy in Steps 3–6; the template gains the items only the skill had (client notification, flaky tests, deployment order, on-call).
+- `explore-idea` Step 6 uses the decision-log table from `references/ideas-backlog.md`, which has the optional `Sub-project` column the skill's copy lacked.
+- The full task-file example moved from AGENTS.md to `references/state-layout.md` § Task format; AGENTS.md keeps the field list.
 
 ## [5.10.7] - 2026-10-25
 
