@@ -80,12 +80,11 @@ quiet window, mergeability), so whenever the script exits 1 in a state other tha
 another agent already receives the events, run the loop instead. Everywhere else, run
 the loop.
 
-After `gh pr create` returns the PR number, start the loop with the rubric inline, so
-each tick carries its own instructions, and with `--unresolved-only`, so handled
+After `gh pr create` returns the PR number, start the loop. Each tick's output carries its own instructions in `next`, and with `--unresolved-only`, so handled
 comments drop out:
 
 ```bash
-/loop 90s python3 "${CLAUDE_SKILL_DIR}/scripts/query_pr_state.py" --pr <PR_NUMBER> --unresolved-only --trigger — if state is bot_commented, address per the rubric (agree → fix, then after the round's last fix run fast_gate.sh once and push once + reply "addressed in <sha>" via gh api repos/<owner>/<repo>/pulls/<PR_NUMBER>/comments/<id>/replies; disagree → reply with rationale on the same endpoint; ambiguous → reply asking for clarification + ping the user). Pair every fix or dismissal with a reply on the thread, since the reply is what --unresolved-only filters on next tick. If bot_skipped / bot_rate_limited / bot_absent, follow its decision: local-review none → continue; diff or full → run one review round per the pre-PR review protocol, then add --local-review-done. If conflicts, rebase onto (or merge) the base branch, resolve, and push. If ci_failed, fetch the failing job log, fix, commit and push, then reply on related comments. Stop only on ready_to_merge, merged, or closed (bot_approved still waits for the quiet window); then CronDelete <job-id> and hand back to the user.
+/loop 90s python3 "${CLAUDE_SKILL_DIR}/scripts/query_pr_state.py" --pr <PR_NUMBER> --unresolved-only --trigger — do what its "next" field says for the printed state (bot_approved still waits for the quiet window); on ready_to_merge, merged or closed, CronDelete <job-id> and hand back to the user.
 ```
 
 `/loop` rounds `90s` up to every 2 minutes. Stop early with `CronDelete <job-id>`
