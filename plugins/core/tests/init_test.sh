@@ -316,6 +316,8 @@ triggers=$(python3 "${CFG_PY}" --repo-root "${answered}" | python3 -c 'import js
 echo "PASS: test_init_interview_rewrite_keeps_escapes"
 
 # The suggestion the interview offers: known commands for the configured bots.
+python3 "${INIT_PY}" --repo-path "${answered}" --review-bots "coderabbitai[bot], claude[bot]" >/dev/null 2>&1 \
+    || { echo "FAIL: --review-bots was refused" >&2; exit 1; }
 suggested=$(python3 "${INIT_PY}" --repo-path "${answered}" --suggest-bot-triggers)
 grep -qF 'coderabbitai[bot]=@coderabbitai review' <<<"${suggested}" \
     || { echo "FAIL: no trigger suggested for coderabbitai[bot]: ${suggested}" >&2; exit 1; }

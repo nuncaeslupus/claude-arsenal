@@ -126,8 +126,9 @@ To customise a skill the marketplace ships:
    skill *loads*, not which files survive an upgrade. Copying from the cache
    (step 1) is safe because the marketplace does not ship the marker; copying
    from another project's `.claude/skills/`, which is the more natural thing to
-   do once you have a fork you like, carries it — and the next `/init` deletes
-   your fork without a word. The prune pass removes a marked folder the same
+   do once you have a fork you like, carries it — and the next `/init` replaces
+   your fork once it is committed (an uncommitted one is kept and reported
+   `MODIFIED LOCALLY`, but only until you commit it). The prune pass removes a marked folder the same
    way when its section is switched off.
 3. Edit the copy. With no marker it is yours: `/init` prints
    `skills: <name> exists and is not arsenal-vendored — left alone`. Look for
@@ -231,7 +232,9 @@ consumer added an `arsenal` git remote**, which most have no reason to do.
 "Only overwrites stale scripts" reads like a safety guarantee, and for your
 `arsenal/` tree it is — but `init.py` decides staleness by **checksum against the
 plugin source**, so a script you patched locally is by definition stale and gets
-overwritten, printing only `refreshed: bin/<name>.sh`. That is the intended
+overwritten once committed, printing only `refreshed: bin/<name>.sh` (an
+uncommitted patch is kept and reported `MODIFIED LOCALLY` until you commit or
+discard it). That is the intended
 design, and it means **the bundle is not a place to fix bugs**: patch it
 upstream and re-vendor, or your fix disappears at the next session start without
 a warning. A consumer repo lost two gate-enforcement fixes this way before

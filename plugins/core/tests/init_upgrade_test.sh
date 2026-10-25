@@ -271,4 +271,27 @@ echo "PASS: the sweep deletes what upstream shipped and leaves host files alone"
     || fail "the first sweep destroyed a file it could not prove ownership of"
 echo "PASS: the pre-manifest sweep retires to .retired/ rather than deleting"
 
+# --- uncommitted edits to vendored files survive a refresh --------------------
+# The refresh overwrote (and the skill vendoring rmtree-d) whatever was there, so
+# an edit nobody had committed yet was destroyed at the next session start.
+lm="${tmpdir}/localmod"; mkdir -p "${lm}"; git -C "${lm}" init -q
+python3 "${INIT_PY}" --repo-path "${lm}" --bundle-dir "${BUNDLE}" --profile minimal >/dev/null 2>&1 \
+    || fail "install for the local-edit case failed"
+git -C "${lm}" add -A >/dev/null; git -C "${lm}" commit -qm install >/dev/null
+lm_bundle="${tmpdir}/localmod-bundle"; cp -R "${BUNDLE}" "${lm_bundle}"
+echo "upstream change" >> "${lm_bundle}/references/worker-loop.md"
+echo "upstream change" >> "${lm_bundle}/references/state-layout.md"
+echo "my local edit" >> "${lm}/claude-arsenal/references/worker-loop.md"
+echo "my skill edit" >> "${lm}/.claude/skills/init/SKILL.md"
+out=$(python3 "${INIT_PY}" --repo-path "${lm}" --bundle-dir "${lm_bundle}" --silent 2>&1)
+grep -qF "MODIFIED LOCALLY — left as is: references/worker-loop.md" <<<"${out}" \
+    || fail "a locally edited bundle file was not reported: ${out}"
+grep -qF "my local edit" "${lm}/claude-arsenal/references/worker-loop.md" \
+    || fail "the refresh overwrote an uncommitted edit"
+grep -qF "my skill edit" "${lm}/.claude/skills/init/SKILL.md" \
+    || fail "skill vendoring destroyed an uncommitted edit"
+grep -qF "upstream change" "${lm}/claude-arsenal/references/state-layout.md" \
+    || fail "an unedited file was not refreshed alongside the kept one"
+echo "PASS: uncommitted edits to vendored files are kept and reported, the rest refreshes"
+
 echo "PASS: init_upgrade_test — all gates passed"

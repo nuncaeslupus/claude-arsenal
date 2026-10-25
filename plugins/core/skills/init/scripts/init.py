@@ -319,6 +319,55 @@ def _bundle_dir(override: Path | None = None) -> Path:
     return path
 
 
+def _locally_modified(path: Path) -> bool:
+    """True when git reports uncommitted changes to tracked content at `path`.
+
+    The refresh used to overwrite (and the skill vendoring rmtree) whatever was
+    there, so an edit nobody had committed yet was destroyed with no message and
+    no way back. Untracked files do not count: a first install that was never
+    committed is init's own output, not someone's work. Outside git, or when git
+    cannot answer, nothing counts as modified — the old behaviour.
+    """
+    try:
+        out = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(path if path.is_dir() else path.parent),
+                "status",
+                "--porcelain",
+                "--",
+                str(path),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    if out.returncode != 0:
+        return False
+    return any(line and not line.startswith("??") for line in out.stdout.splitlines())
+
+
+def _same_tree(src: Path, dst: Path) -> bool:
+    """`dst` holds exactly `src`'s files (ignoring the vendor marker and caches)."""
+
+    def files(root: Path) -> dict[str, str]:
+        return {
+            f.relative_to(root).as_posix(): _content_sha(f)
+            for f in root.rglob("*")
+            if f.is_file() and "__pycache__" not in f.parts and f.name != _VENDOR_MARKER
+        }
+
+    return files(src) == files(dst)
+
+
+def _keep_local(rel: str) -> None:
+    # Printed even under --silent: this is the one refresh outcome that needs a person.
+    print(f"  MODIFIED LOCALLY — left as is: {rel}; commit or discard it, then re-run init")
+
+
 def _content_sha(path: Path) -> str:
     """SHA-256 of a file's content, with newlines normalised to LF.
 
@@ -370,6 +419,8 @@ def _refresh_bundle(bundle: Path, target: Path, silent: bool = False) -> None:
         if dst.exists() and _content_sha(src) == _content_sha(dst):
             if not silent:
                 print(f"  up to date: {rel}")
+        elif dst.exists() and _locally_modified(dst):
+            _keep_local(rel.as_posix())
         else:
             shutil.copy2(src, dst)
             # copy2 already mirrors the source mode; restore +x only for files
@@ -543,6 +594,8 @@ def _prune_bundle(bundle: Path, target: Path, previous: set[str] | None) -> None
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 shutil.move(str(installed), str(dest))
                 print(f"  retired to {_RETIRED_DIR}/ (no longer shipped): {dirname}/{rel}")
+            elif f"{dirname}/{rel}" in previous and _locally_modified(installed):
+                _keep_local(f"{dirname}/{rel}")
             elif f"{dirname}/{rel}" in previous:
                 installed.unlink()
                 print(f"  removed (no longer shipped): {dirname}/{rel}")
@@ -1313,6 +1366,11 @@ def _vendor_skills(
         if target.exists() and not (target / _VENDOR_MARKER).is_file():
             print(f"  skills: {name} exists and is not arsenal-vendored — left alone")
             continue
+        if target.exists() and _same_tree(source / name, target):
+            continue
+        if target.exists() and _locally_modified(target):
+            _keep_local(f"{dest.name}/{name}/")
+            continue
         if target.exists():
             shutil.rmtree(target)
         shutil.copytree(source / name, target)
@@ -1325,6 +1383,9 @@ def _vendor_skills(
     # loop can make it skip the entry that follows a deleted one.
     for d in sorted(dest.iterdir()):
         if d.is_dir() and (d / _VENDOR_MARKER).is_file() and d.name not in available:
+            if _locally_modified(d):
+                _keep_local(f"{dest.name}/{d.name}/")
+                continue
             shutil.rmtree(d)
             removed.append(d.name)
 
@@ -2409,6 +2470,7 @@ _INTERVIEW_KEYS = {
     "review_budget_min": "review-budget-min",
     "bot_wait_min": "bot-wait-min",
     "bot_triggers": "bot-triggers",
+    "review_bots": "review-bots",
 }
 
 
@@ -2448,6 +2510,8 @@ def _interview_answers(args: argparse.Namespace) -> dict[str, str]:
             # ensure_ascii=False: JSON escapes non-BMP characters as surrogate
             # pairs, which TOML rejects; the characters themselves are valid.
             answers[key] = "[" + ", ".join(json.dumps(e, ensure_ascii=False) for e in entries) + "]"
+        elif key == "review-bots":
+            answers[key] = json.dumps([b.strip() for b in raw.split(",") if b.strip()])
         else:
             answers[key] = json.dumps(raw, ensure_ascii=False)
     return answers
@@ -2584,6 +2648,11 @@ def main() -> None:
         "--bot-triggers",
         metavar="LOGIN=COMMENT,...",
         help="Manual review command per bot; written as the `bot-triggers` list.",
+    )
+    p.add_argument(
+        "--review-bots",
+        metavar="LOGIN,...",
+        help="Review bots the PR loop waits on; written as `review-bots` (empty = CI-only).",
     )
     p.add_argument(
         "--suggest-bot-triggers",

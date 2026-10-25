@@ -1,0 +1,40 @@
+name: macos
+
+# BSD tools (sed -i, date, stat, no coreutils `timeout`) are what break shipped
+# shell scripts for consumers on macOS, and only `make test` runs those scripts.
+# Kept out of ci.yml on purpose: a macOS runner that never comes would turn
+# main's `ci` red, and tag-release only tags a green `ci` run.
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "plugins/**/*.sh"
+      - "plugins/**/bin/**"
+      - "plugins/*/hooks/**"
+      - "scripts/**"
+      - "Makefile"
+      - ".github/workflows/macos.yml"
+  schedule:
+    - cron: "41 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: make test (macos)
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Configure git identity (tests create temp repos)
+        run: |
+          git config --global user.email "ci@arsenal.example"
+          git config --global user.name "Arsenal CI"
+      - name: make test
+        run: make test
