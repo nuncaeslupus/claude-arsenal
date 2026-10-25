@@ -78,7 +78,7 @@ done
     || fail "workspace reader alpha failed"
 (SOURCE_DATE_EPOCH=1760462400 run_reader --input ws/beta/spec.md >/dev/null) \
     || fail "workspace reader beta failed"
-names=$(find "${tmp}/ws" -name '*-reader.html' -printf '%f\n' | sort -u | wc -l)
+names=$(find "${tmp}/ws" -name '*-reader.html' -exec basename {} \; | sort -u | wc -l)
 [[ ${names} -eq 2 ]] || fail "two specs built the same day share a file name: $(find "${tmp}/ws" -name '*-reader.html')"
 # ...and their notes must not share browser storage: every file:// page has one
 # localStorage origin, so one workspace's notes came up in the other's reader.
