@@ -22,6 +22,7 @@ Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
 ### Changed
 - **The PR review `/loop` prompt is one line now.** `query_pr_state.py` prints a `next` field with the action for the current state (the agree/disagree/ambiguous rubric on `bot_commented`, rebase on `conflicts`, …), so the loop no longer carries the whole rubric into every 2-minute tick. Update a loop you started from the old one-liner by restarting it from the `github` skill.
+- AGENTS.md's references table lists only when to open each file, not what is inside it (~125 tokens less on every turn of every session).
 
 ## [5.10.8] - 2026-10-25
 

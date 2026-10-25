@@ -161,16 +161,16 @@ or ASCII art → `claude-arsenal/references/diagrams.md`.
 
 | File | Read it when |
 |---|---|
-| `references/worker-loop.md` | Dispatching workers: the loop, worktree isolation, `worker_postcheck.sh`, per-task PRs, credit guards |
-| `references/orchestrator-tick.md` | Running the board unattended: one tick's steps, the merge preconditions |
-| `references/queue-seeding.md` | The queue is empty: seeding from a plan, importing filed issues, handle markers, a `D-N` divergence |
-| `references/evidence-gates.md` | Writing or trusting a gate: the fence rule, hardened execution, numeric evidence, `unmeasured` |
-| `references/claiming-internals.md` | A claim misbehaves: attempt refs, ref accumulation, `on: push` cost |
-| `references/github-automation.md` | Completion: `merge-policy`, the transitions GitHub runs, ending a session. Actions minutes short → `references/ci-minutes.md` |
-| `references/quota-governance.md` | The loop stopped before dispatch: quota windows, fail-open, the round cap |
-| `references/pre-pr-review.md` | About to open a PR: the cold-start adversarial review and its verdicts |
-| `references/performance-tuning.md` | The loop feels slow: recorded timings, their remedies, every `ARSENAL_*` knob |
-| `references/state-layout.md` | A lookup: where a file lives, what a task state means |
-| `references/repo-housekeeping.md` | Choosing a license, or publishing a package: the questions to ask, the metadata an index needs |
-| `references/annotatable-reader.md` | Handing over a spec or plan: which documents need a reader |
+| `references/worker-loop.md` | Dispatching workers |
+| `references/orchestrator-tick.md` | Running the board unattended |
+| `references/queue-seeding.md` | The queue is empty, or filed issues need importing |
+| `references/evidence-gates.md` | Writing or trusting a gate |
+| `references/claiming-internals.md` | A claim misbehaves |
+| `references/github-automation.md` | Completing work or ending a session (Actions minutes short → `references/ci-minutes.md`) |
+| `references/quota-governance.md` | The loop stopped before dispatch |
+| `references/pre-pr-review.md` | About to open a PR |
+| `references/performance-tuning.md` | The loop feels slow, or an `ARSENAL_*` knob is needed |
+| `references/state-layout.md` | Looking up where a file lives, what a task state means, or the task-file format |
+| `references/repo-housekeeping.md` | Choosing a license, or publishing a package |
+| `references/annotatable-reader.md` | Handing over a spec or plan |
 | `references/capability-map.md` | A task looks like something a skill would do |
