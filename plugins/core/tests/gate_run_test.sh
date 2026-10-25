@@ -345,7 +345,7 @@ fi
 # open_task_pr.sh's `git add -A` would sweep it into the PR diff. (The deleted
 # task file itself shows as a tracked deletion; that is the simulated staleness,
 # not residue.)
-if git -C "${refrepo}" status --porcelain --untracked-files=all | grep -q '^??'; then
+if git -C "${refrepo}" status --porcelain --untracked-files=all | grep >/dev/null '^??'; then
     echo "FAIL: resolving the task file left an untracked file in the repo tree" >&2; exit 1
 fi
 echo "PASS: task file resolves from the default branch without dirtying the tree"

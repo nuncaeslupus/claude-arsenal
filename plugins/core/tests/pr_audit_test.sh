@@ -48,7 +48,7 @@ pr '"checks":[],"reviews":[],"threads":[]'
     || fail "zero checks must report absent, not green"
 run --policy after-ci --require-ready >/dev/null 2>&1
 [[ $? -eq 1 ]] || fail "a PR with no checks must not be ready under after-ci"
-run --policy after-ci | grep -qi "absent is not green" \
+run --policy after-ci | grep -i >/dev/null "absent is not green" \
     || fail "the report should say why no checks blocks"
 echo "PASS: no checks at all is blocked, not green"
 
@@ -63,7 +63,7 @@ pr "\"checks\":[{\"name\":\"ci\",\"status\":\"in_progress\",\"head_sha\":\"${HEA
 [[ "$(run --policy after-ci --json | state ci)" == "pending" ]] || fail "a running check is pending"
 pr "\"checks\":[{\"name\":\"lint\",\"status\":\"completed\",\"conclusion\":\"failure\",\"head_sha\":\"${HEAD}\"}],\"reviews\":[],\"threads\":[]"
 [[ "$(run --policy after-ci --json | state ci)" == "failing" ]] || fail "a failed check is failing"
-run --policy after-ci | grep -q "lint" || fail "the next action should name the failing check"
+run --policy after-ci | grep >/dev/null "lint" || fail "the next action should name the failing check"
 # ...but `skipped` and `neutral` are how a matrix job says "not applicable".
 pr "\"checks\":[{\"name\":\"win\",\"status\":\"completed\",\"conclusion\":\"skipped\",\"head_sha\":\"${HEAD}\"}],\"reviews\":[],\"threads\":[]"
 [[ "$(run --policy after-ci --json | state ci)" == "green" ]] \
@@ -82,7 +82,7 @@ echo "PASS: open threads beat an approval"
 pr "\"checks\":[],\"reviews\":[{\"state\":\"APPROVED\",\"commit_id\":\"${OLD}\"}],\"threads\":[]"
 [[ "$(run --policy after-review --json | state review)" == "stale" ]] \
     || fail "a review on an older sha must report stale"
-run --policy after-review | grep -q "claim_review.sh" \
+run --policy after-review | grep >/dev/null "claim_review.sh" \
     || fail "the next action for a stale review should point at the review claim"
 echo "PASS: review evidence is bound to the head it was given"
 
@@ -101,11 +101,11 @@ echo "PASS: only APPROVED/CHANGES_REQUESTED count as a review"
 pr "\"checks\":[],\"reviews\":[{\"state\":\"APPROVED\",\"commit_id\":\"${HEAD}\"}]"
 [[ "$(run --policy after-review --json | state review)" == "clear" ]] \
     || fail "an absent threads key must not block forever"
-run --policy after-review | grep -qi "thread state unavailable" \
+run --policy after-review | grep -i >/dev/null "thread state unavailable" \
     || fail "an unread thread list must be reported as unread"
 # ...while an EMPTY list is a real answer and carries no caveat.
 pr "\"checks\":[],\"reviews\":[{\"state\":\"APPROVED\",\"commit_id\":\"${HEAD}\"}],\"threads\":[]"
-run --policy after-review | grep -qi "thread state unavailable" \
+run --policy after-review | grep -i >/dev/null "thread state unavailable" \
     && fail "an empty thread list is an answer, not a missing one"
 echo "PASS: absent threads is reported, not counted as zero and not a wall"
 
@@ -126,9 +126,9 @@ echo "PASS: each policy consults exactly what it names"
 
 # --- a draft and a conflict outrank everything else --------------------------
 pr "\"draft\":true,\"checks\":[{\"name\":\"ci\",\"status\":\"completed\",\"conclusion\":\"success\",\"head_sha\":\"${HEAD}\"}],\"reviews\":[],\"threads\":[]"
-run --policy after-ci | grep -qi "draft" || fail "a green draft's next action is to un-draft it"
+run --policy after-ci | grep -i >/dev/null "draft" || fail "a green draft's next action is to un-draft it"
 pr "\"mergeable\":false,\"checks\":[{\"name\":\"ci\",\"status\":\"completed\",\"conclusion\":\"success\",\"head_sha\":\"${HEAD}\"}],\"reviews\":[],\"threads\":[]"
-run --policy after-ci | grep -qi "conflict" || fail "a conflict must be the named next action"
+run --policy after-ci | grep -i >/dev/null "conflict" || fail "a conflict must be the named next action"
 run --policy after-ci --require-ready >/dev/null 2>&1
 [[ $? -eq 1 ]] || fail "a conflicted PR is not ready however green it is"
 echo "PASS: draft and conflict are reported before the gates"
@@ -148,7 +148,7 @@ named=$(run --policy after-ci --claims "${tmp}/claims.json" --json \
     | python3 -c "import json,sys;print(' '.join(c['task_id'] for c in json.load(sys.stdin)['stale_claims']))")
 [[ "${named}" == "T99" ]] \
     || fail "only the old claim with no open PR is stale, got '${named}'"
-run --policy after-ci --claims "${tmp}/claims.json" | grep -q "no open PR" \
+run --policy after-ci --claims "${tmp}/claims.json" | grep >/dev/null "no open PR" \
     || fail "the table should carry the stale-claim section too"
 echo "PASS: stale claims are the ones with no open PR and no recency"
 

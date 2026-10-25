@@ -273,6 +273,28 @@ CMDS
 echo "PASS: source running a skill script is allowed; a write beside it is not"
 
 # --- with the marker present, writes are allowed ---------------------------
+# A relative path is relative to the session's cwd, which persists across calls:
+# `cd plugins/core/skills/init` in one call, `sed -i … SKILL.md` in the next.
+probe_cwd() {  # probe_cwd <cwd> <command>
+    printf '%s' "{\"session_id\":\"${SESSION}\",\"cwd\":\"$1\",\"tool_name\":\"Bash\",\"tool_input\":{\"command\":$(python3 -c 'import json,sys;print(json.dumps(sys.argv[1]))' "$2")}}" \
+        | bash "$CHECK" >/dev/null 2>&1 && echo allowed || echo blocked
+}
+[ "$(probe_cwd /r/plugins/core/skills/init "sed -i s/a/b/ SKILL.md")" = blocked ] \
+    || fail "a relative write from inside a skill folder got through"
+[ "$(probe_cwd /r/plugins/core "echo x > skills/init/SKILL.md")" = blocked ] \
+    || fail "a relative write from a plugin folder got through"
+[ "$(probe_cwd /r "echo x > notes.txt")" = allowed ] || fail "a write outside skills was blocked"
+echo "PASS: relative paths resolve against the session cwd"
+
+# No python3 on PATH: calls that cannot touch a skill must not all be refused.
+nopy="$(mktemp -d)"
+for t in bash cat mktemp rm sed dirname; do ln -s "$(command -v "$t")" "$nopy/$t"; done
+out=$(printf '%s' '{"session_id":"s","tool_name":"Bash","tool_input":{"command":"ls"}}' \
+    | PATH="$nopy" "$nopy/bash" "$CHECK" 2>&1; echo "rc=$?")
+rm -rf "$nopy"
+[[ "$out" == *rc=0 ]] || fail "with no python3, a non-skill call was refused: $out"
+echo "PASS: no python3 only refuses calls that name a skill path"
+
 mkdir -p "$CLAUDE_PLUGIN_DATA" && touch "${CLAUDE_PLUGIN_DATA}/loaded-${SESSION}"
 [ "$(probe "sed -i 's/a/b/' $SKILL")" = allowed ] || fail "still blocked after the skill loaded"
 echo "PASS: once skill-workshop is loaded, Bash writes go through"

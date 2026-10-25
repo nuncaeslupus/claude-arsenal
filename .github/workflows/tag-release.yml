@@ -38,6 +38,12 @@ concurrency:
 
 jobs:
   tag:
+    # workflow_run's `branches:` filter matches the triggering run's HEAD branch,
+    # so a fork PR from its own `main` would otherwise run here with a write token.
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4

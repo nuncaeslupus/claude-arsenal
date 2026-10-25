@@ -81,7 +81,7 @@ for needle in "I-1 is used twice" "idea without an (I-N) id" "status 'someday'" 
     "D-1: status 'maybe'" "superseded by D-9, which has no row"; do
     grep -qF "${needle}" "${tmp}/bad.err" || fail "check missed '${needle}': $(cat "${tmp}/bad.err")"
 done
-python3 "${IL}" summary --file "${bad}" | grep -q "problem(s)" \
+python3 "${IL}" summary --file "${bad}" | grep >/dev/null "problem(s)" \
     || fail "summary hid the problems in a malformed file"
 echo "PASS: duplicate ids, missing ids, unknown statuses and dangling refs are problems"
 

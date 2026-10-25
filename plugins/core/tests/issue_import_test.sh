@@ -39,8 +39,8 @@ JSON
 # importing that one would mint a second task for the same work.
 out=$(python3 "${IMPORT}" --issues "${tmp}/issues.json" --tasks-dir "${tasks}" --apply)
 [[ "$(echo "${out}" | wc -l)" -eq 1 ]] || fail "expected exactly one import, got: ${out}"
-echo "${out}" | grep -q '"issue":50' || fail "the labelled open issue was not imported: ${out}"
-echo "${out}" | grep -q '"add_to_issue_body":"`arsenal-task: t-' \
+echo "${out}" | grep >/dev/null '"issue":50' || fail "the labelled open issue was not imported: ${out}"
+echo "${out}" | grep >/dev/null '"add_to_issue_body":"`arsenal-task: t-' \
     || fail "no handle marker was printed for the caller to apply: ${out}"
 echo "PASS: only an open, labelled, unhandled issue becomes a task"
 
@@ -125,14 +125,14 @@ echo "PASS: the id is derived from the issue, so re-running --apply changes noth
 if [[ -f "${AUDIT}" ]] && command -v uv >/dev/null 2>&1; then
     lib="${SCRIPT_DIR}/../skills"
     report=$(cd "${SCRIPT_DIR}/../../.." && uv run python "${AUDIT}" "${lib}" --by-plugin 2>&1 || true)
-    echo "${report}" | grep -q "8000 chars  (default)" \
+    echo "${report}" | grep >/dev/null "8000 chars  (default)" \
         || fail "the default budget and its source should be printed: ${report}"
     report=$(cd "${SCRIPT_DIR}/../../.." && ARSENAL_LISTING_BUDGET_CHARS=12000 \
              uv run python "${AUDIT}" "${lib}" --by-plugin 2>&1 || true)
-    echo "${report}" | grep -q "12000 chars  (ARSENAL_LISTING_BUDGET_CHARS)" \
+    echo "${report}" | grep >/dev/null "12000 chars  (ARSENAL_LISTING_BUDGET_CHARS)" \
         || fail "the env budget should be honoured and named: ${report}"
     report=$(cd "${SCRIPT_DIR}/../../.." && uv run python "${AUDIT}" "${lib}" --by-plugin --listing-budget 500 2>&1 || true)
-    echo "${report}" | grep -q "500 chars  (--listing-budget)" \
+    echo "${report}" | grep >/dev/null "500 chars  (--listing-budget)" \
         || fail "the flag should win and be named: ${report}"
     echo "PASS: the listing budget is settable and its source is reported"
 else

@@ -51,7 +51,7 @@ run() { PATH="${tmp}/bin:${PATH}" python3 "${QPS}" --pr 7 --repo o/r --watch-bot
 # 1. GraphQL refused → REST builds the state; the conflict is seen through REST.
 out=$(run --unresolved-only); rc=$?
 [[ ${rc} -eq 2 ]] || fail "conflicting PR via REST: want exit 2, got ${rc}"
-echo "${out}" | grep -q '"state": "conflicts"' || fail "REST fallback did not report conflicts: ${out}"
+echo "${out}" | grep >/dev/null '"state": "conflicts"' || fail "REST fallback did not report conflicts: ${out}"
 echo "PASS: GraphQL 403 falls back to REST (state conflicts, CI read from check-runs)"
 
 # 2. A human reply addresses the bot thread rebuilt from REST comments.

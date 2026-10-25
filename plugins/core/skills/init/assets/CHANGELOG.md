@@ -18,6 +18,14 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [5.10.7] - 2026-10-25
+
+### Fixed
+- **Skill-edit gate:** a relative path is now resolved against the session's working directory, so `cd …/skills/<name>` followed by `sed -i … SKILL.md` is gated like the absolute form. A host with no `python3` no longer has every Edit/Write/Bash call refused — only calls that name a skill path.
+- Plugin hooks quote `${CLAUDE_PLUGIN_ROOT}` and run through `bash`, so a plugin root with a space in it (e.g. `C:/Users/First Last`) no longer silently disables them.
+- `detect_surface.sh` detects redis on macOS, which has no `timeout`.
+- The skill-edit gate and the prompt hook start fewer `python3` processes per call.
+
 ## [5.10.6] - 2026-10-25
 
 ### Fixed

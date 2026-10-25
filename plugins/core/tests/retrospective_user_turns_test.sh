@@ -75,16 +75,16 @@ count=$(printf '%s' "${out}" | python3 -c 'import json,sys; print(len(json.load(
 
 [[ "${count}" == "1" ]] || fail "expected 1 correction from 8 phrase-bearing records, got ${count}"
 
-printf '%s' "${out}" | grep -q "either" \
+printf '%s' "${out}" | grep >/dev/null "either" \
     && fail "a record with a non-mapping origin was scanned as a human turn"
 
-printf '%s' "${out}" | grep -q "already told" \
+printf '%s' "${out}" | grep >/dev/null "already told" \
     || fail "the one human correction is missing — the filter dropped a real turn"
-printf '%s' "${out}" | grep -qi "goes wrong AND why" \
+printf '%s' "${out}" | grep -i >/dev/null "goes wrong AND why" \
     && fail "a skill body was scanned as if the user had typed it"
-printf '%s' "${out}" | grep -q "bash-input\|bash-stdout" \
+printf '%s' "${out}" | grep >/dev/null "bash-input\|bash-stdout" \
     && fail "a shell escape was scanned as user prose"
-printf '%s' "${out}" | grep -q "task-notification" \
+printf '%s' "${out}" | grep >/dev/null "task-notification" \
     && fail "a task notification was scanned as user prose"
 
 echo "PASS: retrospective_user_turns_test — only the human turn is scanned"

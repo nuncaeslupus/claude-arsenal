@@ -75,7 +75,7 @@ out="$(python3 "${SYNC}" --repo-root "${tmp}" --check 2>&1)"; rc=$?
 [[ "${rc}" -eq 1 ]] || fail "drifted tree should --check exit 1, got ${rc}: ${out}"
 for label in "core/plugin.json" "skill-workshop/plugin.json" "repo-audit/plugin.json" \
              "AGENTS.md header" "INSTALL.md ARSENAL_REF pin"; do
-    printf '%s' "${out}" | grep -qF "${label}" || fail "--check did not name '${label}': ${out}"
+    printf '%s' "${out}" | grep -F >/dev/null "${label}" || fail "--check did not name '${label}': ${out}"
 done
 echo "PASS: --check names every drifted target and exits 1"
 
@@ -108,7 +108,7 @@ echo "PASS: surrounding formatting preserved"
 # --- Gate 4: a synced tree passes --check with exit 0. ---
 cout="$(python3 "${SYNC}" --repo-root "${tmp}" --check 2>&1)"; crc=$?
 [[ "${crc}" -eq 0 ]] || fail "synced tree should --check exit 0, got ${crc}: ${cout}"
-printf '%s' "${cout}" | grep -qi "all versions match" || fail "synced --check missing OK line: ${cout}"
+printf '%s' "${cout}" | grep -i >/dev/null "all versions match" || fail "synced --check missing OK line: ${cout}"
 echo "PASS: synced tree passes --check (exit 0)"
 
 # --- Gate 5: a malformed .bundle-version is rejected (exit 2), not silently synced. ---

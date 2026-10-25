@@ -136,11 +136,12 @@ export ARSENAL_UPSTREAM_CHECK := 0
 # point it at one). branch_protection_test.sh turns it back on against a fake gh.
 export ARSENAL_BRANCH_PROTECTION := 0
 
-test:  ## run every plugin's behaviour tests (plugins/*/tests/*.sh) + repo-tool tests (scripts/*_test.sh)
-	@set -e; for t in plugins/*/tests/*.sh scripts/*_test.sh; do \
-		[ -f "$$t" ] || continue; \
-		echo "=== test: $$t ==="; bash "$$t"; \
-	done
+# Each test works in its own mktemp -d, so files run in parallel (TEST_JOBS=1 for
+# serial); a failing file's full output is printed, a passing one is one line.
+TEST_JOBS ?= 4
+test:  ## run every plugin's behaviour tests (plugins/*/tests/*.sh) + repo-tool tests (scripts/*_test.sh), TEST_JOBS in parallel
+	@ls plugins/*/tests/*.sh scripts/*_test.sh | xargs -P $(TEST_JOBS) -I{} sh -c \
+		'o=$$(bash {} 2>&1) && echo "ok   {}" || { printf "=== FAIL %s ===\n%s\n" {} "$$o"; exit 1; }'
 
 # Tests that scan the tree (grep -r, find, a glob loop) depend on files they
 # never name, so select_tests.py cannot map a change to them; they ride along
@@ -151,6 +152,7 @@ TREE_TESTS = $(shell grep -lE '$(TREE_TEST_RE)' plugins/*/tests/*.sh scripts/*_t
 test-changed:  ## run only the tests the change since BASE touches (default origin/main) — the editing loop; `make test` stays the bar
 	@set -e; for t in $$(python3 plugins/core/skills/init/assets/bin/select_tests.py \
 		--tests 'plugins/*/tests/*.sh' --tests 'scripts/*_test.sh' \
+		--always '**/bin/_*.sh' \
 		$(TREE_TESTS:%=--include %) $(if $(BASE),--base $(BASE))); do \
 		echo "=== test: $$t ==="; bash "$$t"; \
 	done

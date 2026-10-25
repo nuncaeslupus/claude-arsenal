@@ -181,10 +181,10 @@ echo "PASS: an upgrade from a pre-section bundle keeps its skills"
 # consumer is most likely to be missing and least likely to know about.
 repo="$tmp/offline"; mkdir -p "$repo"
 out="$(python3 "$init_py" --repo-path "$repo" 2>&1)" || fail "init exited non-zero"
-echo "$out" | grep -q 'sections off:.*extract' \
+echo "$out" | grep >/dev/null 'sections off:.*extract' \
     || fail "the sections-off line omits the opt-in section 'extract': $out"
-echo "$out" | grep -q 'sections off:.*python' || fail "the sections-off line lost 'python'"
-echo "$out" | grep -q 'sections off:.*core' && fail "core is not an optional section"
+echo "$out" | grep >/dev/null 'sections off:.*python' || fail "the sections-off line lost 'python'"
+echo "$out" | grep >/dev/null 'sections off:.*core' && fail "core is not an optional section"
 echo "PASS: 'sections off' reports opt-in sections, not only default-off ones"
 
 # --- --sections is honoured under --workspace -------------------------------

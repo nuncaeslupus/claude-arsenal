@@ -384,7 +384,7 @@ grep -q "CLEAR" "${GH_BODY_FILE}" \
     || fail "a cleared review must be recorded in the PR body, got: $(cat "${GH_BODY_FILE}")"
 grep -q "the gates then changed it" "${GH_BODY_FILE}" \
     && fail "a gate that writes nothing must produce a CLEAN clear, with no drift note: $(cat "${GH_BODY_FILE}")"
-git log -1 --name-only --format= | grep -q "arsenal-review" \
+git log -1 --name-only --format= | grep >/dev/null "arsenal-review" \
     && fail "the review's own working files must never be committed into the PR"
 echo "PASS: a cleared review is recorded in the PR body, and the packet stays out of the commit"
 

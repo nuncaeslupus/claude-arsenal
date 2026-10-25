@@ -68,7 +68,7 @@ identity distinct-login
 pr "[$(marker owner OWNER CLEAR session_01Reviewer)]"
 [[ "$(audit --json | field review)" == "unresolvable" ]] \
     || fail "under distinct-login a CLEAR from the author's login must not clear"
-audit --json | field review_detail | grep -q "distinct-login" || fail "the refusal should name the rule"
+audit --json | field review_detail | grep >/dev/null "distinct-login" || fail "the refusal should name the rule"
 pr "[$(marker second-reader COLLABORATOR CLEAR)]"
 [[ "$(audit --json | field review)" == "clear" ]] || fail "a CLEAR from another trusted login must clear"
 audit --require-ready >/dev/null || fail "green CI + a distinct reader's CLEAR must be ready"
@@ -85,7 +85,7 @@ rm -f "${tmp}/root/arsenal/config.toml"
 pr "[$(marker owner OWNER CLEAR session_01Reviewer)]"
 [[ "$(audit --json | field review)" == "clear" ]] \
     || fail "a CLEAR from the author's login with a distinct session must clear"
-audit --json | field review_detail | grep -q "cleared via reviewer-identity distinct-session" \
+audit --json | field review_detail | grep >/dev/null "cleared via reviewer-identity distinct-session" \
     || fail "a head cleared via distinct-session must say so in its reason"
 audit --require-ready >/dev/null || fail "...and the PR is then ready"
 

@@ -126,7 +126,7 @@ grep -q 'config-acknowledged = "9.1.0"' <<<"${out}" || fail "the notice must nam
 ${out}"
 grep -q 'NEW SETTING merge-policy' <<<"${out}" \
     && fail "a key from the baseline must not be announced to a host that predates the registry"
-notice 'probe-key = 4\n' | grep -q 'probe-key' && fail "a key the host set is not new to it"
+notice 'probe-key = 4\n' | grep >/dev/null 'probe-key' && fail "a key the host set is not new to it"
 [[ -z "$(notice 'config-acknowledged = "9.1.0"\n')" ]] || fail "an acknowledged version silences its keys"
 [[ -n "$(notice 'config-acknowledged = "9.0.9"\n')" ]] || fail "acknowledging an older version must not silence a newer key"
 out=$(notice 'config-acknowledged = "soon"\n')

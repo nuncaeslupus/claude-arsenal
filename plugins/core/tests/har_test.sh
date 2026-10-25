@@ -70,7 +70,7 @@ out="$(py "$scripts/analyze_har.py" --input "$tmp/basic.har" --index --verify-of
 grep -q "offsets verified" <<<"$out" || fail "--verify-offsets did not report verifying: $out"
 [ -s "$tmp/basic.har.index.jsonl" ] || fail "no sidecar written next to the capture"
 
-head -1 "$tmp/basic.har.index.jsonl" | grep -q '"digest"' \
+head -1 "$tmp/basic.har.index.jsonl" | grep >/dev/null '"digest"' \
     || fail "the index header carries no content digest"
 grep -q "live-token-aaaa" "$tmp/basic.har.index.jsonl" \
     && fail "the sidecar carries a live token — it sits on disk beside the capture"
@@ -99,7 +99,7 @@ echo "PASS: the input capture is never written"
 idx="$(py "$scripts/query_har.py" --input "$tmp/basic.har" \
     --response-match "Senior Rust Engineer 2" | awk 'NR==1{print $1}')"
 [ -n "$idx" ] || fail "--response-match found nothing; it is the operation this toolkit is for"
-py "$scripts/query_har.py" --input "$tmp/basic.har" --show "$idx" --schema | grep -q '"results"' \
+py "$scripts/query_har.py" --input "$tmp/basic.har" --show "$idx" --schema | grep >/dev/null '"results"' \
     || fail "--schema on the located entry did not print the body shape"
 echo "PASS: SC4 — two commands from a string on the page to the endpoint's shape"
 
@@ -120,13 +120,13 @@ py "$scripts/query_har.py" --input "$tmp/hostile.har" --extract-body --output-di
     >/dev/null || fail "--extract-body exited non-zero on the hostile fixture"
 escaped="$(find "$tmp" -maxdepth 1 -name '*passwd*' -o -maxdepth 1 -name 'CON*' | wc -l)"
 [ "$escaped" -eq 0 ] || fail "extraction wrote outside --output-dir"
-find "$tmp/out" -mindepth 2 | grep -q . && fail "extraction created nested paths from a URL"
+find "$tmp/out" -mindepth 2 | grep >/dev/null . && fail "extraction created nested paths from a URL"
 echo "PASS: extraction — every body lands flat inside --output-dir"
 
 # --- three-state cache ------------------------------------------------------
-py "$scripts/query_har.py" --input "$tmp/traps.har" --unknown-cache | grep -q "unknown-cache" \
+py "$scripts/query_har.py" --input "$tmp/traps.har" --unknown-cache | grep >/dev/null "unknown-cache" \
     || fail "--unknown-cache did not select the entry with no _fromCache"
-py "$scripts/query_har.py" --input "$tmp/traps.har" --no-cache | grep -q "unknown-cache" \
+py "$scripts/query_har.py" --input "$tmp/traps.har" --no-cache | grep >/dev/null "unknown-cache" \
     && fail "--no-cache selected an entry whose exporter never recorded _fromCache"
 echo "PASS: _fromCache stays three-state across the CLI"
 
@@ -138,11 +138,11 @@ grep -q "page varies over 4" <<<"$out" || fail "--endpoints did not report the v
 grep -q "loc = NY  (constant)" <<<"$out" || fail "--endpoints did not report the constant one"
 echo "PASS: --endpoints — the paginated API collapses to one row"
 
-py "$scripts/analyze_har.py" --input "$tmp/basic.har" --headers | grep -q "candidate auth" \
+py "$scripts/analyze_har.py" --input "$tmp/basic.har" --headers | grep >/dev/null "candidate auth" \
     || fail "--headers did not name the constant Authorization as a candidate"
-py "$scripts/analyze_har.py" --input "$tmp/traps.har" --cookies | grep -q "sid \[HttpOnly\]" \
+py "$scripts/analyze_har.py" --input "$tmp/traps.har" --cookies | grep >/dev/null "sid \[HttpOnly\]" \
     || fail "--cookies lost the cookie name or its flags"
-py "$scripts/analyze_har.py" --input "$tmp/traps.har" --websockets | grep -q "Rustacean" \
+py "$scripts/analyze_har.py" --input "$tmp/traps.har" --websockets | grep >/dev/null "Rustacean" \
     || fail "--websockets did not show the frames a body search cannot find"
 echo "PASS: --headers, --cookies, --websockets"
 
@@ -204,7 +204,7 @@ echo "PASS: compare_har — one real change found, none invented"
 # --- the sibling scripts have not drifted apart -----------------------------
 for script in query_har.py create_har.py compare_har.py; do
     for flag in --url --host --status --type --param --has-header --unknown-cache --invert; do
-        py "$scripts/$script" --help 2>/dev/null | grep -q -- "$flag" \
+        py "$scripts/$script" --help 2>/dev/null | grep >/dev/null -- "$flag" \
             || fail "$script no longer offers the shared selection flag $flag"
     done
 done

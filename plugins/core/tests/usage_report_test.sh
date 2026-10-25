@@ -131,7 +131,7 @@ w=json.load(sys.stdin)[0]['workflows']
 print(w['CI']['minutes'], w['CI']['runs'], w['arsenal queue']['minutes'], w['arsenal queue']['billed_runs'])
 " <<<"${out}")
 [[ "${got}" == "4 2 0 0" ]] || fail "expected CI 4 min over 2 runs, queue 0 billed, got '${got}'"
-PATH="${tmp}/bin:${PATH}" python3 "${REPORT}" --actions --repo o/r | grep -q "TOTAL  4 minute" \
+PATH="${tmp}/bin:${PATH}" python3 "${REPORT}" --actions --repo o/r | grep >/dev/null "TOTAL  4 minute" \
     || fail "--actions table should total 4 minutes"
 echo "PASS: --actions rounds each job up, doubles Windows, bills skipped jobs nothing"
 

@@ -42,7 +42,7 @@ if want hook; then
   out="$(cd "$repo" && CLAUDE_PROJECT_DIR="$repo" bash "$HOOK" instruct </dev/null)" \
     || fail "instruct exited non-zero"
   for k in 'decisions taken' 'ruled out' 'next step'; do
-    echo "$out" | grep -q "$k" || fail "instruct does not ask the summary to keep '${k}'"
+    echo "$out" | grep >/dev/null "$k" || fail "instruct does not ask the summary to keep '${k}'"
   done
 
   # A notes file: its Resume block (minus the guidance quote) and git status.
@@ -50,18 +50,18 @@ if want hook; then
   cp "$TEMPLATE" "${repo}/tmp/t-1234abcd-notes.md"
   echo x > "${repo}/changed.txt"
   out="$(run)" || fail "hook exited non-zero with notes"
-  echo "$out" | grep -q 'tmp/t-1234abcd-notes.md' || fail "notes path not printed"
-  echo "$out" | grep -q 'Next step' || fail "Resume block not printed"
-  echo "$out" | grep -q '^>' && fail "guidance blockquote leaked into output"
-  echo "$out" | grep -q 'Gate & failing check' && fail "printed past the Resume section"
-  echo "$out" | grep -q 'changed.txt' || fail "git status not printed"
+  echo "$out" | grep >/dev/null 'tmp/t-1234abcd-notes.md' || fail "notes path not printed"
+  echo "$out" | grep >/dev/null 'Next step' || fail "Resume block not printed"
+  echo "$out" | grep >/dev/null '^>' && fail "guidance blockquote leaked into output"
+  echo "$out" | grep >/dev/null 'Gate & failing check' && fail "printed past the Resume section"
+  echo "$out" | grep >/dev/null 'changed.txt' || fail "git status not printed"
 
   # The newest notes file wins; a stale one (>7 days) is ignored.
   printf '## Resume\n- **Next step**: `newest`\n' > "${repo}/tmp/t-9999ffff-notes.md"
   touch -t 202001010000 "${repo}/tmp/t-1234abcd-notes.md"
   out="$(run)"
-  echo "$out" | grep -q 'newest' || fail "did not pick the newest notes file"
-  echo "$out" | grep -q 'GUESSED' || fail "a recency pick is not flagged as a guess"
+  echo "$out" | grep >/dev/null 'newest' || fail "did not pick the newest notes file"
+  echo "$out" | grep >/dev/null 'GUESSED' || fail "a recency pick is not flagged as a guess"
   touch -t 202001010000 "${repo}/tmp/t-9999ffff-notes.md"
   out="$(run)"
   [ -z "$out" ] || fail "stale notes not ignored: $out"
@@ -78,23 +78,23 @@ if want hook; then
   runs() { (cd "$repo" && printf '{"session_id":"%s","source":"compact"}' "$1" \
     | CLAUDE_PROJECT_DIR="$repo" bash "$HOOK"); }
   out="$(runs sess-A)"
-  echo "$out" | grep -q 'task-a' || fail "session A did not get its own (older) notes: $out"
-  echo "$out" | grep -q 'recorded for this session' || fail "session pick not labelled"
+  echo "$out" | grep >/dev/null 'task-a' || fail "session A did not get its own (older) notes: $out"
+  echo "$out" | grep >/dev/null 'recorded for this session' || fail "session pick not labelled"
   out="$(runs sess-B)"
-  echo "$out" | grep -q 'task-b' || fail "session B did not get its own notes"
+  echo "$out" | grep >/dev/null 'task-b' || fail "session B did not get its own notes"
 
   # No record: a task id in the branch name beats recency.
   git -C "$repo" checkout -q -b "arsenal/t-aaaa0001-some-slug"
   out="$(runs sess-unknown)"
-  echo "$out" | grep -q 'task-a' || fail "branch match did not win: $out"
-  echo "$out" | grep -q 'matched to branch' || fail "branch pick not labelled"
+  echo "$out" | grep >/dev/null 'task-a' || fail "branch match did not win: $out"
+  echo "$out" | grep >/dev/null 'matched to branch' || fail "branch pick not labelled"
   git -C "$repo" checkout -q -b other
   rm -f "${repo}/tmp/t-aaaa0001-notes.md" "${repo}/tmp/t-bbbb0002-notes.md"
 
   # A notes file with no Resume section says so rather than printing nothing.
   printf '# notes\n' > "${repo}/tmp/t-0000aaaa-notes.md"
   out="$(run)"
-  echo "$out" | grep -q 'no Resume section' || fail "missing Resume section not flagged"
+  echo "$out" | grep >/dev/null 'no Resume section' || fail "missing Resume section not flagged"
 
   # /init registers it once, under SessionStart/compact, and re-running does not duplicate.
   target="${scratch}/host"
