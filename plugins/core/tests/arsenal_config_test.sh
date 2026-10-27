@@ -199,5 +199,13 @@ printf '[review]\nalways-human-paths = "auth/**"\n' > arsenal/config.toml
 [[ "$(get_rc review.always-human-paths)" == "2" ]] || fail "a bare string for a glob list must be refused"
 echo "PASS: review.preset / approval-* / path lists validate"
 
+printf 'digest-delivery = "email"\n' > arsenal/config.toml
+[[ "$(get_rc digest-delivery)" == "2" ]] || fail "test_digest_delivery_unknown_value_exits_2"
+printf 'digest-every = -1\n' > arsenal/config.toml
+[[ "$(get_rc digest-every)" == "2" ]] || fail "a negative digest-every must be refused"
+printf '[review]\ndigest-decisions = "yes"\n' > arsenal/config.toml
+[[ "$(get_rc review.digest-decisions)" == "2" ]] || fail "digest-decisions must be a boolean"
+echo "PASS: digest-delivery / digest-every / digest-decisions validate"
+
 echo "PASS: arsenal_config_test — model settings and table handling"
 exit 0

@@ -4,7 +4,7 @@
 **Specification**: `arsenal/project/review-digest/spec.md` (r4: § 5 "P2 — the digest", § 6 P2 rows)
 **Author**: nuncaeslupus (with Claude)
 **Revision**: 1
-**Status**: draft
+**Status**: approved (2026-10-27, revision 1) — without annotations
 **Revision log**:
 - r1 — first draft; P1 merged in 5.11.0
 
