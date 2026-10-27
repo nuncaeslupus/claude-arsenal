@@ -60,6 +60,7 @@ grep -q "Make the app say bye" <<<"${packet}" || fail "the packet must carry the
 grep -q "print('bye')" <<<"${packet}" || fail "the packet must carry the uncommitted tracked change"
 grep -q "brand new" <<<"${packet}" || fail "the packet must carry untracked files — a whole new module is invisible to git diff"
 grep -q "Your brief" <<<"${packet}" || fail "the packet must embed the reviewer rubric"
+grep -q "it never blocks alone" <<<"${packet}" && grep -q "SCOPE:" <<<"${packet}" || fail "test_rubric_names_scope_tag"
 grep -q "VERDICT: CLEAR" <<<"${packet}" || fail "the packet must state the verdict contract"
 echo "PASS: the packet is self-contained — intent, tracked diff, untracked files, rubric"
 

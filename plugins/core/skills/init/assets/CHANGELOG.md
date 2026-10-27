@@ -18,6 +18,16 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [5.13.0] - 2026-10-27
+
+### Added
+- **Lean-code rules** (`references/lean-code.md`, loaded only when implementing or reviewing).
+  - Before writing code, a four-step check: is it needed at all → does the stdlib or platform already do it → does the repo already have it → only then the minimum that passes the gate.
+  - One-line rules: smallest diff, delete before adding, no speculative options, no impossible-state guards, no unrequested refactors, no comments restating code, no dependency for a few lines.
+  - A never-cut list: validation, error handling, security, accessibility, tests.
+- **Reviewer `SCOPE` tag:** code a task did not need is reported as `RISK | … — SCOPE: …` with the lines that could go. It never blocks on its own; the author removes it or answers why it stays.
+- **Digest size flag:** add `expected_lines` (your estimate, written before implementing) to the record notes. A PR over twice that shows `⚠ 2.4x expected size` on its card, and a green mark turns amber.
+
 ## [5.12.0] - 2026-10-27
 
 ### Added
