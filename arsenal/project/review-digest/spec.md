@@ -3,10 +3,11 @@
 **Date**: 2026-10-26
 **Ticket / PR**: branch `claude/code-review-enforcement-sa12j9`
 **Author**: nuncaeslupus (with Claude)
-**Revision**: 3
-**Status**: approved (2026-10-27, revision 3) — without annotations
+**Revision**: 4
+**Status**: draft — r4 adds the P2 contracts; r3 was approved 2026-10-27 without annotations
 **Revision log**:
 - r1 — first draft, from the brainstorm on Anthropic's "How the Claude Code team does code review" (Oct 2026)
+- r4 — § 5/§ 6: P2 (digest) contracts and risks; records live in a PR-body marker, the digest branch only holds rendered pages (D-14)
 - r3 — § 5 config: flat `[review]` keys (the loader reads one table level) and existing `risk-paths`/`risk-lines` for the high tier, instead of `[review.tiers]`/`[review.approval]`
 - r2 — open questions resolved with the recommended answers (D-9…D-13), approved in chat without annotations
 
@@ -147,11 +148,12 @@ reads them.
 | D-6 | Every level of review and detail is configurable and asked at `/init`, with presets for solo through team; the effective flow is printable. | agreed | 2026-10-26 |
 | D-7 | Token cost is stated before costly modes (overnight review); everything new is script-first and on-demand; skill-workshop gates every skill change. | agreed | 2026-10-26 |
 | D-8 | Security review is an optional layer, off in solo presets. | agreed | 2026-10-26 |
-| D-9 | Digest records live on a dedicated `arsenal/digest` branch, not on the default branch. | agreed | 2026-10-27 |
+| D-9 | Digest records live on a dedicated `arsenal/digest` branch, not on the default branch. | superseded by D-14 | 2026-10-27 |
 | D-10 | Denying an already-merged `human-after` PR auto-opens a revert PR. | agreed | 2026-10-27 |
 | D-11 | `always-human-paths` is offered in every preset, empty by default; it overrides `solo-trust`. | agreed | 2026-10-27 |
 | D-12 | Lean-code rules: fold in any useful rules from the author's installed ponytail plugin as provenance, never named as a norm. | agreed | 2026-10-27 |
 | D-13 | Severity mark is a red/amber/green colour derived from tier × open findings. | agreed | 2026-10-27 |
+| D-14 | Per-PR digest records live in a marker block in the PR body, not on an `arsenal/digest` branch (supersedes D-9): readable and writable by any session, no second ref to push. | proposed | 2026-10-27 |
 
 ---
 
@@ -234,6 +236,96 @@ Question 5: "Who approves what? `solo-trust` (default for one-person repos), `so
 `init.py --review-preset <name> [--always-human-paths "glob,glob"]`. Upgrades are not
 asked again; the upgrade banner names the new question once.
 
+### P2 — the digest
+
+#### Per-PR record (the durable store)
+
+One machine block in the PR body, rewritten in place by `digest.py record`:
+
+```text
+<!-- arsenal-digest
+{"v":1,"pr":42,"head":"1a2b3c4","tier":"high","mark":"amber",
+ "state":"awaiting-approval","summary":"≤ 60 words, 2–3 sentences",
+ "deps":[41],"size":{"add":120,"del":30,"files":4},"rounds":2,
+ "findings":[{"what":"…","found_by":"cold-reviewer","fix":"…","commit":"9f8e7d6"}],
+ "open":["RISK: …"],"undo":"revert the merge commit; no data migration",
+ "questions":[],"ratified":null}
+-->
+```
+
+States: `awaiting-approval` · `needs-decision` (round cap hit) · `merged-awaiting-ratification`
+(`human-after`) · `blocked-by-dep` · `merged` · `closed`. Mark: red = tier high with an open
+finding, or `needs-decision`; amber = tier high, or medium with an open finding; green otherwise.
+`found_by` ∈ self · cold-reviewer · bot:<login> · ci · human.
+
+```
+digest.py record --pr N --notes FILE   # FILE: {summary, undo, fixes:[{what, fix, commit}], open:[…]}
+                                       # rounds/findings pulled from tmp/arsenal-review round files
+digest.py check --pr N                 # exit 1 when the summary breaks the size rule (≤ 3 sentences, ≤ 60 words)
+```
+
+Why the PR body (D-14, replacing D-9's branch): every session that can see the PR can read
+and rewrite it, it needs no push to a second ref (refused by some cloud git proxies), and it
+dies with nothing — a closed PR still holds its record.
+
+#### The digest
+
+```
+digest.py render [--since last|<date>] [--format html|md] [--out DIR]
+```
+
+Gathers records from open PRs plus PRs merged since the last digest (`--since last` reads
+`arsenal/session/digest.json`, which stores the last render time). HTML: header line (counts by
+state, the P4 metrics line once it exists), dependency list, one folded card per PR sorted
+red → amber → green, then by state. Each card's fold has a status row, the summary, and
+**Approve / Deny / Question** with a note field. The detail shows findings (what · found by ·
+fix · commit), open risks, rounds, size and undo. Export writes
+`<repo>-digest-<stamp>-decisions.md` with an embedded block:
+
+```text
+<!-- ARSENAL-DECISIONS {"42":{"decision":"approve","head":"1a2b3c4","note":""}, …} -->
+```
+
+`--format md` is the same content as chat text (cards as `<details>` blocks).
+
+#### Decisions
+
+```
+apply_decisions.py FILE [--dry-run]
+```
+
+- **approve**: rejected as `stale` when the PR head ≠ the recorded head. Otherwise the script posts
+  `<!-- arsenal-decision: approve head=<sha> via=digest -->` on the PR, and for a
+  `merged-awaiting-ratification` record sets `ratified`.
+- **deny**: an open PR is closed and its task reopened. A merged `human-after` PR gets a revert PR
+  opened (D-10).
+- **question**: posted as a PR comment and added to `questions`. The next worker answers it, and the
+  answer shows in the next digest.
+- Then every approved PR whose deps are merged or approved goes through `merge_ready.sh`, in
+  dependency order. A PR whose dep was denied is reported, not merged.
+- With no scriptable GitHub channel, it prints the calls to make, like `merge_ready.sh` exit 5.
+
+#### Counting a digest approval as human
+
+`[review] digest-decisions = false | true`. When true, `pr_audit.py` counts a decision marker
+on the head SHA as one human approval (`Approved-by: human via digest@<sha>`). This makes
+`solo-gated` work on one GitHub account. The marker is written by the agent from your exported
+file, so the trust is in the file, not in GitHub. Default `false`; `/init` offers `true` with the
+solo presets only.
+
+#### Config
+
+```toml
+digest-delivery = "file"   # file | chat | both — where render's output goes at the triggers below
+digest-every = 5           # also render after this many merges in one session; 0 = only at session end
+[review]
+digest-decisions = false
+```
+
+Triggers: `session-end`, the quota-governance stop, and every `digest-every` merges in the
+orchestrator tick. `file` writes the HTML to the scratch/output dir and prints its path; a
+surface that can publish a page publishes that file.
+
 ## 6. Risks & Validation
 
 | Risk | Likelihood | Impact | Mitigation | Validation |
@@ -244,3 +336,7 @@ asked again; the upgrade banner names the new question once.
 | `solo-trust` merges a high-risk regression overnight | Med | Med | `human-after` trailer → ratification in P2 digest; revert PR on denial (D-10) | manual: during rollout, review the trailers of the first 10 merges |
 | Interview grows and users skip it | Low | Low | One question, defaults first, skip keeps legacy | `init_test.sh` interview cases |
 | Resident context grows | Low | Med | Prose in `github-automation.md` (on demand); `AGENTS.md` unchanged | `make context-budget` core delta ≤ 150 tokens |
+| P2: a digest approval is forged by the agent | Low | High | `digest-decisions` defaults off; marker bound to the head SHA; the decisions file is committed beside the digest as the audit trail | unit: marker on an old SHA counts 0; off → counts 0 |
+| P2: a PR body edit by a human erases the record | Med | Low | `record` rewrites only its own block; a missing block is rebuilt from round files + `--notes` on the next record | unit: body text outside the block is preserved |
+| P2: digest too long to skim | Med | Med | `digest.py check` enforces the per-PR word cap; folded cards | `render` of 10 records ≤ 900 visible words |
+| P2: approve applied to a PR that changed since the digest | Med | High | decision carries the head SHA; mismatch → `stale`, listed in the next digest | unit: stale approval is not merged |
