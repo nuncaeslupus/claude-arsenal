@@ -47,7 +47,7 @@ def files_in(scope: list[Path]) -> list[Path]:
         ["git", "ls-files", "-z", "--", *map(str, scope)], capture_output=True, check=False
     )
     if res.returncode == 0 and res.stdout:
-        listed = [Path(p) for p in res.stdout.decode().split("\0") if p]
+        listed = [Path(p) for p in res.stdout.decode(errors="surrogateescape").split("\0") if p]
     else:
         listed = [p for s in scope for p in ([s] if s.is_file() else s.rglob("*")) if p.is_file()]
     return sorted(p for p in listed if not _skipped(p) and p.is_file())

@@ -10,9 +10,11 @@ From git alone (cheap, always):
     merged    a commit on the first-parent line whose subject ends in `(#N)` (a squash)
               or starts `Merge pull request #N`; its tier is its `Risk-tier:` trailer,
               `untiered` when it has none.
-    revert    a merge whose subject starts `Revert` and names a merge in the window
-              (`Revert #N`, `Revert "<subject>"`, or `This reverts commit <sha>`);
-              counted against the reverted merge's tier.
+    revert    a merge in the window whose subject starts `Revert` and names a merge
+              landed up to 7 days before the window or inside it (`Revert #N`,
+              `Reverts owner/repo#N`, `Revert "<subject>"`, `This reverts commit
+              <sha>`; each tried until one matches); counted against the reverted
+              merge's tier. A revert of anything older is not counted.
     fix-up    a `fix` commit (conventional subject) landing within 7 days after a merge
               that touches a file that merge touched; counted once, against the most
               recent such merge's tier.
@@ -20,7 +22,7 @@ From digest records (`--prs-json`, the PR objects): mean review rounds, and the 
 of findings by `found_by`. These are a trend line, never a gate.
 
 Usage:
-    review_metrics.py [--days 30] [--ref HEAD] [--prs-json FILE] [--json]
+    review_metrics.py [--days 30] [--ref BRANCH] [--prs-json FILE] [--json]
 Exit: 0 ok, 2 not a git repository or bad input.
 """
 
@@ -45,6 +47,8 @@ FIX_RX = re.compile(r"^fix(\(.*?\))?!?:", re.IGNORECASE)
 REVERT_PR_RX = re.compile(r"^Revert #(\d+)")
 REVERT_SUBJ_RX = re.compile(r'^Revert "(.+)"')
 REVERT_SHA_RX = re.compile(r"This reverts commit ([0-9a-f]{7,40})")
+REVERTS_REF_RX = re.compile(r"^Reverts \S*#(\d+)", re.MULTILINE)  # GitHub's Revert button
+PR_SUFFIX_RX = re.compile(r"\s*\(#\d+\)\s*$")
 TIERS = ("low", "medium", "high", "untiered")
 
 
@@ -78,6 +82,23 @@ def commits(ref: str, days: int) -> list[dict[str, Any]]:
     return out
 
 
+def _reverted(c: dict[str, Any], merges: dict[int, dict[str, Any]]) -> dict[str, Any] | None:
+    """The merge a revert names, trying each way of naming it until one matches."""
+    bare = PR_SUFFIX_RX.sub("", c["subject"])
+    if (m := REVERT_PR_RX.search(bare)) and int(m.group(1)) in merges:
+        return merges[int(m.group(1))]
+    if (m := REVERTS_REF_RX.search(c["body"])) and int(m.group(1)) in merges:
+        return merges[int(m.group(1))]
+    if m := REVERT_SUBJ_RX.search(bare):
+        want = PR_SUFFIX_RX.sub("", m.group(1))
+        hit = next((x for x in merges.values() if PR_SUFFIX_RX.sub("", x["subject"]) == want), None)
+        if hit is not None:
+            return hit
+    if m := REVERT_SHA_RX.search(c["body"]):
+        return next((x for x in merges.values() if x["sha"].startswith(m.group(1))), None)
+    return None
+
+
 def git_metrics(cs: list[dict[str, Any]], days: int) -> dict[str, Any]:
     start = datetime.now(UTC) - timedelta(days=days)
     merges: dict[int, dict[str, Any]] = {}
@@ -95,13 +116,7 @@ def git_metrics(cs: list[dict[str, Any]], days: int) -> dict[str, Any]:
     for c in cs:
         if c["time"] < start or not c["subject"].startswith("Revert"):
             continue
-        target = None
-        if pm := REVERT_PR_RX.search(c["subject"]):
-            target = merges.get(int(pm.group(1)))
-        elif sm := REVERT_SUBJ_RX.search(c["subject"]):
-            target = next((x for x in merges.values() if x["subject"] == sm.group(1)), None)
-        elif hm := REVERT_SHA_RX.search(c["body"]):
-            target = next((x for x in merges.values() if x["sha"].startswith(hm.group(1))), None)
+        target = _reverted(c, merges)
         if target is not None:
             reverts[target["tier"]] += 1
 
@@ -122,11 +137,13 @@ def git_metrics(cs: list[dict[str, Any]], days: int) -> dict[str, Any]:
 
 
 def record_metrics(prs: list[dict[str, Any]]) -> dict[str, Any]:
-    recs = [r for r in (digest.read_block(p.get("body")) for p in prs) if r]
-    rounds = [int(r.get("rounds", 0)) for r in recs if int(r.get("rounds", 0)) > 0]
+    recs = [r for r in (digest.read_block(p.get("body")) for p in prs if isinstance(p, dict)) if r]
+    rounds = [r["rounds"] for r in recs if type(r.get("rounds")) is int and r["rounds"] > 0]
     sources: dict[str, int] = {}
     for r in recs:
-        for f in r.get("findings", []):
+        for f in r.get("findings") or []:
+            if not isinstance(f, dict):
+                continue
             src = str(f.get("found_by", "?"))
             src = "bot" if src.startswith("bot:") else src
             sources[src] = sources.get(src, 0) + 1
@@ -155,10 +172,18 @@ def line(m: dict[str, Any]) -> str:
     return out
 
 
-def summary(days: int = 30, ref: str = "HEAD") -> str:
-    """The git-only line, for the digest header; empty outside a git repository."""
+def default_ref() -> str:
+    """origin's default branch when known, so a feature-branch checkout reports main."""
     try:
-        return line(git_metrics(commits(ref, days), days))
+        return _git("symbolic-ref", "--short", "refs/remotes/origin/HEAD").strip() or "HEAD"
+    except ValueError:
+        return "HEAD"
+
+
+def summary(days: int = 30, ref: str | None = None) -> str:
+    """The git-only line for the digest header (origin's default branch); "" outside git."""
+    try:
+        return line(git_metrics(commits(ref or default_ref(), days), days))
     except (ValueError, OSError):
         return ""
 
@@ -166,14 +191,14 @@ def summary(days: int = 30, ref: str = "HEAD") -> str:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=(__doc__ or "").split("\n", 1)[0])
     ap.add_argument("--days", type=int, default=30)
-    ap.add_argument("--ref", default="HEAD", help="the default branch (default: HEAD)")
+    ap.add_argument("--ref", help="branch to read (default: origin's default branch, else HEAD)")
     ap.add_argument("--prs-json", help="PR objects carrying digest records")
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args(argv)
     try:
         if args.days < 1:
             raise ValueError("--days must be >= 1")
-        m = git_metrics(commits(args.ref, args.days), args.days)
+        m = git_metrics(commits(args.ref or default_ref(), args.days), args.days)
         if args.prs_json:
             prs = json.loads(Path(args.prs_json).read_text(encoding="utf-8"))
             if not isinstance(prs, list):

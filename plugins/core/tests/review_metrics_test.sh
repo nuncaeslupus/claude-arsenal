@@ -27,10 +27,11 @@ gc c.py "feat: add c (#3)"
 gc a.py "fix: a crashes on empty input"
 gc b.py "Revert #2: add b (#4)"
 gc z.py "fix: unrelated file"
+gc c.py "Revert \"feat: add c\" (#5)" "Reverts owner/repo#3"
 
 out="$(python3 "${METRICS}" --days 30)" || fail "metrics failed: ${out}"
 grep -q "^30d: 3 merged (low 1 · high 1 · untiered 1)" <<<"${out}" || fail "test_untiered_merges_reported: ${out}"
-grep -q "1 revert (low)" <<<"${out}" || fail "test_revert_counted_against_its_tier: ${out}"
+grep -q "2 reverts (low, untiered)" <<<"${out}" || fail "test_revert_counted_against_its_tier (incl. GitHub's Revert button): ${out}"
 grep -q "1 fix-ups ≤7d" <<<"${out}" || fail "test_fixup_within_7_days_counted: ${out}"
 j="$(python3 "${METRICS}" --json)"
 [[ "$(python3 -c 'import json,sys; print(json.load(sys.stdin)["fixups"]["high"])' <<<"${j}")" == "1" ]] \
@@ -43,7 +44,8 @@ import json
 def pr(n, rounds, srcs):
     rec = {"v": 1, "pr": n, "rounds": rounds, "findings": [{"found_by": s} for s in srcs]}
     return {"number": n, "body": "<!-- arsenal-digest\n" + json.dumps(rec) + "\n-->"}
-print(json.dumps([pr(1, 2, ["cold-reviewer", "ci"]), pr(2, 1, ["cold-reviewer", "bot:rb[bot]"])]))
+bad = {"number": 9, "body": "<!-- arsenal-digest\n" + json.dumps({"v": 1, "pr": 9, "findings": None, "rounds": "x"}) + "\n-->"}
+print(json.dumps([pr(1, 2, ["cold-reviewer", "ci"]), pr(2, 1, ["cold-reviewer", "bot:rb[bot]"]), bad, "junk"]))
 PY
 out="$(python3 "${METRICS}" --prs-json prs.json)"
 grep -q "rounds 1.5" <<<"${out}" && grep -q "found by: cold-reviewer 50% · ci 25% · bot 25%" <<<"${out}" \
