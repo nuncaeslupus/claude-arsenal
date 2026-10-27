@@ -18,6 +18,11 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [5.11.0] - 2026-10-27
+
+### Added
+- **Note on any paragraph in an annotatable reader.** Every paragraph, list item and table in a spec or plan reader has a ✎ at its right; tapping it opens a note box right below that spot, so you write while the text that prompted the note stays in view. The export quotes the paragraph each note is about (`> ¶ “…”`), `--notes` re-seeds them, and a note whose paragraph a later revision rewrote is kept at the end of its section instead of dropped. Regenerate a reader to get it.
+
 ## [5.10.9] - 2026-10-25
 
 ### Changed

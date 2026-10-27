@@ -87,3 +87,8 @@ it on the plan.
 To re-seed a rebuilt reader with previous notes, pass `--notes <the returned
 file>`; the export carries its own note data, so hand back the file the reviewer
 sent, unrenamed.
+
+A note under `> ¶ “…”` was taken on that exact paragraph, list item or table
+(the ✎ beside it), not on the section as a whole: act on the quoted text. One
+reading `(text changed since this note)` was taken on a paragraph a later
+revision rewrote; it is shown at the end of its section.

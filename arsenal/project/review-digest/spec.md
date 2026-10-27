@@ -3,10 +3,11 @@
 **Date**: 2026-10-26
 **Ticket / PR**: branch `claude/code-review-enforcement-sa12j9`
 **Author**: nuncaeslupus (with Claude)
-**Revision**: 1
-**Status**: draft
+**Revision**: 2
+**Status**: approved (2026-10-27, revision 2) — without annotations
 **Revision log**:
 - r1 — first draft, from the brainstorm on Anthropic's "How the Claude Code team does code review" (Oct 2026)
+- r2 — open questions resolved with the recommended answers (D-9…D-13), approved in chat without annotations
 
 ---
 
@@ -131,12 +132,7 @@ tiers, approval presets, provenance trailers, `/init` interview and `--explain`)
 P2 (digest) is planned once P1's config keys are fixed, since every digest field
 reads them.
 
-**Open questions**:
-- [ ] Digest branch vs committed under `arsenal/digest/` on the default branch via each PR — the branch avoids PR churn but is one more ref; recommend the branch.
-- [ ] Denial of an already-merged `human-after` PR: auto-open a revert PR, or queue a task to decide? Recommend the revert PR (undo is cheap, the decision was already made).
-- [ ] Should `solo-trust` still require a human for a path list the user names (`always-human-paths`), even if they otherwise trust the agent? Recommend offering it, empty by default.
-- [ ] The ponytail plugin installed on the author's machine — what rules does it apply? If useful, fold them into `lean-code.md` as provenance, without naming it as a norm.
-- [ ] Severity mark vocabulary: reuse the reviewer's `BLOCKER/RISK/NOTE` plus tier, or a 3-colour mark (red/amber/green)? Recommend the colour mark derived from tier × open findings.
+**Open questions**: none — resolved as D-9…D-13.
 
 **Decisions log**:
 
@@ -150,7 +146,104 @@ reads them.
 | D-6 | Every level of review and detail is configurable and asked at `/init`, with presets for solo through team; the effective flow is printable. | agreed | 2026-10-26 |
 | D-7 | Token cost is stated before costly modes (overnight review); everything new is script-first and on-demand; skill-workshop gates every skill change. | agreed | 2026-10-26 |
 | D-8 | Security review is an optional layer, off in solo presets. | agreed | 2026-10-26 |
+| D-9 | Digest records live on a dedicated `arsenal/digest` branch, not on the default branch. | agreed | 2026-10-27 |
+| D-10 | Denying an already-merged `human-after` PR auto-opens a revert PR. | agreed | 2026-10-27 |
+| D-11 | `always-human-paths` is offered in every preset, empty by default; it overrides `solo-trust`. | agreed | 2026-10-27 |
+| D-12 | Lean-code rules: fold in any useful rules from the author's installed ponytail plugin as provenance, never named as a norm. | agreed | 2026-10-27 |
+| D-13 | Severity mark is a red/amber/green colour derived from tier × open findings. | agreed | 2026-10-27 |
 
 ---
 
-> Sections 5–6 (contracts, risks) are appended by `design`.
+## 5. Contracts
+
+Contracts for phase P1 (tiers, approval policy, provenance, interview). P2–P4
+append theirs when they are designed. The spec's `risk_tier.py` is built as
+`review_policy.py`: tier and approval requirement are read from the same config, so
+one module owns both and `--explain` cannot disagree with the verdict.
+
+### Configuration (`arsenal/config.toml`)
+
+```toml
+review-preset = "solo-trust"        # solo-trust | solo-gated | team | manual; absent = legacy merge-policy only
+always-human-paths = []             # globs; any match → tier high AND a human approval, whatever the preset (D-11)
+
+[review.tiers]                      # optional; defaults shown
+low-paths  = ["docs/**", "*.md", "tests/**"]   # every changed file matches → low
+high-paths = []                     # any match → high; risk-paths is merged in
+high-lines = 400                    # changed lines above this → high; risk-lines when set
+
+[review.approval]                   # optional; overrides the preset row by row
+low    = "auto"                     # auto | agent | human:<N> | human-after
+medium = "agent"
+high   = "human-after"
+```
+
+Approval values: `auto` — CI/gates per `merge-policy`, no review required; `agent` —
+a review clear on the head (bot review or adversarial CLEAR marker); `human:<N>` — N
+approvals on the head from distinct non-bot users with OWNER/MEMBER/COLLABORATOR
+association, none of them the PR author's session, and an agent CLEAR first;
+`human-after` — `agent`, plus the merge is flagged for ratification in the digest.
+
+| preset | low | medium | high | `merge-policy` it implies |
+|---|---|---|---|---|
+| `solo-trust` | auto | agent | human-after | after-ci-and-review |
+| `solo-gated` | auto | human:1 | human:1 | after-ci-and-review |
+| `team` | agent | human:1 | human:2 | after-ci-and-review |
+| `manual` | — | — | — | never |
+
+Precedence: `always-human-paths` > `[review.approval]` row > preset row. With no
+`review-preset`, nothing in this section is read and `merge-policy` behaves exactly
+as before.
+
+### `scripts/review_policy.py`
+
+```
+review_policy.py tier --files <json|->        # GitHub PR-files JSON
+→ {"tier": "high", "reasons": ["path auth/**: src/auth/x.py", "lines 512 > 400"],
+   "lines": 512, "human_paths": []}
+review_policy.py require --tier high          # → {"tier": "high", "approval": "human-after", "humans": 0, "ratify": true}
+review_policy.py explain                      # ≤ 12 lines: preset, tier rules, approval per tier, merge-policy
+```
+
+Exit 0 on success, 2 on a config error (message names the key). Pure functions
+`classify(files, cfg)` and `requirement(tier, cfg, human_paths)` are imported by
+`review_sources.py` and `pr_audit.py`.
+
+### `pr_audit.py` result (added fields, only when `review-preset` is set)
+
+```json
+{"tier": "high", "approval": "human-after", "humans_required": 0,
+ "humans_on_head": [], "agent_review": "clear", "ratify": true,
+ "provenance": ["Reviewed-by: agent adversarial CLEAR@1a2b3c4"]}
+```
+
+`ready` additionally requires `len(humans_on_head) >= humans_required` and, for every
+value but `auto`, `agent_review == "clear"`. A human approval on an older commit is
+not counted (`stale`).
+
+### `merge_ready.sh --body` (merge commit trailers)
+
+```
+Risk-tier: high (lines 512 > 400)
+Reviewed-by: agent adversarial CLEAR@1a2b3c4
+Approved-by: human alice@1a2b3c4            # one line per counted human approval
+Ratify: pending                              # human-after only; P2's digest clears it
+```
+
+### `/init` interview
+
+Question 5: "Who approves what? `solo-trust` (default for one-person repos), `solo-gated`,
+`team`, `manual` — or keep the current merge-policy." One line per preset, then
+`init.py --review-preset <name> [--always-human-paths "glob,glob"]`. Upgrades are not
+asked again; the upgrade banner names the new question once.
+
+## 6. Risks & Validation
+
+| Risk | Likelihood | Impact | Mitigation | Validation |
+|------|-----------|--------|------------|------------|
+| A host with no `review-preset` changes behaviour on upgrade | Low | High | Every new path is gated on the key being present; legacy tests untouched | unit: existing `pr_audit_test.sh`, `merge_ready_test.sh` pass unchanged |
+| A bot or the agent's own login counted as a human | Med | High | Human = `user.type != "Bot"`, trusted association, not the implementer session (`implementer_sessions`) | unit: bot APPROVED and same-session APPROVED both counted 0 |
+| Tier misclassified so a risky change is `low` | Med | Med | `low` needs *every* file in `low-paths`; any `high-paths`/`always-human-paths` hit wins; reasons printed in trailers and digest | unit: mixed docs+code diff is not low |
+| `solo-trust` merges a high-risk regression overnight | Med | Med | `human-after` trailer → ratification in P2 digest; revert PR on denial (D-10) | manual: during rollout, review the trailers of the first 10 merges |
+| Interview grows and users skip it | Low | Low | One question, defaults first, skip keeps legacy | `init_test.sh` interview cases |
+| Resident context grows | Low | Med | Prose in `github-automation.md` (on demand); `AGENTS.md` unchanged | `make context-budget` core delta ≤ 150 tokens |
