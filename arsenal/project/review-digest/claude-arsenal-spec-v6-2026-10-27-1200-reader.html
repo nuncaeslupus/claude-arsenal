@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
-<meta name="arsenal-source-sha256" content="1f0786380e90fb01fb5ac66f6b3abc4daf0c498b43943a32ae2edee513f4cb5d">
+<meta name="arsenal-source-sha256" content="752ddba91237342754b6f0afa000515f54712e5887ce27a702d7fb6aa2363974">
 <title>Claude Arsenal — Specification (annotatable)</title>
 <style>
 :root{
@@ -194,7 +194,7 @@ li>.note.bnote{margin:6px 0}
     <button class="btn primary" id="btn-export">Save / Export</button>
   </div>
 </div>
-<div class="statusbar"><div class="wrap"><span class="count" id="count">0 / 17 notes</span><span class="hint"> · notes save automatically; <strong>Save / Export</strong> keeps a file you can send back</span></div></div>
+<div class="statusbar"><div class="wrap"><span class="count" id="count">0 / 18 notes</span><span class="hint"> · notes save automatically; <strong>Save / Export</strong> keeps a file you can send back</span></div></div>
 <div id="warnbar"><div class="wrap"><strong>Heads up —</strong> this browser isn't storing your notes automatically (private/incognito mode or restricted file view). Tap <strong>Save / Export</strong> regularly.</div></div>
 
 <div class="wrap">
@@ -232,6 +232,7 @@ li>.note.bnote{margin:6px 0}
 <li class="sub"><a href="#s-spec-init-interview">/init interview</a></li>
 <li class="sub"><a href="#s-spec-p2-the-digest">P2 — the digest</a></li>
 <li class="sub"><a href="#s-spec-p3-lean-code">P3 — lean code</a></li>
+<li class="sub"><a href="#s-spec-p4-overnight-repo-review-and-rev">P4 — overnight repo review and review metrics</a></li>
 <li><a href="#s-spec-6">§6 Risks &amp; Validation</a></li>
 </ul>
 </details>
@@ -241,10 +242,11 @@ li>.note.bnote{margin:6px 0}
 <div class="sec-body"><p><strong>Date</strong>: 2026-10-26<br />
 <strong>Ticket / PR</strong>: branch <code>claude/code-review-enforcement-sa12j9</code><br />
 <strong>Author</strong>: nuncaeslupus (with Claude)<br />
-<strong>Revision</strong>: 5<br />
-<strong>Status</strong>: approved (2026-10-27, revision 5) — without annotations<br />
+<strong>Revision</strong>: 6<br />
+<strong>Status</strong>: draft — r6 adds the P4 contracts; r5 was approved 2026-10-27 without annotations<br />
 <strong>Revision log</strong>:
 - r1 — first draft, from the brainstorm on Anthropic's "How the Claude Code team does code review" (Oct 2026)
+- r6 — § 5/§ 6: P4 (overnight repo review, review metrics) contracts and risks
 - r5 — § 5/§ 6: P3 (lean code) contracts and risks
 - r4 — § 5/§ 6: P2 (digest) contracts and risks; records live in a PR-body marker, the digest branch only holds rendered pages (D-14)
 - r3 — § 5 config: flat <code>[review]</code> keys (the loader reads one table level) and existing <code>risk-paths</code>/<code>risk-lines</code> for the high tier, instead of <code>[review.tiers]</code>/<code>[review.approval]</code>
@@ -848,6 +850,61 @@ task's size, made before implementing). <code>record</code> stores <code>size.ex
 turns amber. With no estimate there is no flag; nothing is guessed.</p></div>
 <div class="note" data-for="s-spec-p3-lean-code"><label class="note-head" for="n-s-spec-p3-lean-code"><span class="note-ico" aria-hidden="true">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC › P3 — lean code</span></label><textarea class="note-ta" data-key="s-spec-p3-lean-code" id="n-s-spec-p3-lean-code" data-label="P3 — lean code" data-part="Spec" rows="1" placeholder="Add a note on this section…"></textarea></div>
 </article>
+<article class="sec l3" id="s-spec-p4-overnight-repo-review-and-rev" data-ref="SPEC › P4 — overnight repo review and review metrics" data-label="P4 — overnight repo review and review metrics" data-part="Spec">
+<h4 class="sec-h"><span class="chip">▸</span><span class="sec-title">P4 — overnight repo review and review metrics</span></h4>
+<div class="sec-body"><h4><code>scripts/audit_estimate.py</code> (repo-audit plugin)</h4>
+<pre><code>audit_estimate.py [PATH ...] [--tokens-per-line 12] [--json]
+→ scope: src/, lib/ · 412 files · 61,300 lines · ≈ 740k tokens · 3 workers (subsystems: src/api, src/core, lib)
+</code></pre>
+<p>Counts source files and lines in scope, skipping vendored, generated and lockfiles, and the
+paths <code>.gitignore</code> already hides. It estimates tokens as lines × <code>--tokens-per-line</code>. The
+default of 12 is a starting value (reading plus reasoning), stated as such in <code>--help</code>, and a
+host tunes it once it has a measured run to compare against. It also prints the subsystem split
+that the audit's step 1 would use.</p>
+<h4><code>repo-audit --overnight</code> (a mode, documented in <code>references/overnight.md</code>)</h4>
+<ol>
+<li><strong>Ask first:</strong> scope (paths, default the whole repo), a token ceiling, and whether to stop
+   at the ceiling or at the session's budget stop (<code>quota-governance</code>), whichever comes first.
+   Print <code>audit_estimate.py</code>'s line, and say plainly when the estimate exceeds the ceiling.
+   Nothing starts until the user has seen the cost.</li>
+<li><strong>Run in chunks:</strong> one subsystem at a time, riskiest first (<code>risk-paths</code>, then the largest).
+   Before each chunk, <code>bin/budget_check.sh</code> and the ceiling decide whether to continue.</li>
+<li><strong>Stop cleanly:</strong> a stopped run reports the subsystems it did not cover. It never claims a
+   whole-repo audit it didn't finish.</li>
+<li><strong>Never edit code in the same run.</strong> Findings go through the existing ledger → queue steps.
+   The digest then gets an audit card (below), so the morning page shows both the night's PRs
+   and the night's findings.</li>
+</ol>
+<h4><code>scripts/review_metrics.py</code> (core)</h4>
+<pre><code>review_metrics.py [--days 30] [--prs-json FILE] [--json]
+→ 30d: 41 merged (low 22 · medium 14 · high 5) · 1 revert (high) · 3 fix-ups ≤7d · rounds 1.6 · found by: cold-reviewer 58% · ci 21% · self 15% · bot 6%
+</code></pre>
+<ul>
+<li><strong>From git alone (cheap, always):</strong><ul>
+<li>merges on the default branch in the window, by the <code>Risk-tier:</code> trailer (<code>untiered</code> when absent);</li>
+<li>reverts (<code>Revert "…"</code> or <code>This reverts commit &lt;sha&gt;</code> naming a merge in the window);</li>
+<li>fix-ups (a <code>fix</code> commit within 7 days of a merge that touches a file the merge touched).</li>
+</ul>
+</li>
+<li><strong>From digest records (when PRs are given or a channel exists):</strong> mean review rounds, and
+  finding sources from <code>found_by</code>.</li>
+<li><code>--json</code> returns the same numbers per tier.</li>
+</ul>
+<h4>Digest additions</h4>
+<ul>
+<li><strong>Header line:</strong> <code>render</code> prepends the git-only metrics line for the last 30 days. It costs one
+  <code>git log</code> and no API calls.</li>
+<li><strong>Audit card:</strong> <code>render --audit FILE</code> reads a repo-audit ledger and adds one card above the PR
+  cards. It shows:<ul>
+<li>findings by severity × confidence;</li>
+<li>the top 5 high-severity findings;</li>
+<li>the tasks queued;</li>
+<li>the subsystems not covered.</li>
+</ul>
+</li>
+</ul></div>
+<div class="note" data-for="s-spec-p4-overnight-repo-review-and-rev"><label class="note-head" for="n-s-spec-p4-overnight-repo-review-and-rev"><span class="note-ico" aria-hidden="true">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC › P4 — overnight repo review and review metrics</span></label><textarea class="note-ta" data-key="s-spec-p4-overnight-repo-review-and-rev" id="n-s-spec-p4-overnight-repo-review-and-rev" data-label="P4 — overnight repo review and review metrics" data-part="Spec" rows="1" placeholder="Add a note on this section…"></textarea></div>
+</article>
 <article class="sec l2" id="s-spec-6" data-ref="SPEC §6" data-label="§6 Risks &amp; Validation" data-part="Spec">
 <h3 class="sec-h"><span class="chip">§6</span><span class="sec-title">Risks &amp; Validation</span></h3>
 <div class="sec-body"><table>
@@ -939,6 +996,27 @@ turns amber. With no estimate there is no flag; nothing is guessed.</p></div>
 <td><code>wc -l agents/reviewer.md</code> delta ≤ 4</td>
 </tr>
 <tr>
+<td>P4: an overnight audit spends more than the user expected</td>
+<td>Med</td>
+<td>High</td>
+<td>Estimate shown and confirmed before starting; ceiling + budget stop checked before every chunk</td>
+<td>unit: <code>audit_estimate.py</code> on a fixture tree; manual: first real run's estimate vs <code>usage_report.py</code></td>
+</tr>
+<tr>
+<td>P4: a stopped audit reads as complete</td>
+<td>Med</td>
+<td>Med</td>
+<td>Report lists uncovered subsystems; the audit card shows them</td>
+<td>unit: audit card renders "not covered"</td>
+</tr>
+<tr>
+<td>P4: metrics heuristics mislabel a fix-up or revert</td>
+<td>Med</td>
+<td>Low</td>
+<td>Rules are stated in <code>--help</code>; numbers are a trend line, never a gate</td>
+<td>unit: fixture repo with a known revert and a known fix-up</td>
+</tr>
+<tr>
 <td>P2: approve applied to a PR that changed since the digest</td>
 <td>Med</td>
 <td>High</td>
@@ -976,7 +1054,7 @@ turns amber. With no estimate there is no flag; nothing is guessed.</p></div>
 <script>var SPEC_SEED_NOTES={};</script>
 <script>
 (function(){
-  var NS = 'claude-arsenal-review-digest-spec-v5:';
+  var NS = 'claude-arsenal-review-digest-spec-v6:';
   var tas = Array.prototype.slice.call(document.querySelectorAll('.note-ta'));
 
   function autoGrow(t){t.style.height='auto';t.style.height=(t.scrollHeight)+'px';}
@@ -1136,7 +1214,7 @@ turns amber. With no estimate there is no flag; nothing is guessed.</p></div>
   function today(){var d=new Date();return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());}
   function stamp(){var d=new Date();return today()+'-'+pad(d.getHours())+pad(d.getMinutes());}
   // Named like the reader, <repo>-<doc>-v<N>-<YYYY-MM-DD-HHMM>-notes.md, stamped at export.
-  function exportName(){return 'claude-arsenal-spec-v5-'+stamp()+'-notes.md';}
+  function exportName(){return 'claude-arsenal-spec-v6-'+stamp()+'-notes.md';}
 
   function buildExport(){
     var byPart={},order=[],data={},n=0;
