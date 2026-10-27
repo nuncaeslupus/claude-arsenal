@@ -34,6 +34,7 @@ mkdir -p "${tmp}/bin" "${tmp}/scripts" "${tmp}/repo/arsenal"
 cp "${SRC}" "${tmp}/bin/merge_ready.sh"
 cp "${ASSETS}/scripts/pr_audit.py" "${tmp}/scripts/"
 cp "${ASSETS}/scripts/arsenal_config.py" "${tmp}/scripts/" 2>/dev/null || true
+cp "${ASSETS}/scripts/review_policy.py" "${tmp}/scripts/" 2>/dev/null || true
 READY="${tmp}/bin/merge_ready.sh"
 
 # The stub answers each REST path from a file, so a test sets the world by
@@ -50,6 +51,7 @@ case "${1:-}" in
             */pulls/[0-9]*/reviews) cat "${STUB_DIR}/reviews.json" ;;
             */issues/[0-9]*/comments*) cat "${STUB_DIR}/comments.json" 2>/dev/null || exit 4 ;;
             */pulls/[0-9]*/commits*)   cat "${STUB_DIR}/commits.json" 2>/dev/null || exit 4 ;;
+            */pulls/[0-9]*/files*)     cat "${STUB_DIR}/files.json" 2>/dev/null || exit 4 ;;
             */pulls/[0-9]*)         cat "${STUB_DIR}/pr.json" ;;
             */check-runs)           cat "${STUB_DIR}/checks.json" 2>/dev/null || exit 4 ;;
             *) exit 4 ;;
@@ -86,7 +88,21 @@ echo "PASS: a green head under after-ci is ready"
 
 # --- the merge commit body is printed only for a PR that may be merged -------
 grep -q "merge commit body" <<<"$(run 42 --body)" || fail "--body should print the body"
+body="$(run 42 --body)"
+grep -q "Risk-tier" <<<"${body}" && fail "test_body_without_preset_unchanged: ${body}"
 echo "PASS: --body carries the head and the policy it merged under"
+
+# --- with review.preset, the body carries tier and review provenance -----------
+printf 'merge-policy = "after-ci"\n[review]\npreset = "solo-trust"\n' > arsenal/config.toml
+printf '[{"filename":"src/app.py","additions":2,"deletions":1}]\n' > "${tmp}/files.json"
+printf '[{"state":"APPROVED","commit_id":"%s","user":{"login":"rb[bot]","type":"Bot"},"author_association":"NONE"}]\n' \
+    "${HEAD}" > "${tmp}/reviews.json"
+body="$(run 42 --body)"
+grep -q "^Risk-tier: medium" <<<"${body}" && grep -q "^Reviewed-by: agent" <<<"${body}" \
+    || fail "test_body_carries_tier_and_review_trailers: ${body}"
+printf 'merge-policy = "after-ci"\n' > arsenal/config.toml
+rm -f "${tmp}/files.json"; printf '[]\n' > "${tmp}/reviews.json"
+echo "PASS: --body carries Risk-tier and Reviewed-by trailers under a review preset"
 
 # --- checks are fetched for the head, so a stale run does not pass -----------
 world "${OLD}"
