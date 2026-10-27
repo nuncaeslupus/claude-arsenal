@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
-<meta name="arsenal-source-sha256" content="921e78c378982d49755da73a67dff622dcd4148f1fbe2f305cd38ddf8cbbfd2e">
+<meta name="arsenal-source-sha256" content="fb835c3eb4b438173a9c0d981e22ee1f82dbcda0a733053af28f4326f92728a3">
 <title>Claude Arsenal — Specification (annotatable)</title>
 <style>
 :root{
@@ -235,7 +235,7 @@ li>.note.bnote{margin:6px 0}
 <strong>Specification</strong>: <code>arsenal/project/review-digest/spec.md</code> (r4: § 5 "P2 — the digest", § 6 P2 rows)<br />
 <strong>Author</strong>: nuncaeslupus (with Claude)<br />
 <strong>Revision</strong>: 1<br />
-<strong>Status</strong>: draft<br />
+<strong>Status</strong>: approved (2026-10-27, revision 1) — without annotations<br />
 <strong>Revision log</strong>:
 - r1 — first draft; P1 merged in 5.11.0</p>
 <blockquote>
@@ -466,13 +466,67 @@ human: approve / deny / question ──▶ decisions file ──▶ apply_decisi
 </thead>
 <tbody>
 <tr>
-<td></td>
-<td></td>
-<td></td>
-<td></td>
-<td></td>
-<td></td>
-<td></td>
+<td>T1</td>
+<td><code>config_test_failures == 0</code></td>
+<td>0</td>
+<td><code>bash plugins/core/tests/arsenal_config_test.sh</code></td>
+<td>87033c8</td>
+<td>local</td>
+<td>2026-10-27</td>
+</tr>
+<tr>
+<td>T2</td>
+<td><code>digest_test_failures == 0</code></td>
+<td>0</td>
+<td><code>bash plugins/core/tests/digest_test.sh</code></td>
+<td>87033c8</td>
+<td>local</td>
+<td>2026-10-27</td>
+</tr>
+<tr>
+<td>T3</td>
+<td><code>visible_words_10_records &lt;= 900</code></td>
+<td>355</td>
+<td><code>bash plugins/core/tests/digest_test.sh</code></td>
+<td>87033c8</td>
+<td>local</td>
+<td>2026-10-27</td>
+</tr>
+<tr>
+<td>T4</td>
+<td><code>apply_decisions_test_failures == 0</code></td>
+<td>0</td>
+<td><code>bash plugins/core/tests/apply_decisions_test.sh</code></td>
+<td>HEAD</td>
+<td>local</td>
+<td>2026-10-27</td>
+</tr>
+<tr>
+<td>T5</td>
+<td><code>pr_audit_test_failures == 0</code></td>
+<td>0</td>
+<td><code>bash plugins/core/tests/pr_audit_test.sh</code></td>
+<td>HEAD</td>
+<td>local</td>
+<td>2026-10-27</td>
+</tr>
+<tr>
+<td>T6</td>
+<td><code>resident_token_delta &lt;= 60</code></td>
+<td>26</td>
+<td><code>make context-budget</code> (minimal 2682 → 2708)</td>
+<td>HEAD</td>
+<td>local</td>
+<td>2026-10-27</td>
+</tr>
+<tr>
+<td>T7</td>
+<td><code>sync_version_drift == 0</code></td>
+<td>0</td>
+<td><code>make sync-version-check</code>, <code>make test</code></td>
+<td>HEAD</td>
+<td>local</td>
+<td>2026-10-27</td>
 </tr>
 </tbody>
 </table></div>

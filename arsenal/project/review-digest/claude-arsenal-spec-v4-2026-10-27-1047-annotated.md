@@ -12,7 +12,7 @@
 **Ticket / PR**: branch `claude/code-review-enforcement-sa12j9`
 **Author**: nuncaeslupus (with Claude)
 **Revision**: 4
-**Status**: draft — r4 adds the P2 contracts; r3 was approved 2026-10-27 without annotations
+**Status**: approved (2026-10-27, revision 4) — without annotations
 **Revision log**:
 - r1 — first draft, from the brainstorm on Anthropic's "How the Claude Code team does code review" (Oct 2026)
 - r4 — § 5/§ 6: P2 (digest) contracts and risks; records live in a PR-body marker, the digest branch only holds rendered pages (D-14)
@@ -194,7 +194,7 @@ reads them.
 | D-11 | `always-human-paths` is offered in every preset, empty by default; it overrides `solo-trust`. | agreed | 2026-10-27 |
 | D-12 | Lean-code rules: fold in any useful rules from the author's installed ponytail plugin as provenance, never named as a norm. | agreed | 2026-10-27 |
 | D-13 | Severity mark is a red/amber/green colour derived from tier × open findings. | agreed | 2026-10-27 |
-| D-14 | Per-PR digest records live in a marker block in the PR body, not on an `arsenal/digest` branch (supersedes D-9): readable and writable by any session, no second ref to push. | proposed | 2026-10-27 |
+| D-14 | Per-PR digest records live in a marker block in the PR body, not on an `arsenal/digest` branch (supersedes D-9): readable and writable by any session, no second ref to push. | agreed | 2026-10-27 |
 
 <!-- -->
 

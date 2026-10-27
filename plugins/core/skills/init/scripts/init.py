@@ -2422,6 +2422,7 @@ _INTERVIEW_KEYS = {
     "bot_triggers": "bot-triggers",
     "review_preset": "review.preset",
     "always_human_paths": "review.always-human-paths",
+    "digest_decisions": "review.digest-decisions",
 }
 
 
@@ -2452,6 +2453,10 @@ def _interview_answers(args: argparse.Namespace) -> dict[str, str]:
             if raw < 1:
                 sys.exit(f"init: --{key} must be an integer >= 1, got {raw}")
             answers[key] = str(raw)
+        elif key == "review.digest-decisions":
+            if raw not in ("true", "false"):
+                sys.exit(f"init: --digest-decisions must be true or false, got {raw!r}")
+            answers[key] = raw
         elif key == "review.always-human-paths":
             globs = [g.strip() for g in raw.split(",") if g.strip()]
             answers[key] = "[" + ", ".join(json.dumps(g, ensure_ascii=False) for g in globs) + "]"
@@ -2670,6 +2675,11 @@ def main() -> None:
         "--always-human-paths",
         metavar="GLOB,...",
         help="Globs that always need a human approval; written as `[review] always-human-paths`.",
+    )
+    p.add_argument(
+        "--digest-decisions",
+        metavar="true|false",
+        help="Count a digest approval as a human one; written as `[review] digest-decisions`.",
     )
     p.add_argument(
         "--suggest-bot-triggers",

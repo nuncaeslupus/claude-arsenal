@@ -119,6 +119,13 @@ human: approve / deny / question ──▶ decisions file ──▶ apply_decisi
 
 | T# | Gate | Measured | Command | SHA | Env | Date |
 |----|------|----------|---------|-----|-----|------|
+| T1 | `config_test_failures == 0` | 0 | `bash plugins/core/tests/arsenal_config_test.sh` | 87033c8 | local | 2026-10-27 |
+| T2 | `digest_test_failures == 0` | 0 | `bash plugins/core/tests/digest_test.sh` | 87033c8 | local | 2026-10-27 |
+| T3 | `visible_words_10_records <= 900` | 355 | `bash plugins/core/tests/digest_test.sh` | 87033c8 | local | 2026-10-27 |
+| T4 | `apply_decisions_test_failures == 0` | 0 | `bash plugins/core/tests/apply_decisions_test.sh` | HEAD | local | 2026-10-27 |
+| T5 | `pr_audit_test_failures == 0` | 0 | `bash plugins/core/tests/pr_audit_test.sh` | HEAD | local | 2026-10-27 |
+| T6 | `resident_token_delta <= 60` | 26 | `make context-budget` (minimal 2682 → 2708) | HEAD | local | 2026-10-27 |
+| T7 | `sync_version_drift == 0` | 0 | `make sync-version-check`, `make test` | HEAD | local | 2026-10-27 |
 
 ---
 

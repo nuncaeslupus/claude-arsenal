@@ -204,6 +204,20 @@ pr "\"user\":{\"login\":\"me\"},\"changed_files\":250,${small},\"threads\":[],\"
 [[ "$(trun --json | state tier)" == "high" ]] || fail "a truncated file list must classify high"
 echo "PASS: legacy configs untouched; human:N still needs the agent review; truncated lists are high"
 
+# Digest approvals (P2): a decision marker on the head counts as one human only
+# when [review] digest-decisions is on, and never for an older commit.
+dec() { printf '{"body":"<!-- arsenal-decision: approve head=%s via=digest -->","author_association":"OWNER","user":{"login":"me","type":"User"}}' "$1"; }
+printf '[review]\npreset = "solo-gated"\ndigest-decisions = true\n' > "${tmp}/tiered/arsenal/config.toml"
+pr "\"user\":{\"login\":\"me\"},${small},\"threads\":[],\"reviews\":[${bot}],\"comments\":[$(dec 1111111)]"
+trun --require-ready >/dev/null 2>&1; [[ $? -eq 0 ]] || fail "test_digest_marker_counts_when_enabled"
+out="$(trun --json)"; grep -q "Approved-by: human via digest@1111111" <<<"${out}" || fail "provenance should say via digest"
+pr "\"user\":{\"login\":\"me\"},${small},\"threads\":[],\"reviews\":[${bot}],\"comments\":[$(dec 2222222)]"
+trun --require-ready >/dev/null 2>&1; [[ $? -eq 1 ]] || fail "test_digest_marker_old_sha_counts_zero"
+printf '[review]\npreset = "solo-gated"\n' > "${tmp}/tiered/arsenal/config.toml"
+pr "\"user\":{\"login\":\"me\"},${small},\"threads\":[],\"reviews\":[${bot}],\"comments\":[$(dec 1111111)]"
+trun --require-ready >/dev/null 2>&1; [[ $? -eq 1 ]] || fail "test_digest_marker_off_counts_zero"
+echo "PASS: digest approvals count only when enabled and only on the head"
+
 # --- bad input is an error, not an empty report ------------------------------
 printf 'not json\n' > "${tmp}/prs.json"
 run --policy after-ci >/dev/null 2>&1

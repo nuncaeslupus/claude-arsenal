@@ -322,6 +322,9 @@ fi
 # test_upgrade_does_not_ask_review_preset — a refresh keeps the answer.
 python3 "${INIT_PY}" --repo-path "${answered}" --bundle-dir "${BUNDLE_DIR}" --silent >/dev/null
 [[ "$(get_answered review.preset)" == "solo-trust" ]] || { echo "FAIL: a refresh dropped review.preset" >&2; exit 1; }
+python3 "${INIT_PY}" --repo-path "${answered}" --bundle-dir "${BUNDLE_DIR}" --silent --digest-decisions true >/dev/null \
+    || { echo "FAIL: --digest-decisions was refused" >&2; exit 1; }
+[[ "$(get_answered review.digest-decisions)" == "True" ]] || { echo "FAIL: --digest-decisions not written: $(get_answered review.digest-decisions)" >&2; exit 1; }
 echo "PASS: test_interview_review_preset_written"
 
 # test_upsert_review_key_keeps_toml_valid — a multi-line array and a commented

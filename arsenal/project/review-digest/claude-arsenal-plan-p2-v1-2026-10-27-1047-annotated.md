@@ -12,7 +12,7 @@
 **Specification**: `arsenal/project/review-digest/spec.md` (r4: § 5 "P2 — the digest", § 6 P2 rows)
 **Author**: nuncaeslupus (with Claude)
 **Revision**: 1
-**Status**: draft
+**Status**: approved (2026-10-27, revision 1) — without annotations
 **Revision log**:
 - r1 — first draft; P1 merged in 5.11.0
 
@@ -163,6 +163,13 @@ human: approve / deny / question ──▶ decisions file ──▶ apply_decisi
 
 | T# | Gate | Measured | Command | SHA | Env | Date |
 |----|------|----------|---------|-----|-----|------|
+| T1 | `config_test_failures == 0` | 0 | `bash plugins/core/tests/arsenal_config_test.sh` | 87033c8 | local | 2026-10-27 |
+| T2 | `digest_test_failures == 0` | 0 | `bash plugins/core/tests/digest_test.sh` | 87033c8 | local | 2026-10-27 |
+| T3 | `visible_words_10_records <= 900` | 355 | `bash plugins/core/tests/digest_test.sh` | 87033c8 | local | 2026-10-27 |
+| T4 | `apply_decisions_test_failures == 0` | 0 | `bash plugins/core/tests/apply_decisions_test.sh` | HEAD | local | 2026-10-27 |
+| T5 | `pr_audit_test_failures == 0` | 0 | `bash plugins/core/tests/pr_audit_test.sh` | HEAD | local | 2026-10-27 |
+| T6 | `resident_token_delta <= 60` | 26 | `make context-budget` (minimal 2682 → 2708) | HEAD | local | 2026-10-27 |
+| T7 | `sync_version_drift == 0` | 0 | `make sync-version-check`, `make test` | HEAD | local | 2026-10-27 |
 
 <!-- -->
 

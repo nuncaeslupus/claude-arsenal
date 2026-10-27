@@ -53,6 +53,8 @@ upgrade does not ask again, because the answers are already in `arsenal/config.t
 5. Who approves what, by risk tier? `solo-trust` (agent merges all; high-risk flagged
    to ratify), `solo-gated` (a human approves medium and high), `team` (0/1/2 humans),
    `manual`, or skip to keep merge-policy alone. Optionally, paths that always need a human.
+   With `solo-trust` or `solo-gated`, also ask whether a digest approval counts as the
+   user's (`--digest-decisions true`): needed when PRs are opened with their own account.
 
 Pass only what was answered; a skipped question writes nothing and keeps its default:
 

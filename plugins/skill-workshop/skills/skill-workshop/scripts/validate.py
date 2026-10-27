@@ -268,6 +268,7 @@ CANONICAL_ARGS = {
     "--suggest-bot-triggers",
     "--review-preset",
     "--always-human-paths",
+    "--digest-decisions",
     # usage_report.py: the GitHub Actions minutes view (#463), beside the token one
     "--actions",
     # specify / design validators: a document's approval is a gate of its own

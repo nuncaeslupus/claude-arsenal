@@ -520,7 +520,7 @@ READERS = {
     "review.approval-low": "plugins/core/skills/init/assets/scripts/review_policy.py",
     "review.digest-decisions": "plugins/core/skills/init/assets/scripts/pr_audit.py",
     "digest-delivery": "plugins/core/skills/init/assets/scripts/digest.py",
-    "digest-every": "plugins/core/skills/init/assets/scripts/digest.py",
+    "digest-every": "plugins/core/skills/init/assets/references/orchestrator-tick.md",
     "review.approval-medium": "plugins/core/skills/init/assets/scripts/review_policy.py",
     "review.approval-high": "plugins/core/skills/init/assets/scripts/review_policy.py",
     # Read here, by new_settings() below; init.py prints what it returns.

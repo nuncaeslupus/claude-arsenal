@@ -183,6 +183,27 @@ def read_review_cfg(repo_root: Path) -> dict[str, Any] | None:
     return cfg
 
 
+_DECISION_RX = re.compile(
+    r"<!--\s*arsenal-decision:\s*approve\s+head=([0-9a-fA-F]{7,40})\s+via=digest\s*-->"
+)
+
+
+def digest_approvals(pr: dict[str, Any], head: str) -> int:
+    """Digest approvals on `head`: apply_decisions.py's marker, from a trusted commenter.
+
+    Counted only under `[review] digest-decisions = true`. The marker is written by
+    the agent from the human's exported decisions file, so the trust is in that
+    file; binding it to the head SHA keeps it from approving a later commit.
+    """
+    for c in _records(pr.get("comments")):
+        if c.get("author_association") not in TRUSTED_ASSOCIATIONS:
+            continue
+        m = _DECISION_RX.search(str(c.get("body") or ""))
+        if m and head.lower().startswith(m.group(1).lower()):
+            return 1
+    return 0
+
+
 def humans_on_head(pr: dict[str, Any], head: str) -> list[str]:
     """Distinct logins of human approvals on `head`.
 
@@ -250,6 +271,8 @@ def tier_state(
         cls = review_policy.classify(_records(files), cfg)
     req = review_policy.requirement(cls["tier"], cfg, bool(cls["human_paths"]))
     humans = humans_on_head(pr, head)
+    if cfg["review.digest-decisions"] and digest_approvals(pr, head):
+        humans.append("via digest")
     # `human:N` is an agent review AND N humans: a human approval also turns the
     # GitHub review state clear, so the agent half is checked on its own there.
     agent_ok = review == "clear" and (

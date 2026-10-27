@@ -18,6 +18,20 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [5.12.0] - 2026-10-27
+
+### Added
+- **Review digest: decide on a night's work without opening GitHub.**
+  - `digest.py record` stores each PR's facts in a hidden block in its body: risk tier, a red/amber/green mark, state, a summary of at most 60 words, each problem found (who found it, how it was fixed, which commit), what is still open, and how to undo it.
+  - `digest.py render` turns open and recently merged PRs into one page: folded cards, red first, each with **Approve / Deny / Question**. It also makes a Markdown version for chat.
+  - Agents render it at session end, at the token-budget stop and every `digest-every` merges (default 5).
+- **`apply_decisions.py` acts on what you decided**, from the page's exported file or typed lines like `approve 42; deny 43: split it`.
+  - An approval only counts for the commit you saw; if the PR changed since, it is reported as stale.
+  - Approved PRs merge in dependency order. A denied PR is closed; a denied merged PR gets a revert PR.
+  - Questions are posted on the PR for the next session to answer.
+- **`[review] digest-decisions = true`** makes a digest approval count as your human approval. This lets `solo-gated` work when agents open PRs with your own GitHub account. It is off by default; `/init` offers it with the solo presets.
+- Config: `digest-delivery` (`file` | `chat` | `both`) and `digest-every`.
+
 ## [5.11.0] - 2026-10-27
 
 ### Added
