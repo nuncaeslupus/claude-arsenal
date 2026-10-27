@@ -55,32 +55,47 @@ dec() {  # dec <json> → a decisions file
 }
 
 # --- planning (dry run) ---------------------------------------------------------
-dec '{"10":{"decision":"approve","head":"aaaaaaa"},"11":{"decision":"approve","head":"bbbbbbb"},"12":{"decision":"approve","head":"0000000"}}'
+dec '{"10":{"decision":"approve","head":"aaaaaaa111"},"11":{"decision":"approve","head":"bbbbbbb222"},"12":{"decision":"approve","head":"ccccccc"}}'
 out="$(python3 "${APPLY}" "${tmp}/d.md" --dry-run --prs-json "${tmp}/prs.json")"
 grep -q "#12 stale" <<<"${out}" || fail "test_stale_approval_not_merged: ${out}"
 grep -q "#12 merge" <<<"${out}" && fail "a stale approval must not be merged"
 [[ "$(grep -o '#1[01] merge' <<<"${out}" | tr '\n' ' ')" == "#10 merge #11 merge " ]] \
     || fail "test_merge_order_follows_deps: ${out}"
 
-dec '{"10":{"decision":"deny","head":"aaaaaaa","note":"split"},"11":{"decision":"approve","head":"bbbbbbb"}}'
+dec '{"10":{"decision":"deny","head":"aaaaaaa111","note":"split"},"11":{"decision":"approve","head":"bbbbbbb222"}}'
 out="$(python3 "${APPLY}" "${tmp}/d.md" --dry-run --prs-json "${tmp}/prs.json")"; rc=$?
-grep -q "#11 blocked — waits on #10" <<<"${out}" || fail "test_denied_dep_blocks_dependent: ${out}"
+grep -q "#11 blocked — waits on #10, which was denied" <<<"${out}" || fail "test_denied_dep_blocks_dependent: ${out}"
 grep -q "#10 close" <<<"${out}" || fail "a denied open PR should be closed"
 [[ ${rc} -eq 1 ]] || fail "a blocked PR should make the run exit 1"
 
 out="$(python3 "${APPLY}" --text "approve 13; question 12: why a new dep?" --dry-run --prs-json "${tmp}/prs.json" 2>&1)"
 grep -q "#13 stale" <<<"${out}" || fail "typed approve with no recorded head must be stale: ${out}"
-mkdir -p arsenal/session && printf '{"heads":{"13":"ddddddd"}}' > arsenal/session/digest.json
+mkdir -p arsenal/session && printf '{"heads":{"13":"ddddddd444"}}' > arsenal/session/digest.json
 out="$(python3 "${APPLY}" --text "approve 13; question 12: why a new dep?" --dry-run --prs-json "${tmp}/prs.json")"
 grep -q "#13 ratify" <<<"${out}" && grep -q "#12 ask — why a new dep?" <<<"${out}" \
     || fail "typed decisions should use the digest's heads: ${out}"
 python3 "${APPLY}" --text "merge 12" --dry-run --prs-json "${tmp}/prs.json" >/dev/null 2>&1
 [[ $? -eq 2 ]] || fail "an unknown verb is bad input"
+# A dependency chain: deny 10 blocks 11, and 11 not merging blocks 14 (deps [11]).
+mk 14 eeeeeee555 open 0 '[11]' > "${tmp}/pr-14.json"
+python3 -c 'import json,sys; print(json.dumps([json.load(open(f)) for f in sys.argv[1:]]))' "${tmp}"/pr-1{0,1,2,3,4}.json > "${tmp}/prs.json"
+printf '{"heads":{"11":"bbbbbbb222","14":"eeeeeee555","10":"aaaaaaa111"}}' > arsenal/session/digest.json
+out="$(python3 "${APPLY}" --text "deny 10: big; split it
+approve 11
+approve 14" --dry-run --prs-json "${tmp}/prs.json" 2>&1)"
+grep -q "#10 close — big; split it" <<<"${out}" || fail "a ';' inside a note must stay in the note: ${out}"
+grep -q "#14 blocked — waits on #11" <<<"${out}" || fail "a blocked dep must block its dependents: ${out}"
+# A dep merged earlier, with no decision of its own, satisfies its dependent.
+mk 15 fffffff666 open 0 '[13]' > "${tmp}/pr-15.json"
+python3 -c 'import json,sys; print(json.dumps([json.load(open(f)) for f in sys.argv[1:]]))' "${tmp}"/pr-1{0,1,2,3,4,5}.json > "${tmp}/prs.json"
+printf '{"heads":{"15":"fffffff666"}}' > arsenal/session/digest.json
+out="$(python3 "${APPLY}" --text "approve 15" --dry-run --prs-json "${tmp}/prs.json")"
+grep -q "#15 merge" <<<"${out}" || fail "a dep already merged must not block: ${out}"
 echo "PASS: plan — stale heads, dependency order, denied deps, typed decisions"
 
 # --- execution against the stub -------------------------------------------------
 : > "${CALLS}"
-dec '{"10":{"decision":"approve","head":"aaaaaaa"},"12":{"decision":"question","head":"ccccccc","note":"why?"}}'
+dec '{"10":{"decision":"approve","head":"aaaaaaa111"},"12":{"decision":"question","head":"ccccccc333","note":"why?"}}'
 python3 "${APPLY}" "${tmp}/d.md" >/dev/null || fail "execution failed: $(cat "${CALLS}")"
 grep -q 'POST /repos/o/r/issues/10/comments .*arsenal-decision: approve head=aaaaaaa111 via=digest' "${CALLS}" \
     || fail "an approval should post the SHA-bound marker: $(cat "${CALLS}")"

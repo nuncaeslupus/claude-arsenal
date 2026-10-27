@@ -69,7 +69,8 @@ Commit the decisions file beside the digest it answers, as the record of who app
 ## Counting a digest approval as a human one
 
 `[review] digest-decisions = true` makes `pr_audit.py` count the decision marker that
-`apply_decisions.py` posts as one human approval on that head. Use it when the agent
+`apply_decisions.py` posts as one human approval on that head — only when the repo
+OWNER's account posted it and it names the full head SHA. Use it when the agent
 opens PRs with the owner's own GitHub account, where GitHub will not let the owner
 approve. The marker is written by the agent from the exported file, so it is only
 as trustworthy as that file: leave it off where more than one person can hand the

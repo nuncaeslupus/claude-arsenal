@@ -184,7 +184,7 @@ def read_review_cfg(repo_root: Path) -> dict[str, Any] | None:
 
 
 _DECISION_RX = re.compile(
-    r"<!--\s*arsenal-decision:\s*approve\s+head=([0-9a-fA-F]{7,40})\s+via=digest\s*-->"
+    r"<!--\s*arsenal-decision:\s*approve\s+head=([0-9a-fA-F]{40})\s+via=digest\s*-->"
 )
 
 
@@ -195,11 +195,14 @@ def digest_approvals(pr: dict[str, Any], head: str) -> int:
     the agent from the human's exported decisions file, so the trust is in that
     file; binding it to the head SHA keeps it from approving a later commit.
     """
+    # OWNER only, never a bot: the setting exists for a repo whose owner's own
+    # account is the agent's, and a collaborator could otherwise approve their own
+    # PR with one comment. The full head SHA, so no short-prefix collision counts.
     for c in _records(pr.get("comments")):
-        if c.get("author_association") not in TRUSTED_ASSOCIATIONS:
+        if c.get("author_association") != "OWNER" or _dig(c, "user", "type") == "Bot":
             continue
         m = _DECISION_RX.search(str(c.get("body") or ""))
-        if m and head.lower().startswith(m.group(1).lower()):
+        if m and m.group(1).lower() == head.lower():
             return 1
     return 0
 

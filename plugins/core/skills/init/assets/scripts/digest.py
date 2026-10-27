@@ -118,7 +118,11 @@ def read_block(body: str | None) -> dict[str, Any] | None:
 
 def write_block(body: str | None, record: dict[str, Any]) -> str:
     """The body with its digest block replaced (or appended); other text untouched."""
-    block = "<!-- arsenal-digest\n" + json.dumps(record, ensure_ascii=False) + "\n-->"
+    # `<`, `>` and `--` escaped inside the JSON, so no value can close the HTML
+    # comment early (spilling the rest into the PR body) or cut the record short.
+    raw = json.dumps(record, ensure_ascii=False)
+    raw = raw.replace("<", "\\u003c").replace(">", "\\u003e").replace("--", "-\\u002d")
+    block = "<!-- arsenal-digest\n" + raw + "\n-->"
     body = body or ""
     if BLOCK_RX.search(body):
         return BLOCK_RX.sub(lambda _: block, body, count=1)
@@ -192,7 +196,7 @@ def build_record(
     rec = {
         "v": 1,
         "pr": pr.get("number"),
-        "head": str((pr.get("head") or {}).get("sha") or "")[:7],
+        "head": str((pr.get("head") or {}).get("sha") or ""),
         "tier": cls["tier"],
         "tier_reasons": cls["reasons"],
         "summary": str(notes.get("summary", old.get("summary", ""))).strip(),
@@ -233,7 +237,16 @@ def collect(prs: list[dict[str, Any]], since: str) -> list[dict[str, Any]]:
             continue
         if pr.get("state") == "closed" and str(pr.get("closed_at") or "") < since:
             continue
-        rec = rec | {"title": pr.get("title", ""), "url": pr.get("html_url", "")}
+        # The PR number and head come from GitHub, never from the body: anyone who
+        # can edit a PR's body could otherwise make its card approve another PR.
+        if rec.get("pr") != pr.get("number"):
+            continue
+        rec = rec | {
+            "pr": int(pr["number"]),
+            "head": str((pr.get("head") or {}).get("sha") or ""),
+            "title": pr.get("title", ""),
+            "url": pr.get("html_url", ""),
+        }
         out.append(rec)
     out.sort(
         key=lambda r: (
@@ -272,7 +285,7 @@ def _detail_lines(r: dict[str, Any]) -> list[str]:
     lines += [f"Question: {q}" for q in r.get("questions", [])]
     if r.get("undo"):
         lines.append(f"Undo: {r['undo']}")
-    lines.append(f"Head: {r.get('head')}")
+    lines.append(f"Head: {str(r.get('head', ''))[:7]}")
     return lines
 
 
@@ -458,12 +471,13 @@ def cmd_render(args: argparse.Namespace, cfg: dict[str, Any]) -> int:
     recs = collect(prs if isinstance(prs, list) else [], since)
     now = datetime.now(UTC)
     stamp = now.strftime("%Y-%m-%d %H:%M")
-    fmt = args.format or ("md" if cfg["digest-delivery"] == "chat" else "html")
+    # An explicit --format wins; otherwise digest-delivery decides.
+    fmt = args.format or {"chat": "md", "file": "html", "both": "both"}[cfg["digest-delivery"]]
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
-    if fmt in ("md", "both") or cfg["digest-delivery"] in ("chat", "both"):
+    if fmt in ("md", "both"):
         print(render_md(recs, stamp))
-    if fmt == "html" or cfg["digest-delivery"] in ("file", "both"):
+    if fmt in ("html", "both"):
         page = out_dir / f"{repo}-digest-{now.strftime('%Y-%m-%d-%H%M')}.html"
         page.write_text(render_html(recs, stamp, repo), encoding="utf-8")
         print(f"digest: {page} ({len(recs)} PR(s))")

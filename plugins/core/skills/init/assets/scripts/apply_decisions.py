@@ -63,16 +63,21 @@ def parse(text: str, heads: dict[str, str]) -> dict[int, dict[str, str]]:
             raw = json.loads(m.group(1))
         except ValueError as exc:
             raise ApplyError(f"the ARSENAL-DECISIONS block is not valid JSON — {exc}") from exc
+        if not isinstance(raw, dict):
+            raise ApplyError("the ARSENAL-DECISIONS block must be a JSON object")
         for pr, d in raw.items():
             if not isinstance(d, dict) or d.get("decision") not in KINDS:
                 raise ApplyError(f"#{pr}: decision must be one of {', '.join(KINDS)}")
+            if not str(pr).isdigit():
+                raise ApplyError(f"{pr!r} is not a PR number")
             out[int(pr)] = {
                 "decision": d["decision"],
                 "head": str(d.get("head", "")),
                 "note": str(d.get("note", "")),
             }
         return out
-    for line in re.split(r"[;\n]", text):
+    # A `;` separates decisions only before the next verb, so a note may hold one.
+    for line in re.split(r"\n|;\s*(?=(?:approve|deny|question)\b)", text, flags=re.IGNORECASE):
         if not line.strip():
             continue
         lm = LINE_RX.match(line)
@@ -117,11 +122,11 @@ def plan(decisions: dict[int, dict[str, str]], prs: dict[int, dict[str, Any]]) -
             acts.append(("missing", n, "no such PR"))
             continue
         rec = digest.read_block(pr.get("body")) or {}
-        deps[n] = [int(x) for x in rec.get("deps", [])]
+        deps[n] = [int(x) for x in rec.get("deps", []) if str(x).isdigit()]
         head = str((pr.get("head") or {}).get("sha") or "")
         merged = bool(pr.get("merged") or pr.get("merged_at"))
         if d["decision"] == "approve":
-            if not d["head"] or not head.startswith(d["head"][:7]):
+            if not d["head"] or d["head"] != head:
                 acts.append(("stale", n, f"decided on {d['head'][:7] or '?'}, head is {head[:7]}"))
             elif merged:
                 acts.append(("ratify", n, ""))
@@ -132,25 +137,29 @@ def plan(decisions: dict[int, dict[str, str]], prs: dict[int, dict[str, Any]]) -
             acts.append(("revert" if merged else "close", n, d["note"]))
         else:
             acts.append(("ask", n, d["note"]))
-    denied = {n for n, d in decisions.items() if d["decision"] == "deny"}
+    # Decide in dependency order against what will actually merge, so a PR whose
+    # dep is blocked is blocked too, not merged on top of nothing.
+    will_merge: set[int] = set()
     for n in _deps_order(approved, deps):
         blocker = next(
             (
                 d
                 for d in deps.get(n, [])
-                if d in denied
-                or not (
-                    (prs.get(d) or {}).get("merged")
-                    or (prs.get(d) or {}).get("merged_at")
-                    or d in approved
-                )
+                if not ((prs.get(d) or {}).get("merged") or (prs.get(d) or {}).get("merged_at"))
+                and d not in will_merge
             ),
             None,
         )
         if blocker is None:
+            will_merge.add(n)
             acts.append(("merge", n, ""))
         else:
-            acts.append(("blocked", n, f"waits on #{blocker}"))
+            why = (
+                "was denied"
+                if decisions.get(blocker, {}).get("decision") == "deny"
+                else "is not merging"
+            )
+            acts.append(("blocked", n, f"waits on #{blocker}, which {why}"))
     return acts
 
 
@@ -177,27 +186,51 @@ def _merge(slug: str, n: int, head: str, method: str) -> str:
     return "merged"
 
 
+def _revert_range(sha: str, pr: dict[str, Any], wt: str) -> list[str]:
+    """`git revert` arguments that undo the whole PR, whatever merge method landed it."""
+    parents = subprocess.run(
+        ["git", "-C", wt, "rev-list", "--parents", "-n", "1", sha],
+        capture_output=True,
+        text=True,
+        check=False,
+    ).stdout.split()
+    if len(parents) > 2:  # a merge commit: undo it against its first parent
+        return ["-m", "1", sha]
+    commits = int(pr.get("commits") or 1)
+    if commits > 1 and pr.get("_method") == "rebase":  # rebased: the PR's commits end at sha
+        return [f"{sha}~{commits}..{sha}"]
+    return [sha]  # a squash, or a one-commit PR
+
+
 def _revert(slug: str, n: int, pr: dict[str, Any], note: str) -> str:
-    """Open a revert PR in a throwaway worktree, so the user's checkout is untouched."""
+    """Open a revert PR from a throwaway worktree, so the user's checkout is untouched."""
     sha = pr.get("merge_commit_sha")
     base = (pr.get("base") or {}).get("ref") or "main"
     if not sha:
         return "no merge commit to revert"
     branch = f"revert-pr-{n}"
-    with tempfile.TemporaryDirectory() as wt:
-        steps = [
+    wt = tempfile.mkdtemp(prefix="arsenal-revert-")
+    failed = ""
+    try:
+        for cmd in (
             ["git", "fetch", "-q", "origin", base],
             ["git", "worktree", "add", "-q", "-b", branch, wt, f"origin/{base}"],
-            ["git", "-C", wt, "revert", "--no-edit", sha],
-            ["git", "-C", wt, "push", "-q", "-u", "origin", branch],
-        ]
-        for cmd in steps:
+        ):
             if subprocess.run(cmd, capture_output=True, check=False).returncode != 0:
-                subprocess.run(["git", "worktree", "remove", "--force", wt], capture_output=True)
-                return (
-                    f"revert PR not opened — `{' '.join(cmd[:4])}` failed; revert {sha[:7]} by hand"
-                )
+                failed = " ".join(cmd[:4])
+                break
+        if not failed:
+            rev = ["git", "-C", wt, "revert", "--no-edit", *_revert_range(str(sha), pr, wt)]
+            push = ["git", "-C", wt, "push", "-q", "-u", "origin", branch]
+            for cmd in (rev, push):
+                if subprocess.run(cmd, capture_output=True, check=False).returncode != 0:
+                    failed = " ".join(cmd[2:5])
+                    break
+    finally:
         subprocess.run(["git", "worktree", "remove", "--force", wt], capture_output=True)
+        subprocess.run(["git", "branch", "-D", branch], capture_output=True)
+    if failed:
+        return f"revert PR not opened — `{failed}` failed; revert {str(sha)[:7]} by hand"
     made = _api(
         "POST",
         f"/repos/{slug}/pulls",
@@ -222,47 +255,55 @@ def _patch_record(slug: str, n: int, pr: dict[str, Any], change: dict[str, Any])
 
 
 def execute(acts: list[tuple], prs: dict[int, dict[str, Any]], slug: str, method: str) -> list[str]:
-    out = []
+    out: list[str] = []
+    failed: set[int] = set()
     for kind, n, info in acts:
         pr = prs.get(n, {})
-        if kind == "mark":
-            _api(
-                "POST",
-                f"/repos/{slug}/issues/{n}/comments",
-                {
-                    "body": f"<!-- arsenal-decision: approve head={info} via=digest -->\n"
-                    "Approved in the review digest."
-                },
-            )
-            out.append(f"#{n} approved on {info[:7]}")
-        elif kind == "ratify":
-            _patch_record(slug, n, pr, {"ratified": True, "state": "merged"})
-            out.append(f"#{n} ratified")
-        elif kind == "close":
-            _api(
-                "POST",
-                f"/repos/{slug}/issues/{n}/comments",
-                {"body": f"Denied in the review digest: {info or '(no note)'}"},
-            )
-            _api("PATCH", f"/repos/{slug}/pulls/{n}", {"state": "closed"})
-            out.append(f"#{n} closed")
-        elif kind == "revert":
-            out.append(f"#{n} {_revert(slug, n, pr, info)}")
-        elif kind == "ask":
-            _api(
-                "POST",
-                f"/repos/{slug}/issues/{n}/comments",
-                {"body": f"Question from the review digest: {info}"},
-            )
-            rec = digest.read_block(pr.get("body")) or {}
-            _patch_record(slug, n, pr, {"questions": [*rec.get("questions", []), info]})
-            out.append(f"#{n} question posted")
-        elif kind == "merge":
-            head = str((pr.get("head") or {}).get("sha") or "")
-            out.append(f"#{n} {_merge(slug, n, head, method)}")
-        else:
-            out.append(f"#{n} {kind}: {info}")
+        deps = [
+            int(x)
+            for x in (digest.read_block(pr.get("body")) or {}).get("deps", [])
+            if str(x).isdigit()
+        ]
+        if kind == "merge" and failed.intersection(deps):
+            failed.add(n)
+            out.append(f"#{n} not merged — a dependency failed above")
+            continue
+        try:
+            out.append(_do(kind, n, info, pr, slug, method))
+        except digest.DigestError as exc:
+            failed.add(n)
+            out.append(f"#{n} {kind} failed — {exc}")
+            continue
+        if kind == "merge" and not out[-1].endswith("merged"):
+            failed.add(n)
     return out
+
+
+def _do(kind: str, n: int, info: str, pr: dict[str, Any], slug: str, method: str) -> str:
+    """Carry out one planned action; the returned line reports it."""
+    comments = f"/repos/{slug}/issues/{n}/comments"
+    if kind == "mark":
+        marker = f"<!-- arsenal-decision: approve head={info} via=digest -->"
+        _api("POST", comments, {"body": marker + "\nApproved in the review digest."})
+        return f"#{n} approved on {info[:7]}"
+    if kind == "ratify":
+        _patch_record(slug, n, pr, {"ratified": True, "state": "merged"})
+        return f"#{n} ratified"
+    if kind == "close":
+        _api("POST", comments, {"body": f"Denied in the review digest: {info or '(no note)'}"})
+        _api("PATCH", f"/repos/{slug}/pulls/{n}", {"state": "closed"})
+        return f"#{n} closed"
+    if kind == "revert":
+        return f"#{n} {_revert(slug, n, pr | {'_method': method}, info)}"
+    if kind == "ask":
+        _api("POST", comments, {"body": f"Question from the review digest: {info}"})
+        rec = digest.read_block(pr.get("body")) or {}
+        _patch_record(slug, n, pr, {"questions": [*rec.get("questions", []), info]})
+        return f"#{n} question posted"
+    if kind == "merge":
+        head = str((pr.get("head") or {}).get("sha") or "")
+        return f"#{n} {_merge(slug, n, head, method)}"
+    return f"#{n} {kind}: {info}"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -288,6 +329,12 @@ def main(argv: list[str] | None = None) -> int:
         else:
             slug = digest._slug()
             prs = {n: _api("GET", f"/repos/{slug}/pulls/{n}") for n in decisions}
+            # Deps outside the decisions are fetched too: a dep merged yesterday is
+            # satisfied, and only its PR says so.
+            for pr in list(prs.values()):
+                for d in (digest.read_block(pr.get("body")) or {}).get("deps", []):
+                    if str(d).isdigit() and int(d) not in prs:
+                        prs[int(d)] = _api("GET", f"/repos/{slug}/pulls/{d}")
         acts = plan(decisions, prs)
         for kind, n, info in acts:
             print(f"plan: #{n} {kind}" + (f" — {info}" if info and kind != "mark" else ""))
