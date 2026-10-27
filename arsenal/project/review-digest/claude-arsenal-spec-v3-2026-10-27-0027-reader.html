@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
-<meta name="arsenal-source-sha256" content="1fbfc1a810bb1dd30d4ed7099225f6690ed987d53db54238abbad76b0afece2e">
+<meta name="arsenal-source-sha256" content="bd4bfd13adffc3fa069df9ad6eb8d789f5e8bd0f43e0cca785736caec85ed240">
 <title>Claude Arsenal — Specification (annotatable)</title>
 <style>
 :root{
@@ -239,10 +239,11 @@ li>.note.bnote{margin:6px 0}
 <div class="sec-body"><p><strong>Date</strong>: 2026-10-26<br />
 <strong>Ticket / PR</strong>: branch <code>claude/code-review-enforcement-sa12j9</code><br />
 <strong>Author</strong>: nuncaeslupus (with Claude)<br />
-<strong>Revision</strong>: 2<br />
-<strong>Status</strong>: approved (2026-10-27, revision 2) — without annotations<br />
+<strong>Revision</strong>: 3<br />
+<strong>Status</strong>: draft — r3 (contract correction) awaits approval; r2 was approved 2026-10-27 without annotations<br />
 <strong>Revision log</strong>:
 - r1 — first draft, from the brainstorm on Anthropic's "How the Claude Code team does code review" (Oct 2026)
+- r3 — § 5 config: flat <code>[review]</code> keys (the loader reads one table level) and existing <code>risk-paths</code>/<code>risk-lines</code> for the high tier, instead of <code>[review.tiers]</code>/<code>[review.approval]</code>
 - r2 — open questions resolved with the recommended answers (D-9…D-13), approved in chat without annotations</p></div>
 <div class="note" data-for="s-spec-intro"><label class="note-head" for="n-s-spec-intro"><span class="note-ico" aria-hidden="true">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC · intro</span></label><textarea class="note-ta" data-key="s-spec-intro" id="n-s-spec-intro" data-label="Preamble &amp; scope" data-part="Spec" rows="1" placeholder="Add a note on this section…"></textarea></div>
 </article>
@@ -634,18 +635,14 @@ one module owns both and <code>--explain</code> cannot disagree with the verdict
 </article>
 <article class="sec l3" id="s-spec-configuration-arsenal-config-tom" data-ref="SPEC › Configuration (arsenal/config.toml)" data-label="Configuration (arsenal/config.toml)" data-part="Spec">
 <h4 class="sec-h"><span class="chip">▸</span><span class="sec-title">Configuration (<code>arsenal/config.toml</code>)</span></h4>
-<div class="sec-body"><pre><code class="language-toml">review-preset = &quot;solo-trust&quot;        # solo-trust | solo-gated | team | manual; absent = legacy merge-policy only
-always-human-paths = []             # globs; any match → tier high AND a human approval, whatever the preset (D-11)
-
-[review.tiers]                      # optional; defaults shown
-low-paths  = [&quot;docs/**&quot;, &quot;*.md&quot;, &quot;tests/**&quot;]   # every changed file matches → low
-high-paths = []                     # any match → high; risk-paths is merged in
-high-lines = 400                    # changed lines above this → high; risk-lines when set
-
-[review.approval]                   # optional; overrides the preset row by row
-low    = &quot;auto&quot;                     # auto | agent | human:&lt;N&gt; | human-after
-medium = &quot;agent&quot;
-high   = &quot;human-after&quot;
+<div class="sec-body"><pre><code class="language-toml">[review]                            # one level, like every other table in config.toml
+preset = &quot;solo-trust&quot;               # solo-trust | solo-gated | team | manual; &quot;&quot; = merge-policy only
+always-human-paths = []             # globs; any match → tier high AND a human approval (D-11)
+low-paths = []                      # globs a PR may only touch to be low; [] = built-in docs/config set
+approval-low = &quot;&quot;                   # auto | agent | human:&lt;N&gt; | human-after; &quot;&quot; = preset row
+approval-medium = &quot;&quot;
+approval-high = &quot;&quot;
+# high tier: existing top-level risk-paths / risk-lines (unchanged keys)
 </code></pre>
 <p>Approval values: <code>auto</code> — CI/gates per <code>merge-policy</code>, no review required; <code>agent</code> —
 a review clear on the head (bot review or adversarial CLEAR marker); <code>human:&lt;N&gt;</code> — N
@@ -693,7 +690,7 @@ association, none of them the PR author's session, and an agent CLEAR first;
 </tr>
 </tbody>
 </table>
-<p>Precedence: <code>always-human-paths</code> &gt; <code>[review.approval]</code> row &gt; preset row. With no
+<p>Precedence: <code>always-human-paths</code> &gt; <code>approval-&lt;tier&gt;</code> &gt; preset row. With no
 <code>review-preset</code>, nothing in this section is read and <code>merge-policy</code> behaves exactly
 as before.</p></div>
 <div class="note" data-for="s-spec-configuration-arsenal-config-tom"><label class="note-head" for="n-s-spec-configuration-arsenal-config-tom"><span class="note-ico" aria-hidden="true">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC › Configuration (arsenal/config.toml)</span></label><textarea class="note-ta" data-key="s-spec-configuration-arsenal-config-tom" id="n-s-spec-configuration-arsenal-config-tom" data-label="Configuration (arsenal/config.toml)" data-part="Spec" rows="1" placeholder="Add a note on this section…"></textarea></div>
@@ -825,7 +822,7 @@ asked again; the upgrade banner names the new question once.</p></div>
 <script>var SPEC_SEED_NOTES={};</script>
 <script>
 (function(){
-  var NS = 'claude-arsenal-review-digest-spec-v2:';
+  var NS = 'claude-arsenal-review-digest-spec-v3:';
   var tas = Array.prototype.slice.call(document.querySelectorAll('.note-ta'));
 
   function autoGrow(t){t.style.height='auto';t.style.height=(t.scrollHeight)+'px';}
@@ -969,7 +966,7 @@ asked again; the upgrade banner names the new question once.</p></div>
   function today(){var d=new Date();return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());}
   function stamp(){var d=new Date();return today()+'-'+pad(d.getHours())+pad(d.getMinutes());}
   // Named like the reader, <repo>-<doc>-v<N>-<YYYY-MM-DD-HHMM>-notes.md, stamped at export.
-  function exportName(){return 'claude-arsenal-spec-v2-'+stamp()+'-notes.md';}
+  function exportName(){return 'claude-arsenal-spec-v3-'+stamp()+'-notes.md';}
 
   function buildExport(){
     var byPart={},order=[],data={},n=0;

@@ -11,9 +11,10 @@
 **Date**: 2026-10-27
 **Specification**: `arsenal/project/review-digest/spec.md` (approved r2; contracts and risks in §§ 5–6)
 **Author**: nuncaeslupus (with Claude)
-**Revision**: 1
+**Revision**: 2
 **Status**: draft
 **Revision log**:
+- r2 — executed overnight at the owner's request ("continue working overnight") before plan sign-off; T1 config keys are flat `[review]` keys (spec r3)
 - r1 — first draft, phase P1 only (P2 digest, P3 lean code, P4 overnight review + metrics planned after P1 merges)
 
 > Review record, kept the way the spec keeps its own: each round of notes bumps
@@ -104,7 +105,7 @@ PR reviews/markers ──▶ pr_audit.audit_pr ┴──▶ ready? + provenance
 
 | T# | Description | Service | Size | Depends | Gate | Tests |
 |----|-------------|---------|------|---------|------|-------|
-| T1 | Config schema: `review-preset` enum, `always-human-paths`, `[review.tiers]`, `[review.approval]` with validation and `--explain` text | `scripts/arsenal_config.py` | S | — | `config_test_failures == 0` | `test_review_preset_unknown_value_exits_2` in `plugins/core/tests/arsenal_config_test.sh` — an unknown preset names the key and exits 2 · `test_review_approval_human_n_parses` — `human:2` parses to two required humans |
+| T1 | Config schema: `[review] preset` enum, `always-human-paths`, `low-paths`, `approval-<tier>` with validation | `scripts/arsenal_config.py` | S | — | `config_test_failures == 0` | `test_review_preset_unknown_value_exits_2` in `plugins/core/tests/arsenal_config_test.sh` — an unknown preset names the key and exits 2 · `test_review_approval_human_n_parses` — `human:2` parses to two required humans |
 | T2 | `review_policy.py`: `classify`, `requirement`, CLI `tier` / `require` / `explain`; presets table | `scripts/review_policy.py` (new) | M | T1 | `review_policy_test_failures == 0` and `explain_lines <= 12` | `test_tier_mixed_docs_and_code_is_not_low` in `plugins/core/tests/review_policy_test.sh` — one code file in a docs diff yields medium · `test_tier_always_human_path_forces_high_and_one_human` — a match overrides `solo-trust` · `test_tier_same_input_same_output` — two runs are byte-identical · `test_explain_fits_twelve_lines` |
 | T3 | `review_sources.py` derives `risk_high` from `classify` (tier high) without changing decisions for hosts with no preset | `scripts/review_sources.py` | S | T2 | `review_sources_test_failures == 0` | existing `plugins/core/tests/review_sources_test.sh` unchanged · `test_risk_from_tier_matches_legacy_assess` — same `risk_high` as before on its fixtures |
 | T4 | `pr_audit.py`: per-tier verdict, human counting, provenance fields; legacy path untouched when no preset | `scripts/pr_audit.py` | M | T2 | `pr_audit_test_failures == 0` | `test_bot_approval_counts_zero_humans` in `plugins/core/tests/pr_audit_test.sh` · `test_same_session_approval_counts_zero_humans` · `test_human_approval_on_old_sha_is_stale` · `test_human_after_ready_with_agent_clear_sets_ratify` · `test_no_preset_verdicts_unchanged` — every existing fixture keeps its verdict |

@@ -305,6 +305,25 @@ fi
 [[ "$(get_answered autonomy)" == "autonomous" ]] || { echo "FAIL: a refused answer still changed config" >&2; exit 1; }
 echo "PASS: test_init_interview_answers_written"
 
+# test_interview_review_preset_written — lands inside [review], not as a bare key.
+python3 "${INIT_PY}" --repo-path "${answered}" --bundle-dir "${BUNDLE_DIR}" --silent \
+    --review-preset solo-trust --always-human-paths 'src/auth/*,migrations/*' >/dev/null \
+    || { echo "FAIL: --review-preset was refused" >&2; exit 1; }
+[[ "$(get_answered review.preset)" == "solo-trust" ]] || { echo "FAIL: --review-preset not written" >&2; exit 1; }
+[[ "$(get_answered review.reviewer-identity)" == "distinct-session" ]] \
+    || { echo "FAIL: writing review.preset disturbed reviewer-identity" >&2; exit 1; }
+paths=$(python3 "${CFG_PY}" --repo-root "${answered}" | python3 -c 'import json,sys; print("|".join(json.load(sys.stdin)["review.always-human-paths"]))')
+[[ "${paths}" == "src/auth/*|migrations/*" ]] || { echo "FAIL: --always-human-paths not a list: ${paths}" >&2; exit 1; }
+grep -c '^preset =' "${answered}/arsenal/config.toml" | grep -qx 1 || { echo "FAIL: preset written twice" >&2; exit 1; }
+if python3 "${INIT_PY}" --repo-path "${answered}" --bundle-dir "${BUNDLE_DIR}" --silent \
+        --review-preset everyone >/dev/null 2>&1; then
+    echo "FAIL: an unknown --review-preset was accepted" >&2; exit 1
+fi
+# test_upgrade_does_not_ask_review_preset — a refresh keeps the answer.
+python3 "${INIT_PY}" --repo-path "${answered}" --bundle-dir "${BUNDLE_DIR}" --silent >/dev/null
+[[ "$(get_answered review.preset)" == "solo-trust" ]] || { echo "FAIL: a refresh dropped review.preset" >&2; exit 1; }
+echo "PASS: test_interview_review_preset_written"
+
 # test_init_interview_rewrite_keeps_escapes — the second write replaces an
 # existing key, so the value must reach the file literally (a backslash is not
 # a regex escape) and stay valid TOML outside the BMP (no surrogate escapes).

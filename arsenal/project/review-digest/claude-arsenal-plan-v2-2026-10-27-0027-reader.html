@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
-<meta name="arsenal-source-sha256" content="dbb9c0bd2c47931c4397bda8accf2ec846f1269d1392be9014998b98a449f043">
+<meta name="arsenal-source-sha256" content="4d4986789e5442786473f3133a4a3376a9173b8382c87043af9fe9cba4b08a55">
 <title>Claude Arsenal — Plan (annotatable)</title>
 <style>
 :root{
@@ -234,9 +234,10 @@ li>.note.bnote{margin:6px 0}
 <div class="sec-body"><p><strong>Date</strong>: 2026-10-27<br />
 <strong>Specification</strong>: <code>arsenal/project/review-digest/spec.md</code> (approved r2; contracts and risks in §§ 5–6)<br />
 <strong>Author</strong>: nuncaeslupus (with Claude)<br />
-<strong>Revision</strong>: 1<br />
+<strong>Revision</strong>: 2<br />
 <strong>Status</strong>: draft<br />
 <strong>Revision log</strong>:
+- r2 — executed overnight at the owner's request ("continue working overnight") before plan sign-off; T1 config keys are flat <code>[review]</code> keys (spec r3)
 - r1 — first draft, phase P1 only (P2 digest, P3 lean code, P4 overnight review + metrics planned after P1 merges)</p>
 <blockquote>
 <p>Review record, kept the way the spec keeps its own: each round of notes bumps
@@ -356,7 +357,7 @@ PR reviews/markers ──▶ pr_audit.audit_pr ┴──▶ ready? + provenance
 <tbody>
 <tr>
 <td>T1</td>
-<td>Config schema: <code>review-preset</code> enum, <code>always-human-paths</code>, <code>[review.tiers]</code>, <code>[review.approval]</code> with validation and <code>--explain</code> text</td>
+<td>Config schema: <code>[review] preset</code> enum, <code>always-human-paths</code>, <code>low-paths</code>, <code>approval-&lt;tier&gt;</code> with validation</td>
 <td><code>scripts/arsenal_config.py</code></td>
 <td>S</td>
 <td>—</td>
@@ -494,7 +495,7 @@ PR reviews/markers ──▶ pr_audit.audit_pr ┴──▶ ready? + provenance
 <script>var SPEC_SEED_NOTES={};</script>
 <script>
 (function(){
-  var NS = 'claude-arsenal-review-digest-plan-v1:';
+  var NS = 'claude-arsenal-review-digest-plan-v2:';
   var tas = Array.prototype.slice.call(document.querySelectorAll('.note-ta'));
 
   function autoGrow(t){t.style.height='auto';t.style.height=(t.scrollHeight)+'px';}
@@ -638,7 +639,7 @@ PR reviews/markers ──▶ pr_audit.audit_pr ┴──▶ ready? + provenance
   function today(){var d=new Date();return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());}
   function stamp(){var d=new Date();return today()+'-'+pad(d.getHours())+pad(d.getMinutes());}
   // Named like the reader, <repo>-<doc>-v<N>-<YYYY-MM-DD-HHMM>-notes.md, stamped at export.
-  function exportName(){return 'claude-arsenal-plan-v1-'+stamp()+'-notes.md';}
+  function exportName(){return 'claude-arsenal-plan-v2-'+stamp()+'-notes.md';}
 
   function buildExport(){
     var byPart={},order=[],data={},n=0;

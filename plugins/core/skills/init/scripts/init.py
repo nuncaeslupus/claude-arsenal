@@ -227,8 +227,19 @@ reviewers = ""
 #                     account posting on its own login.
 #
 # A BLOCK marker blocks the head it names under either value.
+#
+# preset decides who approves a PR by its risk tier (review_policy.py explain
+# prints the effective flow). Empty = merge-policy alone, as before:
+#   solo-trust  agent merges every tier; high-risk merges flagged to ratify
+#   solo-gated  a human approves medium- and high-risk PRs
+#   team        agent review on low, 1 human on medium, 2 on high
+#   manual      no agent merges
+# always-human-paths: globs that always need a human, whatever the preset.
+# approval-low / approval-medium / approval-high override one preset row:
+# auto | agent | human:<N> | human-after.
 [review]
 reviewer-identity = "distinct-session"
+preset = ""
 """
 
 # Permissive on purpose: until the probe runs, every `surface:` task stays
@@ -2409,6 +2420,8 @@ _INTERVIEW_KEYS = {
     "review_budget_min": "review-budget-min",
     "bot_wait_min": "bot-wait-min",
     "bot_triggers": "bot-triggers",
+    "review_preset": "review.preset",
+    "always_human_paths": "review.always-human-paths",
 }
 
 
@@ -2430,7 +2443,7 @@ def _interview_answers(args: argparse.Namespace) -> dict[str, str]:
         raw = getattr(args, dest)
         if raw is None:
             continue
-        if key in ("autonomy", "verification"):
+        if key in ("autonomy", "verification", "review.preset"):
             allowed = _arsenal_config().ENUMS[key]
             if raw not in allowed:
                 sys.exit(f"init: --{key} must be one of {', '.join(sorted(allowed))}, got {raw!r}")
@@ -2439,6 +2452,9 @@ def _interview_answers(args: argparse.Namespace) -> dict[str, str]:
             if raw < 1:
                 sys.exit(f"init: --{key} must be an integer >= 1, got {raw}")
             answers[key] = str(raw)
+        elif key == "review.always-human-paths":
+            globs = [g.strip() for g in raw.split(",") if g.strip()]
+            answers[key] = "[" + ", ".join(json.dumps(g, ensure_ascii=False) for g in globs) + "]"
         elif key == "bot-triggers":
             entries = [e.strip() for e in raw.split(",") if e.strip()]
             for entry in entries:
@@ -2457,8 +2473,36 @@ def _record_interview(repo_path: Path, answers: dict[str, str]) -> None:
     """Write the interview answers into arsenal/config.toml, above any table."""
     config = _home(repo_path) / "config.toml"
     for key, value in answers.items():
-        _upsert_bare_key(config, key, value)
+        if key.startswith("review."):
+            _upsert_table_key(config, "review", key.split(".", 1)[1], value)
+        else:
+            _upsert_bare_key(config, key, value)
         print(f"  config.toml: {key} = {value}")
+
+
+def _upsert_table_key(config: Path, table: str, key: str, value: str) -> None:
+    """Upsert `<key> = <value>` inside `[table]` of arsenal/config.toml, adding the table."""
+    text = config.read_text(encoding="utf-8") if config.is_file() else ""
+    lines = text.rstrip("\n").split("\n") if text.strip() else []
+    head = next((i for i, ln in enumerate(lines) if ln.strip() == f"[{table}]"), None)
+    entry = f"{key} = {value}"
+    if head is None:
+        lines += ["", f"[{table}]", entry]
+    else:
+        end = next(
+            (i for i in range(head + 1, len(lines)) if lines[i].lstrip().startswith("[")),
+            len(lines),
+        )
+        hit = next(
+            (i for i in range(head + 1, end) if re.match(rf"\s*{re.escape(key)}\s*=", lines[i])),
+            None,
+        )
+        if hit is None:
+            lines.insert(head + 1, entry)
+        else:
+            lines[hit] = entry
+    config.parent.mkdir(parents=True, exist_ok=True)
+    config.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def suggest_bot_triggers(repo_path: Path) -> int:
@@ -2584,6 +2628,16 @@ def main() -> None:
         "--bot-triggers",
         metavar="LOGIN=COMMENT,...",
         help="Manual review command per bot; written as the `bot-triggers` list.",
+    )
+    p.add_argument(
+        "--review-preset",
+        metavar="solo-trust|solo-gated|team|manual",
+        help="Who approves by risk tier; written as `[review] preset`.",
+    )
+    p.add_argument(
+        "--always-human-paths",
+        metavar="GLOB,...",
+        help="Globs that always need a human approval; written as `[review] always-human-paths`.",
     )
     p.add_argument(
         "--suggest-bot-triggers",

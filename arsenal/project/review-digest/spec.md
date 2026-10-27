@@ -3,10 +3,11 @@
 **Date**: 2026-10-26
 **Ticket / PR**: branch `claude/code-review-enforcement-sa12j9`
 **Author**: nuncaeslupus (with Claude)
-**Revision**: 2
-**Status**: approved (2026-10-27, revision 2) — without annotations
+**Revision**: 3
+**Status**: draft — r3 (contract correction) awaits approval; r2 was approved 2026-10-27 without annotations
 **Revision log**:
 - r1 — first draft, from the brainstorm on Anthropic's "How the Claude Code team does code review" (Oct 2026)
+- r3 — § 5 config: flat `[review]` keys (the loader reads one table level) and existing `risk-paths`/`risk-lines` for the high tier, instead of `[review.tiers]`/`[review.approval]`
 - r2 — open questions resolved with the recommended answers (D-9…D-13), approved in chat without annotations
 
 ---
@@ -164,18 +165,14 @@ one module owns both and `--explain` cannot disagree with the verdict.
 ### Configuration (`arsenal/config.toml`)
 
 ```toml
-review-preset = "solo-trust"        # solo-trust | solo-gated | team | manual; absent = legacy merge-policy only
-always-human-paths = []             # globs; any match → tier high AND a human approval, whatever the preset (D-11)
-
-[review.tiers]                      # optional; defaults shown
-low-paths  = ["docs/**", "*.md", "tests/**"]   # every changed file matches → low
-high-paths = []                     # any match → high; risk-paths is merged in
-high-lines = 400                    # changed lines above this → high; risk-lines when set
-
-[review.approval]                   # optional; overrides the preset row by row
-low    = "auto"                     # auto | agent | human:<N> | human-after
-medium = "agent"
-high   = "human-after"
+[review]                            # one level, like every other table in config.toml
+preset = "solo-trust"               # solo-trust | solo-gated | team | manual; "" = merge-policy only
+always-human-paths = []             # globs; any match → tier high AND a human approval (D-11)
+low-paths = []                      # globs a PR may only touch to be low; [] = built-in docs/config set
+approval-low = ""                   # auto | agent | human:<N> | human-after; "" = preset row
+approval-medium = ""
+approval-high = ""
+# high tier: existing top-level risk-paths / risk-lines (unchanged keys)
 ```
 
 Approval values: `auto` — CI/gates per `merge-policy`, no review required; `agent` —
@@ -191,7 +188,7 @@ association, none of them the PR author's session, and an agent CLEAR first;
 | `team` | agent | human:1 | human:2 | after-ci-and-review |
 | `manual` | — | — | — | never |
 
-Precedence: `always-human-paths` > `[review.approval]` row > preset row. With no
+Precedence: `always-human-paths` > `approval-<tier>` > preset row. With no
 `review-preset`, nothing in this section is read and `merge-policy` behaves exactly
 as before.
 
