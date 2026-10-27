@@ -12,7 +12,7 @@
 **Ticket / PR**: branch `claude/code-review-enforcement-sa12j9`
 **Author**: nuncaeslupus (with Claude)
 **Revision**: 6
-**Status**: draft — r6 adds the P4 contracts; r5 was approved 2026-10-27 without annotations
+**Status**: approved (2026-10-27, revision 6) — without annotations
 **Revision log**:
 - r1 — first draft, from the brainstorm on Anthropic's "How the Claude Code team does code review" (Oct 2026)
 - r6 — § 5/§ 6: P4 (overnight repo review, review metrics) contracts and risks

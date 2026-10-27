@@ -19,6 +19,7 @@ Usage:
     digest.py record --pr N --notes FILE [--pr-json FILE] [--files-json FILE]
     digest.py check  (--pr N | --record FILE)
     digest.py render [--since last|YYYY-MM-DD] [--format html|md] [--out DIR] [--prs-json FILE]
+                     [--audit LEDGER]
 
 `--notes` is what only the worker knows, as JSON:
     {"summary": "2-3 sentences, <= 60 words", "undo": "...", "expected_lines": 120,
@@ -304,9 +305,44 @@ def _detail_lines(r: dict[str, Any]) -> list[str]:
     return lines
 
 
-def render_md(recs: list[dict[str, Any]], stamp: str) -> str:
+def load_audit(path: str) -> dict[str, Any]:
+    """A repo-audit ledger: a bare findings list, or {"findings": [...], "not_covered": [...]}."""
+    raw = _load_json(path)
+    if isinstance(raw, list):
+        raw = {"findings": raw}
+    if not isinstance(raw, dict) or not isinstance(raw.get("findings"), list):
+        raise DigestError(f"{path}: expected a findings list or {{findings, not_covered}}")
+    return {"findings": raw["findings"], "not_covered": list(raw.get("not_covered") or [])}
+
+
+def audit_lines(audit: dict[str, Any]) -> list[str]:
+    """The audit card's content: counts, the top high-severity findings, queued, not covered."""
+    rows = [f for f in audit["findings"] if isinstance(f, dict)]
+    by: dict[str, int] = {}
+    for f in rows:
+        k = f"{f.get('severity', '?')}/{f.get('confidence', '?')}"
+        by[k] = by.get(k, 0) + 1
+    out = [
+        f"{len(rows)} finding(s): "
+        + (" · ".join(f"{k} {n}" for k, n in sorted(by.items())) or "none"),
+        f"Queued as tasks: {sum(1 for f in rows if f.get('status') == 'queued')}",
+    ]
+    high = [f for f in rows if f.get("severity") == "high"][:5]
+    out += [f"High: {f.get('finding', '')} ({f.get('where', '')})" for f in high]
+    if audit["not_covered"]:
+        out.append("Not covered: " + ", ".join(map(str, audit["not_covered"])))
+    return out
+
+
+def render_md(
+    recs: list[dict[str, Any]], stamp: str, metrics: str = "", audit: dict[str, Any] | None = None
+) -> str:
     icon = {"red": "🔴", "amber": "🟠", "green": "🟢"}
     out = [f"# Review digest — {stamp}", "", _counts(recs) or "nothing to review", ""]
+    if metrics:
+        out += [f"_{metrics}_", ""]
+    if audit is not None:
+        out += ["### 🔎 Repo audit", "", *[f"- {ln}" for ln in audit_lines(audit)], ""]
     for r in recs:
         out += [
             f"### {icon.get(r.get('mark', ''), '')} #{r.get('pr')} {r.get('title', '')}",
@@ -327,6 +363,7 @@ def render_md(recs: list[dict[str, Any]], stamp: str) -> str:
 
 CARD_CSS = r"""
 .dg-head{color:var(--muted);margin:.2em 0 1em}
+.card.audit{border-left-color:#2563eb}
 .card{border:1px solid var(--line);border-left:6px solid var(--line);border-radius:12px;
   background:var(--card);padding:12px 16px;margin:14px 0;max-width:var(--measure)}
 .card.red{border-left-color:#dc2626}.card.amber{border-left-color:#d97706}.card.green{border-left-color:#16a34a}
@@ -384,7 +421,13 @@ def reader_css() -> str:
     return m.group(1) if m else ""
 
 
-def render_html(recs: list[dict[str, Any]], stamp: str, repo: str) -> str:
+def render_html(
+    recs: list[dict[str, Any]],
+    stamp: str,
+    repo: str,
+    metrics: str = "",
+    audit: dict[str, Any] | None = None,
+) -> str:
     e = html.escape
     cards = []
     for r in recs:
@@ -416,7 +459,16 @@ def render_html(recs: list[dict[str, Any]], stamp: str, repo: str) -> str:
         f"<title>{e(repo)} — review digest</title>"
         f"<style>{reader_css()}{CARD_CSS}</style></head>"
         f'<body><div class="wrap"><div class="hero"><h1>Review digest</h1>'
-        f'<p class="dg-head">{e(stamp)} · {e(_counts(recs) or "nothing to review")}</p></div>'
+        f'<p class="dg-head">{e(stamp)} · {e(_counts(recs) or "nothing to review")}</p>'
+        + (f'<p class="dg-head">{e(metrics)}</p>' if metrics else "")
+        + "</div>"
+        + (
+            '<section class="card audit"><h3>Repo audit</h3><ul>'
+            + "".join(f"<li>{e(ln)}</li>" for ln in audit_lines(audit))
+            + "</ul></section>"
+            if audit is not None
+            else ""
+        )
         + "".join(cards)
         + '<p><button class="btn primary" id="dg-export">Export decisions</button></p>'
         '<textarea id="dg-out" style="display:none;width:100%;min-height:8em" readonly></textarea>'
@@ -484,6 +536,10 @@ def cmd_render(args: argparse.Namespace, cfg: dict[str, Any]) -> int:
         repo = slug.split("/")[-1]
         prs = _api("GET", f"/repos/{slug}/pulls?state=all&sort=updated&direction=desc&per_page=100")
     recs = collect(prs if isinstance(prs, list) else [], since)
+    import review_metrics  # lazily: it imports this module
+
+    metrics = review_metrics.summary(30)
+    audit = load_audit(args.audit) if args.audit else None
     now = datetime.now(UTC)
     stamp = now.strftime("%Y-%m-%d %H:%M")
     # An explicit --format wins; otherwise digest-delivery decides.
@@ -491,10 +547,10 @@ def cmd_render(args: argparse.Namespace, cfg: dict[str, Any]) -> int:
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
     if fmt in ("md", "both"):
-        print(render_md(recs, stamp))
+        print(render_md(recs, stamp, metrics, audit))
     if fmt in ("html", "both"):
         page = out_dir / f"{repo}-digest-{now.strftime('%Y-%m-%d-%H%M')}.html"
-        page.write_text(render_html(recs, stamp, repo), encoding="utf-8")
+        page.write_text(render_html(recs, stamp, repo, metrics, audit), encoding="utf-8")
         print(f"digest: {page} ({len(recs)} PR(s))")
     STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
     STATE_FILE.write_text(
@@ -525,6 +581,7 @@ def main(argv: list[str] | None = None) -> int:
     d.add_argument("--format", choices=("html", "md", "both"))
     d.add_argument("--out", default="tmp/arsenal-digest", help="where the HTML goes")
     d.add_argument("--prs-json", help="list of PR objects, instead of fetching them")
+    d.add_argument("--audit", help="a repo-audit ledger to show as a card above the PRs")
     args = ap.parse_args(argv)
     try:
         cfg, _ = arsenal_config.load(Path.cwd())

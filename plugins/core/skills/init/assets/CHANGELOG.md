@@ -18,6 +18,18 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [5.14.0] - 2026-10-27
+
+### Added
+- **Overnight repo audit** (`repo-audit`, `references/overnight.md`):
+  - `audit_estimate.py` prices a scope before anything runs: files, lines, ≈ tokens (12 per line, a starting value to tune) and workers.
+  - The audit asks for scope and a token ceiling first, then runs one subsystem at a time, riskiest first, checking the budget before each.
+  - A run that stops early reports what it did not cover, and never edits code.
+- **`review_metrics.py`:** one line per risk tier for the last N days, so you can see whether relaxing a tier raises reverts.
+  - From git: merges, reverts and fix-ups within 7 days.
+  - From digest records: mean review rounds and who found the problems.
+- **Digest:** the header now carries the 30-day metrics line, and `render --audit <ledger>` adds the night's audit findings as a card above the PRs.
+
 ## [5.13.0] - 2026-10-27
 
 ### Added

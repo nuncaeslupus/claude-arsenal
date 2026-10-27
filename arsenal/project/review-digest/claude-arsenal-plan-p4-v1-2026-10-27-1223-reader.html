@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
-<meta name="arsenal-source-sha256" content="5b21503d430e41281884dcc962f7cc470aaccff708220116eff95d67a5064da3">
+<meta name="arsenal-source-sha256" content="84a2c94291009e0e2efc35574d9597f986ef685b7151c90b197f3b14ac50909e">
 <title>Claude Arsenal — Specification (annotatable)</title>
 <style>
 :root{
@@ -235,7 +235,7 @@ li>.note.bnote{margin:6px 0}
 <strong>Specification</strong>: <code>arsenal/project/review-digest/spec.md</code> (r6: § 5 "P4", § 6 P4 rows)<br />
 <strong>Author</strong>: nuncaeslupus (with Claude)<br />
 <strong>Revision</strong>: 1<br />
-<strong>Status</strong>: draft<br />
+<strong>Status</strong>: approved (2026-10-27, revision 1) — without annotations<br />
 <strong>Revision log</strong>:
 - r1 — first draft; P3 merged in 5.13.0</p>
 <blockquote>
@@ -428,13 +428,58 @@ ledger ──▶ queue (existing) + digest --audit card (findings, queued, not c
 </thead>
 <tbody>
 <tr>
-<td></td>
-<td></td>
-<td></td>
-<td></td>
-<td></td>
-<td></td>
-<td></td>
+<td>T1</td>
+<td><code>review_metrics_test_failures == 0</code></td>
+<td>0</td>
+<td><code>bash plugins/core/tests/review_metrics_test.sh</code></td>
+<td>HEAD</td>
+<td>local</td>
+<td>2026-10-27</td>
+</tr>
+<tr>
+<td>T2</td>
+<td><code>digest_test_failures == 0</code></td>
+<td>0</td>
+<td><code>bash plugins/core/tests/digest_test.sh</code></td>
+<td>HEAD</td>
+<td>local</td>
+<td>2026-10-27</td>
+</tr>
+<tr>
+<td>T3</td>
+<td><code>audit_estimate_test_failures == 0</code></td>
+<td>0</td>
+<td><code>bash plugins/repo-audit/tests/audit_estimate_test.sh</code></td>
+<td>HEAD</td>
+<td>local</td>
+<td>2026-10-27</td>
+</tr>
+<tr>
+<td>T4</td>
+<td><code>skill_workshop_findings == 0</code></td>
+<td>0</td>
+<td><code>validate.py plugins/repo-audit/skills/repo-audit</code></td>
+<td>HEAD</td>
+<td>local</td>
+<td>2026-10-27</td>
+</tr>
+<tr>
+<td>T5</td>
+<td><code>digest_test_failures == 0</code></td>
+<td>0</td>
+<td><code>bash plugins/core/tests/digest_test.sh</code> (audit card)</td>
+<td>HEAD</td>
+<td>local</td>
+<td>2026-10-27</td>
+</tr>
+<tr>
+<td>T6</td>
+<td><code>resident_token_delta &lt;= 30</code></td>
+<td>0</td>
+<td><code>make context-budget</code> (minimal 2732 → 2732), <code>make test</code>, <code>make audit</code></td>
+<td>HEAD</td>
+<td>local</td>
+<td>2026-10-27</td>
 </tr>
 </tbody>
 </table></div>

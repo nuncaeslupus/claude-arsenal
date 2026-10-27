@@ -12,7 +12,7 @@
 **Specification**: `arsenal/project/review-digest/spec.md` (r6: § 5 "P4", § 6 P4 rows)
 **Author**: nuncaeslupus (with Claude)
 **Revision**: 1
-**Status**: draft
+**Status**: approved (2026-10-27, revision 1) — without annotations
 **Revision log**:
 - r1 — first draft; P3 merged in 5.13.0
 
@@ -148,6 +148,12 @@ ledger ──▶ queue (existing) + digest --audit card (findings, queued, not c
 
 | T# | Gate | Measured | Command | SHA | Env | Date |
 |----|------|----------|---------|-----|-----|------|
+| T1 | `review_metrics_test_failures == 0` | 0 | `bash plugins/core/tests/review_metrics_test.sh` | HEAD | local | 2026-10-27 |
+| T2 | `digest_test_failures == 0` | 0 | `bash plugins/core/tests/digest_test.sh` | HEAD | local | 2026-10-27 |
+| T3 | `audit_estimate_test_failures == 0` | 0 | `bash plugins/repo-audit/tests/audit_estimate_test.sh` | HEAD | local | 2026-10-27 |
+| T4 | `skill_workshop_findings == 0` | 0 | `validate.py plugins/repo-audit/skills/repo-audit` | HEAD | local | 2026-10-27 |
+| T5 | `digest_test_failures == 0` | 0 | `bash plugins/core/tests/digest_test.sh` (audit card) | HEAD | local | 2026-10-27 |
+| T6 | `resident_token_delta <= 30` | 0 | `make context-budget` (minimal 2732 → 2732), `make test`, `make audit` | HEAD | local | 2026-10-27 |
 
 <!-- -->
 
