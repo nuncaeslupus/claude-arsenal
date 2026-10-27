@@ -11,10 +11,11 @@
 **Date**: 2026-10-26
 **Ticket / PR**: branch `claude/code-review-enforcement-sa12j9`
 **Author**: nuncaeslupus (with Claude)
-**Revision**: 5
-**Status**: approved (2026-10-27, revision 5) — without annotations
+**Revision**: 6
+**Status**: approved (2026-10-27, revision 6) — without annotations
 **Revision log**:
 - r1 — first draft, from the brainstorm on Anthropic's "How the Claude Code team does code review" (Oct 2026)
+- r6 — § 5/§ 6: P4 (overnight repo review, review metrics) contracts and risks
 - r5 — § 5/§ 6: P3 (lean code) contracts and risks
 - r4 — § 5/§ 6: P2 (digest) contracts and risks; records live in a PR-body marker, the digest branch only holds rendered pages (D-14)
 - r3 — § 5 config: flat `[review]` keys (the loader reads one table level) and existing `risk-paths`/`risk-lines` for the high tier, instead of `[review.tiers]`/`[review.approval]`
@@ -452,6 +453,66 @@ turns amber. With no estimate there is no flag; nothing is guessed.
 > **✎ Notes** · `SPEC › P3 — lean code`
 > _(your notes here — replace this line)_
 
+### P4 — overnight repo review and review metrics
+
+#### `scripts/audit_estimate.py` (repo-audit plugin)
+
+```
+audit_estimate.py [PATH ...] [--tokens-per-line 12] [--json]
+→ scope: src/, lib/ · 412 files · 61,300 lines · ≈ 740k tokens · 3 workers (subsystems: src/api, src/core, lib)
+```
+
+Counts source files and lines in scope, skipping vendored, generated and lockfiles, and the
+paths `.gitignore` already hides. It estimates tokens as lines × `--tokens-per-line`. The
+default of 12 is a starting value (reading plus reasoning), stated as such in `--help`, and a
+host tunes it once it has a measured run to compare against. It also prints the subsystem split
+that the audit's step 1 would use.
+
+#### `repo-audit --overnight` (a mode, documented in `references/overnight.md`)
+
+1. **Ask first:** scope (paths, default the whole repo), a token ceiling, and whether to stop
+   at the ceiling or at the session's budget stop (`quota-governance`), whichever comes first.
+   Print `audit_estimate.py`'s line, and say plainly when the estimate exceeds the ceiling.
+   Nothing starts until the user has seen the cost.
+2. **Run in chunks:** one subsystem at a time, riskiest first (`risk-paths`, then the largest).
+   Before each chunk, `bin/budget_check.sh` and the ceiling decide whether to continue.
+3. **Stop cleanly:** a stopped run reports the subsystems it did not cover. It never claims a
+   whole-repo audit it didn't finish.
+4. **Never edit code in the same run.** Findings go through the existing ledger → queue steps.
+   The digest then gets an audit card (below), so the morning page shows both the night's PRs
+   and the night's findings.
+
+#### `scripts/review_metrics.py` (core)
+
+```
+review_metrics.py [--days 30] [--prs-json FILE] [--json]
+→ 30d: 41 merged (low 22 · medium 14 · high 5) · 1 revert (high) · 3 fix-ups ≤7d · rounds 1.6 · found by: cold-reviewer 58% · ci 21% · self 15% · bot 6%
+```
+
+- **From git alone (cheap, always):**
+  - merges on the default branch in the window, by the `Risk-tier:` trailer (`untiered` when absent);
+  - reverts (`Revert "…"` or `This reverts commit <sha>` naming a merge in the window);
+  - fix-ups (a `fix` commit within 7 days of a merge that touches a file the merge touched).
+- **From digest records (when PRs are given or a channel exists):** mean review rounds, and
+  finding sources from `found_by`.
+- `--json` returns the same numbers per tier.
+
+#### Digest additions
+
+- **Header line:** `render` prepends the git-only metrics line for the last 30 days. It costs one
+  `git log` and no API calls.
+- **Audit card:** `render --audit FILE` reads a repo-audit ledger and adds one card above the PR
+  cards. It shows:
+  - findings by severity × confidence;
+  - the top 5 high-severity findings;
+  - the tasks queued;
+  - the subsystems not covered.
+
+<!-- -->
+
+> **✎ Notes** · `SPEC › P4 — overnight repo review and review metrics`
+> _(your notes here — replace this line)_
+
 ## §6 Risks & Validation
 
 | Risk | Likelihood | Impact | Mitigation | Validation |
@@ -467,6 +528,9 @@ turns amber. With no estimate there is no flag; nothing is guessed.
 | P2: digest too long to skim | Med | Med | `digest.py check` enforces the per-PR word cap; folded cards | `render` of 10 records ≤ 900 visible words |
 | P3: lean rules cut something that mattered (validation, error handling) | Low | High | "Never cut" list in the reference; SCOPE never blocks alone, so the author decides | manual: the first 3 SCOPE findings on real PRs are read by the owner |
 | P3: rubric growth taxes every review round | Med | Low | +≤ 4 lines in `agents/reviewer.md`; the rules live in the on-demand reference | `wc -l agents/reviewer.md` delta ≤ 4 |
+| P4: an overnight audit spends more than the user expected | Med | High | Estimate shown and confirmed before starting; ceiling + budget stop checked before every chunk | unit: `audit_estimate.py` on a fixture tree; manual: first real run's estimate vs `usage_report.py` |
+| P4: a stopped audit reads as complete | Med | Med | Report lists uncovered subsystems; the audit card shows them | unit: audit card renders "not covered" |
+| P4: metrics heuristics mislabel a fix-up or revert | Med | Low | Rules are stated in `--help`; numbers are a trend line, never a gate | unit: fixture repo with a known revert and a known fix-up |
 | P2: approve applied to a PR that changed since the digest | Med | High | decision carries the head SHA; mismatch → `stale`, listed in the next digest | unit: stale approval is not merged |
 
 <!-- -->

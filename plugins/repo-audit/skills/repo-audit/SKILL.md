@@ -82,6 +82,8 @@ feature, use `review` or `execution`.
   understanding, to scope each subsystem read.
 - [Issue taxonomy](references/issue-taxonomy.md) — before hunting; includes
   optional architecture prompts.
+- [Overnight audit](references/overnight.md) — load when the run is unattended or too
+  big for one sitting: price it, ask scope and a token ceiling, chunk, stop cleanly.
 - [Output shape](references/output-shape.md) — before reporting and queueing:
   the ledger shape, the destination, and the fix / queue / issue / ledger
   decision.

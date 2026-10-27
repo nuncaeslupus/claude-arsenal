@@ -118,6 +118,17 @@ md="$(python3 "${DIGEST}" render --since 2000-01-01 --format md --out out --prs-
 grep -q "^### 🔴 #107" <<<"${md}" || fail "the Markdown digest should lead with the red card"
 echo "PASS: render — ${words} visible words for 10 PRs, red first, Markdown twin"
 
+# --- metrics header and audit card (P4) -----------------------------------------
+git init -q -b main . && git -c user.name=t -c user.email=t@example.com commit -q --allow-empty -m "feat: x (#9)" -m "Risk-tier: low (docs/config only)"
+printf '{"findings":[{"finding":"SQL built from input","where":"src/db.py","status":"queued","severity":"high","confidence":"high"}],"not_covered":["src/legacy"]}' > ledger.json
+md="$(python3 "${DIGEST}" render --since 2000-01-01 --format md --out out --prs-json prs.json --audit ledger.json)"
+grep -q "^_30d: 1 merged (low 1)" <<<"${md}" || fail "test_render_header_has_metrics_line: $(head -6 <<<"${md}")"
+grep -q "Not covered: src/legacy" <<<"${md}" && grep -q "High: SQL built from input (src/db.py)" <<<"${md}" \
+    || fail "test_audit_card_lists_not_covered"
+python3 "${DIGEST}" render --since 2000-01-01 --format html --out out2 --prs-json prs.json --audit ledger.json >/dev/null
+grep -q 'class="card audit"' out2/*.html && grep -q "Not covered: src/legacy" out2/*.html || fail "the HTML digest should carry the audit card"
+echo "PASS: metrics line heads the digest; audit card shows findings and what was not covered"
+
 # --- export, in a browser where one is installed --------------------------------
 if command -v node >/dev/null 2>&1 && node -e "require('playwright')" 2>/dev/null; then
     cat > exp.js <<'JS'

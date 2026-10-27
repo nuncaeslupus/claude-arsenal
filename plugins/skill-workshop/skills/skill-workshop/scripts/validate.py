@@ -269,6 +269,9 @@ CANONICAL_ARGS = {
     "--review-preset",
     "--always-human-paths",
     "--digest-decisions",
+    # repo-audit audit_estimate.py: the estimate's one tunable and the worker cap
+    "--tokens-per-line",
+    "--max-workers",
     # usage_report.py: the GitHub Actions minutes view (#463), beside the token one
     "--actions",
     # specify / design validators: a document's approval is a gate of its own

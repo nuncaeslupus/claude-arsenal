@@ -48,7 +48,9 @@ blocked worker: report it, and take the next task that does not depend on it.
 python3 claude-arsenal/scripts/digest.py render        # --since last; --format html|md
 ```
 
-`digest-delivery` decides the output. `file` prints the path of the HTML; publish
+The header carries the last 30 days' review metrics (`scripts/review_metrics.py`:
+merges, reverts and fix-ups per tier). Add `--audit <ledger.json>` after an overnight
+repo audit to show its findings as a card above the PRs. `digest-delivery` decides the output. `file` prints the path of the HTML; publish
 that page if your surface can, else name the path. `chat` prints Markdown to paste
 into your reply. `both` does both. Deliver it in the same reply as the session's
 summary, so it is not lost behind later turns.
