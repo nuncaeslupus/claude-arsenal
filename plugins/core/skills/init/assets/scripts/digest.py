@@ -201,6 +201,9 @@ def build_record(
             )
         fixes.append({k: str(f.get(k, "")) for k in ("what", "fix", "commit")} | {"found_by": src})
     open_items = [str(x) for x in notes.get("open", [])]
+    expected = notes.get("expected_lines", old.get("size", {}).get("expected", 0)) or 0
+    if type(expected) is not int or expected < 0:
+        raise DigestError(f"expected_lines must be a whole number >= 0, got {expected!r}")
     rec = {
         "v": 1,
         "pr": pr.get("number"),
@@ -213,9 +216,7 @@ def build_record(
             "add": sum(int(f.get("additions", 0)) for f in files),
             "del": sum(int(f.get("deletions", 0)) for f in files),
             "files": len(files),
-            "expected": int(
-                notes.get("expected_lines") or old.get("size", {}).get("expected") or 0
-            ),
+            "expected": expected,
         },
         "rounds": rounds or int(old.get("rounds", 0)),
         "findings": fixes or old.get("findings", []),

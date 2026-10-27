@@ -34,6 +34,7 @@ means no code the task did not need, not less safety than it needs.
 ## In review
 
 Code the task did not need, judged by the ladder, is reported as
-`RISK | path:line — SCOPE: <what could go> (<lines>)`. SCOPE never blocks on its own:
-the author removes it, or answers why it stays. Either way the finding goes into the
-PR's digest record (`references/digest.md` § 1) with `what` starting `SCOPE:`.
+`RISK | path:line — SCOPE: <what could go> (<lines>; confidence: …)`. SCOPE never
+blocks on its own: the author removes it, or answers why it stays. In the PR's digest
+record (`references/digest.md` § 1) a removed item is a `fixes` entry whose `what`
+starts `SCOPE:`; a kept one goes in `open` as `SCOPE: … — kept because …`.

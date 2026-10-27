@@ -74,6 +74,9 @@ assert "2.5x expected size" in digest._status(r), digest._status(r)' "$(dirname 
 printf '{"summary":"Docs only. Nothing else."}\n' > noest.json
 o="$(python3 "${DIGEST}" record --pr 42 --notes noest.json --pr-json pr.json --files-json small.json 2>/dev/null)"
 grep -q '"mark": "green"' <<<"${o}" || fail "test_no_estimate_no_flag: ${o}"
+printf '{"summary":"Docs only.","expected_lines":"abc"}\n' > bad.json
+python3 "${DIGEST}" record --pr 42 --notes bad.json --pr-json pr.json --files-json small.json >/dev/null 2>&1
+[[ $? -eq 2 ]] || fail "a non-integer expected_lines is bad input, not a traceback"
 echo "PASS: size — over twice the estimate flags and turns amber; no estimate, no flag"
 
 # --- render ---------------------------------------------------------------------

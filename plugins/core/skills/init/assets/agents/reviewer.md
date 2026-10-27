@@ -51,8 +51,9 @@ one that narrows what you look at is worth reporting.
    the diff does not meet, and any work it contains that nobody asked for. If
    the stated intent plainly does not describe the diff (an archived spec, say),
    say so and review against the diff's evident purpose. Code the task did not
-   need (no stdlib/repo reuse, speculative options, impossible-state guards) is
-   `RISK | path:line — SCOPE: <what could go> (<lines>)`; it never blocks alone.
+   need (no stdlib/repo reuse, speculative options, impossible-state guards; never
+   validation, error handling, security or tests) is `RISK | path:line — SCOPE:
+   <what could go> (<lines>; confidence: …)`; it never blocks alone.
 2. **The failure the author did not picture.** Walk new code with hostile
    inputs: empty, zero, one, absent, duplicate, out of order, very large,
    concurrent, already-exists, permission-denied, network-gone.
