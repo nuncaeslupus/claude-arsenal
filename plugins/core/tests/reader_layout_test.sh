@@ -200,13 +200,14 @@ echo "PASS: the review record names dated exports"
 # --- 8: block notes — a ✎ on each paragraph, item and table; seeded notes keep their quote ---
 grep -q 'data-ref="SPEC §1"' "${html}" || fail "articles do not carry the label a block note takes"
 grep -q 'bn-btn' "${html}" || fail "the reader has no block-note button"
-printf '%s' '{"s-spec-1~abc":"Bad how?","s-spec-1~abc~q":"The widget is bad.","s-spec-1~zzz":"orphaned"}' \
+printf '%s' '{"s-spec-1~abc":"Bad how?","s-spec-1~abc~q":"The widget is bad.","s-spec-1~zzz":"orphaned","s-gone~q1":"homeless"}' \
     > "${repo}/notes.json"
 run_reader --input status/specification.md --output-dir blk --name "Widget Overhaul" --notes notes.json >/dev/null \
     || fail "seeding block notes failed"
 md="$(cat "${repo}"/blk/*-annotated.md)"
 case "$md" in *'> ¶ _“The widget is bad.”_'*'> Bad how?'*) ;; *) fail "a seeded block note lost its quote or text: ${md}" ;; esac
 case "$md" in *'> ¶ _(text changed since this note)_'*'> orphaned'*) ;; *) fail "a block note with no quote was dropped" ;; esac
+case "$md" in *'Unplaced notes'*'> homeless'*) ;; *) fail "a note whose section is gone was dropped from the Markdown" ;; esac
 echo "PASS: block notes are seeded into the annotated Markdown with their quoted paragraph"
 
 # The same, in a browser, where one is installed: open a note on a paragraph, reload,

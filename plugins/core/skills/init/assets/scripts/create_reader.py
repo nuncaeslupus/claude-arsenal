@@ -836,6 +836,21 @@ def build_markdown(
                     out.append(f"> {line}")
             out.append("")
         out.append("")
+    # Block notes whose section is gone (heading renamed or removed) — the reader
+    # shows them under "Unplaced notes"; so does this edition.
+    known = {it["domid"] for _, p in parts for it in p["items"]}
+    lost = sorted(
+        {k.split("~")[0] for k in seed_notes if "~" in k and k.split("~")[0] not in known}
+    )
+    rows = [row for domid in lost for row in block_notes(seed_notes, domid)]
+    if rows:
+        out += ["## Unplaced notes — their section changed", "", "> **✎ Notes** · `unplaced`"]
+        for _key, quote, note in rows:
+            out.append(">")
+            out.append(f"> ¶ _“{quote}”_" if quote else "> ¶ _(text changed since this note)_")
+            for line in note.split("\n"):
+                out.append(f"> {line}")
+        out.append("")
     return "\n".join(out)
 
 
