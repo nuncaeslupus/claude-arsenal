@@ -20,6 +20,7 @@ cat > tmp/digest-notes.json <<'JSON'
  "undo": "How to take it back (revert the merge; any data step).",
  "fixes": [{"what": "the problem", "found_by": "cold-reviewer", "fix": "how", "commit": "abc1234"}],
  "open": ["RISK: what is still true and why it ships anyway"],
+ "expected_lines": 120,
  "deps": [41]}
 JSON
 python3 claude-arsenal/scripts/digest.py record --pr <N> --notes tmp/digest-notes.json
@@ -28,6 +29,9 @@ python3 claude-arsenal/scripts/digest.py record --pr <N> --notes tmp/digest-note
 - `found_by` is `self`, `cold-reviewer`, `ci`, `human` or `bot:<login>`. List every
   problem that was found and fixed: who found it is what lets the human judge the review.
 - `deps`: the PR numbers this one needs merged first. Omit it when there are none.
+- `expected_lines`: your estimate of lines added + removed, written down **before**
+  implementing. Over twice that, the card says so and a green mark turns amber.
+  Leave it out rather than guess after the fact.
 - Add `"state": "needs-decision"` when the review cap was hit and you open the PR
   under the `override` exit. That PR is the human's call, not yours.
 - `record` exits 1 on a summary over the size rule. Shorten it, don't pad the details.

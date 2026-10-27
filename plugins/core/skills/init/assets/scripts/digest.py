@@ -21,7 +21,7 @@ Usage:
     digest.py render [--since last|YYYY-MM-DD] [--format html|md] [--out DIR] [--prs-json FILE]
 
 `--notes` is what only the worker knows, as JSON:
-    {"summary": "2-3 sentences, <= 60 words", "undo": "...",
+    {"summary": "2-3 sentences, <= 60 words", "undo": "...", "expected_lines": 120,
      "fixes": [{"what": "...", "found_by": "cold-reviewer", "fix": "...", "commit": "abc1234"}],
      "open": ["RISK: ..."], "state": "needs-decision"}   # state optional
 Review rounds are counted from the adversarial review's round files.
@@ -129,12 +129,20 @@ def write_block(body: str | None, record: dict[str, Any]) -> str:
     return (body.rstrip() + "\n\n" if body.strip() else "") + block + "\n"
 
 
-def mark(tier: str, state: str, open_items: list[str]) -> str:
+def oversize(size: dict[str, Any]) -> float:
+    """How many times its own estimate a PR grew, when over 2x; else 0 (or no estimate)."""
+    expected = int(size.get("expected") or 0)
+    ratio = (int(size.get("add", 0)) + int(size.get("del", 0))) / expected if expected else 0
+    return round(ratio, 1) if ratio > 2 else 0
+
+
+def mark(tier: str, state: str, open_items: list[str], over: float = 0) -> str:
     """red: high with something open, or a decision only a human can make;
-    amber: high, or medium with something open; green otherwise."""
+    amber: high, medium with something open, or over twice its size estimate;
+    green otherwise."""
     if state == "needs-decision" or (tier == "high" and open_items):
         return "red"
-    if tier == "high" or (tier == "medium" and open_items):
+    if tier == "high" or (tier == "medium" and open_items) or over:
         return "amber"
     return "green"
 
@@ -205,6 +213,9 @@ def build_record(
             "add": sum(int(f.get("additions", 0)) for f in files),
             "del": sum(int(f.get("deletions", 0)) for f in files),
             "files": len(files),
+            "expected": int(
+                notes.get("expected_lines") or old.get("size", {}).get("expected") or 0
+            ),
         },
         "rounds": rounds or int(old.get("rounds", 0)),
         "findings": fixes or old.get("findings", []),
@@ -214,7 +225,7 @@ def build_record(
         "ratified": old.get("ratified"),
     }
     rec["state"] = _state(pr, req, rec, notes)
-    rec["mark"] = mark(rec["tier"], rec["state"], open_items)
+    rec["mark"] = mark(rec["tier"], rec["state"], open_items, oversize(rec["size"]))
     return rec
 
 
@@ -276,6 +287,7 @@ def _status(r: dict[str, Any]) -> str:
         f"{r.get('tier', '?')} risk · {r.get('state', '?')}"
         f" · +{sz.get('add', 0)}/-{sz.get('del', 0)}"
         f" · {r.get('rounds', 0)} review round(s){deps}"
+        + (f" · ⚠ {oversize(sz)}x expected size" if oversize(sz) else "")
     )
 
 

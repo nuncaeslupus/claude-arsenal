@@ -12,7 +12,7 @@
 **Specification**: `arsenal/project/review-digest/spec.md` (r5: § 5 "P3 — lean code", § 6 P3 rows)
 **Author**: nuncaeslupus (with Claude)
 **Revision**: 1
-**Status**: draft
+**Status**: approved (2026-10-27, revision 1) — without annotations
 **Revision log**:
 - r1 — first draft; P2 merged in 5.12.0
 
@@ -143,6 +143,11 @@ render ──▶ "⚠ N× expected size" + amber mark when add+del > 2 × expect
 
 | T# | Gate | Measured | Command | SHA | Env | Date |
 |----|------|----------|---------|-----|-----|------|
+| T1 | `skill_workshop_findings == 0` | 0 | `validate.py plugins/core/skills/init` | HEAD | local | 2026-10-27 |
+| T2 | `reviewer_md_line_delta <= 4` | 2 | `git diff --stat origin/main -- agents/reviewer.md` (+3 −1) | HEAD | local | 2026-10-27 |
+| T3 | `skill_workshop_findings == 0` | 0 | `validate.py plugins/core/skills/execution` | HEAD | local | 2026-10-27 |
+| T4 | `digest_test_failures == 0` | 0 | `bash plugins/core/tests/digest_test.sh` | HEAD | local | 2026-10-27 |
+| T5 | `resident_token_delta <= 30` | 24 | `make context-budget` (minimal 2708 → 2732) | HEAD | local | 2026-10-27 |
 
 <!-- -->
 

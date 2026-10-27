@@ -12,7 +12,7 @@
 **Ticket / PR**: branch `claude/code-review-enforcement-sa12j9`
 **Author**: nuncaeslupus (with Claude)
 **Revision**: 5
-**Status**: draft — r5 adds the P3 contracts; r4 was approved 2026-10-27 without annotations
+**Status**: approved (2026-10-27, revision 5) — without annotations
 **Revision log**:
 - r1 — first draft, from the brainstorm on Anthropic's "How the Claude Code team does code review" (Oct 2026)
 - r5 — § 5/§ 6: P3 (lean code) contracts and risks

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
-<meta name="arsenal-source-sha256" content="7e2b5c143a16921a316a22f7203171e9cc1d522a37893cba38423da0b931a161">
+<meta name="arsenal-source-sha256" content="528b005567853f47746ba0c796c73b6008b13ece25db40f49b1e63dc4658f41e">
 <title>Claude Arsenal — Specification (annotatable)</title>
 <style>
 :root{
@@ -235,7 +235,7 @@ li>.note.bnote{margin:6px 0}
 <strong>Specification</strong>: <code>arsenal/project/review-digest/spec.md</code> (r5: § 5 "P3 — lean code", § 6 P3 rows)<br />
 <strong>Author</strong>: nuncaeslupus (with Claude)<br />
 <strong>Revision</strong>: 1<br />
-<strong>Status</strong>: draft<br />
+<strong>Status</strong>: approved (2026-10-27, revision 1) — without annotations<br />
 <strong>Revision log</strong>:
 - r1 — first draft; P2 merged in 5.12.0</p>
 <blockquote>
@@ -416,13 +416,49 @@ render ──▶ &quot;⚠ N× expected size&quot; + amber mark when add+del &gt
 </thead>
 <tbody>
 <tr>
-<td></td>
-<td></td>
-<td></td>
-<td></td>
-<td></td>
-<td></td>
-<td></td>
+<td>T1</td>
+<td><code>skill_workshop_findings == 0</code></td>
+<td>0</td>
+<td><code>validate.py plugins/core/skills/init</code></td>
+<td>HEAD</td>
+<td>local</td>
+<td>2026-10-27</td>
+</tr>
+<tr>
+<td>T2</td>
+<td><code>reviewer_md_line_delta &lt;= 4</code></td>
+<td>2</td>
+<td><code>git diff --stat origin/main -- agents/reviewer.md</code> (+3 −1)</td>
+<td>HEAD</td>
+<td>local</td>
+<td>2026-10-27</td>
+</tr>
+<tr>
+<td>T3</td>
+<td><code>skill_workshop_findings == 0</code></td>
+<td>0</td>
+<td><code>validate.py plugins/core/skills/execution</code></td>
+<td>HEAD</td>
+<td>local</td>
+<td>2026-10-27</td>
+</tr>
+<tr>
+<td>T4</td>
+<td><code>digest_test_failures == 0</code></td>
+<td>0</td>
+<td><code>bash plugins/core/tests/digest_test.sh</code></td>
+<td>HEAD</td>
+<td>local</td>
+<td>2026-10-27</td>
+</tr>
+<tr>
+<td>T5</td>
+<td><code>resident_token_delta &lt;= 30</code></td>
+<td>24</td>
+<td><code>make context-budget</code> (minimal 2708 → 2732)</td>
+<td>HEAD</td>
+<td>local</td>
+<td>2026-10-27</td>
 </tr>
 </tbody>
 </table></div>

@@ -64,6 +64,8 @@ the test alongside the change instead.
 **GREEN.** Implement until the check passes:
 
 - Read the target code first and match its style, naming and structure.
+- Write the smallest change that passes the gate: needed at all → stdlib → already in
+  the repo → minimal new code (`claude-arsenal:core:init § references/lean-code.md`).
 - One concern per commit; type hints or strict types; handle errors explicitly;
   configuration through environment variables or constants.
 - Comments: match the file's density, default to none, and add one only for a *why*

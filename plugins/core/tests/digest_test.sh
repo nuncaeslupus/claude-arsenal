@@ -61,6 +61,21 @@ printf '{"summary":"One. Two. Three. Four."}\n' > four.json
 python3 "${DIGEST}" check --record four.json >/dev/null; [[ $? -eq 1 ]] || fail "four sentences must be refused"
 echo "PASS: check enforces 60 words and 3 sentences"
 
+# --- size against the worker's own estimate -------------------------------------
+printf '[{"filename":"docs/a.md","additions":250,"deletions":0}]\n' > small.json
+printf '{"summary":"Docs only. Nothing else.","expected_lines":100}\n' > est.json
+o="$(python3 "${DIGEST}" record --pr 42 --notes est.json --pr-json pr.json --files-json small.json 2>/dev/null)"
+grep -q '"mark": "amber"' <<<"${o}" && grep -q '"expected": 100' <<<"${o}" \
+    || fail "test_oversize_flags_and_turns_amber: ${o}"
+python3 -c 'import sys; sys.path.insert(0, sys.argv[1]); import digest
+r = {"tier": "low", "state": "open", "size": {"add": 250, "del": 0, "expected": 100}}
+assert "2.5x expected size" in digest._status(r), digest._status(r)' "$(dirname "${DIGEST}")" \
+    || fail "the status row should name the ratio"
+printf '{"summary":"Docs only. Nothing else."}\n' > noest.json
+o="$(python3 "${DIGEST}" record --pr 42 --notes noest.json --pr-json pr.json --files-json small.json 2>/dev/null)"
+grep -q '"mark": "green"' <<<"${o}" || fail "test_no_estimate_no_flag: ${o}"
+echo "PASS: size — over twice the estimate flags and turns amber; no estimate, no flag"
+
 # --- render ---------------------------------------------------------------------
 python3 - <<'PY' > prs.json
 import json
