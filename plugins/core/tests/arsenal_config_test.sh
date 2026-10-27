@@ -187,5 +187,17 @@ sys.exit(0 if raw.get("context-window") == 0 and "context-window" not in raw.get
 PY
 echo "PASS: shipped config template keeps context-window at the top level"
 
+# --- [review] preset and per-tier approval ---
+printf '[review]\npreset = "solo-trust"\napproval-high = "human:2"\n' > arsenal/config.toml
+[[ "$(get review.preset)" == "solo-trust" ]] || fail "review.preset should read solo-trust"
+[[ "$(get review.approval-high)" == "human:2" ]] || fail "test_review_approval_human_n_parses: human:2 not read back"
+printf '[review]\npreset = "solo-trusting"\n' > arsenal/config.toml
+[[ "$(get_rc review.preset)" == "2" ]] || fail "test_review_preset_unknown_value_exits_2"
+printf '[review]\napproval-medium = "human:0"\n' > arsenal/config.toml
+[[ "$(get_rc review.approval-medium)" == "2" ]] || fail "human:0 must be refused"
+printf '[review]\nalways-human-paths = "auth/**"\n' > arsenal/config.toml
+[[ "$(get_rc review.always-human-paths)" == "2" ]] || fail "a bare string for a glob list must be refused"
+echo "PASS: review.preset / approval-* / path lists validate"
+
 echo "PASS: arsenal_config_test — model settings and table handling"
 exit 0

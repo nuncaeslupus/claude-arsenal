@@ -152,6 +152,58 @@ run --policy after-ci --claims "${tmp}/claims.json" | grep >/dev/null "no open P
     || fail "the table should carry the stale-claim section too"
 echo "PASS: stale claims are the ones with no open PR and no recency"
 
+# --- risk tiers: who has to approve (review.preset) ----------------------------
+mkdir -p "${tmp}/tiered/arsenal"
+trun() { python3 "${AUDIT}" --repo-root "${tmp}/tiered" --prs "${tmp}/prs.json" --policy after-review "$@"; }
+small='"files":[{"filename":"src/app.py","additions":3,"deletions":1}]'
+big='"files":[{"filename":"src/app.py","additions":500,"deletions":1}]'
+bot="{\"state\":\"APPROVED\",\"commit_id\":\"${HEAD}\",\"user\":{\"login\":\"rb[bot]\",\"type\":\"Bot\"},\"author_association\":\"NONE\"}"
+self="{\"state\":\"APPROVED\",\"commit_id\":\"${HEAD}\",\"user\":{\"login\":\"me\",\"type\":\"User\"},\"author_association\":\"OWNER\"}"
+old_h="{\"state\":\"APPROVED\",\"commit_id\":\"${OLD}\",\"user\":{\"login\":\"ana\",\"type\":\"User\"},\"author_association\":\"COLLABORATOR\"}"
+human="{\"state\":\"APPROVED\",\"commit_id\":\"${HEAD}\",\"user\":{\"login\":\"ana\",\"type\":\"User\"},\"author_association\":\"COLLABORATOR\"}"
+printf '[review]\npreset = "solo-gated"\n' > "${tmp}/tiered/arsenal/config.toml"
+
+pr "\"user\":{\"login\":\"me\"},${small},\"threads\":[],\"reviews\":[${bot}]"
+[[ "$(trun --json | state tier)" == "medium" ]] || fail "a small code diff should be medium"
+[[ "$(trun --json | state humans_on_head)" == "[]" ]] || fail "test_bot_approval_counts_zero_humans"
+trun --require-ready >/dev/null 2>&1; [[ $? -eq 1 ]] || fail "solo-gated medium must wait for a human"
+out="$(trun)"
+grep -q "waits on 1 human approval" <<<"${out}" || fail "the next action should name the missing human"
+pr "\"user\":{\"login\":\"me\"},${small},\"threads\":[],\"reviews\":[${bot},${self}]"
+[[ "$(trun --json | state humans_on_head)" == "[]" ]] || fail "test_same_session_approval_counts_zero_humans"
+pr "\"user\":{\"login\":\"me\"},${small},\"threads\":[],\"reviews\":[${bot},${old_h}]"
+trun --require-ready >/dev/null 2>&1; [[ $? -eq 1 ]] || fail "test_human_approval_on_old_sha_is_stale"
+pr "\"user\":{\"login\":\"me\"},${small},\"threads\":[],\"reviews\":[${bot},${human}]"
+trun --require-ready >/dev/null 2>&1; [[ $? -eq 0 ]] || fail "a human approval on the head should make it ready"
+# Captured, not piped into grep -q: an early grep exit races the writer under pipefail.
+out="$(trun --json)"
+grep -q "Approved-by: human ana@1111111" <<<"${out}" || fail "provenance should name the human and the sha"
+echo "PASS: tiers — bots, the author and old commits count zero humans; a human on the head counts"
+
+printf '[review]\npreset = "solo-trust"\n' > "${tmp}/tiered/arsenal/config.toml"
+pr "\"user\":{\"login\":\"me\"},${big},\"threads\":[],\"reviews\":[${bot}]"
+trun --require-ready >/dev/null 2>&1; [[ $? -eq 0 ]] || fail "solo-trust high merges on agent review"
+[[ "$(trun --json | state ratify)" == "True" ]] || fail "test_human_after_ready_with_agent_clear_sets_ratify"
+pr "\"user\":{\"login\":\"me\"},\"threads\":[],\"reviews\":[${bot}]"
+[[ "$(trun --json | state tier)" == "high" ]] || fail "unreadable files must classify high"
+echo "PASS: solo-trust high merges on agent review and flags ratification; unknown files are high"
+
+# Review findings: a legacy config is not newly validated; humans alone do not
+# stand in for the agent review under human:N; a truncated file list is high.
+printf 'merge-policy = "after-review"\nrisk-lines = 0\n' > "${tmp}/tiered/arsenal/config.toml"
+pr "\"user\":{\"login\":\"me\"},${small},\"threads\":[],\"reviews\":[${bot}]"
+trun --require-ready >/dev/null 2>&1; [[ $? -eq 0 ]] || fail "a config with no preset must keep its legacy verdict"
+printf '[review]\npreset = "team"\n' > "${tmp}/tiered/arsenal/config.toml"
+human2="{\"state\":\"APPROVED\",\"commit_id\":\"${HEAD}\",\"user\":{\"login\":\"bo\",\"type\":\"User\"},\"author_association\":\"MEMBER\"}"
+pr "\"user\":{\"login\":\"me\"},${big},\"threads\":[],\"reviews\":[${human},${human2}]"
+trun --require-ready >/dev/null 2>&1; [[ $? -eq 1 ]] || fail "human:2 without an agent review must wait"
+pr "\"user\":{\"login\":\"me\"},${big},\"threads\":[],\"reviews\":[${bot},${human},${human2}]"
+trun --require-ready >/dev/null 2>&1; [[ $? -eq 0 ]] || fail "human:2 with an agent review and two humans is ready"
+printf '[review]\npreset = "solo-trust"\n' > "${tmp}/tiered/arsenal/config.toml"
+pr "\"user\":{\"login\":\"me\"},\"changed_files\":250,${small},\"threads\":[],\"reviews\":[${bot}]"
+[[ "$(trun --json | state tier)" == "high" ]] || fail "a truncated file list must classify high"
+echo "PASS: legacy configs untouched; human:N still needs the agent review; truncated lists are high"
+
 # --- bad input is an error, not an empty report ------------------------------
 printf 'not json\n' > "${tmp}/prs.json"
 run --policy after-ci >/dev/null 2>&1

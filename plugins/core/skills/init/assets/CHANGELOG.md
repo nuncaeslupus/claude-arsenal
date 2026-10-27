@@ -18,6 +18,12 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [5.11.0] - 2026-10-27
+
+### Added
+- **Risk-tiered approval (`[review] preset`).** `/init` now asks who approves what: `solo-trust` (the agent merges every PR; high-risk merges are flagged `Ratify: pending` for you to confirm later), `solo-gated` (you approve medium- and high-risk PRs), `team` (0/1/2 human approvals by tier) or `manual`. A PR's tier comes from its changed files (`risk-paths`, `risk-lines`, new `always-human-paths` and `low-paths`); `approval-low|medium|high` override a row. Human approvals only count on the head commit and never from a bot or the PR author. Merge commits now carry `Risk-tier` / `Reviewed-by` / `Approved-by` trailers. `review_policy.py explain` prints your effective flow. **Nothing changes until you set a preset** — re-run `/init --interview` or add `preset = "…"` under `[review]` in `arsenal/config.toml`.
+- **Note on any paragraph in an annotatable reader.** Every paragraph, list item and table in a spec or plan reader has a ✎ at its right; tapping it opens a note box right below that spot, so you write while the text that prompted the note stays in view. The export quotes the paragraph each note is about (`> ¶ “…”`), `--notes` re-seeds them, and a note whose paragraph a later revision rewrote is kept at the end of its section instead of dropped. Regenerate a reader to get it.
+
 ## [5.10.9] - 2026-10-25
 
 ### Changed

@@ -57,6 +57,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import arsenal_config
+import review_policy
+
 POLICIES = {"always", "after-review", "after-ci", "after-ci-and-review", "never"}
 
 # Conclusions that are not a failure. `neutral` and `skipped` are how a matrix
@@ -152,6 +157,122 @@ def read_reviewer_identity(repo_root: Path) -> str:
             f"[review] reviewer-identity must be one of {sorted(IDENTITIES)}, got {value!r}"
         )
     return value
+
+
+def read_review_cfg(repo_root: Path) -> dict[str, Any] | None:
+    """The validated config when `review.preset` or an approval override is set, else None.
+
+    None keeps every verdict exactly what it was before risk tiers existed: the
+    `[review]` table is read on its own first, so a host with no preset is never
+    held to validation of keys pr_audit did not read before.
+    """
+    config = repo_root / "arsenal" / "config.toml"
+    if not config.is_file():
+        return None
+    try:
+        table = tomllib.loads(config.read_text(encoding="utf-8")).get("review", {})
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as exc:
+        raise AuditError(f"cannot read {config}: {exc}") from exc
+    keys = ("preset", "approval-low", "approval-medium", "approval-high")
+    if not isinstance(table, dict) or not any(table.get(k) for k in keys):
+        return None
+    try:
+        cfg, _ = arsenal_config.load(repo_root)
+    except (arsenal_config.ConfigError, OSError) as exc:
+        raise AuditError(str(exc)) from exc
+    return cfg
+
+
+def humans_on_head(pr: dict[str, Any], head: str) -> list[str]:
+    """Distinct logins of human approvals on `head`.
+
+    A human is a non-Bot user GitHub reports as OWNER, MEMBER or COLLABORATOR,
+    other than the PR's author. A bot's approval and an approval of an older
+    commit count zero: an agent approval is never a human one, and an approval
+    covers the tree it read.
+    """
+    author = _dig(pr, "user", "login")
+    logins: list[str] = []
+    for r in _records(pr.get("reviews")):
+        login = _dig(r, "user", "login")
+        if (
+            r.get("state") == "APPROVED"
+            and r.get("commit_id") == head
+            and _dig(r, "user", "type") != "Bot"
+            and r.get("author_association") in TRUSTED_ASSOCIATIONS
+            and login
+            and login != author
+            and login not in logins
+        ):
+            logins.append(str(login))
+    return logins
+
+
+def agent_reviewed(pr: dict[str, Any], head: str, identity: str) -> bool:
+    """A non-human review clears the head: a bot's approval on it, or a CLEAR marker."""
+    marker = marker_state(pr, head, identity)
+    if marker is not None and marker[0] == "clear":
+        return True
+    return any(
+        r.get("state") == "APPROVED"
+        and r.get("commit_id") == head
+        and _dig(r, "user", "type") == "Bot"
+        for r in _records(pr.get("reviews"))
+    )
+
+
+def tier_state(
+    pr: dict[str, Any],
+    head: str,
+    review: str,
+    review_detail: str,
+    cfg: dict[str, Any],
+    identity: str = "distinct-session",
+) -> dict[str, Any]:
+    """What the PR's risk tier requires, and what the head has towards it.
+
+    Files that could not be read classify as high: an unknown change is not a
+    low-risk one.
+    """
+    files = pr.get("files")
+    changed = pr.get("changed_files")
+    cls: dict[str, Any]
+    if not isinstance(files, list):
+        cls = {"tier": "high", "reasons": ["changed files unreadable"], "human_paths": []}
+    elif isinstance(changed, int) and changed > len(files):
+        # A page of the file list is not the list: a risky path past it is unseen.
+        cls = {
+            "tier": "high",
+            "reasons": [f"file list truncated ({len(files)} of {changed})"],
+            "human_paths": [],
+        }
+    else:
+        cls = review_policy.classify(_records(files), cfg)
+    req = review_policy.requirement(cls["tier"], cfg, bool(cls["human_paths"]))
+    humans = humans_on_head(pr, head)
+    # `human:N` is an agent review AND N humans: a human approval also turns the
+    # GitHub review state clear, so the agent half is checked on its own there.
+    agent_ok = review == "clear" and (
+        not req["approval"].startswith("human:") or agent_reviewed(pr, head, identity)
+    )
+    needs_agent = req["approval"] not in ("", "auto")
+    ok = (agent_ok or not needs_agent) and len(humans) >= req["humans"]
+    provenance = [f"Risk-tier: {cls['tier']} ({'; '.join(cls['reasons'])})"]
+    if agent_ok:
+        provenance.append(f"Reviewed-by: agent {review_detail}@{_short(head)}")
+    provenance += [f"Approved-by: human {h}@{_short(head)}" for h in humans]
+    if req["ratify"]:
+        provenance.append("Ratify: pending")
+    return {
+        "tier": cls["tier"],
+        "tier_reasons": cls["reasons"],
+        "approval": req["approval"] or "auto",
+        "humans_required": req["humans"],
+        "humans_on_head": humans,
+        "ratify": req["ratify"],
+        "tier_ok": ok,
+        "provenance": provenance,
+    }
 
 
 # --- reviewer markers ------------------------------------------------------------
@@ -437,12 +558,26 @@ def _next_action(pr: dict[str, Any], audit: dict[str, Any], policy: str) -> str:
                 f"running as its own session read it: claim_review.sh {pr.get('number')} <head-sha>"
             )
 
+    if "tier_ok" in audit and not audit["tier_ok"]:
+        if audit["approval"] not in ("auto",) and review != "clear":
+            return (
+                f"{audit['tier']}-risk PR needs an agent review first: "
+                f"claim_review.sh {pr.get('number')} <head-sha>"
+            )
+        missing = audit["humans_required"] - len(audit["humans_on_head"])
+        return f"{audit['tier']}-risk PR waits on {missing} human approval(s) on the head"
+
     if policy == "never":
         return "ready — merge-policy is `never`, so a human merges"
     return "merge"
 
 
-def audit_pr(pr: dict[str, Any], policy: str, identity: str = "distinct-session") -> dict[str, Any]:
+def audit_pr(
+    pr: dict[str, Any],
+    policy: str,
+    identity: str = "distinct-session",
+    review_cfg: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     head = _dig(pr, "head", "sha") or ""
     ci, ci_detail = check_state(pr, str(head))
     review, review_detail = review_state(pr, str(head), identity)
@@ -474,6 +609,9 @@ def audit_pr(pr: dict[str, Any], policy: str, identity: str = "distinct-session"
         "review_detail": review_detail,
         "ready": ready,
     }
+    if review_cfg is not None:
+        result.update(tier_state(pr, str(head), review, review_detail, review_cfg, identity))
+        result["ready"] = ready and result["tier_ok"]
     result["next_action"] = _next_action(pr, result, policy)
     return result
 
@@ -526,6 +664,9 @@ def render(audits: list[dict[str, Any]], stale: list[dict[str, Any]], policy: st
         )
         lines.append(f"        ci: {a['ci']} ({a['ci_detail']})")
         lines.append(f"        review: {a['review']} ({a['review_detail']})")
+        if "tier" in a:
+            humans = f"{len(a['humans_on_head'])}/{a['humans_required']} human"
+            lines.append(f"        tier: {a['tier']} → {a['approval']} ({humans})")
         if a["mergeable"] is False:
             lines.append("        mergeable: CONFLICT")
         lines.append(f"        → {a['next_action']}")
@@ -558,6 +699,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         policy = args.policy or read_policy(args.repo_root)
         identity = read_reviewer_identity(args.repo_root)
+        review_cfg = read_review_cfg(args.repo_root)
         payload = _load(args.prs)
         claims = _records(_load(args.claims)) if args.claims else []
     except AuditError as exc:
@@ -577,7 +719,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"error: no PR #{args.pr} in the payload", file=sys.stderr)
             return 2
 
-    audits = [audit_pr(pr, policy, identity) for pr in prs]
+    audits = [audit_pr(pr, policy, identity, review_cfg) for pr in prs]
     stale = stale_claims(claims, audits, args.stale_hours)
 
     if args.json:

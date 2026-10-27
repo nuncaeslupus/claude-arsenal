@@ -50,13 +50,16 @@ upgrade does not ask again, because the answers are already in `arsenal/config.t
 3. Minutes per review round (10) and minutes to wait on a silent review bot (20)?
 4. Which manual review triggers to post? Offer what `init.py --suggest-bot-triggers`
    prints for the configured bots.
+5. Who approves what, by risk tier? `solo-trust` (agent merges all; high-risk flagged
+   to ratify), `solo-gated` (a human approves medium and high), `team` (0/1/2 humans),
+   `manual`, or skip to keep merge-policy alone. Optionally, paths that always need a human.
 
 Pass only what was answered; a skipped question writes nothing and keeps its default:
 
 ```bash
 python3 "${CLAUDE_SKILL_DIR}/scripts/init.py" --repo-path . --autonomy autonomous \
   --verification balanced --review-budget-min 10 --bot-wait-min 20 \
-  --bot-triggers "reviewbot[bot]=@reviewbot review"
+  --bot-triggers "reviewbot[bot]=@reviewbot review" --review-preset solo-trust
 ```
 
 ## After a first install — questions init prints

@@ -714,7 +714,12 @@ def build_html(
             tag = "h3" if it["level"] == 2 else "h4"
             noted = has_note_field(it, seed_notes)
             cls = f"sec l{it['level']}" + ("" if noted else " bare")
-            body.append(f'<article class="{cls}" id="{it["domid"]}">')
+            # Block notes (✎ beside each paragraph, list item or table) are
+            # created in the browser; the article carries the label they take.
+            body.append(
+                f'<article class="{cls}" id="{it["domid"]}" data-ref="{esc(it["key"])}" '
+                f'data-label="{esc(it["label"])}" data-part="{part_head}">'
+            )
             body.append(
                 f'<{tag} class="sec-h"><span class="chip">{esc(it["chip"])}</span>'
                 f'<span class="sec-title">{it["title_html"]}</span></{tag}>'
@@ -824,9 +829,44 @@ def build_markdown(
                     out.append(f"> {line}")
             else:
                 out.append("> _(your notes here — replace this line)_")
+            for _key, quote, note in block_notes(seed_notes, it["domid"]):
+                out.append(">")
+                out.append(f"> ¶ _“{quote}”_" if quote else "> ¶ _(text changed since this note)_")
+                for line in note.split("\n"):
+                    out.append(f"> {line}")
             out.append("")
         out.append("")
+    # Block notes whose section is gone (heading renamed or removed) — the reader
+    # shows them under "Unplaced notes"; so does this edition.
+    known = {it["domid"] for _, p in parts for it in p["items"]}
+    lost = sorted(
+        {k.split("~")[0] for k in seed_notes if "~" in k and k.split("~")[0] not in known}
+    )
+    rows = [row for domid in lost for row in block_notes(seed_notes, domid)]
+    if rows:
+        out += ["## Unplaced notes — their section changed", "", "> **✎ Notes** · `unplaced`"]
+        for _key, quote, note in rows:
+            out.append(">")
+            out.append(f"> ¶ _“{quote}”_" if quote else "> ¶ _(text changed since this note)_")
+            for line in note.split("\n"):
+                out.append(f"> {line}")
+        out.append("")
     return "\n".join(out)
+
+
+def block_notes(notes: dict, domid: str) -> list[tuple[str, str, str]]:
+    """(key, quoted anchor, note) for the block notes of one section, in key order.
+
+    A block note's key is `<domid>~<hash of the block's text>`; its anchor text
+    travels beside it as `<key>~q`, so the export still says which paragraph a
+    note is about after the paragraph itself changed.
+    """
+    rows = []
+    for key, note in notes.items():
+        if not key.startswith(domid + "~") or key.endswith("~q") or not note.strip():
+            continue
+        rows.append((key, notes.get(key + "~q", "").strip(), note.strip()))
+    return sorted(rows)
 
 
 # ---------------------------------------------------------------- CSS / JS / HTML template
@@ -999,7 +1039,16 @@ h4 .chip{font-size:11px;color:var(--muted)}
   .fab .btn{box-shadow:none;padding:7px 9px}
   .toast{bottom:64px}
 }
-@media print{.topbar,.statusbar,.fab,.help,.note:not(.filled){display:none}}
+/* Block notes: a faint ✎ in the right margin of every paragraph, item and table. */
+.bn-host{position:relative}
+.bn-btn{position:absolute;top:0;right:-34px;width:26px;height:26px;border-radius:7px;border:1px solid transparent;
+  background:transparent;color:var(--note-fg);font-size:14px;line-height:1;cursor:pointer;opacity:.3;padding:0}
+.bn-host:hover>.bn-btn,.bn-btn:focus-visible,.bn-btn.has{opacity:1;border-color:var(--note-line);background:var(--note)}
+.bn-btn:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.note.bnote{margin:6px 0 12px}
+li>.note.bnote{margin:6px 0}
+@media(max-width:820px){.bn-host{padding-right:30px}.bn-btn{right:0}}
+@media print{.topbar,.statusbar,.fab,.help,.bn-btn,.note:not(.filled){display:none}}
 """
 
 JS = r"""
@@ -1030,11 +1079,14 @@ JS = r"""
       // touched" and the loader falls back to the seed, so removing it brought a
       // seeded note back after the reviewer had deliberately cleared it (#477).
       localStorage.setItem(k,t.value.trim()===''?'':t.value);
+      // A block note keeps its quote beside it, so it still says what it was
+      // about after its paragraph changes (export and re-seed read `<key>~q`).
+      if(t.closest('.bnote')){localStorage.setItem(k+'~q',t.dataset.quote||'');}
       dirty=true;setState('✓ Saved '+nowStamp(),'ok');
     }catch(e){dirty=true;lsOK=false;document.getElementById('warnbar').style.display='block';setState(WARN,'warn');}
   }
   var SEED=(typeof SPEC_SEED_NOTES!=='undefined')?SPEC_SEED_NOTES:{};
-  tas.forEach(function(t){
+  function wire(t){
     // Seed first, then let storage override it. With the read inside the same
     // try as the seed, a throwing localStorage skipped the seed too and the
     // reader came up empty exactly when it could save nothing (#477).
@@ -1047,8 +1099,112 @@ JS = r"""
       clearTimeout(saveTimers[t.dataset.key]);
       saveTimers[t.dataset.key]=setTimeout(function(){save(t);},350);
     });
-    t.addEventListener('blur',function(){save(t);});
+    t.addEventListener('blur',function(){
+      save(t);
+      // An emptied block note folds away again; its ✎ stays to reopen it.
+      var box=t.closest('.bnote');
+      if(box&&t.value.trim()===''){closeBlock(box);}
+    });
+  }
+  tas.forEach(wire);
+
+  // ---- Block notes: a ✎ beside every paragraph, list item and table. The key is
+  // the section id plus a hash of the block's text, so a note stays with its
+  // paragraph when others are added around it; `<key>~q` carries the quoted text.
+  function hash(s){var h=5381;for(var i=0;i<s.length;i++){h=((h<<5)+h+s.charCodeAt(i))|0;}return (h>>>0).toString(36);}
+  function plain(el){var c=el.cloneNode(true);
+    Array.prototype.forEach.call(c.querySelectorAll('.bn-btn,.bnote,ul,ol'),function(x){x.remove();});
+    return c.textContent.replace(/\s+/g,' ').trim();}
+  function quoteOf(text){return text.length>90?text.slice(0,87)+'…':text;}
+  var hosts={},blockBtn={};
+  function hostsOf(body){
+    var out=[];
+    Array.prototype.forEach.call(body.children,function(el){
+      var tag=el.tagName;
+      if(tag==='UL'||tag==='OL'){Array.prototype.forEach.call(el.querySelectorAll('li'),function(li){out.push(li);});return;}
+      if(tag==='HR')return;
+      if(tag==='TABLE'||tag==='PRE'||tag==='FIGURE'){
+        // These scroll sideways; the ✎ goes on a wrapper so it does not scroll away.
+        var w=document.createElement('div');el.parentNode.insertBefore(w,el);w.appendChild(el);el=w;}
+      out.push(el);
+    });
+    return out;
+  }
+  Array.prototype.forEach.call(document.querySelectorAll('article.sec'),function(art){
+    var body=art.querySelector(':scope > .sec-body');if(!body)return;
+    var seen={};
+    hostsOf(body).forEach(function(el){
+      var text=plain(el);if(text==='')return;
+      var h=hash(text);seen[h]=(seen[h]||0)+1;
+      var key=art.id+'~'+h+(seen[h]>1?'-'+seen[h]:'');
+      el.classList.add('bn-host');el.dataset.bkey=key;el.dataset.quote=quoteOf(text);
+      var b=document.createElement('button');
+      b.type='button';b.className='bn-btn';b.textContent='✎';
+      b.title='Note on this';b.setAttribute('aria-label','Add a note on this point');
+      b.addEventListener('click',function(e){e.preventDefault();openBlock(key,true);});
+      el.appendChild(b);hosts[key]=el;blockBtn[key]=b;
+    });
   });
+  function openBlock(key,focus,quote){
+    var t=document.querySelector('.note-ta[data-key="'+key+'"]');
+    if(!t){
+      var host=hosts[key],art=document.getElementById(key.split('~')[0]);
+      if(!host&&!art)art=unplaced();
+      var q=host?host.dataset.quote:(quote||'');
+      var box=document.createElement('div');box.className='note bnote';
+      var head=document.createElement('label');head.className='note-head';
+      var ico=document.createElement('span');ico.className='note-ico';ico.textContent='✎';
+      var lab=document.createElement('span');lab.className='note-label';lab.textContent='Your note';
+      var ref=document.createElement('span');ref.className='note-ref';
+      ref.textContent=host?'¶ '+q:(q?'¶ (text changed) '+q:'¶ text changed since this note');
+      head.appendChild(ico);head.appendChild(lab);head.appendChild(ref);
+      t=document.createElement('textarea');t.className='note-ta';t.rows=1;
+      t.placeholder='Note on this point…';t.dataset.key=key;t.dataset.quote=q;
+      if(art){t.dataset.label=art.dataset.label||'';t.dataset.part=art.dataset.part||'';t.dataset.ref=art.dataset.ref||'';}
+      box.appendChild(head);box.appendChild(t);
+      if(host&&host.tagName==='LI'){host.appendChild(box);}
+      else if(host){host.parentNode.insertBefore(box,host.nextSibling);}
+      else{var sn=art.querySelector(':scope > .note');art.insertBefore(box,sn);}
+      tas.push(t);wire(t);
+      if(blockBtn[key])blockBtn[key].classList.add('has');
+      updateCount();
+    }
+    if(focus)t.focus();
+    return t;
+  }
+  // Notes whose section no longer exists (a heading renamed or removed) are never
+  // dropped: they collect here, after the document, and still export.
+  function unplaced(){
+    var u=document.getElementById('bn-unplaced');
+    if(!u){u=document.createElement('article');u.id='bn-unplaced';u.className='sec l2';
+      u.dataset.label='Unplaced notes';u.dataset.ref='unplaced';u.dataset.part='Unplaced notes';
+      var h=document.createElement('h3');h.className='sec-h';h.textContent='Unplaced notes — their section changed';
+      u.appendChild(h);var parts=document.querySelectorAll('section.part');
+      var last=parts[parts.length-1];(last||document.body).appendChild(u);}
+    return u;
+  }
+  function closeBlock(box){
+    var t=box.querySelector('.note-ta');var i=tas.indexOf(t);if(i>=0)tas.splice(i,1);
+    if(blockBtn[t.dataset.key])blockBtn[t.dataset.key].classList.remove('has');
+    box.remove();updateCount();
+  }
+  // Reopen every block note that has text, from the seed or this browser —
+  // including one whose paragraph changed, which lands at the end of its section.
+  (function(){
+    var keys={};
+    Object.keys(SEED).forEach(function(k){keys[k]=1;});
+    try{for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);
+      if(k&&k.indexOf(NS)===0)keys[k.slice(NS.length)]=1;}}catch(e){}
+    Object.keys(keys).sort().forEach(function(k){
+      if(k.indexOf('~')<0||/~q$/.test(k))return;
+      var v=null;
+      try{v=localStorage.getItem(NS+k);}catch(e){}
+      if(v==null&&typeof SEED[k]==='string')v=SEED[k];
+      var q=null;try{q=localStorage.getItem(NS+k+'~q');}catch(e){}
+      if(q==null&&typeof SEED[k+'~q']==='string')q=SEED[k+'~q'];
+      if(v&&v.trim()!=='')openBlock(k,false,q||'');
+    });
+  })();
   updateCount();
   if(lsOK){setState('✓ Auto-saving','ok');}else{document.getElementById('warnbar').style.display='block';setState(WARN,'warn');}
 
@@ -1061,12 +1217,15 @@ JS = r"""
 
   function buildExport(){
     var byPart={},order=[],data={},n=0;
-    tas.forEach(function(t){
+    // Document order, so a block note sits beside its section's own note.
+    tas.slice().sort(function(a,b){return a.compareDocumentPosition(b)&4?-1:1;}).forEach(function(t){
       var v=t.value.trim();if(v==='')return;n++;
       data[t.dataset.key]=t.value;
+      if(t.closest('.bnote')){data[t.dataset.key+'~q']=t.dataset.quote||'';}
       var part=t.dataset.part||'Other';
       if(!byPart[part]){byPart[part]=[];order.push(part);}
-      byPart[part].push({label:t.dataset.label,ref:keyFromDom(t.dataset.key,t),note:t.value});
+      byPart[part].push({label:t.dataset.label,ref:t.dataset.ref||keyFromDom(t.dataset.key,t),
+                         quote:t.closest('.bnote')?(t.dataset.quote||''):null,note:t.value});
     });
     var lines=['# __DOC_LABEL__ notes','','_Exported '+today()+' · '+n+' note'+(n===1?'':'s')+'._','',
       '> Send this file back to continue the review. Notes are embedded as data at the bottom','> so importing this file restores them in the reader.',''];
@@ -1074,6 +1233,7 @@ JS = r"""
       lines.push('## '+part,'');
       byPart[part].forEach(function(it){
         lines.push('**'+it.label+'**  `'+it.ref+'`');
+        if(it.quote!==null){lines.push(it.quote?'> ¶ _“'+it.quote+'”_':'> ¶ _(text changed since this note)_','>');}
         it.note.split('\n').forEach(function(ln){lines.push('> '+ln);});
         lines.push('');
       });
@@ -1139,6 +1299,10 @@ JS = r"""
   // anything that is not a string and say how many were skipped.
   function applyData(obj){
     var applied=0,skipped=0;
+    Object.keys(obj).forEach(function(k){
+      if(k.indexOf('~')>=0&&!/~q$/.test(k)&&typeof obj[k]==='string'&&obj[k].trim()!==''){
+        openBlock(k,false,typeof obj[k+'~q']==='string'?obj[k+'~q']:'');}
+    });
     tas.forEach(function(t){
       if(!Object.prototype.hasOwnProperty.call(obj,t.dataset.key))return;
       var v=obj[t.dataset.key];
@@ -1173,7 +1337,8 @@ JS = r"""
 
   document.getElementById('btn-clear').addEventListener('click',function(){
     if(!confirm('Clear ALL notes from this browser? Export first if you want to keep them.'))return;
-    tas.forEach(function(t){t.value='';save(t);autoGrow(t);setFilled(t);});
+    tas.slice().forEach(function(t){t.value='';save(t);autoGrow(t);setFilled(t);
+      var box=t.closest('.bnote');if(box)closeBlock(box);});
     updateCount();toast('All notes cleared');
   });
 
@@ -1211,6 +1376,7 @@ HTML_TEMPLATE = r"""<!doctype html>
     <summary>How to annotate (tap)</summary>
     <ul>
       <li>Tap the note field under any section and type. Each note is tagged so your feedback maps to an exact point.</li>
+      <li>Tap <strong>✎</strong> at the right of any paragraph, list item or table to note on that exact spot — the box opens right below it, with the text still in view.</li>
       <li><strong>Notes save automatically</strong> in this browser as you type.</li>
       <li><strong>Save / Export</strong> downloads a Markdown file of your notes — the copy to send back. Tap whenever you pause, especially on a phone.</li>
       <li><strong>Import</strong> reloads notes from a file you exported earlier (after clearing the browser or switching devices).</li>

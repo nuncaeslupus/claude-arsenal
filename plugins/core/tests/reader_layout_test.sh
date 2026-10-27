@@ -197,4 +197,49 @@ out="$(python3 "${PLAN_V}" --input "${repo}/status/plan.md" 2>&1)"
 case "$out" in *"yourproject-plan-v1-2026-01-04-notes.md"*) ;; *) fail "a missing dated notes file was not flagged: $out" ;; esac
 echo "PASS: the review record names dated exports"
 
+# --- 8: block notes — a ✎ on each paragraph, item and table; seeded notes keep their quote ---
+grep -q 'data-ref="SPEC §1"' "${html}" || fail "articles do not carry the label a block note takes"
+grep -q 'bn-btn' "${html}" || fail "the reader has no block-note button"
+printf '%s' '{"s-spec-1~abc":"Bad how?","s-spec-1~abc~q":"The widget is bad.","s-spec-1~zzz":"orphaned","s-gone~q1":"homeless"}' \
+    > "${repo}/notes.json"
+run_reader --input status/specification.md --output-dir blk --name "Widget Overhaul" --notes notes.json >/dev/null \
+    || fail "seeding block notes failed"
+md="$(cat "${repo}"/blk/*-annotated.md)"
+case "$md" in *'> ¶ _“The widget is bad.”_'*'> Bad how?'*) ;; *) fail "a seeded block note lost its quote or text: ${md}" ;; esac
+case "$md" in *'> ¶ _(text changed since this note)_'*'> orphaned'*) ;; *) fail "a block note with no quote was dropped" ;; esac
+case "$md" in *'Unplaced notes'*'> homeless'*) ;; *) fail "a note whose section is gone was dropped from the Markdown" ;; esac
+echo "PASS: block notes are seeded into the annotated Markdown with their quoted paragraph"
+
+# The same, in a browser, where one is installed: open a note on a paragraph, reload,
+# and export — the note comes back below that paragraph and the export quotes it.
+if command -v node >/dev/null 2>&1 && node -e "require('playwright')" 2>/dev/null; then
+    cat > "${base}/blk.js" <<'JS'
+const {chromium}=require('playwright');
+(async()=>{const b=await chromium.launch();const p=await (await b.newContext({acceptDownloads:true})).newPage();
+ const errs=[];p.on('pageerror',e=>errs.push(e.message));
+ await p.goto('file://'+process.argv[2]);
+ await p.locator('#s-spec-1 .sec-body > p .bn-btn').click();await p.keyboard.type('noted here');
+ await p.locator('h1').click();
+ await p.locator('#s-spec-3 .bn-btn').first().click();await p.locator('h1').click();   // emptied → folds away
+ await p.waitForTimeout(450);await p.reload();
+ const box=await p.locator('#s-spec-1 .sec-body > p + .bnote textarea').inputValue();
+ const open=await p.locator('.bnote').count();
+ const [dl]=await Promise.all([p.waitForEvent('download'),p.click('#btn-export')]);
+ const out=require('fs').readFileSync(await dl.path(),'utf8');
+ // A note whose section is gone lands under "Unplaced notes", quote intact.
+ const ns=await p.evaluate(()=>{for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);
+   if(k.indexOf('~')>0)return k.slice(0,k.indexOf('s-spec-'));}return '';});
+ await p.evaluate(ns=>{localStorage.setItem(ns+'s-gone~x','lost?');localStorage.setItem(ns+'s-gone~x~q','old text');},ns);
+ await p.reload();
+ const unplaced=await p.locator('#bn-unplaced textarea').inputValue();
+ console.log(JSON.stringify({box,open,errs,quoted:out.includes('> ¶ _“The widget is bad.”_'),unplaced}));await b.close();})();
+JS
+    res="$(node "${base}/blk.js" "${html}" 2>&1)" || fail "block-note browser check crashed: ${res}"
+    [[ "${res}" == '{"box":"noted here","open":1,"errs":[],"quoted":true,"unplaced":"lost?"}' ]] \
+        || fail "block note did not survive a reload or export: ${res}"
+    echo "PASS: a block note opens below its paragraph, survives a reload and exports its quote"
+else
+    echo "SKIP: block-note browser check — node with playwright not available" >&2
+fi
+
 echo "PASS: reader_layout_test — all gates passed"

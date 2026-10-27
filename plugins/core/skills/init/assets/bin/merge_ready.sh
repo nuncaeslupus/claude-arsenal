@@ -100,12 +100,15 @@ tools, assemble one JSON array of the record below, and pipe it in:
   GET /repos/${slug}/pulls/${PR}/reviews
   GET /repos/${slug}/issues/${PR}/comments   (reviewer markers)
   GET /repos/${slug}/pulls/${PR}/commits     (Claude-Session trailers)
+  GET /repos/${slug}/pulls/${PR}/files       (risk tier, when review.preset is set)
   (thread resolution is GraphQL-only; omit \`threads\` if you cannot read it)
 
   [{"number": ${PR}, "title": …, "draft": …, "mergeable": …, "created_at": …,
     "head": {"sha": …, "ref": …}, "user": {"login": …},
     "checks": [{"name": …, "status": …, "conclusion": …, "head_sha": …}],
-    "reviews": [{"state": …, "commit_id": …}],
+    "reviews": [{"state": …, "commit_id": …, "author_association": …,
+                 "user": {"login": …, "type": …}}],
+    "files": [{"filename": …, "additions": …, "deletions": …}],
     "comments": [{"id": …, "body": …, "author_association": …,
                   "user": {"login": …, "type": …}}],
     "commits": [{"message": …}],
@@ -131,6 +134,8 @@ reviews_json="$(api "/repos/${slug}/pulls/${PR}/reviews")" || reviews_json=""
 # pr_audit reads as "could not be read" and never as "nothing there".
 comments_json="$(api "/repos/${slug}/issues/${PR}/comments?per_page=100")" || comments_json=""
 commits_json="$(api "/repos/${slug}/pulls/${PR}/commits?per_page=100")" || commits_json=""
+# The risk tier reads the changed files; an absent list classifies as high.
+files_json="$(api "/repos/${slug}/pulls/${PR}/files?per_page=100")" || files_json=""
 
 # Thread resolution is not in the REST API at all, so it is fetched only where
 # GraphQL is reachable. `threads` is then ABSENT rather than empty, and pr_audit
@@ -150,7 +155,7 @@ fi
 
 payload="$(PR_JSON="${pr_json}" CHECKS_JSON="${checks_json}" REVIEWS_JSON="${reviews_json}" \
     THREADS_JSON="${threads_json}" COMMENTS_JSON="${comments_json}" \
-    COMMITS_JSON="${commits_json}" python3 - <<'PY'
+    COMMITS_JSON="${commits_json}" FILES_JSON="${files_json}" python3 - <<'PY'
 import json, os, sys
 
 def load(name, default):
@@ -171,6 +176,7 @@ record = {
     "title": pr.get("title") or "",
     "draft": bool(pr.get("draft")),
     "mergeable": pr.get("mergeable"),
+    "changed_files": pr.get("changed_files"),
     "created_at": pr.get("created_at"),
     "updated_at": pr.get("updated_at"),
     "head": {"sha": (pr.get("head") or {}).get("sha"), "ref": (pr.get("head") or {}).get("ref")},
@@ -182,7 +188,10 @@ record = {
     ],
     "reviews": [
         {"state": r.get("state"), "commit_id": r.get("commit_id"),
-         "submitted_at": r.get("submitted_at")}
+         "submitted_at": r.get("submitted_at"),
+         "author_association": r.get("author_association"),
+         "user": {"login": (r.get("user") or {}).get("login"),
+                  "type": (r.get("user") or {}).get("type")}}
         for r in (reviews if isinstance(reviews, list) else []) if isinstance(r, dict)
     ],
 }
@@ -194,6 +203,13 @@ if isinstance(comments, list):
          "user": {"login": (c.get("user") or {}).get("login"),
                   "type": (c.get("user") or {}).get("type")}}
         for c in comments if isinstance(c, dict)
+    ]
+files = load("FILES_JSON", None)
+if isinstance(files, list):
+    record["files"] = [
+        {"filename": f.get("filename"), "additions": f.get("additions") or 0,
+         "deletions": f.get("deletions") or 0}
+        for f in files if isinstance(f, dict)
     ]
 commits = load("COMMITS_JSON", None)
 if isinstance(commits, list):
@@ -228,6 +244,13 @@ Merged under merge-policy \`${policy}\`.
 Head: ${head_sha}
 Conditions checked against that head by claude-arsenal/bin/merge_ready.sh.
 BODY
+    # Risk-tier provenance (review.preset): who reviewed and approved which sha.
+    # Empty when no preset is set, so the body is unchanged for those hosts.
+    trailers="$(printf '%s' "${payload}" \
+        | python3 "${PR_AUDIT}" --pr "${PR}" --prs - --json 2>/dev/null \
+        | python3 -c 'import json,sys
+for line in json.load(sys.stdin)["prs"][0].get("provenance", []): print(line)' 2>/dev/null)"
+    [[ -n "${trailers}" ]] && printf '\n%s\n' "${trailers}"
 fi
 
 exit ${verdict}
