@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
-<meta name="arsenal-source-sha256" content="79e66c2dc7c5b8f7f8b7a090490d3d99d8b14dd073d0d980d31d5e42c671c18f">
+<meta name="arsenal-source-sha256" content="de8c9f16fb59c3ca7635f946a112ba49021399621a040ce8363b2ccec1190c23">
 <title>Claude Arsenal — Specification (annotatable)</title>
 <style>
 :root{
@@ -194,7 +194,7 @@ li>.note.bnote{margin:6px 0}
     <button class="btn primary" id="btn-export">Save / Export</button>
   </div>
 </div>
-<div class="statusbar"><div class="wrap"><span class="count" id="count">0 / 16 notes</span><span class="hint"> · notes save automatically; <strong>Save / Export</strong> keeps a file you can send back</span></div></div>
+<div class="statusbar"><div class="wrap"><span class="count" id="count">0 / 17 notes</span><span class="hint"> · notes save automatically; <strong>Save / Export</strong> keeps a file you can send back</span></div></div>
 <div id="warnbar"><div class="wrap"><strong>Heads up —</strong> this browser isn't storing your notes automatically (private/incognito mode or restricted file view). Tap <strong>Save / Export</strong> regularly.</div></div>
 
 <div class="wrap">
@@ -231,6 +231,7 @@ li>.note.bnote{margin:6px 0}
 <li class="sub"><a href="#s-spec-merge-ready-sh-body-merge-commit">merge_ready.sh --body (merge commit trailers)</a></li>
 <li class="sub"><a href="#s-spec-init-interview">/init interview</a></li>
 <li class="sub"><a href="#s-spec-p2-the-digest">P2 — the digest</a></li>
+<li class="sub"><a href="#s-spec-p3-lean-code">P3 — lean code</a></li>
 <li><a href="#s-spec-6">§6 Risks &amp; Validation</a></li>
 </ul>
 </details>
@@ -240,10 +241,11 @@ li>.note.bnote{margin:6px 0}
 <div class="sec-body"><p><strong>Date</strong>: 2026-10-26<br />
 <strong>Ticket / PR</strong>: branch <code>claude/code-review-enforcement-sa12j9</code><br />
 <strong>Author</strong>: nuncaeslupus (with Claude)<br />
-<strong>Revision</strong>: 4<br />
-<strong>Status</strong>: approved (2026-10-27, revision 4) — without annotations<br />
+<strong>Revision</strong>: 5<br />
+<strong>Status</strong>: draft — r5 adds the P3 contracts; r4 was approved 2026-10-27 without annotations<br />
 <strong>Revision log</strong>:
 - r1 — first draft, from the brainstorm on Anthropic's "How the Claude Code team does code review" (Oct 2026)
+- r5 — § 5/§ 6: P3 (lean code) contracts and risks
 - r4 — § 5/§ 6: P2 (digest) contracts and risks; records live in a PR-body marker, the digest branch only holds rendered pages (D-14)
 - r3 — § 5 config: flat <code>[review]</code> keys (the loader reads one table level) and existing <code>risk-paths</code>/<code>risk-lines</code> for the high tier, instead of <code>[review.tiers]</code>/<code>[review.approval]</code>
 - r2 — open questions resolved with the recommended answers (D-9…D-13), approved in chat without annotations</p></div>
@@ -813,6 +815,39 @@ orchestrator tick. <code>file</code> writes the HTML to the scratch/output dir a
 surface that can publish a page publishes that file.</p></div>
 <div class="note" data-for="s-spec-p2-the-digest"><label class="note-head" for="n-s-spec-p2-the-digest"><span class="note-ico" aria-hidden="true">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC › P2 — the digest</span></label><textarea class="note-ta" data-key="s-spec-p2-the-digest" id="n-s-spec-p2-the-digest" data-label="P2 — the digest" data-part="Spec" rows="1" placeholder="Add a note on this section…"></textarea></div>
 </article>
+<article class="sec l3" id="s-spec-p3-lean-code" data-ref="SPEC › P3 — lean code" data-label="P3 — lean code" data-part="Spec">
+<h4 class="sec-h"><span class="chip">▸</span><span class="sec-title">P3 — lean code</span></h4>
+<div class="sec-body"><h4><code>references/lean-code.md</code> (on demand)</h4>
+<p>Loaded when implementing a task and when reviewing a diff. It has three parts.</p>
+<p>The ladder, applied before writing code:
+1. Is it needed at all? If the task does not ask for it, don't build it.
+2. Does the language or platform already do it (stdlib, a native element, a built-in flag)?
+3. Does this repo already have it (a helper, a script, a pattern beside the change)?
+4. Only then write new code, as little as passes the gate.</p>
+<p>The rules, one line each with the reason behind it:
+- the smallest diff that meets the gate;
+- delete before you add;
+- no speculative abstraction, option or parameter;
+- no defensive code for impossible states;
+- no unrequested refactor;
+- no comment restating the code;
+- no new dependency for something a few lines do.</p>
+<p>What is never cut: input validation, error handling, security checks, accessibility, and tests.</p>
+<p>Provenance: the ladder follows the community "ponytail" plugin's approach (stdlib and
+native features before custom code). It is restated here, not named as a norm (D-12).</p>
+<h4>Reviewer: the <code>SCOPE</code> tag</h4>
+<p>The first item of the reviewer rubric gains one line: code the task did not need, judged by
+the ladder, is reported as <code>RISK | path:line — SCOPE: &lt;what could go&gt; (&lt;lines&gt;)</code>. It is a tag on
+<code>RISK</code>, never its own severity: the verdict grammar is unchanged, and SCOPE never blocks on
+its own. The author removes it, or answers why it stays. Either way the finding goes into the
+digest record as a finding (<code>found_by: cold-reviewer</code>, <code>what</code> starting with <code>SCOPE:</code>).</p>
+<h4>Digest: size against expectation</h4>
+<p>The digest <code>--notes</code> file gains an optional <code>expected_lines</code> (the worker's estimate from the
+task's size, made before implementing). <code>record</code> stores <code>size.expected</code>. When
+<code>add + del &gt; 2 × expected</code>, the status row shows <code>⚠ 2.4× expected size</code> and a green mark
+turns amber. With no estimate there is no flag; nothing is guessed.</p></div>
+<div class="note" data-for="s-spec-p3-lean-code"><label class="note-head" for="n-s-spec-p3-lean-code"><span class="note-ico" aria-hidden="true">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC › P3 — lean code</span></label><textarea class="note-ta" data-key="s-spec-p3-lean-code" id="n-s-spec-p3-lean-code" data-label="P3 — lean code" data-part="Spec" rows="1" placeholder="Add a note on this section…"></textarea></div>
+</article>
 <article class="sec l2" id="s-spec-6" data-ref="SPEC §6" data-label="§6 Risks &amp; Validation" data-part="Spec">
 <h3 class="sec-h"><span class="chip">§6</span><span class="sec-title">Risks &amp; Validation</span></h3>
 <div class="sec-body"><table>
@@ -890,6 +925,20 @@ surface that can publish a page publishes that file.</p></div>
 <td><code>render</code> of 10 records ≤ 900 visible words</td>
 </tr>
 <tr>
+<td>P3: lean rules cut something that mattered (validation, error handling)</td>
+<td>Low</td>
+<td>High</td>
+<td>"Never cut" list in the reference; SCOPE never blocks alone, so the author decides</td>
+<td>manual: the first 3 SCOPE findings on real PRs are read by the owner</td>
+</tr>
+<tr>
+<td>P3: rubric growth taxes every review round</td>
+<td>Med</td>
+<td>Low</td>
+<td>+≤ 4 lines in <code>agents/reviewer.md</code>; the rules live in the on-demand reference</td>
+<td><code>wc -l agents/reviewer.md</code> delta ≤ 4</td>
+</tr>
+<tr>
 <td>P2: approve applied to a PR that changed since the digest</td>
 <td>Med</td>
 <td>High</td>
@@ -927,7 +976,7 @@ surface that can publish a page publishes that file.</p></div>
 <script>var SPEC_SEED_NOTES={};</script>
 <script>
 (function(){
-  var NS = 'claude-arsenal-review-digest-spec-v4:';
+  var NS = 'claude-arsenal-review-digest-spec-v5:';
   var tas = Array.prototype.slice.call(document.querySelectorAll('.note-ta'));
 
   function autoGrow(t){t.style.height='auto';t.style.height=(t.scrollHeight)+'px';}
@@ -1087,7 +1136,7 @@ surface that can publish a page publishes that file.</p></div>
   function today(){var d=new Date();return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());}
   function stamp(){var d=new Date();return today()+'-'+pad(d.getHours())+pad(d.getMinutes());}
   // Named like the reader, <repo>-<doc>-v<N>-<YYYY-MM-DD-HHMM>-notes.md, stamped at export.
-  function exportName(){return 'claude-arsenal-spec-v4-'+stamp()+'-notes.md';}
+  function exportName(){return 'claude-arsenal-spec-v5-'+stamp()+'-notes.md';}
 
   function buildExport(){
     var byPart={},order=[],data={},n=0;

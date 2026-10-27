@@ -11,10 +11,11 @@
 **Date**: 2026-10-26
 **Ticket / PR**: branch `claude/code-review-enforcement-sa12j9`
 **Author**: nuncaeslupus (with Claude)
-**Revision**: 4
-**Status**: approved (2026-10-27, revision 4) — without annotations
+**Revision**: 5
+**Status**: draft — r5 adds the P3 contracts; r4 was approved 2026-10-27 without annotations
 **Revision log**:
 - r1 — first draft, from the brainstorm on Anthropic's "How the Claude Code team does code review" (Oct 2026)
+- r5 — § 5/§ 6: P3 (lean code) contracts and risks
 - r4 — § 5/§ 6: P2 (digest) contracts and risks; records live in a PR-body marker, the digest branch only holds rendered pages (D-14)
 - r3 — § 5 config: flat `[review]` keys (the loader reads one table level) and existing `risk-paths`/`risk-lines` for the high tier, instead of `[review.tiers]`/`[review.approval]`
 - r2 — open questions resolved with the recommended answers (D-9…D-13), approved in chat without annotations
@@ -405,6 +406,52 @@ surface that can publish a page publishes that file.
 > **✎ Notes** · `SPEC › P2 — the digest`
 > _(your notes here — replace this line)_
 
+### P3 — lean code
+
+#### `references/lean-code.md` (on demand)
+
+Loaded when implementing a task and when reviewing a diff. It has three parts.
+
+The ladder, applied before writing code:
+1. Is it needed at all? If the task does not ask for it, don't build it.
+2. Does the language or platform already do it (stdlib, a native element, a built-in flag)?
+3. Does this repo already have it (a helper, a script, a pattern beside the change)?
+4. Only then write new code, as little as passes the gate.
+
+The rules, one line each with the reason behind it:
+- the smallest diff that meets the gate;
+- delete before you add;
+- no speculative abstraction, option or parameter;
+- no defensive code for impossible states;
+- no unrequested refactor;
+- no comment restating the code;
+- no new dependency for something a few lines do.
+
+What is never cut: input validation, error handling, security checks, accessibility, and tests.
+
+Provenance: the ladder follows the community "ponytail" plugin's approach (stdlib and
+native features before custom code). It is restated here, not named as a norm (D-12).
+
+#### Reviewer: the `SCOPE` tag
+
+The first item of the reviewer rubric gains one line: code the task did not need, judged by
+the ladder, is reported as `RISK | path:line — SCOPE: <what could go> (<lines>)`. It is a tag on
+`RISK`, never its own severity: the verdict grammar is unchanged, and SCOPE never blocks on
+its own. The author removes it, or answers why it stays. Either way the finding goes into the
+digest record as a finding (`found_by: cold-reviewer`, `what` starting with `SCOPE:`).
+
+#### Digest: size against expectation
+
+The digest `--notes` file gains an optional `expected_lines` (the worker's estimate from the
+task's size, made before implementing). `record` stores `size.expected`. When
+`add + del > 2 × expected`, the status row shows `⚠ 2.4× expected size` and a green mark
+turns amber. With no estimate there is no flag; nothing is guessed.
+
+<!-- -->
+
+> **✎ Notes** · `SPEC › P3 — lean code`
+> _(your notes here — replace this line)_
+
 ## §6 Risks & Validation
 
 | Risk | Likelihood | Impact | Mitigation | Validation |
@@ -418,6 +465,8 @@ surface that can publish a page publishes that file.
 | P2: a digest approval is forged by the agent | Low | High | `digest-decisions` defaults off; marker bound to the head SHA; the decisions file is committed beside the digest as the audit trail | unit: marker on an old SHA counts 0; off → counts 0 |
 | P2: a PR body edit by a human erases the record | Med | Low | `record` rewrites only its own block; a missing block is rebuilt from round files + `--notes` on the next record | unit: body text outside the block is preserved |
 | P2: digest too long to skim | Med | Med | `digest.py check` enforces the per-PR word cap; folded cards | `render` of 10 records ≤ 900 visible words |
+| P3: lean rules cut something that mattered (validation, error handling) | Low | High | "Never cut" list in the reference; SCOPE never blocks alone, so the author decides | manual: the first 3 SCOPE findings on real PRs are read by the owner |
+| P3: rubric growth taxes every review round | Med | Low | +≤ 4 lines in `agents/reviewer.md`; the rules live in the on-demand reference | `wc -l agents/reviewer.md` delta ≤ 4 |
 | P2: approve applied to a PR that changed since the digest | Med | High | decision carries the head SHA; mismatch → `stale`, listed in the next digest | unit: stale approval is not merged |
 
 <!-- -->
