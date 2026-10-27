@@ -103,4 +103,20 @@ grep -q 'PUT /repos/o/r/pulls/10/merge .*"sha": "aaaaaaa111"' "${CALLS}" || fail
 grep -q 'PATCH /repos/o/r/pulls/12 .*why?' "${CALLS}" || fail "a question should land in the record"
 echo "PASS: execute — marker, pinned merge, question recorded"
 
+# --- what a revert undoes -------------------------------------------------------
+g="${tmp}/g"; git init -q -b main "${g}"
+gc() { git -C "${g}" -c user.name=t -c user.email=t@example.com "$@"; }
+gc commit -q --allow-empty -m base
+gc commit -q --allow-empty -m "Add thing (#5)"; squash="$(gc rev-parse HEAD)"
+gc commit -q --allow-empty -m "rebased commit"; rebased="$(gc rev-parse HEAD)"
+gc checkout -q -b side; gc commit -q --allow-empty -m side; gc checkout -q main
+gc merge -q --no-ff side -m "Merge pull request #6"; merged="$(gc rev-parse HEAD)"
+span() { python3 -c 'import sys,json; sys.path.insert(0,sys.argv[1]); import apply_decisions as a
+print(json.dumps(a._revert_range(sys.argv[2], int(sys.argv[3]), {"commits": int(sys.argv[4])}, sys.argv[5])))' \
+    "${tmp}/scripts" "$1" "$2" "$3" "${g}"; }
+[[ "$(span "${squash}" 5 3)" == "[\"${squash}\"]" ]] || fail "a squash commit reverts as itself"
+[[ "$(span "${merged}" 6 2)" == "[\"-m\", \"1\", \"${merged}\"]" ]] || fail "a merge commit reverts with -m 1"
+[[ "$(span "${rebased}" 7 3)" == "null" ]] || fail "a multi-commit non-squash PR must be left to a human"
+echo "PASS: revert — squash, merge commit, and refusing to guess a rebased range"
+
 echo "PASS: apply_decisions_test — all gates passed"

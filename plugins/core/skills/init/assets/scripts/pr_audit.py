@@ -201,7 +201,9 @@ def digest_approvals(pr: dict[str, Any], head: str) -> int:
     for c in _records(pr.get("comments")):
         if c.get("author_association") != "OWNER" or _dig(c, "user", "type") == "Bot":
             continue
-        m = _DECISION_RX.search(str(c.get("body") or ""))
+        # At the start of the comment only: a comment quoting a PR body or bot
+        # output that happens to contain a marker is not a decision.
+        m = _DECISION_RX.match(str(c.get("body") or "").lstrip())
         if m and m.group(1).lower() == head.lower():
             return 1
     return 0

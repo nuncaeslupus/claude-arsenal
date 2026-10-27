@@ -237,13 +237,15 @@ def collect(prs: list[dict[str, Any]], since: str) -> list[dict[str, Any]]:
             continue
         if pr.get("state") == "closed" and str(pr.get("closed_at") or "") < since:
             continue
-        # The PR number and head come from GitHub, never from the body: anyone who
-        # can edit a PR's body could otherwise make its card approve another PR.
+        # The PR number comes from GitHub, never from the body: anyone who can edit
+        # a PR's body could otherwise make its card approve another PR. The head
+        # stays the RECORD's — the commit that was reviewed and summarised — so a
+        # push after `record` makes the approval stale instead of approving it.
         if rec.get("pr") != pr.get("number"):
             continue
         rec = rec | {
             "pr": int(pr["number"]),
-            "head": str((pr.get("head") or {}).get("sha") or ""),
+            "head": str(rec.get("head", "")),
             "title": pr.get("title", ""),
             "url": pr.get("html_url", ""),
         }

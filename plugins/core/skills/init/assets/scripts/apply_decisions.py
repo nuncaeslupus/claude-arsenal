@@ -186,20 +186,25 @@ def _merge(slug: str, n: int, head: str, method: str) -> str:
     return "merged"
 
 
-def _revert_range(sha: str, pr: dict[str, Any], wt: str) -> list[str]:
-    """`git revert` arguments that undo the whole PR, whatever merge method landed it."""
-    parents = subprocess.run(
-        ["git", "-C", wt, "rev-list", "--parents", "-n", "1", sha],
-        capture_output=True,
-        text=True,
-        check=False,
-    ).stdout.split()
-    if len(parents) > 2:  # a merge commit: undo it against its first parent
+def _revert_range(sha: str, n: int, pr: dict[str, Any], wt: str) -> list[str] | None:
+    """`git revert` arguments that undo exactly this PR, or None when that is unclear.
+
+    A merge commit is reverted against its first parent. A one-commit PR, or a
+    squash (GitHub's subject ends in `(#N)`), is the commit itself. A multi-commit
+    PR landed any other way may have been rebased in, and guessing its range
+    could revert other people's commits — so it is left to a human.
+    """
+
+    def git(*args: str) -> str:
+        return subprocess.run(
+            ["git", "-C", wt, *args], capture_output=True, text=True, check=False
+        ).stdout.strip()
+
+    if len(git("rev-list", "--parents", "-n", "1", sha).split()) > 2:
         return ["-m", "1", sha]
-    commits = int(pr.get("commits") or 1)
-    if commits > 1 and pr.get("_method") == "rebase":  # rebased: the PR's commits end at sha
-        return [f"{sha}~{commits}..{sha}"]
-    return [sha]  # a squash, or a one-commit PR
+    if int(pr.get("commits") or 1) <= 1 or git("log", "-1", "--format=%s", sha).endswith(f"(#{n})"):
+        return [sha]
+    return None
 
 
 def _revert(slug: str, n: int, pr: dict[str, Any], note: str) -> str:
@@ -211,6 +216,7 @@ def _revert(slug: str, n: int, pr: dict[str, Any], note: str) -> str:
     branch = f"revert-pr-{n}"
     wt = tempfile.mkdtemp(prefix="arsenal-revert-")
     failed = ""
+    created = False  # delete only a branch this run made, never one that existed
     try:
         for cmd in (
             ["git", "fetch", "-q", "origin", base],
@@ -219,8 +225,12 @@ def _revert(slug: str, n: int, pr: dict[str, Any], note: str) -> str:
             if subprocess.run(cmd, capture_output=True, check=False).returncode != 0:
                 failed = " ".join(cmd[:4])
                 break
-        if not failed:
-            rev = ["git", "-C", wt, "revert", "--no-edit", *_revert_range(str(sha), pr, wt)]
+            created = created or cmd[1] == "worktree"
+        span = None if failed else _revert_range(str(sha), n, pr, wt)
+        if not failed and span is None:
+            failed = "a multi-commit PR not landed as a squash or merge commit"
+        if not failed and span is not None:
+            rev = ["git", "-C", wt, "revert", "--no-edit", *span]
             push = ["git", "-C", wt, "push", "-q", "-u", "origin", branch]
             for cmd in (rev, push):
                 if subprocess.run(cmd, capture_output=True, check=False).returncode != 0:
@@ -228,7 +238,8 @@ def _revert(slug: str, n: int, pr: dict[str, Any], note: str) -> str:
                     break
     finally:
         subprocess.run(["git", "worktree", "remove", "--force", wt], capture_output=True)
-        subprocess.run(["git", "branch", "-D", branch], capture_output=True)
+        if created:
+            subprocess.run(["git", "branch", "-D", branch], capture_output=True)
     if failed:
         return f"revert PR not opened — `{failed}` failed; revert {str(sha)[:7]} by hand"
     made = _api(
@@ -294,7 +305,7 @@ def _do(kind: str, n: int, info: str, pr: dict[str, Any], slug: str, method: str
         _api("PATCH", f"/repos/{slug}/pulls/{n}", {"state": "closed"})
         return f"#{n} closed"
     if kind == "revert":
-        return f"#{n} {_revert(slug, n, pr | {'_method': method}, info)}"
+        return f"#{n} {_revert(slug, n, pr, info)}"
     if kind == "ask":
         _api("POST", comments, {"body": f"Question from the review digest: {info}"})
         rec = digest.read_block(pr.get("body")) or {}

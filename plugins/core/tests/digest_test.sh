@@ -116,7 +116,7 @@ const {chromium}=require('playwright');
  console.log(JSON.stringify({errs,d107:data["107"],q:data["108"].note}));await b.close();})();
 JS
     res="$(node exp.js "${tmp}/${page}" 2>&1)" || fail "export check crashed: ${res}"
-    [[ "${res}" == '{"errs":[],"d107":{"decision":"approve","head":"0000007fffffffffffffffffffffffffffffffff","note":""},"q":"why so big?"}' ]] \
+    [[ "${res}" == '{"errs":[],"d107":{"decision":"approve","head":"0000007","note":""},"q":"why so big?"}' ]] \
         || fail "test_export_carries_head_sha: ${res}"
     echo "PASS: export carries each decision with the head it was made on"
 else
