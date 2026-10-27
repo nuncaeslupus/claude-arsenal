@@ -359,6 +359,49 @@ SETTINGS: dict[str, Setting] = {
         "5.7.0",
         "Whose review marker clears a PR: distinct-session, or distinct-login for other logins",
     ),
+    # Who approves a PR, by risk tier — read by scripts/review_policy.py, which
+    # classifies the PR (low / medium / high) and turns the tier into what
+    # pr_audit.py waits for. Empty keeps merge-policy alone in charge, exactly as
+    # before the key existed. The presets, one line each:
+    #   solo-trust  agent merges every tier; high-tier merges flagged to ratify
+    #   solo-gated  a human approves medium and high
+    #   team        agent review on low, 1 human on medium, 2 on high
+    #   manual      no agent merges (merge-policy never)
+    "review.preset": Setting(
+        "",
+        "5.11.0",
+        "Who approves by risk tier (solo-trust, solo-gated, team, manual); empty = merge-policy.",
+    ),
+    # Globs that always need a human, whatever the preset says: any match makes
+    # the PR high-risk and requires at least one human approval.
+    "review.always-human-paths": Setting(
+        [],
+        "5.11.0",
+        "Globs whose change always needs a human approval, whatever review.preset says.",
+    ),
+    # Globs a PR must ONLY touch to be low-risk. Empty = the built-in docs/config
+    # set review_sources.py already uses. High is risk-paths / risk-lines.
+    "review.low-paths": Setting(
+        [],
+        "5.11.0",
+        "Globs a PR may only touch to be low-risk; empty = the built-in docs/config set.",
+    ),
+    # Per-tier override of the preset row: auto | agent | human:<N> | human-after.
+    "review.approval-low": Setting(
+        "",
+        "5.11.0",
+        "Approval for low-risk PRs (auto, agent, human:N, human-after); empty = preset row.",
+    ),
+    "review.approval-medium": Setting(
+        "",
+        "5.11.0",
+        "Approval for medium-risk PRs (auto, agent, human:N, human-after); empty = preset row.",
+    ),
+    "review.approval-high": Setting(
+        "",
+        "5.11.0",
+        "Approval for high-risk PRs (auto, agent, human:N, human-after); empty = preset row.",
+    ),
     # The "built with claude-arsenal" badge `/init` puts under the README's
     # title, read by init.py and nowhere else. Like a license notice it says
     # where the tooling came from and links to it, and like any notice the host
@@ -406,7 +449,10 @@ ENUMS: dict[str, set[str]] = {
     "autonomy": {"ask-often", "ask-when-blocked", "autonomous"},
     "branch-protection": {"", "applied", "existing", "unavailable", "off"},
     "review.reviewer-identity": {"distinct-login", "distinct-session"},
+    "review.preset": {"", "solo-trust", "solo-gated", "team", "manual"},
 }
+
+APPROVAL_REGEX = re.compile(r"^(|auto|agent|human-after|human:[1-9])$")
 
 CONFIG_RELPATH = "config.toml"
 
@@ -449,6 +495,12 @@ READERS = {
     "models.workers": "plugins/core/skills/init/assets/agents/worker.md",
     "models.reviewers": "plugins/core/skills/init/assets/agents/reviewer.md",
     "review.reviewer-identity": "plugins/core/skills/init/assets/scripts/pr_audit.py",
+    "review.preset": "plugins/core/skills/init/assets/scripts/review_policy.py",
+    "review.always-human-paths": "plugins/core/skills/init/assets/scripts/review_policy.py",
+    "review.low-paths": "plugins/core/skills/init/assets/scripts/review_policy.py",
+    "review.approval-low": "plugins/core/skills/init/assets/scripts/review_policy.py",
+    "review.approval-medium": "plugins/core/skills/init/assets/scripts/review_policy.py",
+    "review.approval-high": "plugins/core/skills/init/assets/scripts/review_policy.py",
     # Read here, by new_settings() below; init.py prints what it returns.
     "config-acknowledged": "plugins/core/skills/init/assets/scripts/arsenal_config.py",
     # `home` is the exception, and the only one: it names the directory holding
@@ -592,7 +644,19 @@ def load(repo_root: Path | None = None) -> tuple[dict[str, Any], dict[str, str]]
             raise ConfigError(
                 f"{key} must be an integer >= 1, got {values[key]!r} (from {sources[key]})"
             )
-    for key in ("risk-paths", "bot-triggers", "bot-unavailable-notices"):
+    for key in ("review.approval-low", "review.approval-medium", "review.approval-high"):
+        if not isinstance(values[key], str) or not APPROVAL_REGEX.match(values[key]):
+            raise ConfigError(
+                f"{key}: {values[key]!r} is not auto, agent, human:<1-9> or human-after "
+                f"(from {sources[key]})"
+            )
+    for key in (
+        "risk-paths",
+        "bot-triggers",
+        "bot-unavailable-notices",
+        "review.always-human-paths",
+        "review.low-paths",
+    ):
         if not isinstance(values[key], list) or not all(isinstance(v, str) for v in values[key]):
             raise ConfigError(
                 f"{key} must be a list of strings, got {values[key]!r} (from {sources[key]})"
