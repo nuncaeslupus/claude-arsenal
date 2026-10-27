@@ -4,7 +4,7 @@
 **Ticket / PR**: branch `claude/code-review-enforcement-sa12j9`
 **Author**: nuncaeslupus (with Claude)
 **Revision**: 3
-**Status**: draft — r3 (contract correction) awaits approval; r2 was approved 2026-10-27 without annotations
+**Status**: approved (2026-10-27, revision 3) — without annotations
 **Revision log**:
 - r1 — first draft, from the brainstorm on Anthropic's "How the Claude Code team does code review" (Oct 2026)
 - r3 — § 5 config: flat `[review]` keys (the loader reads one table level) and existing `risk-paths`/`risk-lines` for the high tier, instead of `[review.tiers]`/`[review.approval]`

@@ -12,7 +12,7 @@
 **Specification**: `arsenal/project/review-digest/spec.md` (approved r2; contracts and risks in §§ 5–6)
 **Author**: nuncaeslupus (with Claude)
 **Revision**: 2
-**Status**: draft
+**Status**: approved (2026-10-27, revision 2) — without annotations
 **Revision log**:
 - r2 — executed overnight at the owner's request ("continue working overnight") before plan sign-off; T1 config keys are flat `[review]` keys (spec r3)
 - r1 — first draft, phase P1 only (P2 digest, P3 lean code, P4 overnight review + metrics planned after P1 merges)
