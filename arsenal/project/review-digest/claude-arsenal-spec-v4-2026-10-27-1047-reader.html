@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
-<meta name="arsenal-source-sha256" content="9541517211e15c1c4bc984a8d005b000776068ae648ee7d752520da55d20fb4e">
+<meta name="arsenal-source-sha256" content="79e66c2dc7c5b8f7f8b7a090490d3d99d8b14dd073d0d980d31d5e42c671c18f">
 <title>Claude Arsenal — Specification (annotatable)</title>
 <style>
 :root{
@@ -194,7 +194,7 @@ li>.note.bnote{margin:6px 0}
     <button class="btn primary" id="btn-export">Save / Export</button>
   </div>
 </div>
-<div class="statusbar"><div class="wrap"><span class="count" id="count">0 / 15 notes</span><span class="hint"> · notes save automatically; <strong>Save / Export</strong> keeps a file you can send back</span></div></div>
+<div class="statusbar"><div class="wrap"><span class="count" id="count">0 / 16 notes</span><span class="hint"> · notes save automatically; <strong>Save / Export</strong> keeps a file you can send back</span></div></div>
 <div id="warnbar"><div class="wrap"><strong>Heads up —</strong> this browser isn't storing your notes automatically (private/incognito mode or restricted file view). Tap <strong>Save / Export</strong> regularly.</div></div>
 
 <div class="wrap">
@@ -230,6 +230,7 @@ li>.note.bnote{margin:6px 0}
 <li class="sub"><a href="#s-spec-pr-audit-py-result-added-fields">pr_audit.py result (added fields, only when review-preset is set)</a></li>
 <li class="sub"><a href="#s-spec-merge-ready-sh-body-merge-commit">merge_ready.sh --body (merge commit trailers)</a></li>
 <li class="sub"><a href="#s-spec-init-interview">/init interview</a></li>
+<li class="sub"><a href="#s-spec-p2-the-digest">P2 — the digest</a></li>
 <li><a href="#s-spec-6">§6 Risks &amp; Validation</a></li>
 </ul>
 </details>
@@ -239,10 +240,11 @@ li>.note.bnote{margin:6px 0}
 <div class="sec-body"><p><strong>Date</strong>: 2026-10-26<br />
 <strong>Ticket / PR</strong>: branch <code>claude/code-review-enforcement-sa12j9</code><br />
 <strong>Author</strong>: nuncaeslupus (with Claude)<br />
-<strong>Revision</strong>: 3<br />
-<strong>Status</strong>: approved (2026-10-27, revision 3) — without annotations<br />
+<strong>Revision</strong>: 4<br />
+<strong>Status</strong>: approved (2026-10-27, revision 4) — without annotations<br />
 <strong>Revision log</strong>:
 - r1 — first draft, from the brainstorm on Anthropic's "How the Claude Code team does code review" (Oct 2026)
+- r4 — § 5/§ 6: P2 (digest) contracts and risks; records live in a PR-body marker, the digest branch only holds rendered pages (D-14)
 - r3 — § 5 config: flat <code>[review]</code> keys (the loader reads one table level) and existing <code>risk-paths</code>/<code>risk-lines</code> for the high tier, instead of <code>[review.tiers]</code>/<code>[review.approval]</code>
 - r2 — open questions resolved with the recommended answers (D-9…D-13), approved in chat without annotations</p></div>
 <div class="note" data-for="s-spec-intro"><label class="note-head" for="n-s-spec-intro"><span class="note-ico" aria-hidden="true">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC · intro</span></label><textarea class="note-ta" data-key="s-spec-intro" id="n-s-spec-intro" data-label="Preamble &amp; scope" data-part="Spec" rows="1" placeholder="Add a note on this section…"></textarea></div>
@@ -594,7 +596,7 @@ reads them.</p>
 <tr>
 <td>D-9</td>
 <td>Digest records live on a dedicated <code>arsenal/digest</code> branch, not on the default branch.</td>
-<td>agreed</td>
+<td>superseded by D-14</td>
 <td>2026-10-27</td>
 </tr>
 <tr>
@@ -618,6 +620,12 @@ reads them.</p>
 <tr>
 <td>D-13</td>
 <td>Severity mark is a red/amber/green colour derived from tier × open findings.</td>
+<td>agreed</td>
+<td>2026-10-27</td>
+</tr>
+<tr>
+<td>D-14</td>
+<td>Per-PR digest records live in a marker block in the PR body, not on an <code>arsenal/digest</code> branch (supersedes D-9): readable and writable by any session, no second ref to push.</td>
 <td>agreed</td>
 <td>2026-10-27</td>
 </tr>
@@ -736,6 +744,75 @@ Ratify: pending                              # human-after only; P2's digest cle
 asked again; the upgrade banner names the new question once.</p></div>
 <div class="note" data-for="s-spec-init-interview"><label class="note-head" for="n-s-spec-init-interview"><span class="note-ico" aria-hidden="true">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC › /init interview</span></label><textarea class="note-ta" data-key="s-spec-init-interview" id="n-s-spec-init-interview" data-label="/init interview" data-part="Spec" rows="1" placeholder="Add a note on this section…"></textarea></div>
 </article>
+<article class="sec l3" id="s-spec-p2-the-digest" data-ref="SPEC › P2 — the digest" data-label="P2 — the digest" data-part="Spec">
+<h4 class="sec-h"><span class="chip">▸</span><span class="sec-title">P2 — the digest</span></h4>
+<div class="sec-body"><h4>Per-PR record (the durable store)</h4>
+<p>One machine block in the PR body, rewritten in place by <code>digest.py record</code>:</p>
+<pre><code class="language-text">&lt;!-- arsenal-digest
+{&quot;v&quot;:1,&quot;pr&quot;:42,&quot;head&quot;:&quot;1a2b3c4&quot;,&quot;tier&quot;:&quot;high&quot;,&quot;mark&quot;:&quot;amber&quot;,
+ &quot;state&quot;:&quot;awaiting-approval&quot;,&quot;summary&quot;:&quot;≤ 60 words, 2–3 sentences&quot;,
+ &quot;deps&quot;:[41],&quot;size&quot;:{&quot;add&quot;:120,&quot;del&quot;:30,&quot;files&quot;:4},&quot;rounds&quot;:2,
+ &quot;findings&quot;:[{&quot;what&quot;:&quot;…&quot;,&quot;found_by&quot;:&quot;cold-reviewer&quot;,&quot;fix&quot;:&quot;…&quot;,&quot;commit&quot;:&quot;9f8e7d6&quot;}],
+ &quot;open&quot;:[&quot;RISK: …&quot;],&quot;undo&quot;:&quot;revert the merge commit; no data migration&quot;,
+ &quot;questions&quot;:[],&quot;ratified&quot;:null}
+--&gt;
+</code></pre>
+<p>States: <code>awaiting-approval</code> · <code>needs-decision</code> (round cap hit) · <code>merged-awaiting-ratification</code>
+(<code>human-after</code>) · <code>blocked-by-dep</code> · <code>merged</code> · <code>closed</code>. Mark: red = tier high with an open
+finding, or <code>needs-decision</code>; amber = tier high, or medium with an open finding; green otherwise.
+<code>found_by</code> ∈ self · cold-reviewer · bot:<login> · ci · human.</p>
+<pre><code>digest.py record --pr N --notes FILE   # FILE: {summary, undo, fixes:[{what, fix, commit}], open:[…]}
+                                       # rounds/findings pulled from tmp/arsenal-review round files
+digest.py check --pr N                 # exit 1 when the summary breaks the size rule (≤ 3 sentences, ≤ 60 words)
+</code></pre>
+<p>Why the PR body (D-14, replacing D-9's branch): every session that can see the PR can read
+and rewrite it, it needs no push to a second ref (refused by some cloud git proxies), and it
+dies with nothing — a closed PR still holds its record.</p>
+<h4>The digest</h4>
+<pre><code>digest.py render [--since last|&lt;date&gt;] [--format html|md] [--out DIR]
+</code></pre>
+<p>Gathers records from open PRs plus PRs merged since the last digest (<code>--since last</code> reads
+<code>arsenal/session/digest.json</code>, which stores the last render time). HTML: header line (counts by
+state, the P4 metrics line once it exists), dependency list, one folded card per PR sorted
+red → amber → green, then by state. Each card's fold has a status row, the summary, and
+<strong>Approve / Deny / Question</strong> with a note field. The detail shows findings (what · found by ·
+fix · commit), open risks, rounds, size and undo. Export writes
+<code>&lt;repo&gt;-digest-&lt;stamp&gt;-decisions.md</code> with an embedded block:</p>
+<pre><code class="language-text">&lt;!-- ARSENAL-DECISIONS {&quot;42&quot;:{&quot;decision&quot;:&quot;approve&quot;,&quot;head&quot;:&quot;1a2b3c4&quot;,&quot;note&quot;:&quot;&quot;}, …} --&gt;
+</code></pre>
+<p><code>--format md</code> is the same content as chat text (cards as <code>&lt;details&gt;</code> blocks).</p>
+<h4>Decisions</h4>
+<pre><code>apply_decisions.py FILE [--dry-run]
+</code></pre>
+<ul>
+<li><strong>approve</strong>: rejected as <code>stale</code> when the PR head ≠ the recorded head. Otherwise the script posts
+  <code>&lt;!-- arsenal-decision: approve head=&lt;sha&gt; via=digest --&gt;</code> on the PR, and for a
+  <code>merged-awaiting-ratification</code> record sets <code>ratified</code>.</li>
+<li><strong>deny</strong>: an open PR is closed and its task reopened. A merged <code>human-after</code> PR gets a revert PR
+  opened (D-10).</li>
+<li><strong>question</strong>: posted as a PR comment and added to <code>questions</code>. The next worker answers it, and the
+  answer shows in the next digest.</li>
+<li>Then every approved PR whose deps are merged or approved goes through <code>merge_ready.sh</code>, in
+  dependency order. A PR whose dep was denied is reported, not merged.</li>
+<li>With no scriptable GitHub channel, it prints the calls to make, like <code>merge_ready.sh</code> exit 5.</li>
+</ul>
+<h4>Counting a digest approval as human</h4>
+<p><code>[review] digest-decisions = false | true</code>. When true, <code>pr_audit.py</code> counts a decision marker
+on the head SHA as one human approval (<code>Approved-by: human via digest@&lt;sha&gt;</code>). This makes
+<code>solo-gated</code> work on one GitHub account. The marker is written by the agent from your exported
+file, so the trust is in the file, not in GitHub. Default <code>false</code>; <code>/init</code> offers <code>true</code> with the
+solo presets only.</p>
+<h4>Config</h4>
+<pre><code class="language-toml">digest-delivery = &quot;file&quot;   # file | chat | both — where render's output goes at the triggers below
+digest-every = 5           # also render after this many merges in one session; 0 = only at session end
+[review]
+digest-decisions = false
+</code></pre>
+<p>Triggers: <code>session-end</code>, the quota-governance stop, and every <code>digest-every</code> merges in the
+orchestrator tick. <code>file</code> writes the HTML to the scratch/output dir and prints its path; a
+surface that can publish a page publishes that file.</p></div>
+<div class="note" data-for="s-spec-p2-the-digest"><label class="note-head" for="n-s-spec-p2-the-digest"><span class="note-ico" aria-hidden="true">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC › P2 — the digest</span></label><textarea class="note-ta" data-key="s-spec-p2-the-digest" id="n-s-spec-p2-the-digest" data-label="P2 — the digest" data-part="Spec" rows="1" placeholder="Add a note on this section…"></textarea></div>
+</article>
 <article class="sec l2" id="s-spec-6" data-ref="SPEC §6" data-label="§6 Risks &amp; Validation" data-part="Spec">
 <h3 class="sec-h"><span class="chip">§6</span><span class="sec-title">Risks &amp; Validation</span></h3>
 <div class="sec-body"><table>
@@ -791,6 +868,34 @@ asked again; the upgrade banner names the new question once.</p></div>
 <td>Prose in <code>github-automation.md</code> (on demand); <code>AGENTS.md</code> unchanged</td>
 <td><code>make context-budget</code> core delta ≤ 150 tokens</td>
 </tr>
+<tr>
+<td>P2: a digest approval is forged by the agent</td>
+<td>Low</td>
+<td>High</td>
+<td><code>digest-decisions</code> defaults off; marker bound to the head SHA; the decisions file is committed beside the digest as the audit trail</td>
+<td>unit: marker on an old SHA counts 0; off → counts 0</td>
+</tr>
+<tr>
+<td>P2: a PR body edit by a human erases the record</td>
+<td>Med</td>
+<td>Low</td>
+<td><code>record</code> rewrites only its own block; a missing block is rebuilt from round files + <code>--notes</code> on the next record</td>
+<td>unit: body text outside the block is preserved</td>
+</tr>
+<tr>
+<td>P2: digest too long to skim</td>
+<td>Med</td>
+<td>Med</td>
+<td><code>digest.py check</code> enforces the per-PR word cap; folded cards</td>
+<td><code>render</code> of 10 records ≤ 900 visible words</td>
+</tr>
+<tr>
+<td>P2: approve applied to a PR that changed since the digest</td>
+<td>Med</td>
+<td>High</td>
+<td>decision carries the head SHA; mismatch → <code>stale</code>, listed in the next digest</td>
+<td>unit: stale approval is not merged</td>
+</tr>
 </tbody>
 </table></div>
 <div class="note" data-for="s-spec-6"><label class="note-head" for="n-s-spec-6"><span class="note-ico" aria-hidden="true">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC §6</span></label><textarea class="note-ta" data-key="s-spec-6" id="n-s-spec-6" data-label="§6 Risks &amp; Validation" data-part="Spec" rows="1" placeholder="Add a note on this section…"></textarea></div>
@@ -822,7 +927,7 @@ asked again; the upgrade banner names the new question once.</p></div>
 <script>var SPEC_SEED_NOTES={};</script>
 <script>
 (function(){
-  var NS = 'claude-arsenal-review-digest-spec-v3:';
+  var NS = 'claude-arsenal-review-digest-spec-v4:';
   var tas = Array.prototype.slice.call(document.querySelectorAll('.note-ta'));
 
   function autoGrow(t){t.style.height='auto';t.style.height=(t.scrollHeight)+'px';}
@@ -982,7 +1087,7 @@ asked again; the upgrade banner names the new question once.</p></div>
   function today(){var d=new Date();return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());}
   function stamp(){var d=new Date();return today()+'-'+pad(d.getHours())+pad(d.getMinutes());}
   // Named like the reader, <repo>-<doc>-v<N>-<YYYY-MM-DD-HHMM>-notes.md, stamped at export.
-  function exportName(){return 'claude-arsenal-spec-v3-'+stamp()+'-notes.md';}
+  function exportName(){return 'claude-arsenal-spec-v4-'+stamp()+'-notes.md';}
 
   function buildExport(){
     var byPart={},order=[],data={},n=0;

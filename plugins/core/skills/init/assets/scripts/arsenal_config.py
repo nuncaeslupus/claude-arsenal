@@ -402,6 +402,24 @@ SETTINGS: dict[str, Setting] = {
         "5.11.0",
         "Approval for high-risk PRs (auto, agent, human:N, human-after); empty = preset row.",
     ),
+    # When a digest approval counts as a human one (scripts/pr_audit.py): a
+    # `<!-- arsenal-decision: approve head=<sha> via=digest -->` marker written by
+    # apply_decisions.py from the human's exported decisions file. Off by default:
+    # the agent writes the marker, so the trust is in that file, not in GitHub.
+    # On lets solo-gated work when the agent opens PRs with the owner's account.
+    "review.digest-decisions": Setting(
+        False, "5.12.0", "Count a digest approval marker on the head as one human approval."
+    ),
+    # Where `digest.py render` puts the digest at its triggers (session end, the
+    # quota stop, every digest-every merges): file (HTML path printed), chat
+    # (Markdown printed), or both.
+    "digest-delivery": Setting(
+        "file", "5.12.0", "Where the review digest goes: file, chat or both."
+    ),
+    # Also render after this many merges in one session; 0 = only at session end.
+    "digest-every": Setting(
+        5, "5.12.0", "Render the review digest after this many merges; 0 = at session end only."
+    ),
     # The "built with claude-arsenal" badge `/init` puts under the README's
     # title, read by init.py and nowhere else. Like a license notice it says
     # where the tooling came from and links to it, and like any notice the host
@@ -450,6 +468,7 @@ ENUMS: dict[str, set[str]] = {
     "branch-protection": {"", "applied", "existing", "unavailable", "off"},
     "review.reviewer-identity": {"distinct-login", "distinct-session"},
     "review.preset": {"", "solo-trust", "solo-gated", "team", "manual"},
+    "digest-delivery": {"file", "chat", "both"},
 }
 
 APPROVAL_REGEX = re.compile(r"^(|auto|agent|human-after|human:[1-9])$")
@@ -499,6 +518,9 @@ READERS = {
     "review.always-human-paths": "plugins/core/skills/init/assets/scripts/review_policy.py",
     "review.low-paths": "plugins/core/skills/init/assets/scripts/review_policy.py",
     "review.approval-low": "plugins/core/skills/init/assets/scripts/review_policy.py",
+    "review.digest-decisions": "plugins/core/skills/init/assets/scripts/pr_audit.py",
+    "digest-delivery": "plugins/core/skills/init/assets/scripts/digest.py",
+    "digest-every": "plugins/core/skills/init/assets/references/orchestrator-tick.md",
     "review.approval-medium": "plugins/core/skills/init/assets/scripts/review_policy.py",
     "review.approval-high": "plugins/core/skills/init/assets/scripts/review_policy.py",
     # Read here, by new_settings() below; init.py prints what it returns.
@@ -644,6 +666,16 @@ def load(repo_root: Path | None = None) -> tuple[dict[str, Any], dict[str, str]]
             raise ConfigError(
                 f"{key} must be an integer >= 1, got {values[key]!r} (from {sources[key]})"
             )
+    if not isinstance(values["review.digest-decisions"], bool):
+        raise ConfigError(
+            f"review.digest-decisions must be true or false, got "
+            f"{values['review.digest-decisions']!r} (from {sources['review.digest-decisions']})"
+        )
+    if type(values["digest-every"]) is not int or values["digest-every"] < 0:
+        raise ConfigError(
+            f"digest-every must be an integer >= 0, got {values['digest-every']!r} "
+            f"(from {sources['digest-every']})"
+        )
     for key in ("review.approval-low", "review.approval-medium", "review.approval-high"):
         if not isinstance(values[key], str) or not APPROVAL_REGEX.match(values[key]):
             raise ConfigError(

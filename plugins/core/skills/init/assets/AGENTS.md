@@ -1,6 +1,6 @@
 # Claude Arsenal
 
-<!-- claude-arsenal v5.11.0 — imported via @claude-arsenal/AGENTS.md -->
+<!-- claude-arsenal v5.12.0 — imported via @claude-arsenal/AGENTS.md -->
 
 This file is in context on every turn, so it holds only what a session needs before it
 knows what kind of session it is. The rest lives in `claude-arsenal/references/`: plain
@@ -169,6 +169,7 @@ or ASCII art → `claude-arsenal/references/diagrams.md`.
 | `references/github-automation.md` | Completing work or ending a session (Actions minutes short → `references/ci-minutes.md`) |
 | `references/quota-governance.md` | The loop stopped before dispatch |
 | `references/pre-pr-review.md` | About to open a PR |
+| `references/digest.md` | A PR opened or got a new head; ending a session; digest decisions came back |
 | `references/performance-tuning.md` | The loop feels slow, or an `ARSENAL_*` knob is needed |
 | `references/state-layout.md` | Looking up where a file lives, what a task state means, or the task-file format |
 | `references/repo-housekeeping.md` | Choosing a license, or publishing a package |
