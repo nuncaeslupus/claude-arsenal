@@ -60,7 +60,7 @@ echo "PASS: approval — preset rows, overrides, always-human paths, legacy fall
 printf '[review]\npreset = "solo-trust"\n' > arsenal/config.toml
 n="$(python3 "${POLICY}" explain | wc -l)"
 (( n <= 12 )) || fail "test_explain_fits_twelve_lines: ${n} lines"
-python3 "${POLICY}" explain | grep -q "merge-policy after-ci-and-review" || fail "explain should name the implied merge-policy"
+out="$(python3 "${POLICY}" explain)"; grep -q "merge-policy after-ci-and-review" <<<"${out}" || fail "explain should name the implied merge-policy"
 printf '[review]\npreset = "nope"\n' > arsenal/config.toml
 python3 "${POLICY}" explain >/dev/null 2>&1; [[ $? -eq 2 ]] || fail "a bad config should exit 2"
 echo "PASS: explain fits 12 lines; a bad config exits 2"
