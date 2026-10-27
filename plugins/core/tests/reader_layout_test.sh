@@ -225,10 +225,16 @@ const {chromium}=require('playwright');
  const open=await p.locator('.bnote').count();
  const [dl]=await Promise.all([p.waitForEvent('download'),p.click('#btn-export')]);
  const out=require('fs').readFileSync(await dl.path(),'utf8');
- console.log(JSON.stringify({box,open,errs,quoted:out.includes('> ¶ _“The widget is bad.”_')}));await b.close();})();
+ // A note whose section is gone lands under "Unplaced notes", quote intact.
+ const ns=await p.evaluate(()=>{for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);
+   if(k.indexOf('~')>0)return k.slice(0,k.indexOf('s-spec-'));}return '';});
+ await p.evaluate(ns=>{localStorage.setItem(ns+'s-gone~x','lost?');localStorage.setItem(ns+'s-gone~x~q','old text');},ns);
+ await p.reload();
+ const unplaced=await p.locator('#bn-unplaced textarea').inputValue();
+ console.log(JSON.stringify({box,open,errs,quoted:out.includes('> ¶ _“The widget is bad.”_'),unplaced}));await b.close();})();
 JS
     res="$(node "${base}/blk.js" "${html}" 2>&1)" || fail "block-note browser check crashed: ${res}"
-    [[ "${res}" == '{"box":"noted here","open":1,"errs":[],"quoted":true}' ]] \
+    [[ "${res}" == '{"box":"noted here","open":1,"errs":[],"quoted":true,"unplaced":"lost?"}' ]] \
         || fail "block note did not survive a reload or export: ${res}"
     echo "PASS: a block note opens below its paragraph, survives a reload and exports its quote"
 else

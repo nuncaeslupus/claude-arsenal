@@ -121,7 +121,9 @@ on a `risk-paths` or `always-human-paths` match or more than `risk-lines` lines,
 `agent` is a review clear on the head (bot review or adversarial CLEAR marker);
 `human:N` adds N approvals **on the head SHA** from distinct trusted non-bot users
 other than the author — a bot's or the author's approval counts zero, and an
-approval of an older commit is stale; `human-after` merges on the agent review and
+approval of an older commit is stale (so when the agent opens PRs with the
+owner's own account, `human:N` needs the agent on a separate GitHub identity);
+`human:N` also needs the agent review itself, not just N humans; `human-after` merges on the agent review and
 writes `Ratify: pending` for the human to confirm later. `approval-<tier>`
 overrides one row; an `always-human-paths` match always needs one human.
 `merge_ready.sh --body` carries the verdict as trailers on the merge commit:

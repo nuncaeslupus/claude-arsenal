@@ -324,6 +324,19 @@ python3 "${INIT_PY}" --repo-path "${answered}" --bundle-dir "${BUNDLE_DIR}" --si
 [[ "$(get_answered review.preset)" == "solo-trust" ]] || { echo "FAIL: a refresh dropped review.preset" >&2; exit 1; }
 echo "PASS: test_interview_review_preset_written"
 
+# test_upsert_review_key_keeps_toml_valid — a multi-line array and a commented
+# header are replaced in place, never duplicated or left half-written.
+printf 'merge-policy = "after-ci"\n\n[review] # mine\nalways-human-paths = [\n  "a/*",  # x ]\n  "[ab]*",\n]\n\n[models]\nworkers = "sonnet"\n' \
+    > "${answered}/arsenal/config.toml"
+python3 "${INIT_PY}" --repo-path "${answered}" --bundle-dir "${BUNDLE_DIR}" --silent \
+    --review-preset team --always-human-paths 'src/auth/*' >/dev/null \
+    || { echo "FAIL: test_upsert_review_key_keeps_toml_valid: init refused" >&2; exit 1; }
+paths=$(python3 "${CFG_PY}" --repo-root "${answered}" | python3 -c 'import json,sys; print("|".join(json.load(sys.stdin)["review.always-human-paths"]))') \
+    || { echo "FAIL: test_upsert_review_key_keeps_toml_valid: config no longer parses" >&2; exit 1; }
+[[ "${paths}" == "src/auth/*" && "$(get_answered review.preset)" == "team" ]] \
+    || { echo "FAIL: test_upsert_review_key_keeps_toml_valid: ${paths}" >&2; exit 1; }
+echo "PASS: test_upsert_review_key_keeps_toml_valid"
+
 # test_init_interview_rewrite_keeps_escapes — the second write replaces an
 # existing key, so the value must reach the file literally (a backslash is not
 # a regex escape) and stay valid TOML outside the BMP (no surrogate escapes).

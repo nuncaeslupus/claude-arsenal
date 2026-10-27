@@ -188,6 +188,22 @@ pr "\"user\":{\"login\":\"me\"},\"threads\":[],\"reviews\":[${bot}]"
 [[ "$(trun --json | state tier)" == "high" ]] || fail "unreadable files must classify high"
 echo "PASS: solo-trust high merges on agent review and flags ratification; unknown files are high"
 
+# Review findings: a legacy config is not newly validated; humans alone do not
+# stand in for the agent review under human:N; a truncated file list is high.
+printf 'merge-policy = "after-review"\nrisk-lines = 0\n' > "${tmp}/tiered/arsenal/config.toml"
+pr "\"user\":{\"login\":\"me\"},${small},\"threads\":[],\"reviews\":[${bot}]"
+trun --require-ready >/dev/null 2>&1; [[ $? -eq 0 ]] || fail "a config with no preset must keep its legacy verdict"
+printf '[review]\npreset = "team"\n' > "${tmp}/tiered/arsenal/config.toml"
+human2="{\"state\":\"APPROVED\",\"commit_id\":\"${HEAD}\",\"user\":{\"login\":\"bo\",\"type\":\"User\"},\"author_association\":\"MEMBER\"}"
+pr "\"user\":{\"login\":\"me\"},${big},\"threads\":[],\"reviews\":[${human},${human2}]"
+trun --require-ready >/dev/null 2>&1; [[ $? -eq 1 ]] || fail "human:2 without an agent review must wait"
+pr "\"user\":{\"login\":\"me\"},${big},\"threads\":[],\"reviews\":[${bot},${human},${human2}]"
+trun --require-ready >/dev/null 2>&1; [[ $? -eq 0 ]] || fail "human:2 with an agent review and two humans is ready"
+printf '[review]\npreset = "solo-trust"\n' > "${tmp}/tiered/arsenal/config.toml"
+pr "\"user\":{\"login\":\"me\"},\"changed_files\":250,${small},\"threads\":[],\"reviews\":[${bot}]"
+[[ "$(trun --json | state tier)" == "high" ]] || fail "a truncated file list must classify high"
+echo "PASS: legacy configs untouched; human:N still needs the agent review; truncated lists are high"
+
 # --- bad input is an error, not an empty report ------------------------------
 printf 'not json\n' > "${tmp}/prs.json"
 run --policy after-ci >/dev/null 2>&1

@@ -138,6 +138,9 @@ def explain(cfg: dict[str, Any]) -> list[str]:
     human = cfg["review.always-human-paths"] or "[]"
     out.append(f"        or always-human-paths {human} (+1 human)")
     out.append("medium: everything else")
+    if any(requirement(t, cfg)["humans"] for t in TIERS):
+        out.append("  note: a human approval counts only from a login other than the PR author,")
+        out.append("        so the agent needs its own GitHub identity for a human to approve")
     for tier in TIERS:
         req = requirement(tier, cfg)
         src = "config" if cfg[f"review.approval-{tier}"] else "preset"

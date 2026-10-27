@@ -176,6 +176,7 @@ record = {
     "title": pr.get("title") or "",
     "draft": bool(pr.get("draft")),
     "mergeable": pr.get("mergeable"),
+    "changed_files": pr.get("changed_files"),
     "created_at": pr.get("created_at"),
     "updated_at": pr.get("updated_at"),
     "head": {"sha": (pr.get("head") or {}).get("sha"), "ref": (pr.get("head") or {}).get("ref")},

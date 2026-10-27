@@ -2480,11 +2480,43 @@ def _record_interview(repo_path: Path, answers: dict[str, str]) -> None:
         print(f"  config.toml: {key} = {value}")
 
 
+def _value_end(lines: list[str], start: int) -> int:
+    """Index of the last line of the TOML value that starts on `lines[start]`.
+
+    A multi-line array runs until its brackets balance; brackets inside quoted
+    strings (a glob like `"[ab]*"`) and comments do not count.
+    """
+    depth, quote = 0, ""
+    for i in range(start, len(lines)):
+        text = lines[i] if i > start else lines[i].split("=", 1)[1]
+        j = 0
+        while j < len(text):
+            ch = text[j]
+            if quote:
+                if ch == "\\" and quote == '"':
+                    j += 1
+                elif ch == quote:
+                    quote = ""
+            elif ch in "\"'":
+                quote = ch
+            elif ch == "#":
+                break
+            elif ch == "[":
+                depth += 1
+            elif ch == "]":
+                depth -= 1
+            j += 1
+        if depth <= 0 and not quote:
+            return i
+    return len(lines) - 1
+
+
 def _upsert_table_key(config: Path, table: str, key: str, value: str) -> None:
     """Upsert `<key> = <value>` inside `[table]` of arsenal/config.toml, adding the table."""
     text = config.read_text(encoding="utf-8") if config.is_file() else ""
     lines = text.rstrip("\n").split("\n") if text.strip() else []
-    head = next((i for i, ln in enumerate(lines) if ln.strip() == f"[{table}]"), None)
+    header = re.compile(rf"^\s*\[\s*{re.escape(table)}\s*\]\s*(#.*)?$")
+    head = next((i for i, ln in enumerate(lines) if header.match(ln)), None)
     entry = f"{key} = {value}"
     if head is None:
         lines += ["", f"[{table}]", entry]
@@ -2500,7 +2532,7 @@ def _upsert_table_key(config: Path, table: str, key: str, value: str) -> None:
         if hit is None:
             lines.insert(head + 1, entry)
         else:
-            lines[hit] = entry
+            lines[hit : _value_end(lines, hit) + 1] = [entry]
     config.parent.mkdir(parents=True, exist_ok=True)
     config.write_text("\n".join(lines) + "\n", encoding="utf-8")
 

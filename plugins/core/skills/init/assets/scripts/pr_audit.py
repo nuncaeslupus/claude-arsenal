@@ -162,19 +162,25 @@ def read_reviewer_identity(repo_root: Path) -> str:
 def read_review_cfg(repo_root: Path) -> dict[str, Any] | None:
     """The validated config when `review.preset` or an approval override is set, else None.
 
-    None keeps every verdict exactly what it was before risk tiers existed.
+    None keeps every verdict exactly what it was before risk tiers existed: the
+    `[review]` table is read on its own first, so a host with no preset is never
+    held to validation of keys pr_audit did not read before.
     """
+    config = repo_root / "arsenal" / "config.toml"
+    if not config.is_file():
+        return None
+    try:
+        table = tomllib.loads(config.read_text(encoding="utf-8")).get("review", {})
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as exc:
+        raise AuditError(f"cannot read {config}: {exc}") from exc
+    keys = ("preset", "approval-low", "approval-medium", "approval-high")
+    if not isinstance(table, dict) or not any(table.get(k) for k in keys):
+        return None
     try:
         cfg, _ = arsenal_config.load(repo_root)
     except (arsenal_config.ConfigError, OSError) as exc:
         raise AuditError(str(exc)) from exc
-    keys = (
-        "review.preset",
-        "review.approval-low",
-        "review.approval-medium",
-        "review.approval-high",
-    )
-    return cfg if any(cfg[k] for k in keys) else None
+    return cfg
 
 
 def humans_on_head(pr: dict[str, Any], head: str) -> list[str]:
@@ -202,8 +208,26 @@ def humans_on_head(pr: dict[str, Any], head: str) -> list[str]:
     return logins
 
 
+def agent_reviewed(pr: dict[str, Any], head: str, identity: str) -> bool:
+    """A non-human review clears the head: a bot's approval on it, or a CLEAR marker."""
+    marker = marker_state(pr, head, identity)
+    if marker is not None and marker[0] == "clear":
+        return True
+    return any(
+        r.get("state") == "APPROVED"
+        and r.get("commit_id") == head
+        and _dig(r, "user", "type") == "Bot"
+        for r in _records(pr.get("reviews"))
+    )
+
+
 def tier_state(
-    pr: dict[str, Any], head: str, review: str, review_detail: str, cfg: dict[str, Any]
+    pr: dict[str, Any],
+    head: str,
+    review: str,
+    review_detail: str,
+    cfg: dict[str, Any],
+    identity: str = "distinct-session",
 ) -> dict[str, Any]:
     """What the PR's risk tier requires, and what the head has towards it.
 
@@ -211,13 +235,26 @@ def tier_state(
     low-risk one.
     """
     files = pr.get("files")
-    if isinstance(files, list):
-        cls = review_policy.classify(_records(files), cfg)
-    else:
+    changed = pr.get("changed_files")
+    cls: dict[str, Any]
+    if not isinstance(files, list):
         cls = {"tier": "high", "reasons": ["changed files unreadable"], "human_paths": []}
+    elif isinstance(changed, int) and changed > len(files):
+        # A page of the file list is not the list: a risky path past it is unseen.
+        cls = {
+            "tier": "high",
+            "reasons": [f"file list truncated ({len(files)} of {changed})"],
+            "human_paths": [],
+        }
+    else:
+        cls = review_policy.classify(_records(files), cfg)
     req = review_policy.requirement(cls["tier"], cfg, bool(cls["human_paths"]))
     humans = humans_on_head(pr, head)
-    agent_ok = review == "clear"
+    # `human:N` is an agent review AND N humans: a human approval also turns the
+    # GitHub review state clear, so the agent half is checked on its own there.
+    agent_ok = review == "clear" and (
+        not req["approval"].startswith("human:") or agent_reviewed(pr, head, identity)
+    )
     needs_agent = req["approval"] not in ("", "auto")
     ok = (agent_ok or not needs_agent) and len(humans) >= req["humans"]
     provenance = [f"Risk-tier: {cls['tier']} ({'; '.join(cls['reasons'])})"]
@@ -573,7 +610,7 @@ def audit_pr(
         "ready": ready,
     }
     if review_cfg is not None:
-        result.update(tier_state(pr, str(head), review, review_detail, review_cfg))
+        result.update(tier_state(pr, str(head), review, review_detail, review_cfg, identity))
         result["ready"] = ready and result["tier_ok"]
     result["next_action"] = _next_action(pr, result, policy)
     return result

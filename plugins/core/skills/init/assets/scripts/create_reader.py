@@ -1064,6 +1064,9 @@ JS = r"""
       // touched" and the loader falls back to the seed, so removing it brought a
       // seeded note back after the reviewer had deliberately cleared it (#477).
       localStorage.setItem(k,t.value.trim()===''?'':t.value);
+      // A block note keeps its quote beside it, so it still says what it was
+      // about after its paragraph changes (export and re-seed read `<key>~q`).
+      if(t.closest('.bnote')){localStorage.setItem(k+'~q',t.dataset.quote||'');}
       dirty=true;setState('✓ Saved '+nowStamp(),'ok');
     }catch(e){dirty=true;lsOK=false;document.getElementById('warnbar').style.display='block';setState(WARN,'warn');}
   }
@@ -1131,14 +1134,14 @@ JS = r"""
     var t=document.querySelector('.note-ta[data-key="'+key+'"]');
     if(!t){
       var host=hosts[key],art=document.getElementById(key.split('~')[0]);
-      if(!host&&!art)return null;
+      if(!host&&!art)art=unplaced();
       var q=host?host.dataset.quote:(quote||'');
       var box=document.createElement('div');box.className='note bnote';
       var head=document.createElement('label');head.className='note-head';
       var ico=document.createElement('span');ico.className='note-ico';ico.textContent='✎';
       var lab=document.createElement('span');lab.className='note-label';lab.textContent='Your note';
       var ref=document.createElement('span');ref.className='note-ref';
-      ref.textContent=host?'¶ '+q:'¶ text changed since this note';
+      ref.textContent=host?'¶ '+q:(q?'¶ (text changed) '+q:'¶ text changed since this note');
       head.appendChild(ico);head.appendChild(lab);head.appendChild(ref);
       t=document.createElement('textarea');t.className='note-ta';t.rows=1;
       t.placeholder='Note on this point…';t.dataset.key=key;t.dataset.quote=q;
@@ -1153,6 +1156,17 @@ JS = r"""
     }
     if(focus)t.focus();
     return t;
+  }
+  // Notes whose section no longer exists (a heading renamed or removed) are never
+  // dropped: they collect here, after the document, and still export.
+  function unplaced(){
+    var u=document.getElementById('bn-unplaced');
+    if(!u){u=document.createElement('article');u.id='bn-unplaced';u.className='sec l2';
+      u.dataset.label='Unplaced notes';u.dataset.ref='unplaced';u.dataset.part='Unplaced notes';
+      var h=document.createElement('h3');h.className='sec-h';h.textContent='Unplaced notes — their section changed';
+      u.appendChild(h);var parts=document.querySelectorAll('section.part');
+      var last=parts[parts.length-1];(last||document.body).appendChild(u);}
+    return u;
   }
   function closeBlock(box){
     var t=box.querySelector('.note-ta');var i=tas.indexOf(t);if(i>=0)tas.splice(i,1);
@@ -1171,7 +1185,9 @@ JS = r"""
       var v=null;
       try{v=localStorage.getItem(NS+k);}catch(e){}
       if(v==null&&typeof SEED[k]==='string')v=SEED[k];
-      if(v&&v.trim()!=='')openBlock(k,false,typeof SEED[k+'~q']==='string'?SEED[k+'~q']:'');
+      var q=null;try{q=localStorage.getItem(NS+k+'~q');}catch(e){}
+      if(q==null&&typeof SEED[k+'~q']==='string')q=SEED[k+'~q'];
+      if(v&&v.trim()!=='')openBlock(k,false,q||'');
     });
   })();
   updateCount();
