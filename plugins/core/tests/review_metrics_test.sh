@@ -38,6 +38,14 @@ j="$(python3 "${METRICS}" --json)"
     || fail "the fix-up should count against the high-tier merge it followed: ${j}"
 echo "PASS: git — tiers from trailers, revert against its tier, fix-up against the merge it fixes"
 
+# A merge-commit repo: the Revert button's branch names the reverted PR.
+g2="${tmp}/mc"; git init -q -b main "${g2}" && cd "${g2}" || exit 1
+gc d.py "Merge pull request #7 from me/feature" "Risk-tier: medium (1 file)"
+gc d.py "Merge pull request #8 from me/revert-7-feature"
+out="$(python3 "${METRICS}")"
+grep -q "^30d: 1 merged (medium 1) · 1 revert (medium)" <<<"${out}" || fail "a revert-branch merge commit is a revert, not a merge: ${out}"
+cd "${tmp}" || exit 1
+
 # Digest records add rounds and who found the problems.
 python3 - <<'PY' > prs.json
 import json

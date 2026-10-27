@@ -49,6 +49,8 @@ REVERT_SUBJ_RX = re.compile(r'^Revert "(.+)"')
 REVERT_SHA_RX = re.compile(r"This reverts commit ([0-9a-f]{7,40})")
 REVERTS_REF_RX = re.compile(r"^Reverts \S*#(\d+)", re.MULTILINE)  # GitHub's Revert button
 PR_SUFFIX_RX = re.compile(r"\s*\(#\d+\)\s*$")
+# A merge-commit repo: the revert PR's branch from GitHub's Revert button.
+REVERT_BRANCH_RX = re.compile(r"^Merge pull request #\d+ from \S+/revert-(\d+)-")
 TIERS = ("low", "medium", "high", "untiered")
 
 
@@ -82,8 +84,14 @@ def commits(ref: str, days: int) -> list[dict[str, Any]]:
     return out
 
 
+def _is_revert(c: dict[str, Any]) -> bool:
+    return c["subject"].startswith("Revert") or bool(REVERT_BRANCH_RX.search(c["subject"]))
+
+
 def _reverted(c: dict[str, Any], merges: dict[int, dict[str, Any]]) -> dict[str, Any] | None:
     """The merge a revert names, trying each way of naming it until one matches."""
+    if (m := REVERT_BRANCH_RX.search(c["subject"])) and int(m.group(1)) in merges:
+        return merges[int(m.group(1))]
     bare = PR_SUFFIX_RX.sub("", c["subject"])
     if (m := REVERT_PR_RX.search(bare)) and int(m.group(1)) in merges:
         return merges[int(m.group(1))]
@@ -91,9 +99,14 @@ def _reverted(c: dict[str, Any], merges: dict[int, dict[str, Any]]) -> dict[str,
         return merges[int(m.group(1))]
     if m := REVERT_SUBJ_RX.search(bare):
         want = PR_SUFFIX_RX.sub("", m.group(1))
-        hit = next((x for x in merges.values() if PR_SUFFIX_RX.sub("", x["subject"]) == want), None)
-        if hit is not None:
-            return hit
+        # The newest earlier merge of that title: titles like "chore: bump deps" recur.
+        same = [
+            x
+            for x in merges.values()
+            if x["idx"] < c["idx"] and PR_SUFFIX_RX.sub("", x["subject"]) == want
+        ]
+        if same:
+            return max(same, key=lambda x: x["idx"])
     if m := REVERT_SHA_RX.search(c["body"]):
         return next((x for x in merges.values() if x["sha"].startswith(m.group(1))), None)
     return None
@@ -104,7 +117,7 @@ def git_metrics(cs: list[dict[str, Any]], days: int) -> dict[str, Any]:
     merges: dict[int, dict[str, Any]] = {}
     for c in cs:
         m = PR_RX.search(c["subject"])
-        if m and not c["subject"].startswith("Revert"):
+        if m and not _is_revert(c):
             t = TIER_RX.search(c["body"])
             c["pr"] = int(m.group(1) or m.group(2))
             c["tier"] = t.group(1).lower() if t and t.group(1).lower() in TIERS else "untiered"
@@ -114,7 +127,7 @@ def git_metrics(cs: list[dict[str, Any]], days: int) -> dict[str, Any]:
 
     reverts = dict.fromkeys(TIERS, 0)
     for c in cs:
-        if c["time"] < start or not c["subject"].startswith("Revert"):
+        if c["time"] < start or not _is_revert(c):
             continue
         target = _reverted(c, merges)
         if target is not None:
@@ -173,7 +186,10 @@ def line(m: dict[str, Any]) -> str:
 
 
 def default_ref() -> str:
-    """origin's default branch when known, so a feature-branch checkout reports main."""
+    """origin's default branch when known, so a feature-branch checkout reports main.
+
+    It reads the local `origin/<default>`, so it is as fresh as the last fetch.
+    """
     try:
         return _git("symbolic-ref", "--short", "refs/remotes/origin/HEAD").strip() or "HEAD"
     except ValueError:
