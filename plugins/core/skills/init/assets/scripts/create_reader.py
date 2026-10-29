@@ -111,6 +111,14 @@ DRAWSPEC_ENV = "ARSENAL_DRAWSPEC"
 DRAWSPEC_PACKAGE = "drawspec>=0.2,<0.3"
 DRAWSPEC_OPEN_RE = re.compile(r"^(?P<ind>[ \t]*)(?P<fence>`{3,}|~{3,})[ \t]*drawspec[ \t]*$")
 _drawspec_cmd: list[str] | None = None
+# What render_diagrams.py writes around a fence for GitHub: an image of the diagram and
+# a collapsed wrapper for the source. The reader draws the fence itself, so it drops both.
+SOURCE_OPEN = "<details><summary>Diagram source</summary>"
+GITHUB_RENDER_RE = re.compile(
+    r"^[ \t]*(!\[[^\]]*\]\([^)]*\)[ \t]*<!-- drawspec-render -->|"
+    + re.escape(SOURCE_OPEN)
+    + r")[ \t]*$"
+)
 
 
 class DrawspecError(Exception):
@@ -186,6 +194,17 @@ def extract_drawspec(text: str) -> tuple[str, list[tuple[str, str]]]:
             for ln in lines[i + 1 : j]
         ]
         blocks.append((token, "\n".join(body)))
+        # Drop what render_diagrams.py wrote around the fence for GitHub: the image
+        # before it, and the collapsed wrapper whose close follows it.
+        wrapped = False
+        while out and (not out[-1].strip() or GITHUB_RENDER_RE.match(out[-1])):
+            wrapped |= SOURCE_OPEN in out.pop()
+        if wrapped:
+            k = j + 1
+            while k < len(lines) and not lines[k].strip():
+                k += 1
+            if k < len(lines) and lines[k].strip() == "</details>":
+                j = k
         out += ["", m.group("ind") + token, ""]
         i = j + 1
     return "\n".join(out), blocks
