@@ -67,10 +67,23 @@ _fail() { echo "error: $1" >&2; exit 2; }
 
 # One call is one check of the gate, not the whole wait — the loop that polls
 # this is what blocks, and the report divides by PR to show that.
+timing=0
 command -v arsenal_timing_begin >/dev/null 2>&1 && {
     arsenal_timing_begin merge-ready "pr-${PR}"
-    trap 'arsenal_timing_end $?' EXIT
+    timing=1
 }
+# The API responses below are written to a temporary directory; it goes on every
+# exit, an interrupted one included, so private PR data is not left on disk.
+inputs=""
+_on_exit() {
+    local rc=$?
+    [[ -n "${inputs}" ]] && rm -rf "${inputs}"
+    [[ ${timing} -eq 1 ]] && arsenal_timing_end "${rc}"
+    return "${rc}"
+}
+trap _on_exit EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 slug="$(bash "${CHANNEL}" --slug)" || _fail "cannot determine owner/repo from the git remote"
 
@@ -157,13 +170,16 @@ fi
 # 128 KiB, and a PR's review-bot comments alone can pass that.
 inputs="$(mktemp -d)" || _fail "cannot create a temporary directory"
 command -v cygpath >/dev/null 2>&1 && inputs="$(cygpath -m "${inputs}")"
-printf '%s' "${pr_json}" > "${inputs}/PR_JSON"
-printf '%s' "${checks_json}" > "${inputs}/CHECKS_JSON"
-printf '%s' "${reviews_json}" > "${inputs}/REVIEWS_JSON"
-printf '%s' "${threads_json}" > "${inputs}/THREADS_JSON"
-printf '%s' "${comments_json}" > "${inputs}/COMMENTS_JSON"
-printf '%s' "${commits_json}" > "${inputs}/COMMITS_JSON"
-printf '%s' "${files_json}" > "${inputs}/FILES_JSON"
+# A short write (a full disk) would read as an absent response, which can pass a
+# PR whose missing comment blocks it: every write must succeed.
+{ printf '%s' "${pr_json}" > "${inputs}/PR_JSON" &&
+  printf '%s' "${checks_json}" > "${inputs}/CHECKS_JSON" &&
+  printf '%s' "${reviews_json}" > "${inputs}/REVIEWS_JSON" &&
+  printf '%s' "${threads_json}" > "${inputs}/THREADS_JSON" &&
+  printf '%s' "${comments_json}" > "${inputs}/COMMENTS_JSON" &&
+  printf '%s' "${commits_json}" > "${inputs}/COMMITS_JSON" &&
+  printf '%s' "${files_json}" > "${inputs}/FILES_JSON"; } ||
+    _fail "cannot write the PR responses to ${inputs}"
 
 payload="$(INPUTS="${inputs}" python3 - <<'PY'
 import json, os, sys
@@ -239,9 +255,7 @@ if threads_raw:
         pass
 json.dump([record], sys.stdout)
 PY
-)"; status=$?
-rm -rf "${inputs}"
-[[ ${status} -eq 0 ]] || _fail "cannot assemble the PR record"
+)" || _fail "cannot assemble the PR record"
 
 audit_args=(--pr "${PR}" --require-ready --prs -)
 [[ ${WANT_JSON} -eq 1 ]] && audit_args+=(--json)
