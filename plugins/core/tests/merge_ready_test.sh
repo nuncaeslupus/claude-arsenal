@@ -162,6 +162,32 @@ rm -f "${tmp}/comments.json" "${tmp}/commits.json"
 printf 'merge-policy = "after-ci"\n' > arsenal/config.toml
 echo "PASS: merge_ready fetches the markers and trailers reviewer-identity needs"
 
+# --- a response over the 128 KiB environment-string limit still evaluates ---
+#     Review bots post comments of tens of KiB each; passed through the
+#     environment, they made execve fail with "Argument list too long" (exit 2).
+#     The verdict hangs on the comments (a review marker among them), so a
+#     response that went missing would fail this rather than pass it.
+world "${HEAD}"
+printf 'merge-policy = "after-ci-and-review"\n[review]\nreviewer-identity = "distinct-login"\n' > arsenal/config.toml
+python3 - "${tmp}" "${HEAD}" <<'PY'
+import json, sys
+d, head = sys.argv[1], sys.argv[2]
+pr = json.load(open(f"{d}/pr.json"))
+pr["user"] = {"login": "owner"}
+json.dump(pr, open(f"{d}/pr.json", "w"))
+comments = [{"id": i, "user": {"login": "bot[bot]", "type": "Bot"}, "body": "x" * 4096}
+            for i in range(59)]
+comments.append({"id": 59, "author_association": "MEMBER",
+                 "user": {"login": "reviewer", "type": "User"},
+                 "body": f"<!-- arsenal-review: verdict=CLEAR head={head} session=s -->"})
+json.dump(comments, open(f"{d}/comments.json", "w"))
+PY
+out=$(run 42); rc=$?
+[[ ${rc} -eq 0 ]] || fail "test_large_comments_still_evaluated: got ${rc}: ${out}"
+rm -f "${tmp}/comments.json"
+printf 'merge-policy = "after-ci"\n' > arsenal/config.toml
+echo "PASS: a payload over the environment limit is read from files"
+
 # --- no scriptable channel is handed the calls, not skipped -----------------
 out=$(STUB_CHANNEL=none STUB_DIR="${tmp}" bash "${READY}" 42 2>&1); rc=$?
 [[ ${rc} -eq 5 ]] || fail "no channel should exit 5, got ${rc}"

@@ -18,6 +18,11 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [5.14.1] - 2026-10-29
+
+### Fixed
+- **`merge_ready.sh` no longer fails on PRs with long review-bot comments.** It passed each API response to Python through an environment variable, and Linux caps one at 128 KiB, so a PR carrying a few long bot comments exited 2 with "Argument list too long". The responses now go through temporary files.
+
 ## [5.14.0] - 2026-10-27
 
 ### Added

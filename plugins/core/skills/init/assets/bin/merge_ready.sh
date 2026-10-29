@@ -67,10 +67,23 @@ _fail() { echo "error: $1" >&2; exit 2; }
 
 # One call is one check of the gate, not the whole wait — the loop that polls
 # this is what blocks, and the report divides by PR to show that.
+timing=0
 command -v arsenal_timing_begin >/dev/null 2>&1 && {
     arsenal_timing_begin merge-ready "pr-${PR}"
-    trap 'arsenal_timing_end $?' EXIT
+    timing=1
 }
+# The API responses below are written to a temporary directory; it goes on every
+# exit, an interrupted one included, so private PR data is not left on disk.
+inputs=""
+_on_exit() {
+    local rc=$?
+    [[ -n "${inputs}" ]] && rm -rf "${inputs}"
+    [[ ${timing} -eq 1 ]] && arsenal_timing_end "${rc}"
+    return "${rc}"
+}
+trap _on_exit EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 slug="$(bash "${CHANNEL}" --slug)" || _fail "cannot determine owner/repo from the git remote"
 
@@ -153,13 +166,30 @@ if [[ "$(bash "${CHANNEL}" --detect 2>/dev/null)" == "gh" ]]; then
              | {id: .id, resolved: .isResolved}]' 2>/dev/null)" || threads_json=""
 fi
 
-payload="$(PR_JSON="${pr_json}" CHECKS_JSON="${checks_json}" REVIEWS_JSON="${reviews_json}" \
-    THREADS_JSON="${threads_json}" COMMENTS_JSON="${comments_json}" \
-    COMMITS_JSON="${commits_json}" FILES_JSON="${files_json}" python3 - <<'PY'
+# The responses go to Python as files: one environment string is capped at
+# 128 KiB, and a PR's review-bot comments alone can pass that.
+inputs="$(mktemp -d)" || _fail "cannot create a temporary directory"
+command -v cygpath >/dev/null 2>&1 && inputs="$(cygpath -m "${inputs}")"
+# A short write (a full disk) would read as an absent response, which can pass a
+# PR whose missing comment blocks it: every write must succeed.
+{ printf '%s' "${pr_json}" > "${inputs}/PR_JSON" &&
+  printf '%s' "${checks_json}" > "${inputs}/CHECKS_JSON" &&
+  printf '%s' "${reviews_json}" > "${inputs}/REVIEWS_JSON" &&
+  printf '%s' "${threads_json}" > "${inputs}/THREADS_JSON" &&
+  printf '%s' "${comments_json}" > "${inputs}/COMMENTS_JSON" &&
+  printf '%s' "${commits_json}" > "${inputs}/COMMITS_JSON" &&
+  printf '%s' "${files_json}" > "${inputs}/FILES_JSON"; } ||
+    _fail "cannot write the PR responses to ${inputs}"
+
+payload="$(INPUTS="${inputs}" python3 - <<'PY'
 import json, os, sys
 
+def read(name):
+    with open(os.path.join(os.environ["INPUTS"], name), encoding="utf-8") as f:
+        return f.read()
+
 def load(name, default):
-    raw = os.environ.get(name) or ""
+    raw = read(name)
     try:
         return json.loads(raw)
     except json.JSONDecodeError:
@@ -168,7 +198,7 @@ def load(name, default):
 pr = load("PR_JSON", {})
 checks = load("CHECKS_JSON", {})
 reviews = load("REVIEWS_JSON", [])
-threads_raw = os.environ.get("THREADS_JSON") or ""
+threads_raw = read("THREADS_JSON")
 
 runs = checks.get("check_runs", []) if isinstance(checks, dict) else []
 record = {
