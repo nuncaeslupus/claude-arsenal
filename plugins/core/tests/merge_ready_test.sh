@@ -162,6 +162,21 @@ rm -f "${tmp}/comments.json" "${tmp}/commits.json"
 printf 'merge-policy = "after-ci"\n' > arsenal/config.toml
 echo "PASS: merge_ready fetches the markers and trailers reviewer-identity needs"
 
+# --- a response over the 128 KiB environment-string limit still evaluates ---
+#     Review bots post comments of tens of KiB each; passed through the
+#     environment, they made execve fail with "Argument list too long" (exit 2).
+world "${HEAD}"
+python3 - "${tmp}" <<'PY'
+import json, sys
+body = "x" * 4096
+json.dump([{"id": i, "user": {"login": "bot[bot]", "type": "Bot"}, "body": body}
+           for i in range(60)], open(f"{sys.argv[1]}/comments.json", "w"))
+PY
+out=$(run 42); rc=$?
+[[ ${rc} -eq 0 ]] || fail "test_large_comments_still_evaluated: got ${rc}: ${out}"
+rm -f "${tmp}/comments.json"
+echo "PASS: a payload over the environment limit is read from files"
+
 # --- no scriptable channel is handed the calls, not skipped -----------------
 out=$(STUB_CHANNEL=none STUB_DIR="${tmp}" bash "${READY}" 42 2>&1); rc=$?
 [[ ${rc} -eq 5 ]] || fail "no channel should exit 5, got ${rc}"
