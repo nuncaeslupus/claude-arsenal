@@ -42,6 +42,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from urllib.parse import quote
 
 DRAWSPEC_PACKAGE = "drawspec>=0.4,<0.5"
 OPEN_RE = re.compile(r"^(?P<ind>[ \t]*)(?P<fence>`{3,}|~{3,})[ \t]*drawspec[ \t]*$")
@@ -79,6 +80,7 @@ def render_svg(source: str, where: str) -> str:
         input=source,
         capture_output=True,
         text=True,
+        encoding="utf-8",
         check=False,
     )
     if proc.returncode != 0:
@@ -90,27 +92,35 @@ def render_svg(source: str, where: str) -> str:
 
 
 def alt_text(source: str, n: int) -> str:
+    """The document's description, else its title, else "Diagram <n>"."""
     try:
-        title = json.loads(source).get("title")
-    except (ValueError, AttributeError):
-        title = None
-    text = title if isinstance(title, str) and title.strip() else f"Diagram {n}"
-    return re.sub(r"[\[\]\n]", " ", text).strip()
+        doc = json.loads(source)
+    except ValueError:
+        doc = None
+    for key in ("description", "title"):
+        value = doc.get(key) if isinstance(doc, dict) else None
+        if isinstance(value, str) and value.strip():
+            return re.sub(r"[\[\]\s]+", " ", value).strip()
+    return f"Diagram {n}"
 
 
 def unwrap(lines: list[str]) -> list[str]:
     """Drop what an earlier run wrote around the fences, so a rerun starts clean."""
     out: list[str] = []
     skip_blank = False
+    # Only the close of a wrapper this script opened goes; an author's own </details> stays.
+    in_wrapper = False
     for line in lines:
         if skip_blank and line.strip() == "":
             skip_blank = False
             continue
         skip_blank = False
         if IMAGE_RE.match(line) or line.strip() == SOURCE_OPEN:
+            in_wrapper |= line.strip() == SOURCE_OPEN
             skip_blank = True
             continue
-        if line.strip() == SOURCE_CLOSE and out and out[-1].strip() == "":
+        if in_wrapper and line.strip() == SOURCE_CLOSE and out and out[-1].strip() == "":
+            in_wrapper = False
             out.pop()
             continue
         out.append(line)
@@ -139,8 +149,9 @@ def process(doc: Path) -> tuple[str, dict[Path, str]]:
         body = "\n".join(ln[len(ind) :] if ln.startswith(ind) else ln for ln in lines[i + 1 : j])
         n = len(svgs) + 1
         rel = f"diagrams/{doc.stem}-{n}.svg"
+        link = quote(rel)  # a name with spaces or parentheses must not break the link
         svgs[doc.parent / rel] = render_svg(body, f"{doc}, drawspec block {n}")
-        out += [f"{ind}![{alt_text(body, n)}]({rel}) {MARK}", "", ind + SOURCE_OPEN, ""]
+        out += [f"{ind}![{alt_text(body, n)}]({link}) {MARK}", "", ind + SOURCE_OPEN, ""]
         out += lines[i : j + 1]
         out += ["", ind + SOURCE_CLOSE]
         i = j + 1

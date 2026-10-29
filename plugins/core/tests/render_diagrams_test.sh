@@ -68,7 +68,19 @@ grep -qx '!\[Diagram 2\](diagrams/plan-2.svg) <!-- drawspec-render -->' "${doc}"
 [[ $(grep -c '^<details><summary>Diagram source</summary>$' "${doc}") -eq 2 ]] || fail "source not collapsed"
 grep -q 'prefers-color-scheme:dark' "${tmp}/status/diagrams/plan-1.svg" || fail "SVG ink ignores dark mode"
 grep -q 'width="120" height="40"' "${tmp}/status/diagrams/plan-1.svg" || fail "SVG has no intrinsic size"
-grep -q '<summary>Notes</summary>' "${doc}" || fail "an author's own <details> was touched"
+notes=$(awk '/<summary>Notes<\/summary>/{f=1} f{print} f&&/<\/details>/{exit}' "${doc}")
+[[ "${notes}" == $'<details><summary>Notes</summary>\n\nNot a diagram.\n\n</details>' ]] \
+    || fail "an author's own <details> was changed: ${notes}"
+
+# 2b: a name with spaces and parentheses gets a working link, and a rerun adds nothing;
+#     a description is preferred over the title as alt text.
+odd="${tmp}/status/plan (draft).md"
+printf '%s\n' '```drawspec' '{"version": 1, "kind": "flow", "title": "T", "description": "Steps in order", "nodes": [{"id": "a", "text": "One"}]}' '```' > "${odd}"
+python3 "${RENDER}" "${odd}" >/dev/null && python3 "${RENDER}" "${odd}" >/dev/null || fail "render of an odd name failed"
+[[ $(grep -c 'drawspec-render' "${odd}") -eq 1 ]] || fail "a rerun duplicated the image of an odd name"
+grep -qx '!\[Steps in order\](diagrams/plan%20%28draft%29-1.svg) <!-- drawspec-render -->' "${odd}" \
+    || fail "the odd name's link is not encoded, or the description is not the alt text: $(head -1 "${odd}")"
+[[ -f "${tmp}/status/diagrams/plan (draft)-1.svg" ]] || fail "the odd name's SVG is not on disk"
 
 # 3: a rerun changes nothing, and --check agrees.
 cp "${doc}" "${tmp}/once.md"
