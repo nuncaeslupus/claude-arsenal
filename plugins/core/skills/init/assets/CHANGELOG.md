@@ -18,6 +18,16 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [5.15.0] - 2026-10-29
+
+- New `scripts/render_diagrams.py`: renders each ```drawspec fence in a spec or plan
+  to `diagrams/<doc>-<n>.svg` and puts the image above it, with the JSON source
+  collapsed under "Diagram source". Diagrams now show as pictures on GitHub instead
+  of JSON, in light and dark mode. `--check` exits 1 when an SVG is stale, for CI.
+  Needs drawspec 0.4 or later; `uvx` fetches it when it is not installed.
+- `create_reader.py` ignores that image and wrapper, so the HTML reader still draws
+  each diagram once.
+
 ## [5.14.1] - 2026-10-29
 
 ### Fixed
