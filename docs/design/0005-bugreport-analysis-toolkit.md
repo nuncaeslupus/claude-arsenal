@@ -82,7 +82,7 @@ context.
 - [ ] `commands_to_diagnosis <= 1`: `analyze_bugreport.py` (full checkup) on the provenance bugreport reports memory thrashing as the top finding, names the ANR'd processes as victims, and lists the top memory holders — judged against the manual diagnosis recorded above.
 - [ ] Detector coverage: each problem family F1–F11 in § 2.2 has ≥ 1 detector with a fixture that fires it and one that does not (`make test` asserts both).
 - [ ] Advice coverage: every finding id has an entry in `references/advice.md` (a test diffs the two id sets; missing entry = build failure).
-- [ ] Android version / OEM coverage: every sample listed in the fixtures index parses with zero unhandled exceptions, covering at least Android 12, 14 and 16 and at least one non-Pixel OEM; unknown sections degrade to "not parsed", never a crash.
+- [ ] Android version / OEM coverage: synthetic fixtures reproduce the layouts seen in the corpus (§ 2.1.1) — pre-P (no priority blocks), 9–17 with CRITICAL/HIGH, Samsung `DUMPSYS NORMAL` + OEM sections, Xiaomi/OnePlus/Huawei sections, zips without `main_entry.txt` — and all parse in CI with zero unhandled exceptions; before each release the real corpus is re-run locally (not in CI) with the same zero-exception bar. Unknown sections degrade to "not parsed", never a crash.
 - [ ] Fallback cost: for a section with no parser, `commands_to_first_fields <= 2` (`query … locate`, then `query … sample`), each `output_bytes <= 2048`.
 - [ ] `validate_skill.py` (skill-workshop) reports 0 `must` findings on the skill folder.
 - [ ] `pii_in_default_output == 0`: emails, IMEI/IMSI/ICCID, phone numbers, MAC addresses and SSIDs never appear in default output (asserted by a test over a seeded fixture); `--no-redact` is the explicit opt-out.
@@ -237,9 +237,7 @@ compatibility (additive, minor bump), risk (format drift, PII — § 2.1/§ 2.3)
 validation (success criteria), release readiness (changelog entry + `make
 context-budget` row).
 
-**Open questions**:
-1. Public samples: almost none carry a licence, so committing even excerpts is doubtful. Draft: commit only synthetic fixtures; list the public samples by pinned URL + sha256 in a corpus manifest, and add an opt-in `make test-corpus` that downloads and runs them (parse-without-exception + timing), never part of default CI. Agree?
-2. Maintainer's own reports: commit redacted excerpts as fixtures, or use them only as local benchmarks? Draft: local benchmarks plus small redacted excerpts for the detectors they uniquely exercise.
+**Open questions**: none — all resolved in the decisions log.
 
 **Decisions log**:
 - D-1 — Lives inside `claude-arsenal` (not a separate repo), as a tool skill like `har` (maintainer, 2026-11-04).
@@ -250,3 +248,4 @@ context-budget` row).
 - D-6 — Advice: deterministic `advice_id` from scripts, remedy text in a reference the session interprets (maintainer: "a part of it could be from the skill for the LLM to interpret").
 - D-7 — No comparison analysis; stable JSON plus a small `compare_bugreport.py` diff, last and droppable (maintainer, r2 notes).
 - D-8 — Built and validated under skill-workshop rules (maintainer, r2 notes).
+- D-9 — Real reports (public corpus and the maintainer's own) are study material only: they inform which data to read and keep, how to preserve privacy, and which concrete cases detectors must catch. They are never committed, not even as excerpts. CI runs on synthetic fixtures built from what the real reports taught (maintainer, 2026-11-04).
