@@ -99,8 +99,13 @@ bench="$(py "$here/bugreport/benchmark.py" --target-mb 16 --zip-mb 23.4 --output
 echo "PASS: index build, zip build and reuse within their gates at 1/10 scale"
 
 # --- test_skill_folder_has_no_must_findings ---------------------------------
-py "$root/plugins/skill-workshop/skills/skill-workshop/scripts/validate.py" "$skill" >"$tmp/val" 2>&1 \
-    || fail "skill-workshop validate.py reported failures: $(cat "$tmp/val")"
-echo "PASS: skill folder has no must findings"
+# validate.py needs pyyaml, absent from the bare-python job; `make validate` runs it there.
+if python3 -c "import yaml" >/dev/null 2>&1; then
+    py "$root/plugins/skill-workshop/skills/skill-workshop/scripts/validate.py" "$skill" >"$tmp/val" 2>&1 \
+        || fail "skill-workshop validate.py reported failures: $(cat "$tmp/val")"
+    echo "PASS: skill folder has no must findings"
+else
+    echo "SKIP: pyyaml not importable here — \`make validate\` runs the skill validator"
+fi
 
 echo "PASS: bugreport_test.sh"

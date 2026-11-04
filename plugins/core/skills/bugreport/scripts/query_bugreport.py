@@ -330,6 +330,12 @@ _COMMANDS = {
 
 
 def main(argv: list[str] | None = None) -> int:
+    argv = list(sys.argv[1:] if argv is None else argv)
+    # argparse before 3.14 reads `--since -30m` as two flags; bind the value explicitly
+    for i, a in enumerate(argv[:-1]):
+        if a == "--since" and argv[i + 1].startswith("-"):
+            argv[i : i + 2] = [f"--since={argv[i + 1]}"]
+            break
     args = _parser().parse_args(argv)
 
     def go() -> int:
