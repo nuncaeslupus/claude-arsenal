@@ -53,10 +53,17 @@ jobs:
   smoke-macos-skipped:
     name: smoke + lint (macos-latest)
     needs: changes
-    if: needs.changes.outputs.mac != 'true'
+    # always(): when `changes` itself fails, this job still runs and fails, so a
+    # broken file listing blocks the merge instead of reading as a skipped pass.
+    if: always() && needs.changes.outputs.mac != 'true'
     runs-on: ubuntu-22.04
     steps:
-      - run: echo "No script changed in this PR; macOS smoke not needed."
+      - run: |
+          if [ "${{ needs.changes.result }}" != success ]; then
+            echo "changes job did not succeed (${{ needs.changes.result }}); cannot decide whether macOS smoke is needed."
+            exit 1
+          fi
+          echo "No script changed in this PR; macOS smoke not needed."
 
   smoke:
     name: smoke + lint
