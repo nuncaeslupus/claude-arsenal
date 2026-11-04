@@ -18,6 +18,15 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [5.20.2] - 2026-11-05
+
+### Fixed
+
+- `merge_ready.sh` and `pr_audit.py` no longer pass a PR whose `mergeable_state`
+  is `behind`, `dirty` or `unknown`. A `behind` PR ran CI on an old base, so a
+  squash merge would land code never tested together; the next action now says
+  to update the branch. `unknown` is fetched once more before it blocks (#540).
+
 ## [5.20.1] - 2026-11-05
 
 ### Fixed
