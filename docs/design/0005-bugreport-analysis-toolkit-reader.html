@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
-<meta name="arsenal-source-sha256" content="224ff58137696348eac0515120362a4c646a1920c5a57c2e2f08b92e56309c89">
+<meta name="arsenal-source-sha256" content="9562cec6720be66814e8a7062043f808d1e5632c02e9f58c9ab212692fcd47ba">
 <title>Claude Arsenal — Specification (annotatable)</title>
 <style>
 :root{
@@ -194,7 +194,7 @@ li>.note.bnote{margin:6px 0}
     <button class="btn primary" id="btn-export">Save / Export</button>
   </div>
 </div>
-<div class="statusbar"><div class="wrap"><span class="count" id="count">0 / 12 notes</span><span class="hint"> · notes save automatically; <strong>Save / Export</strong> keeps a file you can send back</span></div></div>
+<div class="statusbar"><div class="wrap"><span class="count" id="count">0 / 13 notes</span><span class="hint"> · notes save automatically; <strong>Save / Export</strong> keeps a file you can send back</span></div></div>
 <div id="warnbar"><div class="wrap"><strong>Heads up —</strong> this browser isn't storing your notes automatically (private/incognito mode or restricted file view). Tap <strong>Save / Export</strong> regularly.</div></div>
 
 <div class="wrap">
@@ -222,10 +222,11 @@ li>.note.bnote{margin:6px 0}
 <li class="sub"><a href="#s-spec-2-1">§2.1 What a bugreport contains (parser facts)</a></li>
 <li class="sub"><a href="#s-spec-2-2">§2.2 Problem families the detectors target (ranked by forum demand)</a></li>
 <li class="sub"><a href="#s-spec-2-3">§2.3 Systems touched</a></li>
+<li class="sub"><a href="#s-spec-2-4">§2.4 Skill-workshop constraints the design must meet</a></li>
 <li><a href="#s-spec-3">§3 Options</a></li>
 <li class="sub"><a href="#s-spec-option-a-recipe-reference-a-hand">Option A: Recipe reference + a handful of grep scripts (Conservative)</a></li>
 <li class="sub"><a href="#s-spec-option-b-indexed-detector-driven">Option B: Indexed, detector-driven toolkit, stdlib only (Recommended)</a></li>
-<li class="sub"><a href="#s-spec-option-c-build-on-perfetto-trace">Option C: Build on Perfetto trace_processor as the substrate</a></li>
+<li class="sub"><a href="#s-spec-option-c-build-on-perfetto-trace">Option C: Build on Perfetto trace_processor as the substrate (rejected by the maintainer — ideas only)</a></li>
 <li class="sub"><a href="#s-spec-option-d-mcp-server-instead-of-a">Option D: MCP server instead of a skill</a></li>
 <li class="sub"><a href="#s-spec-comparison">Comparison</a></li>
 <li><a href="#s-spec-4">§4 Recommendation</a></li>
@@ -237,10 +238,11 @@ li>.note.bnote{margin:6px 0}
 <div class="sec-body"><p><strong>Date</strong>: 2026-11-04<br />
 <strong>Ticket / PR</strong>: none yet (opened with this spec)<br />
 <strong>Author</strong>: Claude, for the maintainer<br />
-<strong>Revision</strong>: 1<br />
+<strong>Revision</strong>: 2<br />
 <strong>Status</strong>: draft<br />
 <strong>Revision log</strong>:
-- r1 — first draft</p>
+- r1 — first draft
+- r2 — applied <code>notes/0005-bugreport-analysis-toolkit-notes-2026-11-04.md</code> (7 notes): full-checkup mode with advice, security &amp; hygiene family, extra families (network, Bluetooth/GPS, storage/OTA, battery health), fallback primitives for unparsed sections, <code>android</code> section, Perfetto as ideas only, <code>compare</code> reduced to a JSON diff, skill-workshop conventions, public multi-OEM samples</p>
 <blockquote>
 <p>Review record. Each round of reviewer notes makes a new revision: bump
 <strong>Revision</strong>, add a log line naming the export it applied, and commit that
@@ -292,15 +294,32 @@ context.</p></div>
 <li><strong>Efficient reading.</strong> Decide, with measurements, whether to index or convert
    the file rather than re-scanning it per question.</li>
 <li><strong>Lives in arsenal as a tool</strong>, alongside <code>har</code>, following its conventions.</li>
+<li><strong>An auto-diagnostic, not a parser.</strong> "How is my phone doing?" runs every
+   detector and answers with problems <em>and</em> remedies (close or restrict an app,
+   cut battery use, avoid heat, free storage…), including problems the user
+   has not noticed yet.</li>
+<li><strong>Security and hygiene are in scope</strong>: apps installed outside an app store,
+   risky permissions and app configurations, device-level security settings.</li>
+<li><strong>Nothing is unreachable.</strong> When a section cannot be parsed (a new Android
+   release, an OEM format), cheap generic primitives still let the session
+   locate, sample and interpret it without reading it whole.</li>
+<li><strong>Built to skill-workshop rules</strong> (§ 2.4) — the rubric gates every file in
+   the skill folder.</li>
+<li><strong>No Perfetto dependency</strong>; its ideas may be borrowed.</li>
+<li><strong>Broad coverage</strong>: test material from several Android versions and OEMs,
+    not only the maintainer's phone.</li>
 </ol>
 <p><strong>Success criteria (measurable)</strong></p>
 <ul>
 <li>[ ] <code>index_build_s &lt;= 3</code> for a 160 MB bugreport text on the CI runner (measured today: one <code>mmap</code> + regex pass over 156 MB finds 842 sections in 0.96 s); <code>peak_rss_mb &lt;= 300</code>.</li>
 <li>[ ] <code>query_s &lt;= 1</code> for any single-section command once the index exists (seek to byte range, parse only that slice).</li>
-<li>[ ] <code>triage_output_bytes &lt;= 4096</code> by default, enforced by truncation; every finding carries an evidence pointer (<code>section</code> + byte offset or file path) so the full text is one <code>show</code> command away.</li>
-<li>[ ] <code>commands_to_diagnosis &lt;= 1</code>: <code>triage</code> on the provenance bugreport reports memory thrashing as the top finding, names the ANR'd processes as victims, and lists the top memory holders — judged against the manual diagnosis recorded above.</li>
-<li>[ ] Detector coverage: each of the six problem families in § 2.2 has ≥ 1 detector with a fixture that fires it and one that does not (<code>make test</code> asserts both).</li>
-<li>[ ] Android version coverage: fixtures for at least Android 12, 14 and 16 layouts parse with zero unhandled exceptions; unknown sections degrade to "not parsed", never a crash.</li>
+<li>[ ] <code>checkup_output_bytes &lt;= 4096</code> by default, enforced by truncation; every finding carries an evidence pointer (<code>section</code> + byte offset or file path) so the full text is one <code>show</code> command away.</li>
+<li>[ ] <code>commands_to_diagnosis &lt;= 1</code>: <code>analyze_bugreport.py</code> (full checkup) on the provenance bugreport reports memory thrashing as the top finding, names the ANR'd processes as victims, and lists the top memory holders — judged against the manual diagnosis recorded above.</li>
+<li>[ ] Detector coverage: each problem family F1–F11 in § 2.2 has ≥ 1 detector with a fixture that fires it and one that does not (<code>make test</code> asserts both).</li>
+<li>[ ] Advice coverage: every finding id has an entry in <code>references/advice.md</code> (a test diffs the two id sets; missing entry = build failure).</li>
+<li>[ ] Android version / OEM coverage: every sample listed in the fixtures index parses with zero unhandled exceptions, covering at least Android 12, 14 and 16 and at least one non-Pixel OEM; unknown sections degrade to "not parsed", never a crash.</li>
+<li>[ ] Fallback cost: for a section with no parser, <code>commands_to_first_fields &lt;= 2</code> (<code>query … locate</code>, then <code>query … sample</code>), each <code>output_bytes &lt;= 2048</code>.</li>
+<li>[ ] <code>validate_skill.py</code> (skill-workshop) reports 0 <code>must</code> findings on the skill folder.</li>
 <li>[ ] <code>pii_in_default_output == 0</code>: emails, IMEI/IMSI/ICCID, phone numbers, MAC addresses and SSIDs never appear in default output (asserted by a test over a seeded fixture); <code>--no-redact</code> is the explicit opt-out.</li>
 <li>[ ] Zero third-party runtime dependencies for the core scripts (stdlib only, <code>uv run python</code>), including tombstone <code>.pb</code> decoding.</li>
 <li>[ ] Resident listing cost <code>&lt;= 130</code> tokens for installs with the skill's section enabled and <code>0</code> for installs without it (<code>make context-budget</code>).</li>
@@ -361,9 +380,38 @@ context.</p></div>
 <td>Memory hogs / background abuse</td>
 <td>procstats 24 h aggregates (memory × time per process and state, incl. <strong>foreground while screen off</strong>), meminfo totals, persistent foreground services</td>
 </tr>
+<tr>
+<td>F7</td>
+<td>Network / modem</td>
+<td>signal strength history and radio-active time (batterystats), mobile/Wi-Fi drops and scan storms (<code>connectivity</code>, <code>wifi</code>, <code>telephony.registry</code>), <code>netstats</code> per-app data</td>
+</tr>
+<tr>
+<td>F8</td>
+<td>Bluetooth / GPS / sensors</td>
+<td>Bluetooth HAL crashes and HCI timeouts (tombstones, <code>bluetooth_manager</code>), <code>location</code> request holders and GPS on-time, sensor wakeups</td>
+</tr>
+<tr>
+<td>F9</td>
+<td>Storage / updates</td>
+<td>free space (<code>diskstats</code>), app cache sizes, OTA / <code>update_engine</code> failures, <code>dex2oat</code> storms after updates</td>
+</tr>
+<tr>
+<td>F10</td>
+<td>Security &amp; hygiene</td>
+<td>apps whose installer is not an app store (<code>dumpsys package</code> installer fields); <code>REQUEST_INSTALL_PACKAGES</code> granted; enabled accessibility services, device admins, notification listeners, overlay and usage-access holders; user-installed CA certificates; always-on VPN; ADB / developer options on; bootloader unlocked or verified-boot not green; security patch age; Play Protect status where exposed</td>
+</tr>
+<tr>
+<td>F11</td>
+<td>Battery health &amp; charging</td>
+<td><code>dumpsys battery</code> health, capacity vs design, cycle count, charge-rate limits, temperature while charging</td>
+</tr>
 </tbody>
 </table>
-<p>Network/modem, Bluetooth and storage are out of v1 detectors but reachable through the generic <code>section</code>/<code>grep</code> commands.</p></div>
+<p><strong>Full checkup.</strong> A question as broad as "how is my phone doing?" runs every
+detector of F1–F11 in one command and returns findings ranked by severity,
+each with a remedy id (§ Option B). It surfaces latent problems too — a
+background app holding 2 GB with the screen off, a sideloaded app with
+accessibility access, swap at 97 % — not only the one the user came with.</p></div>
 <div class="note" data-for="s-spec-2-2"><label class="note-head" for="n-s-spec-2-2"><span class="note-ico" aria-hidden="true">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC §2.2</span></label><textarea class="note-ta" data-key="s-spec-2-2" id="n-s-spec-2-2" data-label="§2.2 Problem families the detectors target (ranked by forum demand)" data-part="0005 Bugreport Analysis Toolkit" rows="1" placeholder="Add a note on this section…"></textarea></div>
 </article>
 <article class="sec l3" id="s-spec-2-3" data-ref="SPEC §2.3" data-label="§2.3 Systems touched" data-part="0005 Bugreport Analysis Toolkit">
@@ -383,17 +431,17 @@ context.</p></div>
 <tr>
 <td><code>plugins/core/skills/bugreport/</code></td>
 <td>Primary</td>
-<td>New skill: SKILL.md, references, stdlib scripts, evals</td>
+<td>New skill: SKILL.md, references, stdlib scripts, evals. <code>plugins/core/</code> is the folder every vendored skill lives in (<code>har</code> included) — <strong>not</strong> the always-installed tier; who installs it is decided by the section below</td>
 <td>Yes</td>
 <td>New code only</td>
 <td>Med</td>
 </tr>
 <tr>
-<td>Skill sections (<code>init.py</code> profiles)</td>
+<td>Skill sections (<code>init.py</code>, <code>assets/sections.json</code>)</td>
 <td>Dependent</td>
-<td>Decides who installs it; <code>har</code> lives in default-off <code>extract</code></td>
-<td>Yes (one entry, maybe a new section)</td>
-<td>Listing cost only where enabled</td>
+<td>New default-off section <strong><code>android</code></strong> (frontmatter <code>section: android</code>); <code>har</code> stays in <code>extract</code>. Room for future Android tools (logcat, ANR/tombstone-only inputs)</td>
+<td>Yes (one section entry, regenerated manifest)</td>
+<td>Listing cost only where enabled; 0 for everyone else</td>
 <td>Low</td>
 </tr>
 <tr>
@@ -429,9 +477,20 @@ context.</p></div>
 <td>High</td>
 </tr>
 </tbody>
-</table>
-<p>Impact summary: <strong>Data</strong> — read-only on the input, sidecar index beside it; <strong>API</strong> — new CLI surface, no existing contract changes; <strong>Performance</strong> — bounded by the criteria above; <strong>User</strong> — opt-in skill; <strong>Operational</strong> — fixtures must never contain a real report; <strong>Risk of inaction</strong> — every bugreport question keeps costing ~15 calls and re-learned traps.</p></div>
+</table></div>
 <div class="note" data-for="s-spec-2-3"><label class="note-head" for="n-s-spec-2-3"><span class="note-ico" aria-hidden="true">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC §2.3</span></label><textarea class="note-ta" data-key="s-spec-2-3" id="n-s-spec-2-3" data-label="§2.3 Systems touched" data-part="0005 Bugreport Analysis Toolkit" rows="1" placeholder="Add a note on this section…"></textarea></div>
+</article>
+<article class="sec l3" id="s-spec-2-4" data-ref="SPEC §2.4" data-label="§2.4 Skill-workshop constraints the design must meet" data-part="0005 Bugreport Analysis Toolkit">
+<h4 class="sec-h"><span class="chip">§2.4</span><span class="sec-title">Skill-workshop constraints the design must meet</span></h4>
+<div class="sec-body"><ul>
+<li>Authoring runs under <code>/skill-workshop:skill-workshop</code>; its validator must report 0 <code>must</code> findings.</li>
+<li>Frontmatter: <code>name: bugreport</code> (folder name, kebab-case), third-person <code>description</code> stating what + when with a negative trigger ("Not for live-device adb sessions or logcat-only files" — or whatever scope v1 ends with), no angle brackets, <code>metadata.section: android</code>, <code>metadata.type: tool</code>, <code>allowed-tools</code> pre-approving the script invocations.</li>
+<li>Body ≤ 500 lines, imperative voice, no second person; standing constraints (privacy, output cap, fallback route) front-loaded; detail in <code>references/</code> with "load when…" triggers; <code>references/_index.md</code> if the body passes 300 lines; each reference ≤ 10K tokens; no PII in references.</li>
+<li>Scripts: <code>verb_noun.py</code> naming, canonical flags (<code>--input</code>, <code>--output</code>, <code>--output-dir</code>, <code>--json</code>, <code>--limit</code>, <code>--since</code>), stdout = payload only, progress and errors on stderr via <code>_console.py</code>, exit codes 0/1/2, <code>main()</code> + guard, no top-level work, <code>--help</code> on every script.</li>
+<li>Evals: loading-verification + trigger evals in <code>evals/</code>, like <code>har</code>.</li>
+</ul>
+<p>Impact summary: <strong>Data</strong> — read-only on the input, sidecar index beside it; <strong>API</strong> — new CLI surface, no existing contract changes; <strong>Performance</strong> — bounded by the criteria above; <strong>User</strong> — opt-in skill; <strong>Operational</strong> — fixtures must never contain a real report; <strong>Risk of inaction</strong> — every bugreport question keeps costing ~15 calls and re-learned traps.</p></div>
+<div class="note" data-for="s-spec-2-4"><label class="note-head" for="n-s-spec-2-4"><span class="note-ico" aria-hidden="true">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC §2.4</span></label><textarea class="note-ta" data-key="s-spec-2-4" id="n-s-spec-2-4" data-label="§2.4 Skill-workshop constraints the design must meet" data-part="0005 Bugreport Analysis Toolkit" rows="1" placeholder="Add a note on this section…"></textarea></div>
 </article>
 <article class="sec l2 bare" id="s-spec-3" data-ref="SPEC §3" data-label="§3 Options" data-part="0005 Bugreport Analysis Toolkit">
 <h3 class="sec-h"><span class="chip">§3</span><span class="sec-title">Options</span></h3>
@@ -450,25 +509,26 @@ context.</p></div>
 <article class="sec l3" id="s-spec-option-b-indexed-detector-driven" data-ref="SPEC › Option B: Indexed, detector-driven toolkit, stdlib only (Recommended)" data-label="Option B: Indexed, detector-driven toolkit, stdlib only (Recommended)" data-part="0005 Bugreport Analysis Toolkit">
 <h4 class="sec-h"><span class="chip">▸</span><span class="sec-title">Option B: Indexed, detector-driven toolkit, stdlib only (Recommended)</span></h4>
 <div class="sec-body"><ul>
-<li><strong>Description</strong>:<ul>
-<li><code>index</code> — one pass builds a sidecar <code>&lt;report&gt;.brindex.json</code> (section/service → byte range, build, Android version, timezone offset, uptime) keyed by the input's size+mtime+sha256 of the first MB; reads <code>.zip</code> in place (no full extraction) or a <code>.txt</code>; normalises encoding (BOM/UTF-16) once. Every other command builds it on demand.</li>
-<li><code>triage</code> — runs the detector catalogue and prints ranked findings (<code>severity · family · one-line claim · evidence pointer</code>), plus a three-line device header. This is the default entry point.</li>
-<li>Family commands, each a slice reader with a fixed compact output: <code>memory</code> (procstats 24 h memory×time ranking with state, meminfo totals, swap, PSI, lmkd kills), <code>anr</code> (per ANR: reason, victim vs pressure, main-thread state, top CPU), <code>crashes</code> (tombstones via a ~100-line stdlib protobuf varint decoder, Java fatal exceptions, exit-info reasons), <code>battery</code> (from the checkin CSV, not the text form), <code>reboots</code>, <code>thermal</code>, <code>churn</code> (kill → restart loops and what restarted them).</li>
-<li>Generic access, so nothing in the report is unreachable: <code>sections</code> (list with sizes), <code>show &lt;section&gt; [--grep re] [--around HH:MM:SS --window 2m]</code>, <code>timeline --at HH:MM --window 5m</code> (merged event log + system log + ANR/kill markers).</li>
-<li><code>redact</code> — writes a scrubbed copy (emails, IMEI by Luhn, phone numbers, MACs, SSIDs, account names, coordinates) for sharing; the same filter is on by default for all stdout.</li>
-<li><code>compare A B</code> — before/after diff of findings and memory/battery rankings (e.g. "did the restriction help?").</li>
-<li>Output discipline copied from <code>har</code>: ≤ 4096 bytes by default, <code>--json</code> for full machine output to a file, <code>--help</code> on every script.</li>
+<li><strong>Description</strong> — four scripts sharing one library (<code>_brlib.py</code>: index, slice reader, tolerant number parsing, redaction filter, <code>_console.py</code>):<ul>
+<li><strong><code>analyze_bugreport.py</code></strong> — the entry point. Builds or reuses the index, then runs detectors and emits findings. Default mode is the <strong>full checkup</strong> (all families F1–F11); <code>--family memory,anr,…</code> narrows it. Each finding: <code>id</code>, <code>severity</code>, <code>family</code>, one-line <code>claim</code>, key <code>facts</code> (numbers), <code>evidence</code> pointer (section + byte offset, or <code>FS/</code> path), <code>advice_id</code>. Family views give the fixed compact tables a follow-up needs: memory (procstats 24 h memory × time by process and state, meminfo, swap, PSI, lmkd kills), ANR (reason, victim vs pressure, main-thread state, top CPU), crashes (tombstones via a ~100-line stdlib protobuf varint decoder, Java fatal exceptions, exit-info reasons), battery (from the checkin CSV, not the text form), reboots, thermal, churn (kill → restart loops and what restarted them), security &amp; hygiene.</li>
+<li><strong><code>query_bugreport.py</code></strong> — generic primitives, so a section with no parser (new Android release, OEM format) is still cheap to interpret: <code>sections</code> (name, service, size, parse status), <code>locate --grep RE</code> (hit counts per section, no lines), <code>sample SECTION</code> (first lines, plus a format sniff — key=value, table, indented tree, CSV — and the shape of its repeated records), <code>show SECTION --grep RE --context N --limit N</code>, <code>timeline --since HH:MM --window 5m</code> (event log + system log + ANR/kill markers merged). All output capped; full text goes to <code>--output FILE</code>.</li>
+<li><strong><code>validate_bugreport.py</code></strong> — is the input a bugreport, which format version, Android version, OEM, encoding fixed, which detector inputs parsed and which fell back. A falling-back detector names the <code>query</code> command to use instead, so drift shows up as a route, not a silent gap.</li>
+<li><strong><code>create_bugreport.py --redact</code></strong> — writes a scrubbed copy for sharing (emails, IMEI by Luhn, phone numbers, MACs, SSIDs, account names, coordinates); the same filter is on by default for all stdout.</li>
 </ul>
 </li>
+<li><strong>Advice split</strong> (resolves open question 3): scripts stay deterministic and only emit <code>advice_id</code> plus the facts; <code>references/advice.md</code> maps each id to a remedy template (what to do, Settings path per Android version, when to escalate to repair/support), loaded only when advice is needed; the session phrases it for the user's situation. <code>--advice</code> adds the one-line canned remedy to each finding for terminal use.</li>
+<li><strong>Comparison</strong> (resolves open question 4): no analysis of its own. <code>analyze --json</code> has a versioned, stable schema, so "before vs after" means running it on two reports; <code>compare_bugreport.py</code> is a small diff of two such JSON files (new / gone / changed findings, memory and battery ranking deltas), last in the plan and droppable.</li>
+<li><strong>Ideas borrowed from Perfetto, no dependency</strong>: the section/service two-level model, the logcat-local vs UTC offset taken from the alarm dump's <code>nowRTC</code>/<code>nowELAPSED</code>, scanning <code>FS/</code> for embedded traces and logs.</li>
+<li><strong>Output discipline</strong> from <code>har</code> and skill-workshop: compact JSON on stdout ≤ 4096 bytes by default (truncated with a marker), progress on stderr, <code>--output</code> for full fidelity, <code>--help</code> everywhere.</li>
 <li><strong>Scope</strong>: New skill folder, section entry, tests + synthetic fixtures, changelog.</li>
-<li><strong>Effort</strong>: Large (deliverable in 3–4 stacked PRs: index + generic access → memory/anr/churn + triage → crashes/battery/reboots/thermal → redact/compare).</li>
+<li><strong>Effort</strong>: Large (4 stacked PRs: P1 library + index + <code>query</code> + <code>validate</code> + fixture generator; P2 memory/ANR/churn/thermal detectors + checkup; P3 crashes/battery/reboots/network/Bluetooth/storage/battery-health; P4 security &amp; hygiene + advice reference + redaction + <code>compare</code>).</li>
 <li><strong>Tradeoffs</strong>: The detectors are the value and also the maintenance cost: formats shift between Android releases and OEMs, so every detector must fail soft ("section not parsed") and be fixture-tested. Byte-range index over SQLite: one JSON file, no conversion step; SQLite only earns its keep for repeated time-window logcat queries, which <code>timeline</code> can add later behind the same interface.</li>
 <li><strong>Compatibility</strong>: Additive; no dependency on Perfetto or protobuf libraries.</li>
 </ul></div>
 <div class="note" data-for="s-spec-option-b-indexed-detector-driven"><label class="note-head" for="n-s-spec-option-b-indexed-detector-driven"><span class="note-ico" aria-hidden="true">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC › Option B: Indexed, detector-driven toolkit, stdlib only (Recommended)</span></label><textarea class="note-ta" data-key="s-spec-option-b-indexed-detector-driven" id="n-s-spec-option-b-indexed-detector-driven" data-label="Option B: Indexed, detector-driven toolkit, stdlib only (Recommended)" data-part="0005 Bugreport Analysis Toolkit" rows="1" placeholder="Add a note on this section…"></textarea></div>
 </article>
-<article class="sec l3" id="s-spec-option-c-build-on-perfetto-trace" data-ref="SPEC › Option C: Build on Perfetto trace_processor as the substrate" data-label="Option C: Build on Perfetto trace_processor as the substrate" data-part="0005 Bugreport Analysis Toolkit">
-<h4 class="sec-h"><span class="chip">▸</span><span class="sec-title">Option C: Build on Perfetto <code>trace_processor</code> as the substrate</span></h4>
+<article class="sec l3" id="s-spec-option-c-build-on-perfetto-trace" data-ref="SPEC › Option C: Build on Perfetto trace_processor as the substrate (rejected by the maintainer — ideas only)" data-label="Option C: Build on Perfetto trace_processor as the substrate (rejected by the maintainer — ideas only)" data-part="0005 Bugreport Analysis Toolkit">
+<h4 class="sec-h"><span class="chip">▸</span><span class="sec-title">Option C: Build on Perfetto <code>trace_processor</code> as the substrate (rejected by the maintainer — ideas only)</span></h4>
 <div class="sec-body"><ul>
 <li><strong>Description</strong>: Load the zip into Perfetto's SQL tables (<code>android_logs</code>, <code>android_dumpstate</code>, <code>battery_stats</code>) and write the detectors as SQL queries over them.</li>
 <li><strong>Scope</strong>: New skill + a pip dependency (<code>perfetto</code>) that downloads a native binary.</li>
@@ -476,7 +536,7 @@ context.</p></div>
 <li><strong>Tradeoffs</strong>: Free logcat parsing and SQL joins, and alignment with Google's own trace skill. But dumpstate is stored as raw lines (detectors still parse text, now inside SQL), batterystats import is partial (~30–40 % of events per Perfetto issue #934), load time and RAM are far above a byte-range index, and the binary download fails in network-restricted environments (cloud sessions, CI behind proxies).</li>
 <li><strong>Compatibility</strong>: Additive, but adds a heavy runtime dependency to a stdlib-only bundle.</li>
 </ul></div>
-<div class="note" data-for="s-spec-option-c-build-on-perfetto-trace"><label class="note-head" for="n-s-spec-option-c-build-on-perfetto-trace"><span class="note-ico" aria-hidden="true">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC › Option C: Build on Perfetto trace_processor as the substrate</span></label><textarea class="note-ta" data-key="s-spec-option-c-build-on-perfetto-trace" id="n-s-spec-option-c-build-on-perfetto-trace" data-label="Option C: Build on Perfetto trace_processor as the substrate" data-part="0005 Bugreport Analysis Toolkit" rows="1" placeholder="Add a note on this section…"></textarea></div>
+<div class="note" data-for="s-spec-option-c-build-on-perfetto-trace"><label class="note-head" for="n-s-spec-option-c-build-on-perfetto-trace"><span class="note-ico" aria-hidden="true">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC › Option C: Build on Perfetto trace_processor as the substrate (rejected by the maintainer — ideas only)</span></label><textarea class="note-ta" data-key="s-spec-option-c-build-on-perfetto-trace" id="n-s-spec-option-c-build-on-perfetto-trace" data-label="Option C: Build on Perfetto trace_processor as the substrate (rejected by the maintainer — ideas only)" data-part="0005 Bugreport Analysis Toolkit" rows="1" placeholder="Add a note on this section…"></textarea></div>
 </article>
 <article class="sec l3" id="s-spec-option-d-mcp-server-instead-of-a" data-ref="SPEC › Option D: MCP server instead of a skill" data-label="Option D: MCP server instead of a skill" data-part="0005 Bugreport Analysis Toolkit">
 <h4 class="sec-h"><span class="chip">▸</span><span class="sec-title">Option D: MCP server instead of a skill</span></h4>
@@ -554,21 +614,25 @@ not just expose data" without a native dependency, and it reuses the decisions
 <code>--json</code> escape hatch). A is a strict subset and becomes B's first PR; C stays
 an optional backend idea for logcat-heavy questions; D is rejected for v1.</p>
 <p><strong>Immediate next action</strong>: after approval, run <code>design</code> to turn this into
-contracts and a stacked PR plan; first PR = <code>index</code> + <code>sections</code> + <code>show</code> +
-<code>timeline</code> + synthetic-fixture generator, so every later detector has a fast,
-tested substrate.</p>
+contracts and a stacked PR plan; first PR = P1 (library, index, <code>query</code>, <code>validate</code>,
+synthetic-fixture generator), so every later detector has a fast, tested
+substrate and the fallback route exists from day one.</p>
 <p><strong>Gates check</strong>: objective (§ 1), scope (§ 2.3), impacted systems (§ 2.3),
 compatibility (additive, minor bump), risk (format drift, PII — § 2.1/§ 2.3),
 validation (success criteria), release readiness (changelog entry + <code>make
 context-budget</code> row).</p>
 <p><strong>Open questions</strong>:
-1. Section: put <code>bugreport</code> in the existing default-off <code>extract</code> section next to <code>har</code>, or create a new default-off <code>diagnostics</code> (or <code>android</code>) section? Draft assumes a new <code>diagnostics</code> section — "extract" describes scraping, not device diagnosis.
-2. Fixtures: synthetic only (generated by a script, zero PII), or also redacted excerpts from real reports the maintainer is willing to contribute?
-3. Should <code>triage</code> also emit end-user advice ("restrict app X: Settings → Apps → X → Battery → Restricted"), or stay at diagnosis and leave advice to the session? Draft: short, optional <code>--advice</code> hints for the six families, off by default.
-4. Should <code>compare</code> be in v1 or deferred?</p>
+1. Public samples: which of the collected public bugreports (§ fixtures index, gathered in r2) may be committed — only permissive-licence ones, and only after <code>create_bugreport.py --redact</code>? Draft: commit redacted excerpts of permissive samples; keep the rest as local-only benchmark inputs listed by URL.
+2. Maintainer's own reports: commit redacted excerpts as fixtures, or use them only as local benchmarks? Draft: local benchmarks plus small redacted excerpts for the detectors they uniquely exercise.</p>
 <p><strong>Decisions log</strong>:
 - D-1 — Lives inside <code>claude-arsenal</code> (not a separate repo), as a tool skill like <code>har</code> (maintainer, 2026-11-04).
-- D-2 — Skill + stdlib scripts, not an MCP server (this spec, Option D rationale; open to a thin MCP wrapper later).</p></div>
+- D-2 — Skill + stdlib scripts, not an MCP server (this spec, Option D rationale; open to a thin MCP wrapper later).
+- D-3 — Option B approved; Perfetto not used, ideas may be borrowed (maintainer, r2 notes).
+- D-4 — Section <code>android</code>, default-off, skill folder under <code>plugins/core/skills/</code> like every vendored skill (maintainer: "an Android section or inside diagnostics"; <code>android</code> chosen as the narrower, self-describing name).
+- D-5 — Full checkup with remedies, security &amp; hygiene in scope, all families F1–F11 in v1 (maintainer, r2 notes).
+- D-6 — Advice: deterministic <code>advice_id</code> from scripts, remedy text in a reference the session interprets (maintainer: "a part of it could be from the skill for the LLM to interpret").
+- D-7 — No comparison analysis; stable JSON plus a small <code>compare_bugreport.py</code> diff, last and droppable (maintainer, r2 notes).
+- D-8 — Built and validated under skill-workshop rules (maintainer, r2 notes).</p></div>
 <div class="note" data-for="s-spec-4"><label class="note-head" for="n-s-spec-4"><span class="note-ico" aria-hidden="true">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC §4</span></label><textarea class="note-ta" data-key="s-spec-4" id="n-s-spec-4" data-label="§4 Recommendation" data-part="0005 Bugreport Analysis Toolkit" rows="1" placeholder="Add a note on this section…"></textarea></div>
 </article>
 </section>
@@ -598,7 +662,7 @@ context-budget</code> row).</p>
 <script>var SPEC_SEED_NOTES={};</script>
 <script>
 (function(){
-  var NS = 'claude-arsenal-0005-bugreport-analysis-toolkit-v1:';
+  var NS = 'claude-arsenal-0005-bugreport-analysis-toolkit-v2:';
   var tas = Array.prototype.slice.call(document.querySelectorAll('.note-ta'));
 
   function autoGrow(t){t.style.height='auto';t.style.height=(t.scrollHeight)+'px';}
@@ -758,7 +822,7 @@ context-budget</code> row).</p>
   function today(){var d=new Date();return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());}
   function stamp(){var d=new Date();return today()+'-'+pad(d.getHours())+pad(d.getMinutes());}
   // Named like the reader, <repo>-<doc>-v<N>-<YYYY-MM-DD-HHMM>-notes.md, stamped at export.
-  function exportName(){return 'claude-arsenal-0005-bugreport-analysis-toolkit-v1-'+stamp()+'-notes.md';}
+  function exportName(){return 'claude-arsenal-0005-bugreport-analysis-toolkit-v2-'+stamp()+'-notes.md';}
 
   function buildExport(){
     var byPart={},order=[],data={},n=0;

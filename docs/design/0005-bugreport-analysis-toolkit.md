@@ -3,10 +3,11 @@
 **Date**: 2026-11-04
 **Ticket / PR**: none yet (opened with this spec)
 **Author**: Claude, for the maintainer
-**Revision**: 1
+**Revision**: 2
 **Status**: draft
 **Revision log**:
 - r1 — first draft
+- r2 — applied `notes/0005-bugreport-analysis-toolkit-notes-2026-11-04.md` (7 notes): full-checkup mode with advice, security & hygiene family, extra families (network, Bluetooth/GPS, storage/OTA, battery health), fallback primitives for unparsed sections, `android` section, Perfetto as ideas only, `compare` reduced to a JSON diff, skill-workshop conventions, public multi-OEM samples
 
 > Review record. Each round of reviewer notes makes a new revision: bump
 > **Revision**, add a log line naming the export it applied, and commit that
@@ -58,15 +59,32 @@ context.
 4. **Efficient reading.** Decide, with measurements, whether to index or convert
    the file rather than re-scanning it per question.
 5. **Lives in arsenal as a tool**, alongside `har`, following its conventions.
+6. **An auto-diagnostic, not a parser.** "How is my phone doing?" runs every
+   detector and answers with problems *and* remedies (close or restrict an app,
+   cut battery use, avoid heat, free storage…), including problems the user
+   has not noticed yet.
+7. **Security and hygiene are in scope**: apps installed outside an app store,
+   risky permissions and app configurations, device-level security settings.
+8. **Nothing is unreachable.** When a section cannot be parsed (a new Android
+   release, an OEM format), cheap generic primitives still let the session
+   locate, sample and interpret it without reading it whole.
+9. **Built to skill-workshop rules** (§ 2.4) — the rubric gates every file in
+   the skill folder.
+10. **No Perfetto dependency**; its ideas may be borrowed.
+11. **Broad coverage**: test material from several Android versions and OEMs,
+    not only the maintainer's phone.
 
 **Success criteria (measurable)**
 
 - [ ] `index_build_s <= 3` for a 160 MB bugreport text on the CI runner (measured today: one `mmap` + regex pass over 156 MB finds 842 sections in 0.96 s); `peak_rss_mb <= 300`.
 - [ ] `query_s <= 1` for any single-section command once the index exists (seek to byte range, parse only that slice).
-- [ ] `triage_output_bytes <= 4096` by default, enforced by truncation; every finding carries an evidence pointer (`section` + byte offset or file path) so the full text is one `show` command away.
-- [ ] `commands_to_diagnosis <= 1`: `triage` on the provenance bugreport reports memory thrashing as the top finding, names the ANR'd processes as victims, and lists the top memory holders — judged against the manual diagnosis recorded above.
-- [ ] Detector coverage: each of the six problem families in § 2.2 has ≥ 1 detector with a fixture that fires it and one that does not (`make test` asserts both).
-- [ ] Android version coverage: fixtures for at least Android 12, 14 and 16 layouts parse with zero unhandled exceptions; unknown sections degrade to "not parsed", never a crash.
+- [ ] `checkup_output_bytes <= 4096` by default, enforced by truncation; every finding carries an evidence pointer (`section` + byte offset or file path) so the full text is one `show` command away.
+- [ ] `commands_to_diagnosis <= 1`: `analyze_bugreport.py` (full checkup) on the provenance bugreport reports memory thrashing as the top finding, names the ANR'd processes as victims, and lists the top memory holders — judged against the manual diagnosis recorded above.
+- [ ] Detector coverage: each problem family F1–F11 in § 2.2 has ≥ 1 detector with a fixture that fires it and one that does not (`make test` asserts both).
+- [ ] Advice coverage: every finding id has an entry in `references/advice.md` (a test diffs the two id sets; missing entry = build failure).
+- [ ] Android version / OEM coverage: every sample listed in the fixtures index parses with zero unhandled exceptions, covering at least Android 12, 14 and 16 and at least one non-Pixel OEM; unknown sections degrade to "not parsed", never a crash.
+- [ ] Fallback cost: for a section with no parser, `commands_to_first_fields <= 2` (`query … locate`, then `query … sample`), each `output_bytes <= 2048`.
+- [ ] `validate_skill.py` (skill-workshop) reports 0 `must` findings on the skill folder.
 - [ ] `pii_in_default_output == 0`: emails, IMEI/IMSI/ICCID, phone numbers, MAC addresses and SSIDs never appear in default output (asserted by a test over a seeded fixture); `--no-redact` is the explicit opt-out.
 - [ ] Zero third-party runtime dependencies for the core scripts (stdlib only, `uv run python`), including tombstone `.pb` decoding.
 - [ ] Resident listing cost `<= 130` tokens for installs with the skill's section enabled and `0` for installs without it (`make context-budget`).
@@ -90,19 +108,36 @@ context.
 | F4 | Lag / freezes / ANR | ANR files + `ANR in` blocks (reason, load, PSI, CPU usage), main-thread stack state, `kswapd` CPU, PSI memory/io, swap fill, lmkd kills, `am_proc_died`/`am_proc_start` churn |
 | F5 | App crashes / app keeps dying | tombstones (signal, abort message, crashing frame), `FATAL EXCEPTION`, `dumpsys activity exit-info` (ApplicationExitInfo reasons), repeat-crash counts |
 | F6 | Memory hogs / background abuse | procstats 24 h aggregates (memory × time per process and state, incl. **foreground while screen off**), meminfo totals, persistent foreground services |
+| F7 | Network / modem | signal strength history and radio-active time (batterystats), mobile/Wi-Fi drops and scan storms (`connectivity`, `wifi`, `telephony.registry`), `netstats` per-app data |
+| F8 | Bluetooth / GPS / sensors | Bluetooth HAL crashes and HCI timeouts (tombstones, `bluetooth_manager`), `location` request holders and GPS on-time, sensor wakeups |
+| F9 | Storage / updates | free space (`diskstats`), app cache sizes, OTA / `update_engine` failures, `dex2oat` storms after updates |
+| F10 | Security & hygiene | apps whose installer is not an app store (`dumpsys package` installer fields); `REQUEST_INSTALL_PACKAGES` granted; enabled accessibility services, device admins, notification listeners, overlay and usage-access holders; user-installed CA certificates; always-on VPN; ADB / developer options on; bootloader unlocked or verified-boot not green; security patch age; Play Protect status where exposed |
+| F11 | Battery health & charging | `dumpsys battery` health, capacity vs design, cycle count, charge-rate limits, temperature while charging |
 
-Network/modem, Bluetooth and storage are out of v1 detectors but reachable through the generic `section`/`grep` commands.
+**Full checkup.** A question as broad as "how is my phone doing?" runs every
+detector of F1–F11 in one command and returns findings ranked by severity,
+each with a remedy id (§ Option B). It surfaces latent problems too — a
+background app holding 2 GB with the screen off, a sideloaded app with
+accessibility access, swap at 97 % — not only the one the user came with.
 
 ### 2.3 Systems touched
 
 | System | Type | Role | Needs changes? | Impact | Severity |
 |--------|------|------|----------------|--------|----------|
-| `plugins/core/skills/bugreport/` | Primary | New skill: SKILL.md, references, stdlib scripts, evals | Yes | New code only | Med |
-| Skill sections (`init.py` profiles) | Dependent | Decides who installs it; `har` lives in default-off `extract` | Yes (one entry, maybe a new section) | Listing cost only where enabled | Low |
+| `plugins/core/skills/bugreport/` | Primary | New skill: SKILL.md, references, stdlib scripts, evals. `plugins/core/` is the folder every vendored skill lives in (`har` included) — **not** the always-installed tier; who installs it is decided by the section below | Yes | New code only | Med |
+| Skill sections (`init.py`, `assets/sections.json`) | Dependent | New default-off section **`android`** (frontmatter `section: android`); `har` stays in `extract`. Room for future Android tools (logcat, ANR/tombstone-only inputs) | Yes (one section entry, regenerated manifest) | Listing cost only where enabled; 0 for everyone else | Low |
 | `.bundle-version` + `CHANGELOG.md` | Dependent | Minor bump (new skill) | Yes | Consumer-visible release note | Low |
 | `plugins/core/tests/` + fixtures | Dependent | Synthetic, PII-free fixtures; detector fire/no-fire tests | Yes | CI time + a few MB of fixtures | Low |
 | `har` skill | Reference only | Source of shared conventions: output cap, index sidecar, redaction stance | No | None | Low |
 | User's device data | Shared resource (read-only) | Bugreports hold accounts, IMEI, SSIDs, locations, notification text | No (never written back) | Privacy: local-only processing, redacted output | High |
+
+### 2.4 Skill-workshop constraints the design must meet
+
+- Authoring runs under `/skill-workshop:skill-workshop`; its validator must report 0 `must` findings.
+- Frontmatter: `name: bugreport` (folder name, kebab-case), third-person `description` stating what + when with a negative trigger ("Not for live-device adb sessions or logcat-only files" — or whatever scope v1 ends with), no angle brackets, `metadata.section: android`, `metadata.type: tool`, `allowed-tools` pre-approving the script invocations.
+- Body ≤ 500 lines, imperative voice, no second person; standing constraints (privacy, output cap, fallback route) front-loaded; detail in `references/` with "load when…" triggers; `references/_index.md` if the body passes 300 lines; each reference ≤ 10K tokens; no PII in references.
+- Scripts: `verb_noun.py` naming, canonical flags (`--input`, `--output`, `--output-dir`, `--json`, `--limit`, `--since`), stdout = payload only, progress and errors on stderr via `_console.py`, exit codes 0/1/2, `main()` + guard, no top-level work, `--help` on every script.
+- Evals: loading-verification + trigger evals in `evals/`, like `har`.
 
 Impact summary: **Data** — read-only on the input, sidecar index beside it; **API** — new CLI surface, no existing contract changes; **Performance** — bounded by the criteria above; **User** — opt-in skill; **Operational** — fixtures must never contain a real report; **Risk of inaction** — every bugreport question keeps costing ~15 calls and re-learned traps.
 
@@ -118,20 +153,21 @@ Impact summary: **Data** — read-only on the input, sidecar index beside it; **
 
 ### Option B: Indexed, detector-driven toolkit, stdlib only (Recommended)
 
-- **Description**:
-  - `index` — one pass builds a sidecar `<report>.brindex.json` (section/service → byte range, build, Android version, timezone offset, uptime) keyed by the input's size+mtime+sha256 of the first MB; reads `.zip` in place (no full extraction) or a `.txt`; normalises encoding (BOM/UTF-16) once. Every other command builds it on demand.
-  - `triage` — runs the detector catalogue and prints ranked findings (`severity · family · one-line claim · evidence pointer`), plus a three-line device header. This is the default entry point.
-  - Family commands, each a slice reader with a fixed compact output: `memory` (procstats 24 h memory×time ranking with state, meminfo totals, swap, PSI, lmkd kills), `anr` (per ANR: reason, victim vs pressure, main-thread state, top CPU), `crashes` (tombstones via a ~100-line stdlib protobuf varint decoder, Java fatal exceptions, exit-info reasons), `battery` (from the checkin CSV, not the text form), `reboots`, `thermal`, `churn` (kill → restart loops and what restarted them).
-  - Generic access, so nothing in the report is unreachable: `sections` (list with sizes), `show <section> [--grep re] [--around HH:MM:SS --window 2m]`, `timeline --at HH:MM --window 5m` (merged event log + system log + ANR/kill markers).
-  - `redact` — writes a scrubbed copy (emails, IMEI by Luhn, phone numbers, MACs, SSIDs, account names, coordinates) for sharing; the same filter is on by default for all stdout.
-  - `compare A B` — before/after diff of findings and memory/battery rankings (e.g. "did the restriction help?").
-  - Output discipline copied from `har`: ≤ 4096 bytes by default, `--json` for full machine output to a file, `--help` on every script.
+- **Description** — four scripts sharing one library (`_brlib.py`: index, slice reader, tolerant number parsing, redaction filter, `_console.py`):
+  - **`analyze_bugreport.py`** — the entry point. Builds or reuses the index, then runs detectors and emits findings. Default mode is the **full checkup** (all families F1–F11); `--family memory,anr,…` narrows it. Each finding: `id`, `severity`, `family`, one-line `claim`, key `facts` (numbers), `evidence` pointer (section + byte offset, or `FS/` path), `advice_id`. Family views give the fixed compact tables a follow-up needs: memory (procstats 24 h memory × time by process and state, meminfo, swap, PSI, lmkd kills), ANR (reason, victim vs pressure, main-thread state, top CPU), crashes (tombstones via a ~100-line stdlib protobuf varint decoder, Java fatal exceptions, exit-info reasons), battery (from the checkin CSV, not the text form), reboots, thermal, churn (kill → restart loops and what restarted them), security & hygiene.
+  - **`query_bugreport.py`** — generic primitives, so a section with no parser (new Android release, OEM format) is still cheap to interpret: `sections` (name, service, size, parse status), `locate --grep RE` (hit counts per section, no lines), `sample SECTION` (first lines, plus a format sniff — key=value, table, indented tree, CSV — and the shape of its repeated records), `show SECTION --grep RE --context N --limit N`, `timeline --since HH:MM --window 5m` (event log + system log + ANR/kill markers merged). All output capped; full text goes to `--output FILE`.
+  - **`validate_bugreport.py`** — is the input a bugreport, which format version, Android version, OEM, encoding fixed, which detector inputs parsed and which fell back. A falling-back detector names the `query` command to use instead, so drift shows up as a route, not a silent gap.
+  - **`create_bugreport.py --redact`** — writes a scrubbed copy for sharing (emails, IMEI by Luhn, phone numbers, MACs, SSIDs, account names, coordinates); the same filter is on by default for all stdout.
+- **Advice split** (resolves open question 3): scripts stay deterministic and only emit `advice_id` plus the facts; `references/advice.md` maps each id to a remedy template (what to do, Settings path per Android version, when to escalate to repair/support), loaded only when advice is needed; the session phrases it for the user's situation. `--advice` adds the one-line canned remedy to each finding for terminal use.
+- **Comparison** (resolves open question 4): no analysis of its own. `analyze --json` has a versioned, stable schema, so "before vs after" means running it on two reports; `compare_bugreport.py` is a small diff of two such JSON files (new / gone / changed findings, memory and battery ranking deltas), last in the plan and droppable.
+- **Ideas borrowed from Perfetto, no dependency**: the section/service two-level model, the logcat-local vs UTC offset taken from the alarm dump's `nowRTC`/`nowELAPSED`, scanning `FS/` for embedded traces and logs.
+- **Output discipline** from `har` and skill-workshop: compact JSON on stdout ≤ 4096 bytes by default (truncated with a marker), progress on stderr, `--output` for full fidelity, `--help` everywhere.
 - **Scope**: New skill folder, section entry, tests + synthetic fixtures, changelog.
-- **Effort**: Large (deliverable in 3–4 stacked PRs: index + generic access → memory/anr/churn + triage → crashes/battery/reboots/thermal → redact/compare).
+- **Effort**: Large (4 stacked PRs: P1 library + index + `query` + `validate` + fixture generator; P2 memory/ANR/churn/thermal detectors + checkup; P3 crashes/battery/reboots/network/Bluetooth/storage/battery-health; P4 security & hygiene + advice reference + redaction + `compare`).
 - **Tradeoffs**: The detectors are the value and also the maintenance cost: formats shift between Android releases and OEMs, so every detector must fail soft ("section not parsed") and be fixture-tested. Byte-range index over SQLite: one JSON file, no conversion step; SQLite only earns its keep for repeated time-window logcat queries, which `timeline` can add later behind the same interface.
 - **Compatibility**: Additive; no dependency on Perfetto or protobuf libraries.
 
-### Option C: Build on Perfetto `trace_processor` as the substrate
+### Option C: Build on Perfetto `trace_processor` as the substrate (rejected by the maintainer — ideas only)
 
 - **Description**: Load the zip into Perfetto's SQL tables (`android_logs`, `android_dumpstate`, `battery_stats`) and write the detectors as SQL queries over them.
 - **Scope**: New skill + a pip dependency (`perfetto`) that downloads a native binary.
@@ -165,9 +201,9 @@ not just expose data" without a native dependency, and it reuses the decisions
 an optional backend idea for logcat-heavy questions; D is rejected for v1.
 
 **Immediate next action**: after approval, run `design` to turn this into
-contracts and a stacked PR plan; first PR = `index` + `sections` + `show` +
-`timeline` + synthetic-fixture generator, so every later detector has a fast,
-tested substrate.
+contracts and a stacked PR plan; first PR = P1 (library, index, `query`, `validate`,
+synthetic-fixture generator), so every later detector has a fast, tested
+substrate and the fallback route exists from day one.
 
 **Gates check**: objective (§ 1), scope (§ 2.3), impacted systems (§ 2.3),
 compatibility (additive, minor bump), risk (format drift, PII — § 2.1/§ 2.3),
@@ -175,11 +211,15 @@ validation (success criteria), release readiness (changelog entry + `make
 context-budget` row).
 
 **Open questions**:
-1. Section: put `bugreport` in the existing default-off `extract` section next to `har`, or create a new default-off `diagnostics` (or `android`) section? Draft assumes a new `diagnostics` section — "extract" describes scraping, not device diagnosis.
-2. Fixtures: synthetic only (generated by a script, zero PII), or also redacted excerpts from real reports the maintainer is willing to contribute?
-3. Should `triage` also emit end-user advice ("restrict app X: Settings → Apps → X → Battery → Restricted"), or stay at diagnosis and leave advice to the session? Draft: short, optional `--advice` hints for the six families, off by default.
-4. Should `compare` be in v1 or deferred?
+1. Public samples: which of the collected public bugreports (§ fixtures index, gathered in r2) may be committed — only permissive-licence ones, and only after `create_bugreport.py --redact`? Draft: commit redacted excerpts of permissive samples; keep the rest as local-only benchmark inputs listed by URL.
+2. Maintainer's own reports: commit redacted excerpts as fixtures, or use them only as local benchmarks? Draft: local benchmarks plus small redacted excerpts for the detectors they uniquely exercise.
 
 **Decisions log**:
 - D-1 — Lives inside `claude-arsenal` (not a separate repo), as a tool skill like `har` (maintainer, 2026-11-04).
 - D-2 — Skill + stdlib scripts, not an MCP server (this spec, Option D rationale; open to a thin MCP wrapper later).
+- D-3 — Option B approved; Perfetto not used, ideas may be borrowed (maintainer, r2 notes).
+- D-4 — Section `android`, default-off, skill folder under `plugins/core/skills/` like every vendored skill (maintainer: "an Android section or inside diagnostics"; `android` chosen as the narrower, self-describing name).
+- D-5 — Full checkup with remedies, security & hygiene in scope, all families F1–F11 in v1 (maintainer, r2 notes).
+- D-6 — Advice: deterministic `advice_id` from scripts, remedy text in a reference the session interprets (maintainer: "a part of it could be from the skill for the LLM to interpret").
+- D-7 — No comparison analysis; stable JSON plus a small `compare_bugreport.py` diff, last and droppable (maintainer, r2 notes).
+- D-8 — Built and validated under skill-workshop rules (maintainer, r2 notes).
