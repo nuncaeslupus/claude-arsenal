@@ -848,8 +848,10 @@ MODEL_NAME_REGEX = re.compile(
 )
 # Explicit conditionals only: "load" or "for the details" says what to read, not
 # when, so "2. Load references/x.md" is an unconditional load.
+# ponytail: English and Spanish only — add a language's words when a skill in it trips this
 REF_TRIGGER_REGEX = re.compile(
-    r"\b(?:when|whenever|if|unless|before|after|while|during|once|in case)\b",
+    r"\b(?:when|whenever|if|unless|before|after|while|during|once|in case"
+    r"|cuando|si|salvo|antes de|despu[eé]s de|mientras|en cuanto|en caso de)\b",
     re.IGNORECASE,
 )
 SENTENCE_BOUNDARY_REGEX = re.compile(

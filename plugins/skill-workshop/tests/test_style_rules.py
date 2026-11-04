@@ -212,6 +212,21 @@ def test_ref_with_trigger_is_fine(tmp_path: Path) -> None:
 @pytest.mark.parametrize(
     "line",
     [
+        "- Ábrelo cuando tengas una disputa delante: `references/guide.md`.",
+        "- **Antes de `aplicar.py`**, aísla los parches: `references/guide.md`.",
+        "- Lee `references/guide.md` si el build falla.",
+    ],
+)
+def test_ref_with_a_spanish_trigger_is_fine(tmp_path: Path, line: str) -> None:
+    skill = _skill(tmp_path, line)
+    (skill / "references").mkdir()
+    (skill / "references" / "guide.md").write_text("# Guide\n\nDetails.\n", encoding="utf-8")
+    assert _checks(skill) == []
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
         "2. Load `references/guide.md`.",
         "- Load `references/guide.md` for the details.",
         "## Steps\n\nOpen `references/guide.md` and apply it.",
