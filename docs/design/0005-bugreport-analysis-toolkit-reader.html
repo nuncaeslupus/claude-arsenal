@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
-<meta name="arsenal-source-sha256" content="f86dfb35259db888587892a3b15807c0f480e765e2a55452fb396f09934ec2aa">
+<meta name="arsenal-source-sha256" content="9eb152bcd13bd52ff3f85327c61fc0267bb256ef9218b5c15b4229748fc69e1f">
 <title>Claude Arsenal — Specification (annotatable)</title>
 <style>
 :root{
@@ -260,7 +260,7 @@ li>.note.bnote{margin:6px 0}
 <strong>Revision log</strong>:
 - r1 — first draft
 - r2 — applied <code>0005-bugreport-analysis-toolkit-spec-notes-2026-11-04.md</code> (7 notes): full-checkup mode with advice, security &amp; hygiene family, extra families (network, Bluetooth/GPS, storage/OTA, battery health), fallback primitives for unparsed sections, <code>android</code> section, Perfetto as ideas only, <code>compare</code> reduced to a JSON diff, skill-workshop conventions, public multi-OEM samples; then, from conversation: public corpus findings (§ 2.1.1) and D-9 (real reports as study material only); then review fixes from the adversarial round and CodeRabbit (selectors, redaction ids, capped-JSON envelope, index location, fixture size)
-- r3 — maintainer additions in conversation (2026-11-04): file summary command (<code>query_bugreport.py summary</code>, requirement 12) and a single version bump for the whole stack (D-10); §§ 5–6 appended by <code>design</code></p>
+- r3 — maintainer additions in conversation (2026-11-04): file summary command (<code>query_bugreport.py summary</code>, requirement 12) and a single version bump for the whole stack (D-10); §§ 5–6 appended by <code>design</code>; then post-approval review fixes from the adversarial rounds and CodeRabbit on #542 (exit codes, span definition, prune scope, extraction ceiling, shared cache flags) — clarifications of the approved contract, covered by the same approval</p>
 <blockquote>
 <p>Review record. Each round of reviewer notes makes a new revision: bump
 <strong>Revision</strong>, add a log line naming the export it applied, and commit that
@@ -774,7 +774,9 @@ inside logcat are decoded <code>errors="replace"</code> per slice, never fatal.<
 <li>None → exit 1, listing up to five largest text members, so the session can
    point <code>--input</code> at one by hand.</li>
 </ol>
-<p><strong>Streaming vs extracting.</strong> The main entry is <strong>extracted once</strong> into the cache,
+<p><strong>Streaming vs extracting.</strong> Extraction stops at a decompressed-size ceiling (a module
+constant, 2 GiB as a starting value): past it the partial file is deleted and the
+run exits 1, so a corrupt or hostile zip cannot fill the disk. The main entry is <strong>extracted once</strong> into the cache,
 streamed in 1 MiB chunks through the same scanner that builds the index (one
 decompression pass; never held whole in memory). Deflate has no random access,
 so a streaming-only design would re-decompress up to a section's offset on every
@@ -827,7 +829,11 @@ per-user cache directory:</p>
 Builds write to a temp file in the same directory and <code>os.replace</code> it, so an
 interrupted build leaves the previous index intact. On each build the root is
 pruned to the five most recently used keys (a module constant, stated as a
-starting value); the cache is otherwise disposable and documented as such.</p>
+starting value); the cache is otherwise disposable and documented as such.
+Pruning only ever touches entries this skill created — a directory whose name is
+exactly 16 lowercase hex characters <strong>and</strong> whose <code>index.json</code> declares
+<code>schema: bugreport.index/1</code> — so <code>--output-dir .</code> or a home directory never loses
+a foreign file.</p>
 <p><strong>Key.</strong> <code>key = sha256(f"{size}:{mtime_ns}:" + sha256(first 1 MiB ‖ last 1 MiB))[:16]</code>
 — about 3 ms on a 160 MB file, against ~1 s for a full hash. <strong>Stale-index
 trade-off:</strong> an in-place edit that keeps size and mtime and touches only the
@@ -941,7 +947,7 @@ span, that date is used. If it falls on <strong>more than one</strong> (persiste
   candidates: 2026-11-01 14:15, 2026-11-02 14:15, 2026-11-03 14:15
   pass a date, e.g. --since &quot;2026-11-03 14:15&quot;
 </code></pre>
-<p>A <code>--since</code> time outside every source's span is exit 1 ("time outside report span"), with the span
+<p>The report span is the overall first-to-last timestamp across all timed sources (gaps between sources included). A <code>--since</code> time outside that span is exit 1 ("time outside report span"), with the span
 printed. A time inside the span whose window simply holds no matching event is exit 0 with an empty <code>events</code> list. A local time inside a DST fold resolves to its first occurrence and the
 output says so.</p></div>
 <div class="note" data-for="s-spec-5-5"><label class="note-head" for="n-s-spec-5-5"><span class="note-ico" aria-hidden="true">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC §5.5</span></label><textarea class="note-ta" data-key="s-spec-5-5" id="n-s-spec-5-5" data-label="§5.5 Clock and timeline --since" data-part="0005 Bugreport Analysis Toolkit" rows="1" placeholder="Add a note on this section…"></textarea></div>
@@ -1103,6 +1109,7 @@ them — <code>--section</code>, <code>--grep</code>, <code>--context</code>, <c
 </tr>
 </tbody>
 </table>
+<p>Every script that opens a report (<code>analyze</code>, <code>query</code>, <code>validate</code>, <code>create</code>) accepts <code>--output-dir DIR</code> and <code>--force</code> with the § 5.3 meaning, so an index built by one is reused by the others.</p>
 <p>Every script: <code>main()</code> + <code>__main__</code> guard, no top-level work, <code>--help</code>.</p></div>
 <div class="note" data-for="s-spec-5-7"><label class="note-head" for="n-s-spec-5-7"><span class="note-ico" aria-hidden="true">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC §5.7</span></label><textarea class="note-ta" data-key="s-spec-5-7" id="n-s-spec-5-7" data-label="§5.7 CLI surface" data-part="0005 Bugreport Analysis Toolkit" rows="1" placeholder="Add a note on this section…"></textarea></div>
 </article>
@@ -1372,7 +1379,7 @@ under-redacted one leaks.</p></div>
 <td>Zip extraction fills the disk or leaves full-PII copies behind</td>
 <td>Medium</td>
 <td>Medium</td>
-<td>Cache pruned to five keys; documented as disposable; <code>--output-dir</code> to place it elsewhere</td>
+<td>Cache pruned to five keys, only skill-created entries (<code>test_prune_ignores_foreign_dirs_in_output_dir</code>); extraction ceiling aborts and deletes the partial file (<code>test_zip_extraction_over_ceiling_exits_1</code>); documented as disposable; <code>--output-dir</code> to place it elsewhere</td>
 <td>unit: prune keeps exactly five; manual: cache size equals main entry + index</td>
 </tr>
 <tr>

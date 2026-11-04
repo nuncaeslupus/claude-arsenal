@@ -1,13 +1,13 @@
 # Plan: Android bugreport analysis toolkit
 
 **Date**: 2026-11-04
-**Specification**: `docs/design/0005-bugreport-analysis-toolkit.md` (approved r2; §§ 5–6 appended by this design)
+**Specification**: `docs/design/0005-bugreport-analysis-toolkit.md` (approved r3; §§ 5–6 appended by this design)
 **Author**: Claude, for the maintainer
 **Revision**: 2
 **Status**: approved (2026-11-04, revision 2) — without annotations
 **Revision log**:
 - r1 — first draft
-- r2 — maintainer decisions (2026-11-04): single bump via top-down merge (spec D-10), extra flags accepted, new task T25 `summary`
+- r2 — maintainer decisions (2026-11-04): single bump via top-down merge (spec D-10), extra flags accepted, new task T25 `summary`; then review fixes on #542 (stacked-branch CI gap, T9→T25, T24 no longer depends on droppable T23, sign-off mapping, stdlib-only check)
 
 > Review record, kept the way the spec keeps its own: each round of notes bumps
 > **Revision** with a log line naming the `<repo>-plan-v<N>-<date>-notes.md`
@@ -99,7 +99,7 @@ under `plugins/core/tests/` unless a path says otherwise.
 | T4 | P1 | Index + cache | Index + cache: key, platform cache root, `--output-dir` override, atomic write, `0700`/`0600`, prune to five, delimiter check + one rebuild, `--force`; `bugreport/benchmark.py` and a dispatch-only benchmark workflow | `_brlib.py`, `bugreport/benchmark.py`, `.github/workflows/bugreport-benchmark.yml` | L | T3 | `index_build_s <= 3` and `peak_rss_mb <= 300` (160 MB txt); `index_build_zip_s <= 6` and `peak_rss_mb <= 300` (234 MB zip); `index_reuse_s <= 0.5` — all on CI `ubuntu-22.04`, 1/10-scale guard on every push | `test_index_holds_no_section_text` in `bugreport/test_index.py` — no canary string appears in `index.json` · `test_output_dir_overrides_cache_root` in `bugreport/test_index.py` — nothing is written under the default root · `test_middle_edit_keeping_size_and_mtime_triggers_rebuild` in `bugreport/test_index.py` — the delimiter check rebuilds and the slice is correct · `test_interrupted_build_keeps_previous_index` in `bugreport/test_index.py` · `test_prune_keeps_five_most_recent_keys` in `bugreport/test_index.py` |
 | T5 | P1 | Redaction + budget | `_redact.py`: the ten § 5.10 kinds, Luhn, harvest, per-run HMAC tokens; `apply_budget` + capped envelope; `_console.py` copy with duplication header | `scripts/_redact.py`, `_brlib.py`, `scripts/_console.py` | M | T3 | `pii_in_default_output == 0` over every canary kind in the seeded fixture | `test_each_canary_kind_is_redacted` in `bugreport/test_redact.py` — one assertion per kind · `test_equal_values_share_a_token_within_one_run` in `bugreport/test_redact.py` · `test_tokens_differ_across_runs` in `bugreport/test_redact.py` — salts are never reused · `test_masked_android_mac_is_left_alone` in `bugreport/test_redact.py` — `02:00:00:00:00:00` passes unchanged · `test_capped_output_is_valid_json_with_envelope` in `bugreport/test_budget.py` — `truncated`, `shown`, `omitted` present and rows whole |
 | T6 | P1 | query primitives | `query_bugreport.py` `sections`, `locate`, `sample`, `show`; selector rules (§ 5.4); format sniff + record shape | `scripts/query_bugreport.py` | L | T4, T5 | `query_s <= 1` (any single-section command, warm index) and `commands_to_first_fields <= 2` with each `output_bytes <= 2048` | `test_unparsed_section_reaches_fields_in_two_commands` in `bugreport_test.sh` — `locate` then `sample` on an OEM section yields its key names · `test_ambiguous_bare_name_exits_2_with_candidates` in `bugreport/test_query.py` · `test_sample_sniffs_kv_table_tree_csv_log` in `bugreport/test_query.py` — each seed format is classified correctly · `test_query_never_writes_the_input` in `bugreport_test.sh` — input digest unchanged |
-| T7 | P1 | Clock + timeline | Clock + `timeline`: offset derivation (alarm → timezone → none), year inference, kernel/batterystats conversion, `--since` grammar, date selection, DST fold, `--window` | `_brlib.py`, `query_bugreport.py` | L | T6 | `timeline_offset_error_s == 0` on the known-offset fixture | `test_alarm_dump_offset_converts_kernel_time_to_local` in `bugreport/test_clock.py` — a dmesg line lands on its seeded local minute · `test_since_matching_two_dates_exits_2_listing_both` in `bugreport/test_clock.py` · `test_december_logs_in_january_report_get_previous_year` in `bugreport/test_clock.py` · `test_no_offset_source_marks_rows_elapsed` in `bugreport/test_clock.py` — rows carry `clock: elapsed`, nothing is guessed |
+| T7 | P1 | Clock + timeline | Clock + `timeline`: offset derivation (alarm → timezone → none), year inference, kernel/batterystats conversion, `--since` grammar, date selection, DST fold, `--window` | `_brlib.py`, `query_bugreport.py` | L | T6 | `timeline_offset_error_s == 0` on the known-offset fixture | `test_alarm_dump_offset_converts_kernel_time_to_local` in `bugreport/test_clock.py` — a dmesg line lands on its seeded local minute · `test_since_matching_two_dates_exits_2_listing_both` in `bugreport/test_clock.py` · `test_december_logs_in_january_report_get_previous_year` in `bugreport/test_clock.py` · `test_no_offset_source_marks_rows_elapsed` in `bugreport/test_clock.py` — rows carry `clock: elapsed`, nothing is guessed; `test_since_outside_span_exits_1` — a time before the first or after the last timestamp exits 1 with the span printed; `test_since_empty_window_exits_0` — a window inside the span with no events exits 0 with an empty list |
 | T8 | P1 | validate script | `validate_bugreport.py`: kind, main entry, format/Android/SDK/OEM, encoding facts, per-detector-input status (registry-ready, empty until P2) | `scripts/validate_bugreport.py` | M | T6 | `layout_fixture_unhandled_exceptions == 0` across every layout × container × trap | `test_validate_reports_layout_facts_per_fixture` in `bugreport/test_validate.py` — Android release and OEM match each fixture's seed · `test_non_bugreport_exits_1` in `bugreport_test.sh` — a random text file is rejected with a reason · `test_utf16_input_is_reported_transcoded` in `bugreport/test_validate.py` |
 | T25 | P1 | summary | `query_bugreport.py summary` (spec § 5.7, requirement 12): device, build, capture time, uptime + boot reason, per-source coverage windows, file stats, battery and storage snapshot, app counts; `unknown` for absent fields | `scripts/query_bugreport.py`, `scripts/_summary.py` | M | T6, T7 | `summary_missing_fields == 0` across every layout fixture (output ≤ 2048 B asserted by its test) | `test_summary_reports_every_field_per_layout` in `bugreport/test_summary.py` — every field is present as a value or `unknown` and output stays ≤ 2048 B; `test_summary_coverage_windows_match_fixture_bounds` — per-source first/last timestamps equal the generator's seeded bounds |
 | T9 | P1 | SKILL.md (P1) | SKILL.md (P1 scope: standing constraints front-loaded — privacy, output cap, fallback route; script table), `references/sections.md` (section map, traps, fallback recipe), `evals/loading_verification.json` | `skills/bugreport/SKILL.md`, `references/`, `evals/` | M | T7, T8, T25 | `skill_workshop_must_findings == 0` | `test_skill_md_commands_resolve_to_existing_scripts_and_flags` in `bugreport_test.sh` — every command SKILL.md shows parses under its script's argparse · `test_skill_folder_has_no_must_findings` in `bugreport_test.sh` — skill-workshop `validate.py` on the folder reports 0 `must` |
@@ -117,7 +117,7 @@ under `plugins/core/tests/` unless a path says otherwise.
 | T21 | P4 | Advice reference | `references/advice.md` for every `advice_id`; `--advice`; generated `references/detectors.md`; `_index.md` if the split rule triggers | `skills/bugreport/references/`, `analyze_bugreport.py` | M | T15, T16, T17, T18, T19, T20 | `advice_ids_missing_entry == 0` and `advice_orphan_headings == 0` | `test_every_registry_advice_id_has_an_entry` in `bugreport/test_advice.py` · `test_advice_flag_prints_first_line_of_entry` in `bugreport/test_advice.py` · `test_detectors_reference_matches_registry` in `bugreport/test_advice.py` |
 | T22 | P4 | Redacted copy | `create_bugreport.py --redact`: text → text, zip → zip with binary members dropped and listed, refuse input path, `--force` | `scripts/create_bugreport.py` | M | T20 | `pii_in_redacted_copy == 0` over every canary kind, txt and zip | `test_redacted_zip_drops_pb_and_proto_members` in `bugreport/test_create.py` · `test_output_equal_to_input_is_refused` in `bugreport/test_create.py` · `test_redacted_copy_still_indexes_and_analyzes` in `bugreport/test_create.py` — the scrubbed file is a valid bugreport |
 | T23 | P4 | compare script | `compare_bugreport.py`: pair on id + primary subject, new/gone/changed, ranking deltas, schema-major check (droppable, D-7) | `scripts/compare_bugreport.py` | S | T21 | `invented_changes_on_identical_inputs == 0` | `test_same_report_twice_compares_empty` in `bugreport/test_compare.py` — different salts, no changes · `test_schema_major_mismatch_exits_1` in `bugreport/test_compare.py` |
-| T24 | P4 | Release | Release: SKILL.md complete (≤ 500 lines), trigger evals, all-family coverage, flag parity, context budget, `.bundle-version` minor bump + `CHANGELOG.md` entry + `make sync-version` (only here — see Merge order) | `SKILL.md`, `evals/`, `plugins/core/skills/init/assets/.bundle-version`, `CHANGELOG.md` | M | T22, T23 | `resident_listing_tokens_with_android <= 130` and `resident_token_delta_without_android == 0` and `families_without_fire_nofire_fixture == 0` and `skill_workshop_must_findings == 0` | `test_every_family_f1_to_f11_has_fire_and_nofire` in `bugreport/test_coverage.py` · `test_sibling_scripts_share_input_output_limit_flags` in `bugreport/test_parity.py` · `test_trigger_evals_cover_positive_and_negative_prompts` in `bugreport/test_evals.py` — evals hold ≥ 1 "Not for" prompt per negative trigger |
+| T24 | P4 | Release | Release: SKILL.md complete (≤ 500 lines), trigger evals, all-family coverage, flag parity, context budget, `.bundle-version` minor bump + `CHANGELOG.md` entry + `make sync-version` (only here — see Merge order) | `SKILL.md`, `evals/`, `plugins/core/skills/init/assets/.bundle-version`, `CHANGELOG.md` | M | T22 | `resident_listing_tokens_with_android <= 130` and `resident_token_delta_without_android == 0` and `families_without_fire_nofire_fixture == 0` and `skill_workshop_must_findings == 0` | `test_every_family_f1_to_f11_has_fire_and_nofire` in `bugreport/test_coverage.py` · `test_sibling_scripts_share_input_output_limit_flags` in `bugreport/test_parity.py` · `test_trigger_evals_cover_positive_and_negative_prompts` in `bugreport/test_evals.py` — evals hold ≥ 1 "Not for" prompt per negative trigger |
 
 **Status legend**: ☐ not started · ◐ in progress · ☑ merged
 
@@ -226,8 +226,7 @@ under `plugins/core/tests/` unless a path says otherwise.
   {"from": "T20", "to": "T21"},
   {"from": "T20", "to": "T22"},
   {"from": "T21", "to": "T23"},
-  {"from": "T22", "to": "T24"},
-  {"from": "T23", "to": "T24"}
+  {"from": "T22", "to": "T24"}
  ]}
 ```
 
@@ -278,7 +277,7 @@ are committed. One scenario per detector branch, so a failure names its cause:
 
 Before the release (T24), the maintainer's five Pixel reports and the public
 corpus are re-run **locally** with the zero-`error:` bar and the provenance
-diagnosis checked by hand (D-9); the result is recorded in the Evidence log as
+diagnosis and the T25 summary coverage windows (within one minute of the hand-read values) checked by hand (D-9); the result is recorded in the Evidence log as
 `Env: local`, beside — never instead of — the CI rows.
 
 ---
@@ -299,7 +298,7 @@ measurement may sit beside it; it never replaces it.
 
 ## Sign-off
 
-- [ ] Every spec § 1 success criterion maps to a gate row (T4, T5, T6, T10, T14, T21, T24, T25 cover them)
+- [ ] Every spec § 1 success criterion maps to a gate row (T4, T5, T6, T8, T10, T14, T21, T24, T25 cover them; T24 also carries the stdlib-only check — `test_runtime_imports_are_stdlib_only` scans every script, `_pbwire.py` included, for non-stdlib imports)
 - [ ] Every spec § 6 risk has a test or an accepted-risk note
 - [x] Stack merge strategy chosen: top-down into P1, one bump (spec D-10)
 - [ ] T25 summary gate green, and before release the provenance report's summary coverage windows checked locally against the hand-read values (within one minute; real report never committed, D-9)

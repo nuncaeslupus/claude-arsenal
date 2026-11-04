@@ -8,7 +8,7 @@
 **Revision log**:
 - r1 — first draft
 - r2 — applied `0005-bugreport-analysis-toolkit-spec-notes-2026-11-04.md` (7 notes): full-checkup mode with advice, security & hygiene family, extra families (network, Bluetooth/GPS, storage/OTA, battery health), fallback primitives for unparsed sections, `android` section, Perfetto as ideas only, `compare` reduced to a JSON diff, skill-workshop conventions, public multi-OEM samples; then, from conversation: public corpus findings (§ 2.1.1) and D-9 (real reports as study material only); then review fixes from the adversarial round and CodeRabbit (selectors, redaction ids, capped-JSON envelope, index location, fixture size)
-- r3 — maintainer additions in conversation (2026-11-04): file summary command (`query_bugreport.py summary`, requirement 12) and a single version bump for the whole stack (D-10); §§ 5–6 appended by `design`
+- r3 — maintainer additions in conversation (2026-11-04): file summary command (`query_bugreport.py summary`, requirement 12) and a single version bump for the whole stack (D-10); §§ 5–6 appended by `design`; then post-approval review fixes from the adversarial rounds and CodeRabbit on #542 (exit codes, span definition, prune scope, extraction ceiling, shared cache flags) — clarifications of the approved contract, covered by the same approval
 
 > Review record. Each round of reviewer notes makes a new revision: bump
 > **Revision**, add a log line naming the export it applied, and commit that
@@ -321,7 +321,9 @@ inside logcat are decoded `errors="replace"` per slice, never fatal.
 3. None → exit 1, listing up to five largest text members, so the session can
    point `--input` at one by hand.
 
-**Streaming vs extracting.** The main entry is **extracted once** into the cache,
+**Streaming vs extracting.** Extraction stops at a decompressed-size ceiling (a module
+constant, 2 GiB as a starting value): past it the partial file is deleted and the
+run exits 1, so a corrupt or hostile zip cannot fill the disk. The main entry is **extracted once** into the cache,
 streamed in 1 MiB chunks through the same scanner that builds the index (one
 decompression pass; never held whole in memory). Deflate has no random access,
 so a streaming-only design would re-decompress up to a section's offset on every
@@ -360,6 +362,10 @@ Builds write to a temp file in the same directory and `os.replace` it, so an
 interrupted build leaves the previous index intact. On each build the root is
 pruned to the five most recently used keys (a module constant, stated as a
 starting value); the cache is otherwise disposable and documented as such.
+Pruning only ever touches entries this skill created — a directory whose name is
+exactly 16 lowercase hex characters **and** whose `index.json` declares
+`schema: bugreport.index/1` — so `--output-dir .` or a home directory never loses
+a foreign file.
 
 **Key.** `key = sha256(f"{size}:{mtime_ns}:" + sha256(first 1 MiB ‖ last 1 MiB))[:16]`
 — about 3 ms on a 160 MB file, against ~1 s for a full hash. **Stale-index
@@ -455,7 +461,7 @@ span, that date is used. If it falls on **more than one** (persistent logd, long
   pass a date, e.g. --since "2026-11-03 14:15"
 ```
 
-A `--since` time outside every source's span is exit 1 ("time outside report span"), with the span
+The report span is the overall first-to-last timestamp across all timed sources (gaps between sources included). A `--since` time outside that span is exit 1 ("time outside report span"), with the span
 printed. A time inside the span whose window simply holds no matching event is exit 0 with an empty `events` list. A local time inside a DST fold resolves to its first occurrence and the
 output says so.
 
@@ -559,6 +565,8 @@ them — `--section`, `--grep`, `--context`, `--redact`.
 | `validate_bugreport.py` | `--input R [--json]` | is-bugreport, input kind, main entry, format/Android/SDK/OEM, encoding facts, section count, each detector input `parsed` · `fallback` (+ route) · `absent` |
 | `create_bugreport.py` | `--redact --input R --output FILE [--force]` | Writes a scrubbed copy; stdout = counts per redaction kind. `--redact` is required (the only v1 mode, named so later modes do not change its meaning). Text input → text; zip input with a `.zip` output → main entry and text `FS/` members redacted, binary members (`.pb`, `proto/`, `visible_windows.zip`) **dropped** and listed, because binary cannot be scrubbed reliably. Refuses an output that resolves to the input or exists without `--force` |
 | `compare_bugreport.py` | `--input A.json --against B.json [--limit N] [--output FILE]` | `new` / `gone` / `changed` findings (paired on `id` + primary subject package — never on section ids or redacted tokens, which differ across reports and runs), memory and battery ranking deltas. Exit 1 when the two schema majors differ |
+
+Every script that opens a report (`analyze`, `query`, `validate`, `create`) accepts `--output-dir DIR` and `--force` with the § 5.3 meaning, so an index built by one is reused by the others.
 
 Every script: `main()` + `__main__` guard, no top-level work, `--help`.
 
@@ -711,7 +719,7 @@ None. The only persistent state is the per-user cache (§ 5.3), versioned by
 | A detector reports a confident wrong diagnosis (e.g. blames the ANR victim, not the memory holder) | Medium | High | `subjects[].role` separates victim from cause/holder; every finding carries evidence pointers; fire/no-fire fixtures per detector | unit: provenance scenario ranks `memory.swap_thrashing` first with the ANR'd processes as `victim`; manual: real-report check before release |
 | PII leaks into stdout, the cache, a shared redacted copy, or a committed fixture | Medium | High | Redaction on by default, known-value harvest, cache `0700`/`0600` outside the working tree, index holds no text, fixtures generated from reserved-range canaries; `create_bugreport` drops binary members | security: `pii_in_default_output == 0` over every command × fixture; `index.json` canary grep; `generic_examples_test.sh`-style check that seeds hold no real identifiers |
 | Stale index after an in-place edit that keeps size and mtime | Low | Medium | Head/tail hash in the key; delimiter check on every slice read with one automatic rebuild; `--force` | unit: mutate a middle section keeping size + mtime → read rebuilds, result correct |
-| Zip extraction fills the disk or leaves full-PII copies behind | Medium | Medium | Cache pruned to five keys; documented as disposable; `--output-dir` to place it elsewhere | unit: prune keeps exactly five; manual: cache size equals main entry + index |
+| Zip extraction fills the disk or leaves full-PII copies behind | Medium | Medium | Cache pruned to five keys, only skill-created entries (`test_prune_ignores_foreign_dirs_in_output_dir`); extraction ceiling aborts and deletes the partial file (`test_zip_extraction_over_ceiling_exits_1`); documented as disposable; `--output-dir` to place it elsewhere | unit: prune keeps exactly five; manual: cache size equals main entry + index |
 | Wrong clock offset puts `timeline` events in the wrong minute | Medium | Medium | Ordered derivation (alarm → timezone → none), source recorded; elapsed-only rows marked instead of guessed; ambiguous `--since` is an error | unit: fixture with a known offset → `timeline_offset_error_s == 0`; multi-day fixture → exit 2 with candidates |
 | Performance regresses past the build/query criteria as detectors are added | Medium | Low | Detectors read slices only; the index is built once; benchmark at full size on CI dispatch, 1/10 scale on every push | perf: `index_build_s`, `index_build_zip_s`, `query_s` gates |
 | Hand-rolled protobuf reader misdecodes a newer tombstone schema | Medium | Low | Wire-format only (varint, length-delimited), unknown fields skipped; falls back to the text tombstone beside the `.pb` | unit: synthetic `.pb` round-trip; unknown-field fixture still yields signal + abort message |
