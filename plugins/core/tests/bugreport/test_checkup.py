@@ -32,6 +32,11 @@ FIRES = {
     "gps-background": ["peripherals.gps_background"],
     "low-storage": ["storage.low_free_space"],
     "battery-degraded": ["battery-health.degraded"],
+    "sideloaded": ["security.sideloaded_with_access"],
+    "old-patch": ["security.patch_old"],
+    "unlocked": ["security.bootloader_unlocked"],
+    "adb-on": ["security.debugging_enabled"],
+    "always-on-vpn": ["security.always_on_vpn"],
 }
 
 

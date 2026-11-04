@@ -46,6 +46,7 @@ MODULES = (
     "_det_peripherals",
     "_det_storage",
     "_det_battery_health",
+    "_det_security",
 )
 CLAIM_CHARS = 160
 MEMBER_CAP = 1 << 20  # ponytail: starting value — a tombstone .pb is tens of KiB
@@ -298,3 +299,28 @@ def views(ctx: Context, slugs: list[str]) -> tuple[dict[str, Any], list[dict[str
                 }
             )
     return out, failed
+
+
+def catalogue_md() -> str:
+    """`references/detectors.md`, generated from the registry (`make sync-bugreport-detectors`)."""
+    load()
+    out = [
+        "# Detector catalogue",
+        "",
+        "Generated from the detector registry by `make sync-bugreport-detectors`; do not edit.",
+        "The advice column names the remedy's entry in `advice.md`.",
+    ]
+    for fam, slug in FAMILIES.items():
+        dets = sorted((d for d in REGISTRY.values() if d.family == fam), key=lambda d: d.id)
+        out += [
+            "",
+            f"## {fam} {slug}",
+            "",
+            "| detector | finding | advice | inputs |",
+            "|---|---|---|---|",
+        ]
+        for d in dets:
+            inputs = ", ".join(f"`{i}`" for i in d.inputs)
+            for fid, aid in d.findings.items():
+                out.append(f"| `{d.id}` | `{fid}` | `{aid}` | {inputs} |")
+    return "\n".join(out) + "\n"

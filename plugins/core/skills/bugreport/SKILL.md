@@ -1,6 +1,6 @@
 ---
 name: bugreport
-description: Reads Android bugreports (dumpstate .txt or .zip) through a byte-offset index — device summary, ranked checkup, section lookup, merged timeline, redacted output. Use when the user has a bugreport to read or diagnose. Not for live-device adb sessions or logcat-only files.
+description: Reads Android bugreports (dumpstate .txt or .zip) through a byte-offset index — device summary, ranked checkup, section lookup, merged timeline, redacted copies, report diffs. Use when the user has a bugreport to read or diagnose. Not for live-device adb sessions or logcat-only files.
 argument-hint: "--input bugreport.zip"
 user-invocable: true
 allowed-tools: Bash(python3 *_bugreport.py *)
@@ -54,25 +54,30 @@ python3 "${CLAUDE_SKILL_DIR}/scripts/query_bugreport.py" locate --input bugrepor
 python3 "${CLAUDE_SKILL_DIR}/scripts/query_bugreport.py" sample --input bugreport.zip --section meminfo
 python3 "${CLAUDE_SKILL_DIR}/scripts/query_bugreport.py" show --input bugreport.zip --section battery --grep level --context 1
 python3 "${CLAUDE_SKILL_DIR}/scripts/query_bugreport.py" timeline --input bugreport.zip --since 14:15 --window 5m
+python3 "${CLAUDE_SKILL_DIR}/scripts/create_bugreport.py" --redact --input bugreport.zip --output shared.zip  # a copy safe to send
+python3 "${CLAUDE_SKILL_DIR}/scripts/compare_bugreport.py" --input new.json --against old.json  # two analyze --output files
 ```
 
 | Script | Gives |
 |---|---|
 | `validate_bugreport.py` | Whether the input is a bugreport, its container and main entry, encoding facts (CR, NUL, transcoding), header, clock source, section count, each detector input's status (`parsed`, `fallback` with its route, `absent`) |
 | `query_bugreport.py summary` | Device, Android build, capture time and timezone, uptime, boot reason, per-source coverage windows, file stats, battery snapshot, storage, app counts — `unknown` where the report lacks a field |
-| `analyze_bugreport.py` | Findings ranked by severity then score: `claim`, `facts`, `subjects` with a role (`cause`, `victim`, `holder`), `evidence` offsets, `advice_id`. Families so far: `battery` (F1), `thermal` (F2), `reboots` (F3), `anr` (F4), `crashes` (F5, `.pb` tombstones from a zip), `memory` (F6), `network` (F7), `peripherals` (F8), `storage` (F9), `battery-health` (F11), `churn` (a view over F6); `--family` takes slugs or F-numbers and adds that family's `views` tables; `--severity` sets a floor. A section a detector could not read is a `not_parsed` row with the `query` command that reaches it |
+| `analyze_bugreport.py` | Findings ranked by severity then score: `claim`, `facts`, `subjects` with a role (`cause`, `victim`, `holder`), `evidence` offsets, `advice_id`. Families so far: `battery` (F1), `thermal` (F2), `reboots` (F3), `anr` (F4), `crashes` (F5, `.pb` tombstones from a zip), `memory` (F6), `network` (F7), `peripherals` (F8), `storage` (F9), `security` (F10: sideloaded apps holding sensitive access, debugging, always-on VPN, boot state, patch age, user CAs from a zip), `battery-health` (F11), `churn` (a view over F6); `--family` takes slugs or F-numbers and adds that family's `views` tables; `--severity` sets a floor; `--advice` adds each finding's one-line remedy. A section a detector could not read is a `not_parsed` row with the `query` command that reaches it |
 | `query_bugreport.py sections` | Section ids (`name#occurrence`), kind, dumpsys block, offset and size |
 | `query_bugreport.py locate` | Hit count and first offset per section for `--grep RE`, no lines |
 | `query_bugreport.py sample` | The first lines of `--section ID` and its sniffed format (`kv`, `table`, `tree`, `csv`, `log`, `unknown`) |
 | `query_bugreport.py show` | Lines of `--section ID`, optionally filtered by `--grep` with `--context N`, with byte offsets |
 | `query_bugreport.py timeline` | System, event and kernel log rows merged on one clock from `--since T` over `--window D` (default level ≥ W plus ANR, kill, crash, boot and thermal markers; `--grep RE` replaces that filter) |
+| `create_bugreport.py --redact` | A scrubbed copy: every identifier becomes a token. A `.zip` output keeps the zip's text members and drops binary ones (`.pb`, `proto/`, nested zips), listed in `dropped`; any other output is the main text. Refuses to overwrite the input |
+| `compare_bugreport.py` | `new`, `gone` and `changed` findings between two `analyze_bugreport.py --output` files, paired on finding id and first subject, plus `rankings` moves in the memory and battery tables (run both with `--family memory,battery`). Schema majors that differ exit 1 |
 
 Start a diagnosis with the checkup, then open the top finding's `evidence`
 with `show`. An ANR whose subjects are `victim`s was caused by the system
 (read the memory finding beside it), not by the app.
 
-`create_bugreport.py` and `compare_bugreport.py` answer `--help` but are not
-implemented yet; they exit 2.
+Before sending a report to anyone (a developer, an OEM, a forum), make the
+copy with `create_bugreport.py --redact` and send that. To check whether a fix
+worked, analyze the old and new reports with `--output` and compare the two.
 
 **Selectors.** `--section` takes an exact id (`meminfo#2`) or a name that
 matches one section (`meminfo`, case-insensitive). An ambiguous name exits 2
@@ -93,3 +98,5 @@ flag, ambiguous selector, bad regex).
 | File | Load when |
 |---|---|
 | [references/sections.md](references/sections.md) | Choosing which section answers a question, reading an OEM or unparsed section, or a number looks wrong (locale, unsampled PSS, timeouts, duplicate services) |
+| [references/advice.md](references/advice.md) | A finding's remedy needs more than its one line: the settings path, version differences, when to escalate |
+| [references/detectors.md](references/detectors.md) | Which detector emits a finding, its advice id, or which sections it reads |

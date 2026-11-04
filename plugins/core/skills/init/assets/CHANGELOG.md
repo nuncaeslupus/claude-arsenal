@@ -18,6 +18,22 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [5.20.0] - 2026-11-04
+
+- **`bugreport` (android section, off by default) is feature-complete.** New in this release:
+  - **Security checkup (F10):** `analyze_bugreport.py` now flags sideloaded apps holding
+    accessibility, device-admin, notification, overlay, usage or install access; USB
+    debugging; an always-on VPN; an unlocked bootloader; a security patch over 90 days
+    older than the report; and user-installed CA certificates (zip reports only). Play
+    Protect is not reported: a bugreport's text does not expose it.
+  - **`--advice`** adds each finding's one-line remedy; `references/advice.md` holds the
+    full steps per finding.
+  - **`create_bugreport.py --redact`** writes a copy safe to send: identifiers become
+    tokens, and a `.zip` output drops binary members (listed in `dropped`) because they
+    cannot be scrubbed.
+  - **`compare_bugreport.py`** diffs two `analyze_bugreport.py --output` files: new, gone
+    and changed findings, plus moves in the memory and battery rankings.
+
 ## [5.19.0] - 2026-11-04
 
 - **`review-bots` now defaults to none (CI-only).** It used to list three vendor bots, so a

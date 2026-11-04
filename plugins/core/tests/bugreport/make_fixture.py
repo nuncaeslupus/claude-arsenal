@@ -45,6 +45,12 @@ SCENARIOS = (
     "gps-background",
     "low-storage",
     "battery-degraded",
+    "sideloaded",
+    "old-patch",
+    "unlocked",
+    "adb-on",
+    "always-on-vpn",
+    "user-ca",
 )
 
 UTC_OFFSET_S = 3600  # Europe/Berlin in November and January
@@ -108,6 +114,9 @@ _DUMPSYS = (
     "telephony.registry",
     "wifi",
     "activity",
+    "settings",
+    "device_policy",
+    "appops",
 )
 _RULE = "-" * 79
 
@@ -299,6 +308,16 @@ def render(
             else "12582912K / 115343360K total = 10% free"
         ),
         "heavy_cache": "4294967296" if "low-storage" in scenarios else "20971520",
+        "app_installer": (
+            "com.google.android.packageinstaller"
+            if "sideloaded" in scenarios
+            else "com.android.vending"
+        ),
+        "patch": "2025-06-05" if "old-patch" in scenarios else "2026-10-05",
+        "vb_state": "orange" if "unlocked" in scenarios else "green",
+        "vb_device": "unlocked" if "unlocked" in scenarios else "locked",
+        "adb": "1" if "adb-on" in scenarios else "0",
+        "vpn": "com.example.app" if "always-on-vpn" in scenarios else "null",
         "checkin_extra": "".join(
             "\n" + blocks[f"checkin_{s}"] for s in scenarios if f"checkin_{s}" in blocks
         ),
@@ -532,6 +551,8 @@ def build(
         ]
         if "crash-loop" in scenarios:
             members.append(("FS/data/tombstones/tombstone_01.pb", tombstone_pb()))
+        if "user-ca" in scenarios:
+            members.append(("FS/data/misc/user/0/cacerts-added/0a1b2c3d.0", b"example cert\n"))
     elif container == "zip-bare":
         name = main_name or f"dumpstate-{stamp}.txt"
         members = [

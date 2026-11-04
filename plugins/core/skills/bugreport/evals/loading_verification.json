@@ -3,12 +3,16 @@
   "canary": "bugreport-loaded-2026-11-04-da2adc41-b71d285c189d31db",
   "negative_control": "this-fact-is-false-and-must-not-appear-in-the-skill-body",
   "load_prompts": [
-    "Here is a bugreport zip from my phone — what device and Android version is it?",
+    "Here is a bugreport zip from my phone \u2014 what device and Android version is it?",
     "My Pixel rebooted at 14:20, look at bugreport.txt and tell me what happened around then",
-    "Which section of this dumpstate file has the meminfo for com.example.app?"
+    "Which section of this dumpstate file has the meminfo for com.example.app?",
+    "Make a copy of bugreport-2026.zip with my personal data scrubbed so I can send it to the app developer",
+    "I took a bugreport before and after the update; compare them and tell me what got worse",
+    "Is anything on this phone a security risk? The bugreport is in ~/Downloads"
   ],
   "no_load_prompts": [
     "Run adb logcat on my connected phone and watch for crashes",
-    "Parse this logcat.txt I exported from Android Studio"
+    "Parse this logcat.txt I exported from Android Studio",
+    "Connect to my phone over adb and pull a fresh bugreport for me"
   ]
 }
