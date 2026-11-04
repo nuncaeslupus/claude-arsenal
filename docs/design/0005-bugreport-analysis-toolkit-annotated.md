@@ -12,7 +12,7 @@
 **Ticket / PR**: none yet (opened with this spec)
 **Author**: Claude, for the maintainer
 **Revision**: 2
-**Status**: draft
+**Status**: approved (2026-11-04, revision 2)
 **Revision log**:
 - r1 — first draft
 - r2 — applied `notes/0005-bugreport-analysis-toolkit-notes-2026-11-04.md` (7 notes): full-checkup mode with advice, security & hygiene family, extra families (network, Bluetooth/GPS, storage/OTA, battery health), fallback primitives for unparsed sections, `android` section, Perfetto as ideas only, `compare` reduced to a JSON diff, skill-workshop conventions, public multi-OEM samples
