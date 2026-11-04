@@ -252,7 +252,7 @@ context-budget` row).
 - D-7 — No comparison analysis; stable JSON plus a small `compare_bugreport.py` diff, last and droppable (maintainer, r2 notes).
 - D-8 — Built and validated under skill-workshop rules (maintainer, r2 notes).
 - D-9 — Real reports (public corpus and the maintainer's own) are study material only: they inform which data to read and keep, how to preserve privacy, and which concrete cases detectors must catch. They are never committed, not even as excerpts. CI runs on synthetic fixtures built from what the real reports taught (maintainer, 2026-11-04).
-- D-10 — One version bump for the whole stack: P4 → P3 → P2 → P1 merge top-down, then P1 → `main` with the single minor bump (maintainer, 2026-11-04). The four extra domain flags of § 5.7 are accepted (maintainer, 2026-11-04).
+- D-10 — ~~One version bump for the whole stack, merged top-down~~ Superseded (maintainer, 2026-11-04): each phase P2–P4 merges into `main` with its own minor bump and `CHANGELOG.md` entry; the required `version bump` check and `enforce_admins` on `main` made the single bump mergeable only through an admin-protection toggle. See plan r3. The four extra domain flags of § 5.7 are accepted (maintainer, 2026-11-04).
 
 ---
 

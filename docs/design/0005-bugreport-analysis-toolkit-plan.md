@@ -3,11 +3,12 @@
 **Date**: 2026-11-04
 **Specification**: `docs/design/0005-bugreport-analysis-toolkit.md` (approved r3; §§ 5–6 appended by this design)
 **Author**: Claude, for the maintainer
-**Revision**: 2
+**Revision**: 3
 **Status**: approved (2026-11-04, revision 2) — without annotations
 **Revision log**:
 - r1 — first draft
 - r2 — maintainer decisions (2026-11-04): single bump via top-down merge (spec D-10), extra flags accepted, new task T25 `summary`; then review fixes on #542 (stacked-branch CI gap, T9→T25, T24 no longer depends on droppable T23, sign-off mapping, stdlib-only check)
+- r3 — maintainer decision (2026-11-04): bump per phase, replacing spec D-10's single bump. The required `version bump` check plus `enforce_admins` on `main` meant P1 could only merge through an admin-protection toggle; each of P2–P4 now targets `main`, carries its own bump and `CHANGELOG.md` entry, and gets CI
 
 > Review record, kept the way the spec keeps its own: each round of notes bumps
 > **Revision** with a log line naming the `<repo>-plan-v<N>-<date>-notes.md`
@@ -118,7 +119,7 @@ under `plugins/core/tests/` unless a path says otherwise.
 | T21 | P4 | Advice reference | `references/advice.md` for every `advice_id`; `--advice`; generated `references/detectors.md`; `_index.md` if the split rule triggers | `skills/bugreport/references/`, `analyze_bugreport.py` | M | T15, T16, T17, T18, T19, T20 | `advice_ids_missing_entry == 0` and `advice_orphan_headings == 0` | `test_every_registry_advice_id_has_an_entry` in `bugreport/test_advice.py` · `test_advice_flag_prints_first_line_of_entry` in `bugreport/test_advice.py` · `test_detectors_reference_matches_registry` in `bugreport/test_advice.py` |
 | T22 | P4 | Redacted copy | `create_bugreport.py --redact`: text → text, zip → zip with binary members dropped and listed, refuse input path, `--force` | `scripts/create_bugreport.py` | M | T20 | `pii_in_redacted_copy == 0` over every canary kind, txt and zip | `test_redacted_zip_drops_pb_and_proto_members` in `bugreport/test_create.py` · `test_output_equal_to_input_is_refused` in `bugreport/test_create.py` · `test_redacted_copy_still_indexes_and_analyzes` in `bugreport/test_create.py` — the scrubbed file is a valid bugreport |
 | T23 | P4 | compare script | `compare_bugreport.py`: pair on id + primary subject, new/gone/changed, ranking deltas, schema-major check (droppable, D-7) | `scripts/compare_bugreport.py` | S | T21 | `invented_changes_on_identical_inputs == 0` | `test_same_report_twice_compares_empty` in `bugreport/test_compare.py` — different salts, no changes · `test_schema_major_mismatch_exits_1` in `bugreport/test_compare.py` |
-| T24 | P4 | Release | Release: SKILL.md complete (≤ 500 lines), trigger evals, all-family coverage, flag parity, context budget, `.bundle-version` minor bump + `CHANGELOG.md` entry + `make sync-version` (only here — see Merge order) | `SKILL.md`, `evals/`, `plugins/core/skills/init/assets/.bundle-version`, `CHANGELOG.md` | M | T22 | `resident_listing_tokens_with_android <= 130` and `resident_token_delta_without_android == 0` and `families_without_fire_nofire_fixture == 0` and `skill_workshop_must_findings == 0` | `test_every_family_f1_to_f11_has_fire_and_nofire` in `bugreport/test_coverage.py` · `test_sibling_scripts_share_input_output_limit_flags` in `bugreport/test_parity.py` · `test_trigger_evals_cover_positive_and_negative_prompts` in `bugreport/test_evals.py` — evals hold ≥ 1 "Not for" prompt per negative trigger |
+| T24 | P4 | Release | Release: SKILL.md complete (≤ 500 lines), trigger evals, all-family coverage, flag parity, context budget, `.bundle-version` minor bump + `CHANGELOG.md` entry + `make sync-version` (each phase bumps — see Merge order) | `SKILL.md`, `evals/`, `plugins/core/skills/init/assets/.bundle-version`, `CHANGELOG.md` | M | T22 | `resident_listing_tokens_with_android <= 130` and `resident_token_delta_without_android == 0` and `families_without_fire_nofire_fixture == 0` and `skill_workshop_must_findings == 0` | `test_every_family_f1_to_f11_has_fire_and_nofire` in `bugreport/test_coverage.py` · `test_sibling_scripts_share_input_output_limit_flags` in `bugreport/test_parity.py` · `test_trigger_evals_cover_positive_and_negative_prompts` in `bugreport/test_evals.py` — evals hold ≥ 1 "Not for" prompt per negative trigger |
 
 **Status legend**: ☐ not started · ◐ in progress · ☑ merged
 
@@ -235,27 +236,22 @@ under `plugins/core/tests/` unless a path says otherwise.
 
 | PR | Tasks | Branch | Bump |
 |---|---|---|---|
-| P1 | T1–T9, T25 | `feat/bugreport-p1-substrate` from `main` | none |
-| P2 | T10–T14 | `feat/bugreport-p2-memory-anr` on P1 | none |
-| P3 | T15–T19 | `feat/bugreport-p3-families` on P2 | none |
-| P4 | T20–T24 | `feat/bugreport-p4-security-release` on P3 | **minor** — new skill, new section |
+| P1 | T1–T9, T25 | `feat/bugreport-p1-substrate` from `main` | none — merged in #547 through an admin-protection toggle, which r3 retires |
+| P2 | T10–T14 | `feat/bugreport-p2-memory-anr` from `main` | **minor** (5.16.0) — first release of the `bugreport` skill: P1's substrate plus `analyze` for memory, ANR and thermal |
+| P3 | T15–T19 | `feat/bugreport-p3-families` from `main` | **minor** — new detector families |
+| P4 | T20–T24 | `feat/bugreport-p4-security-release` from `main` | **minor** — security, `create`/`compare`, release polish |
 
-Stacked from the start, per `github` `references/stacking.md`: **only P4 bumps
-`.bundle-version`** and adds the `CHANGELOG.md` entry, so the release has one
-bump commit and consumers see one coherent "new `bugreport` skill" entry rather
-than three half-skills. Inside P2–P4 the tasks run in table order; T11–T13 and
-T15–T19 are independent of each other and may be parallel commits.
+Each phase targets `main` once the previous one has merged, and carries its own
+`.bundle-version` bump, `CHANGELOG.md` entry and `make sync-version`, so every PR
+passes the required `version bump` check and runs the full CI on its own diff.
+Inside a phase the tasks run in table order; T11–T13 and T15–T19 are
+independent of each other and may be parallel commits. **Chosen by the
+maintainer (r3, 2026-11-04): bump per phase**, after the single-bump plan of
+spec D-10 left P1 mergeable only by toggling `enforce_admins`.
 
-**This collides with CI's `version bump` job**, which requires a bump on any PR
-whose diff against its base touches `plugins/*/skills/` — true of P1–P3. Designs
-0002 and 0004 resolved the same collision by bumping every PR. To keep the
-stacking rule, this plan merges the stack **top-down into P1's branch**: P4 →
-P3 → P2 → P1 (each approved on its own diff), then P1 → `main` as one squash
-carrying the bump. CI (`.github/workflows/ci.yml`) runs only on pushes to `main` and PRs into `main`, so **P2–P4, which target stacked branches, get no CI at all**: their gate is `make test` plus the task gates run locally on each branch head, with the output recorded in the PR body, and the adversarial review. The first CI run over T10–T24 is the P1 → `main` PR after the stack is folded in, which is the real merge gate. **Chosen by the maintainer (spec D-10): one bump, top-down merge.**
-
-**P1 alone is useful**: `query` + `validate` are the spec's Option A coverage
-(sections map, traps, cheap fallback) — but under top-down merging nothing ships
-until P4 lands, so a stall after P1 means merging P1 to `main` with its own bump.
+A stall after any phase leaves a released, coherent subset: the `CHANGELOG.md`
+entry of each phase says what the skill covers so far. T24 keeps its release
+checks (SKILL.md, evals, coverage, parity, budget) and its own bump.
 
 After the release merges: `make release-check`; on `NO TAG`, ask the maintainer
 to run `make tag` from their machine (CLAUDE.md § Versioning).
@@ -299,6 +295,11 @@ diagnosis and the T25 summary coverage windows (within one minute of the hand-re
 | T8 | `layout_fixture_unhandled_exceptions == 0` | 0 | `uv run pytest plugins/core/tests/bugreport/test_validate.py` | 92bc00d | local Linux x86_64 py3.12 | 2026-11-04 |
 | T25 | `summary_missing_fields == 0`, output ≤ 2048 B | 0; 1494 B at 160 MB | `uv run pytest plugins/core/tests/bugreport/test_summary.py` | 92bc00d | local Linux x86_64 py3.12 | 2026-11-04 |
 | T9 | `skill_workshop_must_findings == 0` | 0 | `validate.py plugins/core/skills/bugreport`; `bugreport_test.sh` | 92bc00d | local Linux x86_64 py3.12 | 2026-11-04 |
+| T10 | `capped_outputs_parse_rate == 1.0`, `checkup_output_bytes <= 4096` | 1.0 (0 `error:` rows over 7 layouts × 4 scenarios × traps); 3896 B with every view | `uv run pytest plugins/core/tests/bugreport/test_detectors.py test_analyze.py`; `bugreport_test.sh` | P2 PR | local Linux x86_64 py3.14 | 2026-11-04 |
+| T11 | `family_fire_nofire_failures_f6 == 0` | 0 | `uv run pytest plugins/core/tests/bugreport/test_det_memory.py test_checkup.py` | P2 PR | local Linux x86_64 py3.14 | 2026-11-04 |
+| T12 | `family_fire_nofire_failures_f4 == 0` | 0 | `uv run pytest plugins/core/tests/bugreport/test_det_anr.py test_checkup.py` | P2 PR | local Linux x86_64 py3.14 | 2026-11-04 |
+| T13 | `family_fire_nofire_failures_f2 == 0`, `churn_loop_detected_on_fixture == 1` | 0; 1 | `uv run pytest plugins/core/tests/bugreport/test_det_churn.py test_det_thermal.py` | P2 PR | local Linux x86_64 py3.14 | 2026-11-04 |
+| T14 | `commands_to_diagnosis <= 1` | 1 — top finding `memory.swap_thrashing`, ANRs as `victim`, top 3 holders | `uv run pytest plugins/core/tests/bugreport/test_checkup.py` | P2 PR | local Linux x86_64 py3.14 | 2026-11-04 |
 
 **Benchmark provenance.** `index_build_s`, `index_build_zip_s`, `index_reuse_s`
 and `peak_rss_mb` are measured on the CI `ubuntu-22.04` runner against a report
@@ -311,7 +312,7 @@ measurement may sit beside it; it never replaces it.
 
 - [ ] Every spec § 1 success criterion maps to a gate row (T4, T5, T6, T8, T10, T14, T21, T24, T25 cover them; T24 also carries the stdlib-only check — `test_runtime_imports_are_stdlib_only` scans every script, `_pbwire.py` included, for non-stdlib imports)
 - [ ] Every spec § 6 risk has a test or an accepted-risk note
-- [x] Stack merge strategy chosen: top-down into P1, one bump (spec D-10)
+- [x] Merge strategy chosen: one PR into `main` per phase, one bump each (r3, superseding spec D-10)
 - [ ] T25 summary gate green, and before release the provenance report's summary coverage windows checked locally against the hand-read values (within one minute; real report never committed, D-9)
 - [ ] `make context-budget`: `android` row ≤ 130 tokens, `general` row unchanged
 - [ ] Ready for execution

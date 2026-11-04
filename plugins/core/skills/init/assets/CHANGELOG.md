@@ -18,6 +18,20 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [5.16.0] - 2026-11-04
+
+- New `bugreport` skill (android section) for Android bugreports: `query_bugreport.py`
+  (show / sample / locate a section), `validate_bugreport.py` (layout and which
+  detector inputs parsed) and `summary` for the device header. Output is JSON,
+  capped in size, with PII redacted by default.
+- `analyze_bugreport.py` runs a ranked checkup: swap thrashing, ANRs blamed on system
+  pressure or on the app's own main thread, kill → restart loops, and thermal
+  throttling. Each finding lists its subjects, evidence offsets and an `advice_id`.
+  `--family memory|anr|thermal|churn` adds that family's tables. A section it cannot
+  read becomes a `not_parsed` row with the `query` command that reaches it, so the
+  run does not fail. More families (crashes, battery, reboots, …) come in later
+  releases.
+
 ## [5.15.0] - 2026-10-29
 
 - New `scripts/render_diagrams.py`: renders each ```drawspec fence in a spec or plan
