@@ -18,6 +18,15 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [5.20.3] - 2026-11-05
+
+### Fixed
+
+- `validate.py`'s `content.ref-unconditional` check accepts Spanish load
+  conditions (`cuando`, `si`, `antes de`, `en caso de` …), so a skill written in
+  Spanish no longer fails the skill-workshop gate on every reference it cites
+  with a condition (#550).
+
 ## [5.20.2] - 2026-11-05
 
 ### Fixed
