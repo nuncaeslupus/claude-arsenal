@@ -14,13 +14,58 @@ permissions:
   contents: read
 
 jobs:
+  # macOS runners queue far longer than Linux ones, and the macOS leg exists to
+  # catch BSD-userland / bash 3.2 breakage in what the bundle ships — scripts.
+  # A PR that touches no script (docs, specs, plans) runs Linux only. Pushes to
+  # main and manual runs always run both.
+  changes:
+    name: changes
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      os: ${{ steps.pick.outputs.os }}
+      mac: ${{ steps.pick.outputs.mac }}
+    steps:
+      - id: pick
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          mac=true
+          if [ "${{ github.event_name }}" = pull_request ]; then
+            files=$(gh api "repos/${{ github.repository }}/pulls/$PR/files" --paginate --jq '.[].filename')
+            if ! printf '%s\n' "$files" | grep -Eq '\.(sh|py)$|(^|/)bin/|(^|/)scripts/|^Makefile$|^\.github/workflows/|^pyproject\.toml$|^uv\.lock$'; then
+              mac=false
+            fi
+          fi
+          echo "mac=$mac" >> "$GITHUB_OUTPUT"
+          if [ "$mac" = true ]; then
+            echo 'os=["ubuntu-22.04","macos-latest"]' >> "$GITHUB_OUTPUT"
+          else
+            echo 'os=["ubuntu-22.04"]' >> "$GITHUB_OUTPUT"
+          fi
+          echo "macOS leg: $mac"
+
+  # Keeps the required check "smoke + lint (macos-latest)" reporting when the
+  # macOS leg is not needed, so a docs-only PR is not blocked forever.
+  smoke-macos-skipped:
+    name: smoke + lint (macos-latest)
+    needs: changes
+    if: needs.changes.outputs.mac != 'true'
+    runs-on: ubuntu-22.04
+    steps:
+      - run: echo "No script changed in this PR; macOS smoke not needed."
+
   smoke:
     name: smoke + lint
+    needs: changes
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04, macos-latest]
+        os: ${{ fromJSON(needs.changes.outputs.os) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
