@@ -1503,11 +1503,17 @@ def _retire_plugin_declaration(repo_path: Path) -> None:
         print("  settings.json: retired the plugin declaration (vendored copies supersede it)")
 
 
+def _gitignore_key(pattern: str) -> tuple[bool, str]:
+    """A pattern with a slash before its end is anchored with or without the leading one."""
+    p = pattern.strip()
+    return (p.startswith("/") or "/" in p.rstrip("/"), p.lstrip("/"))
+
+
 def _add_gitignore_entry(repo_path: Path, entry: str) -> None:
     gitignore = repo_path / ".gitignore"
     if gitignore.exists():
         lines = gitignore.read_text(encoding="utf-8").splitlines()
-        if entry in lines:
+        if _gitignore_key(entry) in {_gitignore_key(line) for line in lines}:
             return
         with gitignore.open("a", encoding="utf-8") as f:
             f.write(f"\n{entry}\n")
