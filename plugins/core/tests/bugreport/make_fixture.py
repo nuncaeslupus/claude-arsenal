@@ -28,8 +28,24 @@ SEEDS = Path(__file__).resolve().parent / "seeds"
 LAYOUTS = ("pre-p", "modern", "samsung", "xiaomi", "oneplus", "huawei", "android9")
 CONTAINERS = ("txt", "zip", "zip-bare", "zip-text")
 TRAPS = ("cr", "utf16", "nul", "locale", "unsampled-pss", "timeout", "dup-service")
-# The last four are the P2 detector scenarios; each is a composable fire block.
-SCENARIOS = ("multi-day", "new-year", "no-clock", "thrashing", "anr-idle", "churn", "thermal")
+# From `thrashing` on, each is a detector scenario: a composable fire block.
+SCENARIOS = (
+    "multi-day",
+    "new-year",
+    "no-clock",
+    "thrashing",
+    "anr-idle",
+    "churn",
+    "thermal",
+    "crash-loop",
+    "battery-drain",
+    "battery-shutdown",
+    "watchdog",
+    "scan-storm",
+    "gps-background",
+    "low-storage",
+    "battery-degraded",
+)
 
 UTC_OFFSET_S = 3600  # Europe/Berlin in November and January
 KERNEL_MARKER_AGO_S = 425  # the lowmemorykiller line sits this far before capture
@@ -274,6 +290,18 @@ def render(
         "main_state": "Blocked" if "anr-idle" in scenarios else "Native",
         "thermal_status": "1" if "thermal" in scenarios else "0",
         "cpu_temp": "46.2" if "thermal" in scenarios else "38.5",
+        "last_boot": "shutdown,battery" if "battery-shutdown" in scenarios else "reboot,ota",
+        "dc": "44,46,8,38" if "battery-drain" in scenarios else "44,46,32,12",
+        "learned_mah": "2900" if "battery-degraded" in scenarios else "3850",
+        "data_free": (
+            "2306867K / 115343360K total = 2% free"
+            if "low-storage" in scenarios
+            else "12582912K / 115343360K total = 10% free"
+        ),
+        "heavy_cache": "4294967296" if "low-storage" in scenarios else "20971520",
+        "checkin_extra": "".join(
+            "\n" + blocks[f"checkin_{s}"] for s in scenarios if f"checkin_{s}" in blocks
+        ),
         "pss_triple": (
             ("0,00-0,00-0,00" if locale else "0.00-0.00-0.00")
             if "unsampled-pss" in traps
@@ -409,6 +437,43 @@ def _pad_body(name: str, rng: random.Random) -> str:
     return "\n".join(lines)
 
 
+def _pb(fields: list[tuple[int, int | bytes]]) -> bytes:
+    """Protobuf wire bytes: ints as varints (wire 0), bytes length-delimited (wire 2)."""
+
+    def varint(n: int) -> bytes:
+        out = b""
+        while True:
+            out += bytes([n & 0x7F | (0x80 if n > 0x7F else 0)])
+            n >>= 7
+            if not n:
+                return out
+
+    buf = b""
+    for num, val in fields:
+        if isinstance(val, int):
+            buf += varint(num << 3) + varint(val)
+        else:
+            buf += varint(num << 3 | 2) + varint(len(val)) + val
+    return buf
+
+
+def tombstone_pb() -> bytes:
+    """A native SIGABRT of com.example.app, in the field numbers of AOSP tombstone.proto."""
+    signal = _pb([(1, 6), (2, b"SIGABRT"), (3, 0), (4, b"SI_USER")])
+    return _pb(
+        [
+            (2, b"example/example8/example8:14/EX34A.261005.042/4242424:user/release-keys"),
+            (5, 4321),
+            (6, 4321),
+            (7, 10234),
+            (9, b"com.example.app"),
+            (10, signal),
+            (14, b"example abort: invariant broken"),
+            (16, _pb([(1, 4321), (2, _pb([(1, 4321), (2, b"main")]))])),
+        ]
+    )
+
+
 _ZIP_DATE = (2026, 11, 3, 14, 22, 5)
 
 
@@ -465,6 +530,8 @@ def build(
             ),
             ("FS/data/tombstones/tombstone_00", b"*** *** *** example tombstone\n"),
         ]
+        if "crash-loop" in scenarios:
+            members.append(("FS/data/tombstones/tombstone_01.pb", tombstone_pb()))
     elif container == "zip-bare":
         name = main_name or f"dumpstate-{stamp}.txt"
         members = [

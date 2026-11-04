@@ -13,6 +13,7 @@ import datetime as dt
 import fnmatch
 import importlib
 import re
+import zipfile
 from collections.abc import Callable, Iterable, Iterator
 from typing import Any
 
@@ -34,8 +35,20 @@ FAMILIES = {
 }
 # `churn` is a view over F6, not a family of its own (§ 5.8)
 SLUGS = {**{slug: f for f, slug in FAMILIES.items()}, "churn": "F6"}
-MODULES = ("_det_memory", "_det_anr", "_det_thermal")
+MODULES = (
+    "_det_memory",
+    "_det_anr",
+    "_det_thermal",
+    "_det_crashes",
+    "_det_battery",
+    "_det_reboots",
+    "_det_network",
+    "_det_peripherals",
+    "_det_storage",
+    "_det_battery_health",
+)
 CLAIM_CHARS = 160
+MEMBER_CAP = 1 << 20  # ponytail: starting value — a tombstone .pb is tens of KiB
 
 
 class NotParsed(Exception):
@@ -118,6 +131,11 @@ class Context:
         for member in self.rpt.index.get("fs", []):
             if fnmatch.fnmatch(member["path"], pattern):
                 yield member
+
+    def read(self, member: dict[str, Any], cap: int = MEMBER_CAP) -> bytes:
+        """The first `cap` bytes of one `FS/` member of the zip input."""
+        with zipfile.ZipFile(self.rpt.path) as zf, zf.open(member["path"]) as f:
+            return f.read(cap)
 
 
 @dataclasses.dataclass

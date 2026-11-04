@@ -18,6 +18,19 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [5.17.0] - 2026-11-04
+
+- `analyze_bugreport.py` gains seven detector families, each with its `--family` table:
+  `battery` (F1, screen-off drain blamed on the top partial wakelock, checkin v15 and v36),
+  `reboots` (F3, battery shutdown as last boot reason, system_server watchdog kills with
+  the blocked thread), `crashes` (F5, repeated `am_crash` per package and native crashes
+  decoded from `.pb` tombstones in a zip), `network` (F7, Wi-Fi scan storms, SSIDs never
+  shown), `peripherals` (F8, GPS held by a background app), `storage` (F9, low `/data`
+  free space with the largest caches) and `battery-health` (F11, learned capacity under
+  80% of design).
+- Thresholds are starting values; a section whose layout a detector does not recognise
+  is still a `not_parsed` row, never a silent miss.
+
 ## [5.16.0] - 2026-11-04
 
 - New `bugreport` skill (android section) for Android bugreports: `query_bugreport.py`

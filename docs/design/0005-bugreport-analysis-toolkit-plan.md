@@ -300,6 +300,11 @@ diagnosis and the T25 summary coverage windows (within one minute of the hand-re
 | T12 | `family_fire_nofire_failures_f4 == 0` | 0 | `uv run pytest plugins/core/tests/bugreport/test_det_anr.py test_checkup.py` | P2 PR | local Linux x86_64 py3.14 | 2026-11-04 |
 | T13 | `family_fire_nofire_failures_f2 == 0`, `churn_loop_detected_on_fixture == 1` | 0; 1 | `uv run pytest plugins/core/tests/bugreport/test_det_churn.py test_det_thermal.py` | P2 PR | local Linux x86_64 py3.14 | 2026-11-04 |
 | T14 | `commands_to_diagnosis <= 1` | 1 — top finding `memory.swap_thrashing`, ANRs as `victim`, top 3 holders | `uv run pytest plugins/core/tests/bugreport/test_checkup.py` | P2 PR | local Linux x86_64 py3.14 | 2026-11-04 |
+| T15 | `family_fire_nofire_failures_f5 == 0`, `pb_tombstone_decode_failures == 0` | 0; 0 | `uv run pytest plugins/core/tests/bugreport/test_pbwire.py test_det_crashes.py` | P3 PR | local Linux x86_64 py3.14 | 2026-11-04 |
+| T16 | `family_fire_nofire_failures_f1 == 0` | 0 (v15 and v36 checkin) | `uv run pytest plugins/core/tests/bugreport/test_det_battery.py` | P3 PR | local Linux x86_64 py3.14 | 2026-11-04 |
+| T17 | `family_fire_nofire_failures_f3 == 0` | 0 | `uv run pytest plugins/core/tests/bugreport/test_det_reboots.py` | P3 PR | local Linux x86_64 py3.14 | 2026-11-04 |
+| T18 | `family_fire_nofire_failures_f7 == 0`, `family_fire_nofire_failures_f8 == 0` | 0; 0 | `uv run pytest plugins/core/tests/bugreport/test_det_network.py test_det_peripherals.py` | P3 PR | local Linux x86_64 py3.14 | 2026-11-04 |
+| T19 | `family_fire_nofire_failures_f9 == 0`, `family_fire_nofire_failures_f11 == 0` | 0; 0 | `uv run pytest plugins/core/tests/bugreport/test_det_storage.py test_det_battery_health.py` | P3 PR | local Linux x86_64 py3.14 | 2026-11-04 |
 
 **Benchmark provenance.** `index_build_s`, `index_build_zip_s`, `index_reuse_s`
 and `peak_rss_mb` are measured on the CI `ubuntu-22.04` runner against a report
