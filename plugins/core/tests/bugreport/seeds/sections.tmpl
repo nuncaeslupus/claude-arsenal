@@ -28,10 +28,12 @@ Dumpstate info: id=1 pid=4242 dry_run=0 parallel_run=1 args=-SB extra_options=bu
 [persist.sys.locale]: [en-US]
 [persist.sys.timezone]: [{{timezone}}]
 [ro.boot.serialno]: [{{serial}}]
+[ro.boot.vbmeta.device_state]: [{{vb_device}}]
+[ro.boot.verifiedbootstate]: [{{vb_state}}]
 [ro.build.id]: [{{build}}]
 [ro.build.version.release]: [{{release}}]
 [ro.build.version.sdk]: [{{sdk}}]
-[ro.build.version.security_patch]: [2026-10-05]
+[ro.build.version.security_patch]: [{{patch}}]
 [ro.product.device]: [{{device}}]
 [ro.product.manufacturer]: [{{oem}}]
 [ro.product.model]: [{{model}}]
@@ -167,13 +169,40 @@ Packages:
     pkgFlags=[ SYSTEM HAS_CODE ]
   Package [com.example.app] (e5f6a7b):
     userId=10234
+    installerPackageName={{app_installer}}
     pkgFlags=[ HAS_CODE ALLOW_CLEAR_USER_DATA ]
   Package [com.example.heavy] (f6a7b8c):
     userId=10211
+    installerPackageName=com.android.vending
     pkgFlags=[ HAS_CODE ALLOW_CLEAR_USER_DATA ]
   Package [com.example.notes] (a7b8c9d):
     userId=10240
+    installerPackageName=org.fdroid.fdroid
     pkgFlags=[ HAS_CODE ALLOW_CLEAR_USER_DATA ]
+    install permissions:
+      android.permission.REQUEST_INSTALL_PACKAGES: granted=true
+@@ svc_settings
+GLOBAL SETTINGS (user 0)
+_id:12 name:adb_enabled pkg:android value:{{adb}} default:0 defaultSystemSet:true
+_id:31 name:development_settings_enabled pkg:com.android.settings value:{{adb}} default:0 defaultSystemSet:true
+SECURE SETTINGS (user 0)
+_id:88 name:enabled_accessibility_services pkg:com.android.settings value:com.example.app/com.example.app.ExampleA11yService default:null defaultSystemSet:false
+_id:91 name:enabled_notification_listeners pkg:android value:com.android.systemui/.ExampleListener default:null defaultSystemSet:false
+_id:97 name:always_on_vpn_app pkg:com.android.settings value:{{vpn}} default:null defaultSystemSet:false
+@@ svc_device_policy
+Current Device Policy Manager state:
+  Enabled Device Admins (User 0, provisioningState: 0):
+    com.example.heavy/.ExampleAdminReceiver:
+      uid=10211
+@@ svc_appops
+Current AppOps Service state:
+  Uid u0a234:
+    Package com.example.app:
+      SYSTEM_ALERT_WINDOW (allow):
+      CAMERA (allow):
+  Uid u0a211:
+    Package com.example.heavy:
+      GET_USAGE_STATS (deny):
 @@ svc_procstats
 COMMITTED STATS FROM 2026-11-03-11-00-00:
   * com.example.app / u0a234 / v42:

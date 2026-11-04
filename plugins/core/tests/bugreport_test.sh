@@ -79,12 +79,22 @@ echo "PASS: a non-bugreport exits 1"
 
 # --- test_skill_md_commands_resolve_to_existing_scripts_and_flags -----------
 #     Every command in SKILL.md's bash block runs as written against the fixture.
+#     `compare` reads two analyze documents, not a report, so it takes no cache.
+for v in old new; do
+    py "$scripts/analyze_bugreport.py" --input "$zipfx" --output "$tmp/$v.json" \
+        --output-dir "$tmp/cache" >/dev/null || fail "analyze --output failed"
+done
 n=0
 while IFS= read -r line; do
     cmd="${line%%#*}"
     cmd="${cmd//\$\{CLAUDE_SKILL_DIR\}/$skill}"
     cmd="${cmd//bugreport.zip/$zipfx}"
-    (cd "$root" && eval "$cmd --output-dir '$tmp/cache'") >/dev/null 2>"$tmp/err" \
+    cmd="${cmd//shared.zip/$tmp/shared.zip}"
+    cmd="${cmd//old.json/$tmp/old.json}"
+    cmd="${cmd//new.json/$tmp/new.json}"
+    cache="--output-dir '$tmp/cache'"
+    [[ $cmd == *compare_bugreport.py* ]] && cache=""
+    (cd "$root" && eval "$cmd $cache") >/dev/null 2>"$tmp/err" \
         || fail "SKILL.md command failed: $line — $(cat "$tmp/err")"
     n=$((n + 1))
 done < <(sed -n '/^```bash$/,/^```$/p' "$skill/SKILL.md" | grep '_bugreport.py')

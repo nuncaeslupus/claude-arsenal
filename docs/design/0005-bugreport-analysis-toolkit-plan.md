@@ -305,6 +305,11 @@ diagnosis and the T25 summary coverage windows (within one minute of the hand-re
 | T17 | `family_fire_nofire_failures_f3 == 0` | 0 | `uv run pytest plugins/core/tests/bugreport/test_det_reboots.py` | P3 PR | local Linux x86_64 py3.14 | 2026-11-04 |
 | T18 | `family_fire_nofire_failures_f7 == 0`, `family_fire_nofire_failures_f8 == 0` | 0; 0 | `uv run pytest plugins/core/tests/bugreport/test_det_network.py test_det_peripherals.py` | P3 PR | local Linux x86_64 py3.14 | 2026-11-04 |
 | T19 | `family_fire_nofire_failures_f9 == 0`, `family_fire_nofire_failures_f11 == 0` | 0; 0 | `uv run pytest plugins/core/tests/bugreport/test_det_storage.py test_det_battery_health.py` | P3 PR | local Linux x86_64 py3.14 | 2026-11-04 |
+| T20 | `family_fire_nofire_failures_f10 == 0` | 0 (5 scenarios × 7 layouts; `user-ca` on zip) | `uv run pytest plugins/core/tests/bugreport/test_det_security.py test_checkup.py` | P4 PR | local Linux x86_64 py3.14 | 2026-11-04 |
+| T21 | `advice_ids_missing_entry == 0`, `advice_orphan_headings == 0` | 0; 0 (19 entries) | `uv run pytest plugins/core/tests/bugreport/test_advice.py` | P4 PR | local Linux x86_64 py3.14 | 2026-11-04 |
+| T22 | `pii_in_redacted_copy == 0` | 0 over all 10 canary kinds, txt and zip | `uv run pytest plugins/core/tests/bugreport/test_create.py` | P4 PR | local Linux x86_64 py3.14 | 2026-11-04 |
+| T23 | `invented_changes_on_identical_inputs == 0` | 0 (differing salts) | `uv run pytest plugins/core/tests/bugreport/test_compare.py` | P4 PR | local Linux x86_64 py3.14 | 2026-11-04 |
+| T24 | `resident_listing_tokens_with_android <= 130`, `resident_token_delta_without_android == 0`, `families_without_fire_nofire_fixture == 0`, `skill_workshop_must_findings == 0` | 78; 0; 0; 0 | `make context-budget`; `uv run pytest plugins/core/tests/bugreport/test_coverage.py test_parity.py test_evals.py`; `bugreport_test.sh` | P4 PR | local Linux x86_64 py3.14 | 2026-11-04 |
 
 **Benchmark provenance.** `index_build_s`, `index_build_zip_s`, `index_reuse_s`
 and `peak_rss_mb` are measured on the CI `ubuntu-22.04` runner against a report

@@ -1,4 +1,4 @@
-.PHONY: validate-manifests help sync smoke test test-changed context-budget timings hero queue-doctor tag sync-version sync-version-check validate audit audit-rule-drift sync-dupes lint format dev new-skill update-skills clean
+.PHONY: validate-manifests help sync smoke test test-changed context-budget timings hero queue-doctor tag sync-version sync-version-check sync-bugreport-detectors validate audit audit-rule-drift sync-dupes lint format dev new-skill update-skills clean
 
 PLUGIN_DIRS := $(wildcard plugins/*)
 PLUGIN_SKILL_LIBS := $(wildcard plugins/*/skills)
@@ -123,6 +123,9 @@ sync-version-check:  ## fail if any manifest / AGENTS.md version drifts from .bu
 
 sync-sections:  ## regenerate the shipped capability map from the skills init vendors
 	uv run python scripts/sync_sections.py
+
+sync-bugreport-detectors:  ## regenerate the bugreport skill's detector catalogue from its registry
+	cd plugins/core/skills/bugreport/scripts && python3 -c "import _detectors; print(_detectors.catalogue_md(), end='')" > ../references/detectors.md
 
 sync-sections-check:  ## fail if sections.json has drifted from the shipped skills
 	uv run python scripts/sync_sections.py --check

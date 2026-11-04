@@ -8,7 +8,7 @@ Findings are ranked by severity, then score. Each names its subjects (with a
 role: cause, victim, holder), the evidence offsets to open with
 `query_bugreport.py show`, and an `advice_id`. A section a detector could not
 read is a `not_parsed` row with the `query` command that reaches it instead.
-Families: memory (F6, with the `churn` view), anr (F4), thermal (F2).
+Families: F1-F11 by slug or number; `--advice` adds each finding's one-line remedy.
 Exit 0 ran (findings or not), 1 not a bugreport, 2 bad usage or internal error.
 """
 
@@ -31,9 +31,6 @@ ADVICE = Path(__file__).resolve().parent.parent / "references" / "advice.md"
 
 def advice() -> dict[str, str]:
     """`### id` headings of references/advice.md -> the first line under each."""
-    if not ADVICE.is_file():
-        console.warn("references/advice.md is not written yet; --advice prints nothing")
-        return {}
     text = ADVICE.read_text(encoding="utf-8")
     return dict(re.findall(r"^### (\S+)\n+(.+)$", text, re.M))
 
@@ -64,7 +61,10 @@ def main(argv: list[str] | None = None) -> int:
         if args.advice:
             lines = advice()
             for f in findings:
-                f["advice"] = lines.get(f["advice_id"])
+                if f["advice_id"] in lines:
+                    f["advice"] = lines[f["advice_id"]]
+                else:
+                    console.warn(f"no advice entry for {f['advice_id']}")
         not_parsed = res["not_parsed"]
         extra: dict[str, Any] = {}
         if slugs:
