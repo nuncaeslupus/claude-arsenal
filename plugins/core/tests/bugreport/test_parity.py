@@ -32,3 +32,26 @@ def test_sibling_scripts_share_input_output_limit_flags():
         assert {"--input", "--output", "--limit"} <= _flags(argv), argv
     for argv in REPORT:
         assert {"--input", "--output-dir", "--force", "--json"} <= _flags(argv), argv
+
+
+def test_runtime_imports_are_stdlib_only():
+    import ast
+
+    local = {p.stem for p in SCRIPTS.glob("*.py")}
+    bad = []
+    for path in SCRIPTS.glob("*.py"):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        guarded = {id(n) for t in ast.walk(tree) if isinstance(t, ast.Try) for n in ast.walk(t)}
+        for node in ast.walk(tree):
+            if id(node) in guarded:  # optional, with a fallback (termcolor in _console)
+                continue
+            if isinstance(node, ast.Import):
+                names = [a.name for a in node.names]
+            elif isinstance(node, ast.ImportFrom) and not node.level:
+                names = [node.module or ""]
+            else:
+                continue
+            for top in (n.split(".")[0] for n in names):
+                if top not in sys.stdlib_module_names and top not in local:
+                    bad.append(f"{path.name}: {top}")
+    assert not bad, bad
