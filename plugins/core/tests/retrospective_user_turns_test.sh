@@ -62,7 +62,8 @@ with open(sys.argv[1], "w") as fh:
 PY
 
 # The scanner locates transcripts by an encoded project path; point it at ours.
-encoded=$(python3 -c "print('${proj}'.replace('/', '-'))")
+# Resolved, as the scanner resolves cwd: on macOS /var is a symlink to /private/var.
+encoded=$(cd "${proj}" && python3 -c "import os; print(os.getcwd().replace('/', '-'))")
 store="${tmpdir}/home/.claude/projects/${encoded}"
 mkdir -p "${store}"
 cp "${tmpdir}/t.jsonl" "${store}/"

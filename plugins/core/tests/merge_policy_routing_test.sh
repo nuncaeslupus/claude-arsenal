@@ -63,7 +63,8 @@ grep -q 'arsenal_config.py --get merge-policy' <<<"${policy}" \
     || note "github-automation.md documents the policy without the command to read it"
 
 # --- 2: every value in the enum has a rule written for it ---
-mapfile -t values < <(python3 - "${CFG}" <<'PY'
+values=()
+while IFS= read -r line; do values+=("${line}"); done < <(python3 - "${CFG}" <<'PY'
 import ast, sys
 
 # ENUMS is annotated (`ENUMS: dict[str, set[str]] = {...}`), so it parses as an

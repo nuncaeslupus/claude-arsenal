@@ -14,7 +14,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/skills/init/assets/bin/compact_resume.sh\""
+            "command": "grep -qsF compact_resume.sh \"$CLAUDE_PROJECT_DIR/.claude/settings.json\" || bash \"${CLAUDE_PLUGIN_ROOT}/skills/init/assets/bin/compact_resume.sh\""
           }
         ]
       }
@@ -24,7 +24,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/skills/init/assets/bin/compact_resume.sh\" instruct"
+            "command": "grep -qsF compact_resume.sh \"$CLAUDE_PROJECT_DIR/.claude/settings.json\" || bash \"${CLAUDE_PLUGIN_ROOT}/skills/init/assets/bin/compact_resume.sh\" instruct"
           }
         ]
       }
@@ -35,7 +35,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/skills/init/assets/bin/compact_resume.sh\" record"
+            "command": "grep -qsF compact_resume.sh \"$CLAUDE_PROJECT_DIR/.claude/settings.json\" || bash \"${CLAUDE_PLUGIN_ROOT}/skills/init/assets/bin/compact_resume.sh\" record"
           }
         ]
       },

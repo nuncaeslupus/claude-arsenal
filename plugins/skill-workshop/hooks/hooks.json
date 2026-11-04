@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/check_skill_workshop_loaded.sh\""
+            "command": "grep -qsF check_skill_workshop_loaded.sh \"$CLAUDE_PROJECT_DIR/.claude/settings.json\" || bash \"${CLAUDE_PLUGIN_ROOT}/hooks/check_skill_workshop_loaded.sh\""
           }
         ]
       }
@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/mark_skill_workshop_loaded.sh\""
+            "command": "grep -qsF mark_skill_workshop_loaded.sh \"$CLAUDE_PROJECT_DIR/.claude/settings.json\" || bash \"${CLAUDE_PLUGIN_ROOT}/hooks/mark_skill_workshop_loaded.sh\""
           }
         ]
       }
@@ -27,7 +27,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/mark_skill_workshop_loaded_from_prompt.sh\""
+            "command": "grep -qsF mark_skill_workshop_loaded_from_prompt.sh \"$CLAUDE_PROJECT_DIR/.claude/settings.json\" || bash \"${CLAUDE_PLUGIN_ROOT}/hooks/mark_skill_workshop_loaded_from_prompt.sh\""
           }
         ]
       }
