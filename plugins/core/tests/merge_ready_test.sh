@@ -118,6 +118,17 @@ out=$(run 42); rc=$?
 grep -qi "absent is not green" <<<"${out}" || fail "it should say what is missing: ${out}"
 echo "PASS: a failed checks fetch blocks instead of passing silently"
 
+# --- mergeable_state reaches the evaluator, and unknown is asked twice -------
+world "${HEAD}"
+sed -i.bak 's/"mergeable":true,/"mergeable":true,"mergeable_state":"behind",/' "${tmp}/pr.json"
+out=$(run 42); rc=$?
+[[ ${rc} -eq 1 ]] && grep -qi "behind" <<<"${out}" \
+    || fail "a behind PR must not pass merge_ready: ${out}"
+sed -i.bak 's/"behind"/"unknown"/' "${tmp}/pr.json"
+out=$(MERGE_READY_RETRY_SLEEP=0 run 42); rc=$?
+[[ ${rc} -eq 1 ]] || fail "a PR still unknown after the retry must block: ${out}"
+echo "PASS: behind and unknown block through merge_ready"
+
 # --- the policy comes from the repo, not from the script --------------------
 world "${HEAD}"
 printf 'merge-policy = "never"\n' > arsenal/config.toml

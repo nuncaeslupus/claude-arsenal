@@ -133,6 +133,21 @@ run --policy after-ci --require-ready >/dev/null 2>&1
 [[ $? -eq 1 ]] || fail "a conflicted PR is not ready however green it is"
 echo "PASS: draft and conflict are reported before the gates"
 
+# --- behind, dirty and unknown are not mergeable either ----------------------
+# A `behind` head ran CI on an old base: squash it and the merged code was never
+# tested together. `unknown` is GitHub not having computed it yet.
+GREEN="\"checks\":[{\"name\":\"ci\",\"status\":\"completed\",\"conclusion\":\"success\",\"head_sha\":\"${HEAD}\"}],\"reviews\":[],\"threads\":[]"
+for st in behind:update dirty:conflict unknown:wait; do
+    pr "\"mergeable\":true,\"mergeable_state\":\"${st%%:*}\",${GREEN}"
+    run --policy after-ci --require-ready >/dev/null 2>&1
+    [[ $? -eq 1 ]] || fail "a ${st%%:*} PR is not ready however green it is"
+    run --policy after-ci | grep -i >/dev/null "${st##*:}" || fail "${st%%:*}: next action should say ${st##*:}"
+done
+pr "\"mergeable\":true,\"mergeable_state\":\"clean\",${GREEN}"
+run --policy after-ci --require-ready >/dev/null 2>&1
+[[ $? -eq 0 ]] || fail "a clean green PR is ready"
+echo "PASS: behind, dirty and unknown block; clean does not"
+
 # --- claims nothing is working on -------------------------------------------
 # A sandboxed session cannot delete a claim ref, so the ref outlives the work
 # and nothing anywhere says "claimed, and no session is on it".
