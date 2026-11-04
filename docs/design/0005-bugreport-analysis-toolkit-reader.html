@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
-<meta name="arsenal-source-sha256" content="bdee3b557c4006728833b13a606bb2abe63657b47f3f86a7898e943ecc87516f">
+<meta name="arsenal-source-sha256" content="f86dfb35259db888587892a3b15807c0f480e765e2a55452fb396f09934ec2aa">
 <title>Claude Arsenal — Specification (annotatable)</title>
 <style>
 :root{
@@ -339,7 +339,7 @@ context.</p></div>
 <li>[ ] Android version / OEM coverage: synthetic fixtures reproduce the layouts seen in the corpus (§ 2.1.1) — pre-P (no priority blocks), 9–17 with CRITICAL/HIGH, Samsung <code>DUMPSYS NORMAL</code> + OEM sections, Xiaomi/OnePlus/Huawei sections, zips without <code>main_entry.txt</code> — and all parse in CI with zero unhandled exceptions; before each release the real corpus is re-run locally (not in CI) with the same zero-exception bar. Unknown sections degrade to "not parsed", never a crash.</li>
 <li>[ ] <code>summary_output_bytes &lt;= 2048</code> and every summary field present (value or <code>unknown</code>) on every layout fixture; on the provenance report the coverage windows match the hand-read values within one minute.</li>
 <li>[ ] Fallback cost: for a section with no parser, <code>commands_to_first_fields &lt;= 2</code> (<code>query … locate</code>, then <code>query … sample</code>), each <code>output_bytes &lt;= 2048</code>.</li>
-<li>[ ] <code>validate_skill.py</code> (skill-workshop) reports 0 <code>must</code> findings on the skill folder.</li>
+<li>[ ] <code>validate.py</code> (skill-workshop) reports 0 <code>must</code> findings on the skill folder.</li>
 <li>[ ] <code>pii_in_default_output == 0</code>: emails, IMEI/IMSI/ICCID, phone numbers, MAC addresses and SSIDs never appear in default output (asserted by a test over a seeded fixture); <code>--no-redact</code> is the explicit opt-out.</li>
 <li>[ ] Zero third-party runtime dependencies for the core scripts (stdlib only, <code>uv run python</code>), including tombstone <code>.pb</code> decoding.</li>
 <li>[ ] Resident listing cost <code>&lt;= 130</code> tokens for installs with the skill's section enabled and <code>0</code> for installs without it (<code>make context-budget</code>).</li>
@@ -707,7 +707,8 @@ context-budget</code> row).</p>
 - D-6 — Advice: deterministic <code>advice_id</code> from scripts, remedy text in a reference the session interprets (maintainer: "a part of it could be from the skill for the LLM to interpret").
 - D-7 — No comparison analysis; stable JSON plus a small <code>compare_bugreport.py</code> diff, last and droppable (maintainer, r2 notes).
 - D-8 — Built and validated under skill-workshop rules (maintainer, r2 notes).
-- D-9 — Real reports (public corpus and the maintainer's own) are study material only: they inform which data to read and keep, how to preserve privacy, and which concrete cases detectors must catch. They are never committed, not even as excerpts. CI runs on synthetic fixtures built from what the real reports taught (maintainer, 2026-11-04).</p></div>
+- D-9 — Real reports (public corpus and the maintainer's own) are study material only: they inform which data to read and keep, how to preserve privacy, and which concrete cases detectors must catch. They are never committed, not even as excerpts. CI runs on synthetic fixtures built from what the real reports taught (maintainer, 2026-11-04).
+- D-10 — One version bump for the whole stack: P4 → P3 → P2 → P1 merge top-down, then P1 → <code>main</code> with the single minor bump (maintainer, 2026-11-04). The four extra domain flags of § 5.7 are accepted (maintainer, 2026-11-04).</p></div>
 <div class="note" data-for="s-spec-4"><label class="note-head" for="n-s-spec-4"><span class="note-ico" aria-hidden="true">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC §4</span></label><textarea class="note-ta" data-key="s-spec-4" id="n-s-spec-4" data-label="§4 Recommendation" data-part="0005 Bugreport Analysis Toolkit" rows="1" placeholder="Add a note on this section…"></textarea></div>
 </article>
 <article class="sec l2" id="s-spec-5" data-ref="SPEC §5" data-label="§5 Contracts" data-part="0005 Bugreport Analysis Toolkit">
@@ -940,8 +941,8 @@ span, that date is used. If it falls on <strong>more than one</strong> (persiste
   candidates: 2026-11-01 14:15, 2026-11-02 14:15, 2026-11-03 14:15
   pass a date, e.g. --since &quot;2026-11-03 14:15&quot;
 </code></pre>
-<p>A time outside the span is exit 1 ("no events in window"), with the span
-printed. A local time inside a DST fold resolves to its first occurrence and the
+<p>A <code>--since</code> time outside every source's span is exit 1 ("time outside report span"), with the span
+printed. A time inside the span whose window simply holds no matching event is exit 0 with an empty <code>events</code> list. A local time inside a DST fold resolves to its first occurrence and the
 output says so.</p></div>
 <div class="note" data-for="s-spec-5-5"><label class="note-head" for="n-s-spec-5-5"><span class="note-ico" aria-hidden="true">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC §5.5</span></label><textarea class="note-ta" data-key="s-spec-5-5" id="n-s-spec-5-5" data-label="§5.5 Clock and timeline --since" data-part="0005 Bugreport Analysis Toolkit" rows="1" placeholder="Add a note on this section…"></textarea></div>
 </article>
@@ -1023,7 +1024,7 @@ serial number or any account.</p>
 </tr>
 <tr>
 <td>1</td>
-<td>The data is unusable for the request: not a bugreport, no main entry in the zip, nothing in the <code>--since</code> window, schema mismatch in <code>compare</code></td>
+<td>The data is unusable for the request: not a bugreport, no main entry in the zip, a <code>--since</code> time outside the report span, schema mismatch in <code>compare</code></td>
 </tr>
 <tr>
 <td>2</td>
@@ -1414,8 +1415,7 @@ under-redacted one leaks.</p></div>
 <p><strong>Rollback.</strong> Everything is additive in a default-off section: rolling back is
 reverting the stack (or shipping a patch that removes the skill from
 <code>sections.json</code>); no consumer data or configuration is touched, and the cache
-is disposable.
-- D-10 — One version bump for the whole stack: P4 → P3 → P2 → P1 merge top-down, then P1 → <code>main</code> with the single minor bump (maintainer, 2026-11-04). The four extra domain flags of § 5.7 are accepted (maintainer, 2026-11-04).</p></div>
+is disposable.</p></div>
 <div class="note" data-for="s-spec-6"><label class="note-head" for="n-s-spec-6"><span class="note-ico" aria-hidden="true">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC §6</span></label><textarea class="note-ta" data-key="s-spec-6" id="n-s-spec-6" data-label="§6 Risks &amp; Validation" data-part="0005 Bugreport Analysis Toolkit" rows="1" placeholder="Add a note on this section…"></textarea></div>
 </article>
 </section>

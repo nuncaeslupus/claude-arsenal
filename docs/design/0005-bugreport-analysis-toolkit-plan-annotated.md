@@ -136,7 +136,7 @@ under `plugins/core/tests/` unless a path says otherwise.
 | T7 | P1 | Clock + timeline | Clock + `timeline`: offset derivation (alarm → timezone → none), year inference, kernel/batterystats conversion, `--since` grammar, date selection, DST fold, `--window` | `_brlib.py`, `query_bugreport.py` | L | T6 | `timeline_offset_error_s == 0` on the known-offset fixture | `test_alarm_dump_offset_converts_kernel_time_to_local` in `bugreport/test_clock.py` — a dmesg line lands on its seeded local minute · `test_since_matching_two_dates_exits_2_listing_both` in `bugreport/test_clock.py` · `test_december_logs_in_january_report_get_previous_year` in `bugreport/test_clock.py` · `test_no_offset_source_marks_rows_elapsed` in `bugreport/test_clock.py` — rows carry `clock: elapsed`, nothing is guessed |
 | T8 | P1 | validate script | `validate_bugreport.py`: kind, main entry, format/Android/SDK/OEM, encoding facts, per-detector-input status (registry-ready, empty until P2) | `scripts/validate_bugreport.py` | M | T6 | `layout_fixture_unhandled_exceptions == 0` across every layout × container × trap | `test_validate_reports_layout_facts_per_fixture` in `bugreport/test_validate.py` — Android release and OEM match each fixture's seed · `test_non_bugreport_exits_1` in `bugreport_test.sh` — a random text file is rejected with a reason · `test_utf16_input_is_reported_transcoded` in `bugreport/test_validate.py` |
 | T25 | P1 | summary | `query_bugreport.py summary` (spec § 5.7, requirement 12): device, build, capture time, uptime + boot reason, per-source coverage windows, file stats, battery and storage snapshot, app counts; `unknown` for absent fields | `scripts/query_bugreport.py`, `scripts/_summary.py` | M | T6, T7 | `summary_missing_fields == 0` across every layout fixture (output ≤ 2048 B asserted by its test) | `test_summary_reports_every_field_per_layout` in `bugreport/test_summary.py` — every field is present as a value or `unknown` and output stays ≤ 2048 B; `test_summary_coverage_windows_match_fixture_bounds` — per-source first/last timestamps equal the generator's seeded bounds |
-| T9 | P1 | SKILL.md (P1) | SKILL.md (P1 scope: standing constraints front-loaded — privacy, output cap, fallback route; script table), `references/sections.md` (section map, traps, fallback recipe), `evals/loading_verification.json` | `skills/bugreport/SKILL.md`, `references/`, `evals/` | M | T7, T8 | `skill_workshop_must_findings == 0` | `test_skill_md_commands_resolve_to_existing_scripts_and_flags` in `bugreport_test.sh` — every command SKILL.md shows parses under its script's argparse · `test_skill_folder_has_no_must_findings` in `bugreport_test.sh` — skill-workshop `validate.py` on the folder reports 0 `must` |
+| T9 | P1 | SKILL.md (P1) | SKILL.md (P1 scope: standing constraints front-loaded — privacy, output cap, fallback route; script table), `references/sections.md` (section map, traps, fallback recipe), `evals/loading_verification.json` | `skills/bugreport/SKILL.md`, `references/`, `evals/` | M | T7, T8, T25 | `skill_workshop_must_findings == 0` | `test_skill_md_commands_resolve_to_existing_scripts_and_flags` in `bugreport_test.sh` — every command SKILL.md shows parses under its script's argparse · `test_skill_folder_has_no_must_findings` in `bugreport_test.sh` — skill-workshop `validate.py` on the folder reports 0 `must` |
 | T10 | P2 | Detector framework | `_detectors.py` + `analyze_bugreport.py`: registry, `Finding`, `NotParsed`, fail-soft loop with `error:` reasons, ranking, `bugreport.analyze/1`, `--family`/`--severity`/`--limit`/`--output`, `views`; `validate` reports detector inputs | `scripts/_detectors.py`, `scripts/analyze_bugreport.py`, `validate_bugreport.py` | L | T9 | `capped_outputs_parse_rate == 1.0` and `checkup_output_bytes <= 4096` | `test_raising_detector_becomes_not_parsed_row` in `bugreport/test_detectors.py` — a deliberately broken detector yields `reason: error: …` and the run exits 0 · `test_analyze_json_is_byte_identical_across_runs_modulo_tokens` in `bugreport/test_analyze.py` · `test_family_accepts_slug_and_f_number` in `bugreport/test_analyze.py` |
 | T11 | P2 | F6 memory | F6 memory detectors + `views.memory`: procstats 24 h memory × time (PSS, RSS fallback for `0,00`), foreground-while-screen-off, meminfo, swap, PSI, lmkd kills | `scripts/_det_memory.py` | L | T10 | `family_fire_nofire_failures_f6 == 0` | `test_swap_97pct_with_kswapd_cpu_fires_thrashing` in `bugreport/test_det_memory.py` · `test_unsampled_pss_falls_back_to_rss` in `bugreport/test_det_memory.py` — the holder ranking uses RSS, not 0 · `test_healthy_memory_fixture_fires_nothing` in `bugreport/test_det_memory.py` |
 | T12 | P2 | F4 ANR | F4 ANR detectors + `views.anr`: ANR files and `ANR in` blocks, reason, victim vs pressure, main-thread state, top CPU | `scripts/_det_anr.py` | M | T10 | `family_fire_nofire_failures_f4 == 0` | `test_input_dispatch_anr_under_pressure_marks_victim` in `bugreport/test_det_anr.py` — the ANR'd process is `role: victim`, not `cause` · `test_anr_with_idle_system_blames_main_thread` in `bugreport/test_det_anr.py` |
@@ -203,13 +203,13 @@ under `plugins/core/tests/` unless a path says otherwise.
  ]}
 ```
 
-**Phase 2** — T9, T10, T11, T12, T13, T14, T15, T16, T17 (with T7, T8 from earlier phases)
+**Phase 2** — T9, T10, T11, T12, T13, T14, T15, T16, T17 (with T8, T25 from earlier phases)
 
 ```drawspec
 {"version": 1, "kind": "flow", "title": "Task dependencies — phase 2",
  "nodes": [
-  {"id": "T7", "text": "T7\nphase 1"},
   {"id": "T8", "text": "T8\nphase 1"},
+  {"id": "T25", "text": "T25\nphase 1"},
   {"id": "T9", "text": "T9\nSKILL.md (P1)"},
   {"id": "T10", "text": "T10\nDetector framework"},
   {"id": "T11", "text": "T11\nF6 memory"},
@@ -221,8 +221,8 @@ under `plugins/core/tests/` unless a path says otherwise.
   {"id": "T17", "text": "T17\nF3 reboots"}
  ],
  "edges": [
-  {"from": "T7", "to": "T9"},
   {"from": "T8", "to": "T9"},
+  {"from": "T25", "to": "T9"},
   {"from": "T9", "to": "T10"},
   {"from": "T10", "to": "T11"},
   {"from": "T10", "to": "T12"},
@@ -295,8 +295,7 @@ whose diff against its base touches `plugins/*/skills/` — true of P1–P3. Des
 0002 and 0004 resolved the same collision by bumping every PR. To keep the
 stacking rule, this plan merges the stack **top-down into P1's branch**: P4 →
 P3 → P2 → P1 (each approved on its own diff), then P1 → `main` as one squash
-carrying the bump. P1–P3's `version bump` check is red while they are open and
-is not the merge gate for them; the P1 → `main` merge is. **Chosen by the maintainer (spec D-10): one bump, top-down merge.**
+carrying the bump. CI (`.github/workflows/ci.yml`) runs only on pushes to `main` and PRs into `main`, so **P2–P4, which target stacked branches, get no CI at all**: their gate is `make test` plus the task gates run locally on each branch head, with the output recorded in the PR body, and the adversarial review. The first CI run over T10–T24 is the P1 → `main` PR after the stack is folded in, which is the real merge gate. **Chosen by the maintainer (spec D-10): one bump, top-down merge.**
 
 **P1 alone is useful**: `query` + `validate` are the spec's Option A coverage
 (sections map, traps, cheap fallback) — but under top-down merging nothing ships
@@ -355,9 +354,10 @@ measurement may sit beside it; it never replaces it.
 
 ## Sign-off
 
-- [ ] Every spec § 1 success criterion maps to a gate row (T4, T5, T6, T10, T14, T21, T24 cover them)
+- [ ] Every spec § 1 success criterion maps to a gate row (T4, T5, T6, T10, T14, T21, T24, T25 cover them)
 - [ ] Every spec § 6 risk has a test or an accepted-risk note
-- [ ] Stack merge strategy chosen (top-down into P1, or bump-per-PR)
+- [x] Stack merge strategy chosen: top-down into P1, one bump (spec D-10)
+- [ ] T25 summary gate green, and before release the provenance report's summary coverage windows checked locally against the hand-read values (within one minute; real report never committed, D-9)
 - [ ] `make context-budget`: `android` row ≤ 130 tokens, `general` row unchanged
 - [ ] Ready for execution
 

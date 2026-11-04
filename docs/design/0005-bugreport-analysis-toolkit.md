@@ -87,7 +87,7 @@ context.
 - [ ] Android version / OEM coverage: synthetic fixtures reproduce the layouts seen in the corpus (§ 2.1.1) — pre-P (no priority blocks), 9–17 with CRITICAL/HIGH, Samsung `DUMPSYS NORMAL` + OEM sections, Xiaomi/OnePlus/Huawei sections, zips without `main_entry.txt` — and all parse in CI with zero unhandled exceptions; before each release the real corpus is re-run locally (not in CI) with the same zero-exception bar. Unknown sections degrade to "not parsed", never a crash.
 - [ ] `summary_output_bytes <= 2048` and every summary field present (value or `unknown`) on every layout fixture; on the provenance report the coverage windows match the hand-read values within one minute.
 - [ ] Fallback cost: for a section with no parser, `commands_to_first_fields <= 2` (`query … locate`, then `query … sample`), each `output_bytes <= 2048`.
-- [ ] `validate_skill.py` (skill-workshop) reports 0 `must` findings on the skill folder.
+- [ ] `validate.py` (skill-workshop) reports 0 `must` findings on the skill folder.
 - [ ] `pii_in_default_output == 0`: emails, IMEI/IMSI/ICCID, phone numbers, MAC addresses and SSIDs never appear in default output (asserted by a test over a seeded fixture); `--no-redact` is the explicit opt-out.
 - [ ] Zero third-party runtime dependencies for the core scripts (stdlib only, `uv run python`), including tombstone `.pb` decoding.
 - [ ] Resident listing cost `<= 130` tokens for installs with the skill's section enabled and `0` for installs without it (`make context-budget`).
@@ -252,6 +252,7 @@ context-budget` row).
 - D-7 — No comparison analysis; stable JSON plus a small `compare_bugreport.py` diff, last and droppable (maintainer, r2 notes).
 - D-8 — Built and validated under skill-workshop rules (maintainer, r2 notes).
 - D-9 — Real reports (public corpus and the maintainer's own) are study material only: they inform which data to read and keep, how to preserve privacy, and which concrete cases detectors must catch. They are never committed, not even as excerpts. CI runs on synthetic fixtures built from what the real reports taught (maintainer, 2026-11-04).
+- D-10 — One version bump for the whole stack: P4 → P3 → P2 → P1 merge top-down, then P1 → `main` with the single minor bump (maintainer, 2026-11-04). The four extra domain flags of § 5.7 are accepted (maintainer, 2026-11-04).
 
 ---
 
@@ -454,8 +455,8 @@ span, that date is used. If it falls on **more than one** (persistent logd, long
   pass a date, e.g. --since "2026-11-03 14:15"
 ```
 
-A time outside the span is exit 1 ("no events in window"), with the span
-printed. A local time inside a DST fold resolves to its first occurrence and the
+A `--since` time outside every source's span is exit 1 ("time outside report span"), with the span
+printed. A time inside the span whose window simply holds no matching event is exit 0 with an empty `events` list. A local time inside a DST fold resolves to its first occurrence and the
 output says so.
 
 ### 5.6 Output, JSON schema and exit codes
@@ -534,7 +535,7 @@ serial number or any account.
 | Code | Meaning |
 |---|---|
 | 0 | Ran and produced its document — including "no findings" and "no matches" |
-| 1 | The data is unusable for the request: not a bugreport, no main entry in the zip, nothing in the `--since` window, schema mismatch in `compare` |
+| 1 | The data is unusable for the request: not a bugreport, no main entry in the zip, a `--since` time outside the report span, schema mismatch in `compare` |
 | 2 | Usage or internal error: bad flag, ambiguous `--section` or `--since`, unwritable `--output`, unexpected exception |
 
 ### 5.7 CLI surface
@@ -721,4 +722,3 @@ None. The only persistent state is the per-user cache (§ 5.3), versioned by
 reverting the stack (or shipping a patch that removes the skill from
 `sections.json`); no consumer data or configuration is touched, and the cache
 is disposable.
-- D-10 — One version bump for the whole stack: P4 → P3 → P2 → P1 merge top-down, then P1 → `main` with the single minor bump (maintainer, 2026-11-04). The four extra domain flags of § 5.7 are accepted (maintainer, 2026-11-04).
