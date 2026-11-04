@@ -1,0 +1,35 @@
+name: bugreport benchmark
+
+# The T4 evidence row of design 0005: index build time and peak RSS on a
+# 160 MB text and a 234 MB-text zip report, which mean nothing without saying
+# where they ran — the plan requires this runner. `bugreport_test.sh` runs the
+# same benchmark at a tenth of the scale on every push; this carries the full
+# one on demand only.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark:
+    name: bugreport benchmark (T4)
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Full-scale index build and reuse
+        # `shell: bash` adds pipefail, so a missed gate is not hidden by `tee`
+        shell: bash
+        run: |
+          python3 plugins/core/tests/bugreport/benchmark.py \
+            --target-mb 160 --zip-mb 234 \
+            --output-dir "${RUNNER_TEMP}/bench" --json | tee "${RUNNER_TEMP}/bench.json"

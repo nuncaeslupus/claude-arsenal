@@ -18,7 +18,7 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
-## [5.16.0] - 2026-11-04
+## [5.18.0] - 2026-11-04
 
 - The setup interview is no longer first-install only. While `arsenal/config.toml` has
   no `setup-interview` key, every `init.py` run — `--silent` session starts and
@@ -34,6 +34,33 @@ Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
   no auto-review under 10 stars, but on a public repo `@coderabbitai review` still gets
   a review (about one per hour); on a private Free-plan repo only a summary.
   `--suggest-bot-triggers` prints that note on stderr when CodeRabbit is configured.
+
+## [5.17.0] - 2026-11-04
+
+- `analyze_bugreport.py` gains seven detector families, each with its `--family` table:
+  `battery` (F1, screen-off drain blamed on the top partial wakelock, checkin v15 and v36),
+  `reboots` (F3, battery shutdown as last boot reason, system_server watchdog kills with
+  the blocked thread), `crashes` (F5, repeated `am_crash` per package and native crashes
+  decoded from `.pb` tombstones in a zip), `network` (F7, Wi-Fi scan storms, SSIDs never
+  shown), `peripherals` (F8, GPS held by a background app), `storage` (F9, low `/data`
+  free space with the largest caches) and `battery-health` (F11, learned capacity under
+  80% of design).
+- Thresholds are starting values; a section whose layout a detector does not recognise
+  is still a `not_parsed` row, never a silent miss.
+
+## [5.16.0] - 2026-11-04
+
+- New `bugreport` skill (android section) for Android bugreports: `query_bugreport.py`
+  (show / sample / locate a section), `validate_bugreport.py` (layout and which
+  detector inputs parsed) and `summary` for the device header. Output is JSON,
+  capped in size, with PII redacted by default.
+- `analyze_bugreport.py` runs a ranked checkup: swap thrashing, ANRs blamed on system
+  pressure or on the app's own main thread, kill → restart loops, and thermal
+  throttling. Each finding lists its subjects, evidence offsets and an `advice_id`.
+  `--family memory|anr|thermal|churn` adds that family's tables. A section it cannot
+  read becomes a `not_parsed` row with the `query` command that reaches it, so the
+  run does not fail. More families (crashes, battery, reboots, …) come in later
+  releases.
 
 ## [5.15.0] - 2026-10-29
 

@@ -1,0 +1,359 @@
+# Synthetic section bodies for make_fixture.py. Written from field names and
+# layouts, never copied from a real report (D-9). `@@ name` opens a block;
+# `{{key}}` is filled by the generator. Identifiers are placeholders only.
+@@ header
+========================================================
+== dumpstate: {{captured}}
+========================================================
+
+Build: {{build}}
+Build fingerprint: '{{brand}}/{{device}}/{{device}}:{{release}}/{{build}}/4242424:user/release-keys'
+Bootloader: {{device}}-1.0-4242424
+Radio: g5300i-000000-000000-B-4242424
+Network: Example Mobile
+Module Metadata version: 351
+Linux version 6.1.75-android14-11-g0000000 (build-user@build-host) #1 SMP PREEMPT
+Command line: console=ttynull androidboot.hardware={{device}} androidboot.verifiedbootstate=green
+Uptime: up {{uptime_days}} days, {{uptime_hm}},  0 users,  load average: 1.21, 1.30, 1.25
+@@ header_fill
+Bootconfig: androidboot.slot_suffix=_a
+Kernel cmdline extra: printk.devkmsg=on
+Hardware revision: EVT1.0
+SoC: example-soc
+@@ format_line
+Bugreport format version: 2.0
+Dumpstate info: id=1 pid=4242 dry_run=0 parallel_run=1 args=-SB extra_options=bugreportfull
+@@ props
+[dalvik.vm.heapsize]: [512m]
+[persist.sys.locale]: [en-US]
+[persist.sys.timezone]: [{{timezone}}]
+[ro.boot.serialno]: [{{serial}}]
+[ro.build.id]: [{{build}}]
+[ro.build.version.release]: [{{release}}]
+[ro.build.version.sdk]: [{{sdk}}]
+[ro.build.version.security_patch]: [2026-10-05]
+[ro.product.device]: [{{device}}]
+[ro.product.manufacturer]: [{{oem}}]
+[ro.product.model]: [{{model}}]
+[ro.serialno]: [{{serial}}]
+[sys.boot.reason]: [reboot,userrequested]
+[sys.boot.reason.last]: [{{last_boot}}]
+[sys.boot_completed]: [1]
+@@ ps
+USER           PID  TID  PPID     VSZ    RSS WCHAN            ADDR S CMD
+root             1    1     0 1234567  12345 do_epoll_wait       0 S init
+root           567  567     1 2345678  45678 do_epoll_wait       0 S surfaceflinger
+system        1234 1234   567 9876543 412345 do_epoll_wait       0 S system_server
+u0_a234       4321 4321   567 5432100 123456 do_epoll_wait       0 S com.example.app
+u0_a211       4400 4400   567 6543210 234567 do_epoll_wait       0 S com.example.heavy
+radio         2100 2100   567 3456789  65432 do_epoll_wait       0 S com.android.phone
+@@ checkin
+9,0,i,vers,36,215,{{build}},{{build}}
+9,0,i,uid,1000,android
+9,0,i,uid,10234,com.example.app
+9,0,i,uid,10211,com.example.heavy
+9,0,l,bt,0,18723000,18723000,312455000,312455000,1762176125000,18723000,18723000,4000000
+9,0,l,dc,{{dc}}
+9,1000,l,cpu,412000,123000,0
+9,10234,l,cpu,98000,21000,0
+9,10234,l,fg,3600000,12{{checkin_extra}}
+@@ svc_alarm
+Current Alarm Manager state:
+  Settings:
+    min_futurity=+5s0ms
+    max_interval=+365d0h0m0s0ms
+
+  nowRTC={{now_rtc}}={{captured}}.000 nowELAPSED={{now_elapsed}}
+  mLastTimeChangeClockTime=0=1970-01-01 01:00:00.000
+  Next non-wakeup alarm: +4m12s0ms = {{captured}}.000
+  Pending alarm batches: 12
+@@ svc_iphonesubinfo
+Phone Subscription Info:
+  Phone Type = GSM
+  Device ID = {{imei}}
+  mImei={{imei}}
+  subscriberId={{imsi}}
+  mIccId={{iccid}}
+  mLine1Number={{phone}}
+@@ svc_telephony.registry
+last known state:
+  Phone Id=0
+    mCallState=0
+    mCallIncomingNumber=
+    mServiceState={mVoiceRegState=0(IN_SERVICE), mOperatorAlphaLong=Example Mobile}
+    mSignalStrength=SignalStrength:{mLte=CellSignalStrengthLte: rssi=-61 rsrp=-95}
+    phoneNumber={{phone}}
+@@ svc_account
+Accounts: 2
+  Account {name={{account}}, type=com.example.auth}
+  Account {name={{account}}, type=com.example.sync}
+
+Active Sessions: 0
+@@ svc_battery
+Current Battery Service state:
+  AC powered: false
+  USB powered: false
+  Wireless powered: false
+  Max charging current: 0
+  status: 3
+  health: 2
+  present: true
+  level: 54
+  scale: 100
+  voltage: 3912
+  temperature: 312
+  technology: Li-ion
+@@ svc_batterystats
+Battery History (12% used, 48KB used of 4096KB, 212 strings using 15KB):
+                    0 (14) RESET:TIME: {{captured}}
+Statistics since last charge:
+  System starts: 3, currently on battery: true
+  Time on battery: 5h 12m 3s 0ms (100.0%) realtime, 1h 2m 1s 0ms (19.9%) uptime
+  Discharge: 2412 mAh
+  Estimated battery capacity: 4000 mAh
+  Last learned battery capacity: {{learned_mah}} mAh
+@@ svc_diskstats
+Latency: 2ms [512B Data Write]
+Recent Disk Write Speed (kB/s) = 41234
+Data-Free: {{data_free}}
+Cache-Free: 0K / 0K total = 0% free
+System-Free: 0K / 6291456K total = 0% free
+Package Names: ["com.example.heavy","com.example.app","com.example.notes"]
+App Sizes: [104857600,52428800,10485760]
+Cache Sizes: [{{heavy_cache}},20971520,1048576]
+@@ svc_location
+Location Manager State:
+  User 0:
+    last location=Location[fused {{coord}} hAcc=12.0 et=+3d14h40m0s0ms alt=650.0]
+  Historical Records by Provider:
+    fused: min interval 1s, max 12 requests
+@@ svc_meminfo
+Applications Memory Usage (in Kilobytes):
+Uptime: {{now_elapsed}} Realtime: {{now_elapsed}}
+
+Total PSS by process:
+    412,345K: system (pid 1234)
+    {{heavy_pss}}: com.example.heavy (pid 4400)
+    123,456K: com.example.app (pid 4321 / activities)
+     45,678K: surfaceflinger (pid 567)
+
+Total PSS by OOM adjustment:
+    512,345K: Native
+        45,678K: surfaceflinger (pid 567)
+        12,345K: init (pid 1)
+    412,345K: System
+       412,345K: system (pid 1234)
+    123,456K: Foreground
+       123,456K: com.example.app (pid 4321 / activities)
+
+Total RAM: 7,712,456K (status normal)
+ Free RAM: {{free_ram}}
+ Used RAM: 5,012,345K
+ Lost RAM:   123,456K
+     ZRAM:   812,345K physical used for {{swap_used}} in swap (4,194,300K total swap)
+@@ svc_package
+Packages:
+  Package [android] (a1b2c3d):
+    userId=1000
+    pkgFlags=[ SYSTEM HAS_CODE PERSISTENT ]
+  Package [com.android.phone] (b2c3d4e):
+    userId=1001
+    pkgFlags=[ SYSTEM HAS_CODE PERSISTENT ]
+  Package [com.android.systemui] (c3d4e5f):
+    userId=10101
+    pkgFlags=[ SYSTEM HAS_CODE ]
+  Package [com.android.settings] (d4e5f6a):
+    userId=1000
+    pkgFlags=[ SYSTEM HAS_CODE ]
+  Package [com.example.app] (e5f6a7b):
+    userId=10234
+    pkgFlags=[ HAS_CODE ALLOW_CLEAR_USER_DATA ]
+  Package [com.example.heavy] (f6a7b8c):
+    userId=10211
+    pkgFlags=[ HAS_CODE ALLOW_CLEAR_USER_DATA ]
+  Package [com.example.notes] (a7b8c9d):
+    userId=10240
+    pkgFlags=[ HAS_CODE ALLOW_CLEAR_USER_DATA ]
+@@ svc_procstats
+COMMITTED STATS FROM 2026-11-03-11-00-00:
+  * com.example.app / u0a234 / v42:
+           TOTAL: {{pct}} ({{pss_triple}}/38MB-42MB-48MB/80MB-90MB-99MB over 12)
+          Top: {{pct}} ({{pss_triple}}/38MB-42MB-48MB/80MB-90MB-99MB over 12)
+
+AGGREGATED OVER LAST 24 HOURS:
+System memory usage:
+  SOff/Norm: samples=24 total={{sys_total}} free=212MB zram=812MB kernel=345MB native=512MB
+  * com.example.heavy / u0a211 / v7:
+           TOTAL: 88% (180MB-200MB-230MB/170MB-190MB-220MB/300MB-310MB-330MB over 24)
+  * com.example.app / u0a234 / v42:
+           TOTAL: {{pct}} ({{pss_triple}}/38MB-42MB-48MB/80MB-90MB-99MB over 24)
+
+AGGREGATED OVER LAST 3 HOURS:
+  * com.example.app / u0a234 / v42:
+           TOTAL: 61% (40MB-45MB-50MB/38MB-42MB-48MB/80MB-85MB-90MB over 3)
+@@ svc_thermalservice
+IsStatusOverride: false
+ThermalEventListeners:
+	callbacks: 2
+Thermal Status: {{thermal_status}}
+Cached temperatures:
+	Temperature{mValue=31.2, mType=2, mName=battery, mStatus=0}
+	Temperature{mValue={{cpu_temp}}, mType=0, mName=cpu0, mStatus={{thermal_status}}}
+@@ svc_wifi
+Wi-Fi is enabled
+Verbose logging is off
+mWifiInfo SSID: "{{ssid}}", BSSID: {{mac}}, MAC: 02:00:00:00:00:00, Security type: 2, Supplicant state: COMPLETED, RSSI: -61
+mLastSignalLevel 3
+WifiConfiguration list:
+  ID: 0 SSID: "{{ssid}}" PROVIDER-NAME: null BSSID: null
+@@ svc_activity
+ACTIVITY MANAGER RUNNING PROCESSES (dumpsys activity processes)
+  All known processes:
+  *APP* UID 10234 ProcessRecord{1a2b3c 4321:com.example.app/u0a234}
+    user #0 uid=10234 gids={50234, 20234, 9997}
+    pid=4321 starting=false
+    lastActivityTime=-4m12s0ms
+  *APP* UID 10211 ProcessRecord{2b3c4d 4400:com.example.heavy/u0a211}
+    user #0 uid=10211 gids={50211, 20211}
+    pid=4400 starting=false
+@@ svc_power
+Power Manager State:
+  mWakefulness=Asleep
+  mIsPowered=false
+  mBatteryLevel=54
+  mHoldingWakeLockSuspendBlocker=false
+@@ oem_AP RESET INFO EXTEND
+RSTCNT: 3
+RR: KP
+PC: 0xffffffc010000000
+LR: 0xffffffc010000040
+AP_RESET_REASON: kernel_panic
+@@ oem_SEC_MEDIA
+sec_media_codec_state: idle
+sec_media_active_sessions: 0
+sec_media_last_error: none
+@@ oem_POWERUP_REASON
+powerup_reason: 0x00000001
+powerup_reason_name: hard_reset
+powerup_count: 7
+@@ oem_qsee_log
+qsee_app_loaded: keymaster
+qsee_app_loaded: widevine
+qsee_last_status: ok
+@@ oem_PERFLOCK HISTORY
+perflock_owner: com.example.app
+perflock_duration_ms: 1200
+perflock_count: 41
+@@ oem_End of OLOG
+olog_lines: 412
+olog_dropped: 0
+olog_last_tag: example_olog
+@@ oem_OMMSERVICE
+omm_version: 2
+omm_mem_reclaim: on
+omm_kill_count: 12
+omm_last_victim: com.example.notes
+@@ oem_KERNEL LIVE PATCH
+klp_enabled: 1
+klp_patch_count: 2
+klp_last_patch: kpatch_example_01
+@@ oem_QTAGUID NETWORK INTERFACES INFO
+iface_stat_all: wlan0 1 0 0 0 0
+qtaguid_ctrl_version: 3
+qtaguid_stats_entries: 128
+@@ log_messages
+I|ActivityManager|Start proc 4321:com.example.app/u0a234 for activity {com.example.app/.MainActivity}
+D|WifiStateMachine|ConnectedState: rssi=-61 linkspeed=433
+W|ActivityManager|Slow operation: 112ms so far, now at startProcess: returned from zygote
+I|PowerManagerService|Going to sleep due to timeout (uid 1000)
+W|BatteryStatsService|Timeout reading modem stats
+I|chatty|uid=1000(system) Binder:1234_2 expire 3 lines
+E|ExampleSync|sync failed: java.net.SocketTimeoutException: timeout
+D|ConnectivityService|NetworkAgentInfo [WIFI () - 100] validation passed
+I|SurfaceFlinger|Display 0 HWC layers: 4
+W|libc|Unable to set property "ctl.interface_start" to "aidl/example": error code: 0x20
+@@ event_messages
+I|am_proc_start|[0,4321,10234,com.example.app,activity,{com.example.app/.MainActivity}]
+I|am_pss|[4321,10234,com.example.app,123456000,98765000,0,234567000,0,6,3]
+I|battery_level|[54,3912,312]
+I|screen_toggled|0
+I|am_wtf|[0,1234,system_server,-1,ExampleTag,example message]
+@@ kernel_messages
+healthd: battery l=54 v=3912 t=31.2 h=2 st=3 c=-412000 fc=4512000 cc=312 chg=
+binder: 1234:1250 transaction failed 29189/-22, size 0-0 line 3083
+wlan: [4242:I:HDD] hdd_get_station: rssi -61
+init: Service 'example_hal' (pid 2200) exited with status 0
+@@ cpu_info
+Tasks: 812 total,   2 running, 810 sleeping,   0 stopped,   0 zombie
+  Mem:  7712456K total,  5100111K used,  2612345K free,    12345K buffers
+ Swap:  4194300K total, {{swap_used}} used,  1781955K free,  2100000K cached
+800%cpu  92%user   0%nice  80%sys 620%idle   4%iow   2%irq   2%sirq   0%host
+  PID   TID USER         PR  NI[%CPU]S VIRT  RES PCY CMD             NAME
+ 1234  1250 system       18  -2 12.0 S 9.4G 402M  fg system_server   Binder:1234_2
+  123   123 root         20   0 {{kswapd_cpu}} S    0    0  fg kswapd0         kswapd0
+ 4321  4321 u0_a234      10 -10  3.1 S 5.1G 120M  ta com.example.app com.example.app
+@@ psi_memory
+some avg10={{psi_mem}} avg60=0.40 avg300=0.21 total=12345678
+full avg10=0.00 avg60=0.10 avg300=0.05 total=2345678
+@@ psi_io
+some avg10={{psi_io}} avg60=1.20 avg300=0.80 total=34567890
+full avg10=0.10 avg60=0.40 avg300=0.30 total=4567890
+@@ vm_traces
+----- pid 4321 at 2026-11-03 14:10:00 -----
+Cmd line: com.example.app
+
+"main" prio=5 tid=1 {{main_state}}
+  | group="main" sCount=1 ucsCount=0 flags=1 obj=0x72a1b2c3 self=0x7a0b0c0d0e0f
+  at com.example.app.SyncStore.read(SyncStore.java:88)
+@@ sys_thrashing
+243|E|ActivityManager|ANR in com.example.app (com.example.app/.MainActivity)
+243|E|ActivityManager|PID: 4321
+243|E|ActivityManager|Reason: Input dispatching timed out (com.example.app/.MainActivity is not responding. Waited 5001ms for MotionEvent)
+243|E|ActivityManager|Load: 14.2 / 11.8 / 9.6
+243|E|ActivityManager|CPU usage from 0ms to 9873ms later:
+243|E|ActivityManager|  58% 123/kswapd0: 0% user + 58% kernel
+243|E|ActivityManager|  12% 1234/system_server: 7% user + 5% kernel
+130|E|ActivityManager|ANR in com.android.phone
+130|E|ActivityManager|PID: 2100
+130|E|ActivityManager|Reason: Input dispatching timed out (Application does not have a focused window)
+130|E|ActivityManager|Load: 15.1 / 12.4 / 9.9
+130|E|ActivityManager|CPU usage from 0ms to 9911ms later:
+130|E|ActivityManager|  61% 123/kswapd0: 0% user + 61% kernel
+@@ ev_thrashing
+243|I|am_anr|[0,4321,com.example.app,952745541,Input dispatching timed out]
+130|I|am_anr|[0,2100,com.android.phone,952745541,Input dispatching timed out]
+@@ sys_anr-idle
+730|E|ActivityManager|ANR in com.example.app (com.example.app/.MainActivity)
+730|E|ActivityManager|PID: 4321
+730|E|ActivityManager|Reason: Input dispatching timed out (com.example.app/.MainActivity is not responding. Waited 5001ms for KeyEvent)
+730|E|ActivityManager|Load: 1.2 / 1.1 / 0.9
+730|E|ActivityManager|CPU usage from 0ms to 9902ms later:
+730|E|ActivityManager|  4% 1234/system_server: 2% user + 2% kernel
+@@ ev_anr-idle
+730|I|am_anr|[0,4321,com.example.app,952745541,Input dispatching timed out]
+@@ ev_churn
+600|I|am_proc_died|[0,4400,com.example.heavy,900,17]
+596|I|am_proc_start|[0,4401,10211,com.example.heavy,service,{com.example.heavy/.SyncService}]
+480|I|am_proc_died|[0,4401,com.example.heavy,900,17]
+475|I|am_proc_start|[0,4402,10211,com.example.heavy,service,{com.example.heavy/.SyncService}]
+360|I|am_proc_died|[0,4402,com.example.heavy,900,17]
+356|I|am_proc_start|[0,4403,10211,com.example.heavy,service,{com.example.heavy/.SyncService}]
+240|I|am_proc_died|[0,4403,com.example.heavy,900,17]
+234|I|am_proc_start|[0,4404,10211,com.example.heavy,service,{com.example.heavy/.SyncService}]
+@@ ev_thermal
+1500|I|thermal_changed|[cpu0,0,44.0,1,0]
+1200|I|thermal_changed|[cpu0,0,49.5,2,1]
+900|I|thermal_changed|[cpu0,0,53.1,3,2]
+600|I|thermal_changed|[cpu0,0,46.2,1,3]
+@@ checkin_battery-drain
+9,10211,l,wl,ExampleSyncLock,0,f,0,15400000,p,412,0,w,0
+@@ checkin_scan-storm
+9,10211,l,wfl,0,1234000,0,2400,0,0,0,2390,1200000,1190000
+@@ checkin_gps-background
+9,10211,l,sr,-10000,7200000,40,38,7200000,6900000
+@@ ev_crash-loop
+900|I|am_crash|[0,4321,com.example.app,952745541,java.lang.IllegalStateException,example failure,SyncStore.java,88,0]
+600|I|am_crash|[0,4322,com.example.app,952745541,java.lang.IllegalStateException,example failure,SyncStore.java,88,0]
+300|I|am_crash|[0,4323,com.example.app,952745541,java.lang.IllegalStateException,example failure,SyncStore.java,88,0]
+@@ sys_watchdog
+400|W|Watchdog|*** WATCHDOG KILLING SYSTEM PROCESS: Blocked in handler on foreground thread (android.fg)

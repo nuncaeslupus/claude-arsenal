@@ -446,7 +446,7 @@ SETTINGS: dict[str, Setting] = {
     # interview existed (or one whose first install skipped it) was never asked
     # at all, and its user repeated the same answers by hand every session.
     "setup-interview": Setting(
-        "", "5.16.0", 'When the setup interview was answered (YYYY-MM-DD), or "declined".'
+        "", "5.18.0", 'When the setup interview was answered (YYYY-MM-DD), or "declined".'
     ),
 }
 

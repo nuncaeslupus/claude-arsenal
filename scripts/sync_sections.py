@@ -52,6 +52,7 @@ SECTION_BLURBS: dict[str, str] = {
     "workflow": "the spec → design → execute → review → ship discipline",
     "python": "the Python toolchain — coverage, mutation, dependency and release skills",
     "extract": "structured data out of artifacts you did not produce",
+    "android": "diagnosing Android devices from the bugreports they produce",
 }
 
 

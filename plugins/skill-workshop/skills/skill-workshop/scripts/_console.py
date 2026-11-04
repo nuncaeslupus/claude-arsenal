@@ -3,6 +3,10 @@
 Stderr-first output with prefix icons. Colour optional (termcolor when
 available + stderr is a TTY). Stdout is reserved for the data payload
 (JSON) and never written to from this module.
+
+DUPLICATED ACROSS SKILLS:
+- plugins/skill-workshop/skills/skill-workshop/scripts/_console.py (canonical)
+- plugins/core/skills/bugreport/scripts/_console.py
 """
 
 from __future__ import annotations
