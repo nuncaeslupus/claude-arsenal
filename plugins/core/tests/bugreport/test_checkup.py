@@ -24,6 +24,14 @@ FIRES = {
     "anr-idle": ["anr.main_thread"],
     "churn": ["memory.restart_loop"],
     "thermal": ["thermal.throttling"],
+    "crash-loop": ["crashes.repeat_crash"],
+    "battery-drain": ["battery.screen_off_drain"],
+    "battery-shutdown": ["reboots.battery_shutdown"],
+    "watchdog": ["reboots.watchdog"],
+    "scan-storm": ["network.scan_storm"],
+    "gps-background": ["peripherals.gps_background"],
+    "low-storage": ["storage.low_free_space"],
+    "battery-degraded": ["battery-health.degraded"],
 }
 
 
