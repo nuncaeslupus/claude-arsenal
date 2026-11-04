@@ -207,5 +207,16 @@ printf '[review]\ndigest-decisions = "yes"\n' > arsenal/config.toml
 [[ "$(get_rc review.digest-decisions)" == "2" ]] || fail "digest-decisions must be a boolean"
 echo "PASS: digest-delivery / digest-every / digest-decisions validate"
 
+# --- setup-interview: a quoted date or "declined"; anything else is refused ---
+printf 'setup-interview = "2026-01-31"\n' > arsenal/config.toml
+[[ "$(get setup-interview)" == "2026-01-31" ]] || fail "a quoted date must be accepted"
+printf 'setup-interview = "declined"\n' > arsenal/config.toml
+[[ "$(get setup-interview)" == "declined" ]] || fail "declined must be accepted"
+printf 'setup-interview = 2026-01-31\n' > arsenal/config.toml
+[[ "$(get_rc setup-interview)" == "2" ]] || fail "a bare TOML date must be refused"
+printf 'setup-interview = "later"\n' > arsenal/config.toml
+[[ "$(get_rc setup-interview)" == "2" ]] || fail "an arbitrary string must be refused"
+echo "PASS: setup-interview validates"
+
 echo "PASS: arsenal_config_test — model settings and table handling"
 exit 0

@@ -351,12 +351,49 @@ triggers=$(python3 "${CFG_PY}" --repo-root "${answered}" | python3 -c 'import js
 echo "PASS: test_init_interview_rewrite_keeps_escapes"
 
 # The suggestion the interview offers: known commands for the configured bots.
-suggested=$(python3 "${INIT_PY}" --repo-path "${answered}" --suggest-bot-triggers)
+suggested=$(python3 "${INIT_PY}" --repo-path "${answered}" --suggest-bot-triggers 2>/dev/null)
 grep -qF 'coderabbitai[bot]=@coderabbitai review' <<<"${suggested}" \
     || { echo "FAIL: no trigger suggested for coderabbitai[bot]: ${suggested}" >&2; exit 1; }
 grep -qF 'claude[bot]=@claude review' <<<"${suggested}" \
     || { echo "FAIL: no trigger suggested for claude[bot]: ${suggested}" >&2; exit 1; }
 echo "PASS: --suggest-bot-triggers names the known command for each configured bot"
+
+# test_setup_interview_pending — asked on every run until recorded, not only on
+# a first install: a host installed without it would otherwise never be asked.
+pending="${tmpdir}/interview-pending"
+mkdir -p "${pending}"; echo "# Pending" > "${pending}/CLAUDE.md"
+run_pending() { python3 "${INIT_PY}" --repo-path "${pending}" --bundle-dir "${BUNDLE_DIR}" "$@" 2>&1; }
+out=$(run_pending)
+grep -q '^SETUP INTERVIEW PENDING' <<<"${out}" || { echo "FAIL: first install did not print SETUP INTERVIEW PENDING" >&2; exit 1; }
+out=$(run_pending --silent)
+grep -q '^SETUP INTERVIEW PENDING' <<<"${out}" || { echo "FAIL: --silent re-run did not print SETUP INTERVIEW PENDING" >&2; exit 1; }
+! grep -q 'NEW SETTING setup-interview' <<<"${out}" || { echo "FAIL: setup-interview announced twice, as a NEW SETTING too" >&2; exit 1; }
+# An invalid --merge-policy is refused before anything is written.
+if run_pending --silent --merge-policy sometimes >/dev/null; then
+    echo "FAIL: an unknown --merge-policy value was accepted" >&2; exit 1
+fi
+grep -q '^setup-interview' "${pending}/arsenal/config.toml" && { echo "FAIL: a refused answer recorded setup-interview" >&2; exit 1; }
+out=$(run_pending --silent --merge-policy after-ci-and-review)
+! grep -q 'SETUP INTERVIEW PENDING' <<<"${out}" || { echo "FAIL: PENDING printed in the run that recorded the interview" >&2; exit 1; }
+[[ "$(python3 "${CFG_PY}" --repo-root "${pending}" --get merge-policy)" == "after-ci-and-review" ]] \
+    || { echo "FAIL: --merge-policy not written" >&2; exit 1; }
+grep -qE '^setup-interview = "[0-9]{4}-[0-9]{2}-[0-9]{2}"$' "${pending}/arsenal/config.toml" \
+    || { echo "FAIL: answering did not record setup-interview with a date" >&2; exit 1; }
+out=$(run_pending --silent)
+! grep -q 'SETUP INTERVIEW PENDING' <<<"${out}" || { echo "FAIL: PENDING still printed after recording" >&2; exit 1; }
+# --interview-declined records "declined", stops the line, and refuses answers beside it.
+declined_i="${tmpdir}/interview-declined"
+mkdir -p "${declined_i}"; echo "# Declined" > "${declined_i}/CLAUDE.md"
+python3 "${INIT_PY}" --repo-path "${declined_i}" --bundle-dir "${BUNDLE_DIR}" --silent --interview-declined >/dev/null
+[[ "$(python3 "${CFG_PY}" --repo-root "${declined_i}" --get setup-interview)" == "declined" ]] \
+    || { echo "FAIL: --interview-declined did not record declined" >&2; exit 1; }
+out=$(python3 "${INIT_PY}" --repo-path "${declined_i}" --bundle-dir "${BUNDLE_DIR}" --silent 2>&1)
+! grep -q 'SETUP INTERVIEW PENDING' <<<"${out}" || { echo "FAIL: PENDING printed after a decline" >&2; exit 1; }
+if python3 "${INIT_PY}" --repo-path "${declined_i}" --bundle-dir "${BUNDLE_DIR}" --silent \
+        --interview-declined --autonomy autonomous >/dev/null 2>&1; then
+    echo "FAIL: --interview-declined with answers was accepted" >&2; exit 1
+fi
+echo "PASS: test_setup_interview_pending"
 
 echo "PASS: init_test — all gates passed"
 exit 0
