@@ -15,7 +15,7 @@
 **Status**: approved (2026-11-04, revision 2)
 **Revision log**:
 - r1 — first draft
-- r2 — applied `notes/0005-bugreport-analysis-toolkit-notes-2026-11-04.md` (7 notes): full-checkup mode with advice, security & hygiene family, extra families (network, Bluetooth/GPS, storage/OTA, battery health), fallback primitives for unparsed sections, `android` section, Perfetto as ideas only, `compare` reduced to a JSON diff, skill-workshop conventions, public multi-OEM samples; then, from conversation: public corpus findings (§ 2.1.1) and D-9 (real reports as study material only); then review fixes from the adversarial round and CodeRabbit (selectors, redaction ids, capped-JSON envelope, index location, fixture size)
+- r2 — applied `0005-bugreport-analysis-toolkit-spec-notes-2026-11-04.md` (7 notes): full-checkup mode with advice, security & hygiene family, extra families (network, Bluetooth/GPS, storage/OTA, battery health), fallback primitives for unparsed sections, `android` section, Perfetto as ideas only, `compare` reduced to a JSON diff, skill-workshop conventions, public multi-OEM samples; then, from conversation: public corpus findings (§ 2.1.1) and D-9 (real reports as study material only); then review fixes from the adversarial round and CodeRabbit (selectors, redaction ids, capped-JSON envelope, index location, fixture size)
 
 > Review record. Each round of reviewer notes makes a new revision: bump
 > **Revision**, add a log line naming the export it applied, and commit that
