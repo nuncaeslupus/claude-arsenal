@@ -18,6 +18,23 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [5.18.0] - 2026-11-04
+
+- The setup interview is no longer first-install only. While `arsenal/config.toml` has
+  no `setup-interview` key, every `init.py` run — `--silent` session starts and
+  upgrades included — prints `SETUP INTERVIEW PENDING`, and the session asks the
+  interview before picking up work. Hosts installed before the interview existed, or
+  whose first install skipped it, are now asked once.
+- Answering records `setup-interview = "<date>"`; the new `--interview-declined` flag
+  records `"declined"` for a user who skips it. Either stops the line for good.
+- New interview question and flag `--merge-policy` (`always`, `after-ci`,
+  `after-review`, `after-ci-and-review`, `never`). Whatever is chosen, the agent merges
+  by itself once `merge_ready.sh` passes, without asking.
+- The interview and `pr-review-loop.md` now say how CodeRabbit behaves on small repos:
+  no auto-review under 10 stars, but on a public repo `@coderabbitai review` still gets
+  a review (about one per hour); on a private Free-plan repo only a summary.
+  `--suggest-bot-triggers` prints that note on stderr when CodeRabbit is configured.
+
 ## [5.17.0] - 2026-11-04
 
 - `analyze_bugreport.py` gains seven detector families, each with its `--family` table:

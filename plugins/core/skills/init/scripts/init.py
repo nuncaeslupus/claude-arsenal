@@ -3,6 +3,7 @@
 
 import argparse
 import contextlib
+import datetime
 import hashlib
 import importlib.util
 import json
@@ -2405,6 +2406,12 @@ def init_workspace(
 # The manual review command each known bot answers to, offered by the setup
 # interview for the bots in `review-bots`. "request-reviewer" is not a comment:
 # review_sources.py requests the bot as a reviewer instead.
+#
+# CodeRabbit's trigger matters more than the others: it does not auto-review a
+# repo with fewer than 10 GitHub stars, but on a PUBLIC repo it still reviews
+# when asked with `@coderabbitai review` (about one on-demand review per hour
+# per account). On a private repo on its Free plan it posts only a summary,
+# never a line review, so the local adversarial review has to stand in there.
 KNOWN_BOT_TRIGGERS = {
     "coderabbitai[bot]": "@coderabbitai review",
     "gemini-code-assist[bot]": "/gemini review",
@@ -2423,7 +2430,14 @@ _INTERVIEW_KEYS = {
     "review_preset": "review.preset",
     "always_human_paths": "review.always-human-paths",
     "digest_decisions": "review.digest-decisions",
+    "merge_policy": "merge-policy",
 }
+
+# Recorded by every answered interview (the date) or by --interview-declined.
+# While it is absent, every init run prints SETUP INTERVIEW PENDING: asking on
+# a first install only meant a host installed before the interview existed, or
+# whose first install skipped it, was never asked at all.
+_INTERVIEW_DONE_KEY = "setup-interview"
 
 
 def _arsenal_config() -> Any:
@@ -2444,7 +2458,7 @@ def _interview_answers(args: argparse.Namespace) -> dict[str, str]:
         raw = getattr(args, dest)
         if raw is None:
             continue
-        if key in ("autonomy", "verification", "review.preset"):
+        if key in ("autonomy", "verification", "review.preset", "merge-policy"):
             allowed = _arsenal_config().ENUMS[key]
             if raw not in allowed:
                 sys.exit(f"init: --{key} must be one of {', '.join(sorted(allowed))}, got {raw!r}")
@@ -2475,14 +2489,36 @@ def _interview_answers(args: argparse.Namespace) -> dict[str, str]:
 
 
 def _record_interview(repo_path: Path, answers: dict[str, str]) -> None:
-    """Write the interview answers into arsenal/config.toml, above any table."""
+    """Write the interview answers into arsenal/config.toml, above any table.
+
+    Also stamps `setup-interview` with today's date — or keeps the "declined"
+    the caller passed — so the PENDING line stops for good.
+    """
     config = _home(repo_path) / "config.toml"
+    answers = dict(answers)
+    answers.setdefault(_INTERVIEW_DONE_KEY, json.dumps(datetime.date.today().isoformat()))
     for key, value in answers.items():
         if key.startswith("review."):
             _upsert_table_key(config, "review", key.split(".", 1)[1], value)
         else:
             _upsert_bare_key(config, key, value)
         print(f"  config.toml: {key} = {value}")
+
+
+def _report_interview_pending(repo_path: Path) -> None:
+    """Print SETUP INTERVIEW PENDING while `setup-interview` is unrecorded.
+
+    Printed on every run, --silent and upgrades included: session start is the
+    only moment a host installed without the interview would ever be asked.
+    """
+    if _config_value(_home(repo_path) / "config.toml", _INTERVIEW_DONE_KEY):
+        return
+    print(
+        "SETUP INTERVIEW PENDING — arsenal/config.toml has no `setup-interview`, so nobody "
+        "has answered how this repo should work (autonomy, merge-policy, review). Ask the "
+        "init skill's § Setup interview with AskUserQuestion before picking up work, then "
+        "pass the answers to init.py (or --interview-declined if the user skips it)."
+    )
 
 
 def _value_end(lines: list[str], start: int) -> int:
@@ -2556,6 +2592,17 @@ def suggest_bot_triggers(repo_path: Path) -> int:
         if bot in KNOWN_BOT_TRIGGERS
     ]
     print(",".join(rows))
+    # Advice on stderr, so stdout stays a pasteable --bot-triggers value. Not
+    # detected: whether the repo is public needs a GitHub round trip, and the
+    # interview is asking the user anyway.
+    if "coderabbitai[bot]" in values["review-bots"]:
+        print(
+            "note: CodeRabbit skips auto-review on repos under 10 stars. On a PUBLIC repo keep "
+            "the `@coderabbitai review` trigger (about one on-demand review per hour); on a "
+            "private Free-plan repo it posts only a summary, so the local adversarial review "
+            "stands in.",
+            file=sys.stderr,
+        )
     return 0
 
 
@@ -2682,6 +2729,17 @@ def main() -> None:
         help="Count a digest approval as a human one; written as `[review] digest-decisions`.",
     )
     p.add_argument(
+        "--merge-policy",
+        metavar="always|after-ci|after-review|after-ci-and-review|never",
+        help="How far a task PR must get before an agent merges it; written as `merge-policy`.",
+    )
+    p.add_argument(
+        "--interview-declined",
+        action="store_true",
+        help='The user skipped the setup interview; records setup-interview = "declined" so '
+        "it is not asked again.",
+    )
+    p.add_argument(
         "--suggest-bot-triggers",
         action="store_true",
         help="Print the known trigger for each bot in review-bots, as a --bot-triggers value. "
@@ -2694,6 +2752,10 @@ def main() -> None:
         raise SystemExit(suggest_bot_triggers(repo_path))
     # Validated before the install runs, so a bad answer writes nothing at all.
     interview = _interview_answers(args)
+    if args.interview_declined:
+        if interview:
+            sys.exit("init: --interview-declined cannot be combined with interview answers")
+        interview = {_INTERVIEW_DONE_KEY: json.dumps("declined")}
     bundle_override = Path(args.bundle_dir) if args.bundle_dir else None
 
     # Read-only, and answered before anything else: this is what the session-start
@@ -2736,6 +2798,8 @@ def main() -> None:
         )
     if installed and interview:
         _record_interview(repo_path, interview)
+    if installed:
+        _report_interview_pending(repo_path)
 
 
 if __name__ == "__main__":
