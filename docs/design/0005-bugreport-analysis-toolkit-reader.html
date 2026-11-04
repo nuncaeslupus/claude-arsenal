@@ -1,0 +1,1014 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="arsenal-source-sha256" content="8b289540dfc166ae99aecc6f72f9b5bb96e4c9680a6bc5f5e572a01b0dd986c8">
+<title>Claude Arsenal — Specification (annotatable)</title>
+<style>
+:root{
+  --bg:#fbfaf7;--fg:#1d1c1a;--muted:#5f5c56;--line:#e3ded4;
+  --card:#ffffff;--accent:#0f766e;--accent2:#9a4a0b;--chip:#e8efed;
+  --note:#fffaf0;--note-line:#d9a441;--note-fg:#7a3b06;--code:#f1eee8;--link:#0f766e;
+  --measure:70ch;
+  --serif:Charter,"Bitstream Charter","Iowan Old Style","Sitka Text",Cambria,Georgia,serif;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+@media(prefers-color-scheme:dark){
+  :root{
+    --bg:#16151a;--fg:#ebe9e4;--muted:#aaa69f;--line:#34313a;
+    --card:#1e1d23;--accent:#5eead4;--accent2:#fbbf24;--chip:#24302f;
+    --note:#221d12;--note-line:#8a6a22;--note-fg:#fcd34d;--code:#26242b;--link:#7ff0dc;
+  }
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;background:var(--bg);color:var(--fg);
+  font:17px/1.65 var(--sans);
+  padding-bottom:96px;
+}
+/* The document reads in a book face; the reader's own chrome (bars, buttons,
+   headings, notes) stays in the UI face, so the two never blur together. */
+.sec-body{font-family:var(--serif);font-size:1.06em;line-height:1.7}
+.sec-body table,.sec-body pre{font-family:var(--sans)}
+.sec-body pre{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.wrap{max-width:calc(var(--measure) + 120px);margin:0 auto;padding:0 16px}
+a{color:var(--link);text-underline-offset:2px}
+code{background:var(--code);padding:.08em .35em;border-radius:5px;font-size:.86em;
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;word-break:break-word}
+pre{background:var(--code);padding:12px;border-radius:8px;overflow:auto;font-size:.88em;line-height:1.5}
+pre code{background:none;padding:0;font-size:1em}
+.topbar{position:sticky;top:0;z-index:30;background:var(--bg);
+  border-bottom:1px solid var(--line);backdrop-filter:saturate(120%) blur(6px)}
+.topbar .wrap{display:flex;align-items:center;gap:8px;padding-top:10px;padding-bottom:10px}
+.brand{font-weight:700;font-size:16px;margin-right:auto;letter-spacing:.2px;min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.brand small{font-weight:500;color:var(--muted);display:block;font-size:11px;letter-spacing:0}
+.btn{appearance:none;border:1px solid var(--line);background:var(--card);color:var(--fg);
+  border-radius:9px;padding:8px 11px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap}
+.btn:active{transform:translateY(1px)}
+.btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+@media(prefers-color-scheme:dark){.btn.primary{color:#06201d}}
+.count{font-size:12px;color:var(--muted);white-space:nowrap;font-weight:600}
+.savestate{font-size:12px;font-weight:700;white-space:nowrap;transition:color .2s}
+.savestate.ok{color:var(--accent)}
+.savestate.warn{color:#9a4a0b}
+@media(prefers-color-scheme:dark){.savestate.warn{color:#fbbf24}}
+.statusbar{border-bottom:1px solid var(--line);background:var(--card)}
+.statusbar .wrap{padding:7px 16px;font-size:12px;color:var(--muted)}
+#warnbar{display:none;background:#fff4e5;border-bottom:1px solid var(--note-line);color:#7c2d12}
+#warnbar .wrap{padding:10px 16px;font-size:13px;line-height:1.45}
+@media(prefers-color-scheme:dark){#warnbar{background:#3a2a0e;color:#fde68a;border-color:#6b531c}}
+.hero{padding:34px 0 8px}
+.hero h1{font-size:2rem;line-height:1.15;margin:.1em 0 .3em;letter-spacing:-.02em}
+.hero p{color:var(--muted);margin:.3em 0;max-width:var(--measure)}
+.help{border:1px solid var(--line);background:var(--card);border-radius:12px;padding:4px 14px;margin:14px 0}
+.help summary{cursor:pointer;font-weight:600;padding:10px 0}
+.help ul{margin:.2em 0 1em;padding-left:1.2em}
+.help li{margin:.3em 0}
+.toc{border:1px solid var(--line);background:var(--card);border-radius:12px;padding:4px 14px;margin:14px 0}
+.toc>summary{cursor:pointer;font-weight:700;padding:11px 0;font-size:15px}
+.toc-part{margin:2px 0;border-top:1px solid var(--line)}
+.toc-part>summary{cursor:pointer;padding:9px 2px;font-weight:600;font-size:14px}
+.toc-part ul{margin:.1em 0 .7em;padding-left:1.1em}
+.toc-part li{margin:.22em 0;font-size:13.5px;line-height:1.4}
+.toc-part a,.toc-flat a{text-decoration:none}
+.toc-flat{margin:.1em 0 .8em;padding-left:1.1em}
+.toc-flat li{margin:.25em 0;font-size:14px;line-height:1.4;break-inside:avoid}
+.toc-flat li.sub{margin-left:1.1em;font-size:13px}
+.toc-flat a:hover{text-decoration:underline}
+.toc-part a:hover{text-decoration:underline}
+.part{margin:30px 0}
+.part-title{font-size:1.45rem;line-height:1.25;border-bottom:2px solid var(--accent);
+  padding-bottom:8px;margin:18px 0 10px}
+.badge{display:inline-block;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;
+  vertical-align:middle;padding:3px 7px;border-radius:6px;margin-right:8px}
+.badge.spec,.badge.plan{background:var(--chip);color:var(--accent)}
+.badge.workspace{background:var(--chip);color:var(--accent2)}
+/* Two heading levels, told apart by size, weight and a rule: a ## section opens
+   with a full-width rule; a ### section sits indented under it on a side rule. */
+.sec{scroll-margin-top:72px}
+.sec.l2{padding:22px 0 6px;border-top:1px solid var(--line);margin-top:18px}
+.part>.sec.l2:first-of-type{border-top:none;margin-top:0}
+.sec.l3{margin:6px 0 6px 2px;padding:2px 0 2px 14px;border-left:3px solid var(--line)}
+.sec-h{margin:6px 0 8px;line-height:1.3}
+h3.sec-h{font-size:1.3rem;font-weight:750}
+h4.sec-h{font-size:1.08rem;font-weight:650;color:var(--fg)}
+.sec.bare>.sec-h{margin-bottom:2px}
+.chip{display:inline-block;font-family:ui-monospace,Menlo,monospace;font-size:12px;font-weight:700;
+  color:var(--accent);background:var(--chip);border-radius:6px;padding:2px 7px;margin-right:8px;vertical-align:middle}
+h4 .chip{font-size:11px;color:var(--muted)}
+.sec-title{vertical-align:middle}
+.sec-body{margin:.2em 0 .4em}
+.sec-body p,.sec-body li,.sec-body blockquote{max-width:var(--measure)}
+.sec-body p{margin:.6em 0}
+.sec-body ul,.sec-body ol{margin:.5em 0;padding-left:1.35em}
+.sec-body li{margin:.3em 0}
+.sec-body h4,.sec-body h5,.sec-body h6{font-size:1em;margin:1em 0 .3em}
+.sec-body blockquote{margin:.7em 0;padding:.5em .9em;border-left:3px solid var(--accent);
+  background:var(--code);border-radius:0 8px 8px 0;color:var(--fg)}
+.sec-body blockquote p{margin:.3em 0}
+.sec-body figure.drawspec{margin:.8em 0;overflow-x:auto}
+.sec-body figure.drawspec svg{display:block;max-width:100%;height:auto;margin:0 auto}
+.sec-body table{border-collapse:separate;border-spacing:0;font-size:14px;line-height:1.45;margin:.8em 0;
+  display:block;width:max-content;max-width:100%;overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--card)}
+.sec-body th,.sec-body td{border-bottom:1px solid var(--line);padding:8px 12px;text-align:left;vertical-align:top}
+.sec-body tr:last-child td{border-bottom:none}
+.sec-body tbody tr:nth-child(even) td{background:color-mix(in srgb,var(--chip) 45%,transparent)}
+.sec-body th{background:var(--chip);font-weight:700;font-size:12.5px;letter-spacing:.02em}
+.sec-body strong{font-weight:700}
+/* The note field: the one thing on the page that is the reviewer's, so it must
+   not read as more document — but an empty one must not shout over the text
+   either. Empty: a quiet dashed margin slip. Focused: it opens into a writing
+   card. Written in: a solid amber card that stands out on a skim. */
+.note{max-width:var(--measure);background:transparent;border:1.5px dashed var(--note-line);
+  border-radius:10px;padding:6px 12px;margin:14px 0 20px;opacity:.78;
+  transition:background .15s,box-shadow .15s,opacity .15s,padding .15s}
+.note:hover{opacity:1}
+.note:focus-within,.note.filled{opacity:1;background:var(--note);border-style:solid;
+  border-left:4px solid var(--note-line);padding:10px 14px}
+.note:focus-within{box-shadow:0 0 0 3px color-mix(in srgb,var(--note-line) 28%,transparent),0 6px 20px #0000000f}
+.note-head{display:flex;align-items:center;gap:8px;cursor:text}
+.note-ico{color:var(--note-fg);font-weight:800}
+.note-label{font-size:11px;font-weight:800;color:var(--note-fg);text-transform:uppercase;letter-spacing:.07em}
+.note-ref{margin-left:auto;font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:var(--muted);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+/* While empty the label row collapses into the placeholder line beside the icon. */
+.note:not(.filled):not(:focus-within){display:flex;align-items:center;gap:8px}
+.note:not(.filled):not(:focus-within) .note-label,
+.note:not(.filled):not(:focus-within) .note-ref{display:none}
+.note:focus-within .note-head,.note.filled .note-head{margin-bottom:4px}
+.note-ta{display:block;width:100%;border:none;background:transparent;color:var(--fg);font:inherit;font-size:16px;
+  resize:none;outline:none;line-height:1.55;padding:2px 0;overflow:hidden;min-height:1.6em}
+.note:focus-within .note-ta{min-height:4.8em}
+.note-ta::placeholder{color:var(--muted);opacity:1;font-style:italic}
+.fab{position:fixed;right:14px;bottom:16px;z-index:40;display:flex;flex-direction:column;gap:8px;align-items:flex-end}
+.fab .btn{box-shadow:0 4px 14px #0003}
+.modal{position:fixed;inset:0;z-index:60;background:#0008;display:none;align-items:center;justify-content:center;padding:16px}
+.modal.open{display:flex}
+.modal-card{background:var(--card);border:1px solid var(--line);border-radius:14px;max-width:680px;width:100%;
+  max-height:86vh;display:flex;flex-direction:column;padding:16px}
+.modal-card h3{margin:.1em 0 .5em}
+.modal-card p{color:var(--muted);font-size:13.5px;margin:.2em 0 .6em}
+.modal-card textarea{width:100%;flex:1;min-height:220px;border:1px solid var(--line);border-radius:8px;
+  background:var(--bg);color:var(--fg);font:13px/1.5 ui-monospace,Menlo,monospace;padding:10px;resize:vertical}
+.modal-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.hidden-input{display:none}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:84px;z-index:70;background:#111;color:#fff;
+  padding:9px 14px;border-radius:9px;font-size:13px;opacity:0;transition:opacity .25s;pointer-events:none}
+.toast.show{opacity:.96}
+/* Phone width: smaller type, no floating column over the text, the hint dropped. */
+@media(max-width:600px){
+  body{font-size:16px;padding-bottom:76px}
+  .hero h1{font-size:1.45rem}
+  .part-title{font-size:1.25rem}
+  h3.sec-h{font-size:1.15rem}
+  h4.sec-h{font-size:1rem}
+  .sec.l3{padding-left:10px}
+  .statusbar .hint{display:none}
+  .fab{left:0;right:0;bottom:0;flex-direction:row;justify-content:flex-end;gap:6px;padding:8px 10px;
+    flex-wrap:wrap;background:var(--bg);border-top:1px solid var(--line)}
+  .fab .btn{box-shadow:none;padding:7px 9px}
+  .toast{bottom:64px}
+}
+/* Block notes: a faint ✎ in the right margin of every paragraph, item and table. */
+.bn-host{position:relative}
+.bn-btn{position:absolute;top:0;right:-34px;width:26px;height:26px;border-radius:7px;border:1px solid transparent;
+  background:transparent;color:var(--note-fg);font-size:14px;line-height:1;cursor:pointer;opacity:.3;padding:0}
+.bn-host:hover>.bn-btn,.bn-btn:focus-visible,.bn-btn.has{opacity:1;border-color:var(--note-line);background:var(--note)}
+.bn-btn:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.note.bnote{margin:6px 0 12px}
+li>.note.bnote{margin:6px 0}
+@media(max-width:820px){.bn-host{padding-right:30px}.bn-btn{right:0}}
+@media print{.topbar,.statusbar,.fab,.help,.bn-btn,.note:not(.filled){display:none}}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="wrap">
+    <div class="brand">Claude Arsenal — Specification<small>annotatable reader · 2026-11-04</small></div>
+    <span class="savestate ok" id="savestate">✓ Auto-saving</span>
+    <button class="btn primary" id="btn-export">Save / Export</button>
+  </div>
+</div>
+<div class="statusbar"><div class="wrap"><span class="count" id="count">0 / 14 notes</span><span class="hint"> · notes save automatically; <strong>Save / Export</strong> keeps a file you can send back</span></div></div>
+<div id="warnbar"><div class="wrap"><strong>Heads up —</strong> this browser isn't storing your notes automatically (private/incognito mode or restricted file view). Tap <strong>Save / Export</strong> regularly.</div></div>
+
+<div class="wrap">
+  <div class="hero">
+    <h1>Claude Arsenal — Specification</h1>
+    <p>Read at your own pace and leave a note on any point you want to discuss.</p>
+  </div>
+  <details class="help">
+    <summary>How to annotate (tap)</summary>
+    <ul>
+      <li>Tap the note field under any section and type. Each note is tagged so your feedback maps to an exact point.</li>
+      <li>Tap <strong>✎</strong> at the right of any paragraph, list item or table to note on that exact spot — the box opens right below it, with the text still in view.</li>
+      <li><strong>Notes save automatically</strong> in this browser as you type.</li>
+      <li><strong>Save / Export</strong> downloads a Markdown file of your notes — the copy to send back. Tap whenever you pause, especially on a phone.</li>
+      <li><strong>Import</strong> reloads notes from a file you exported earlier (after clearing the browser or switching devices).</li>
+      <li><strong>Clear</strong> erases every note in this browser. Export first.</li>
+    </ul>
+  </details>
+  <details class="toc" open><summary>Contents</summary>
+<ul class="toc-flat">
+<li><a href="#s-spec-intro">Preamble &amp; scope</a></li>
+<li><a href="#s-spec-1">§1 Problem statement</a></li>
+<li class="sub"><a href="#s-spec-requirements-from-the-maintainer">Requirements (from the maintainer)</a></li>
+<li><a href="#s-spec-2">§2 Systems &amp; Impact</a></li>
+<li class="sub"><a href="#s-spec-2-1">§2.1 What a bugreport contains (parser facts)</a></li>
+<li class="sub"><a href="#s-spec-2-1-1">§2.1.1 Public sample corpus (collected for r2)</a></li>
+<li class="sub"><a href="#s-spec-2-2">§2.2 Problem families the detectors target (ranked by forum demand)</a></li>
+<li class="sub"><a href="#s-spec-2-3">§2.3 Systems touched</a></li>
+<li class="sub"><a href="#s-spec-2-4">§2.4 Skill-workshop constraints the design must meet</a></li>
+<li><a href="#s-spec-3">§3 Options</a></li>
+<li class="sub"><a href="#s-spec-option-a-recipe-reference-a-hand">Option A: Recipe reference + a handful of grep scripts (Conservative)</a></li>
+<li class="sub"><a href="#s-spec-option-b-indexed-detector-driven">Option B: Indexed, detector-driven toolkit, stdlib only (Recommended)</a></li>
+<li class="sub"><a href="#s-spec-option-c-build-on-perfetto-trace">Option C: Build on Perfetto trace_processor as the substrate (rejected by the maintainer — ideas only)</a></li>
+<li class="sub"><a href="#s-spec-option-d-mcp-server-instead-of-a">Option D: MCP server instead of a skill</a></li>
+<li class="sub"><a href="#s-spec-comparison">Comparison</a></li>
+<li><a href="#s-spec-4">§4 Recommendation</a></li>
+</ul>
+</details>
+  <section class="part">
+<article class="sec l2" id="s-spec-intro" data-ref="SPEC · intro" data-label="Preamble &amp; scope" data-part="0005 Bugreport Analysis Toolkit">
+<h3 class="sec-h"><span class="chip">overview</span><span class="sec-title">Preamble &amp; scope</span></h3>
+<div class="sec-body"><p><strong>Date</strong>: 2026-11-04<br />
+<strong>Ticket / PR</strong>: none yet (opened with this spec)<br />
+<strong>Author</strong>: Claude, for the maintainer<br />
+<strong>Revision</strong>: 2<br />
+<strong>Status</strong>: approved (2026-11-04, revision 2)<br />
+<strong>Revision log</strong>:
+- r1 — first draft
+- r2 — applied <code>notes/0005-bugreport-analysis-toolkit-notes-2026-11-04.md</code> (7 notes): full-checkup mode with advice, security &amp; hygiene family, extra families (network, Bluetooth/GPS, storage/OTA, battery health), fallback primitives for unparsed sections, <code>android</code> section, Perfetto as ideas only, <code>compare</code> reduced to a JSON diff, skill-workshop conventions, public multi-OEM samples; then, from conversation: public corpus findings (§ 2.1.1) and D-9 (real reports as study material only); then review fixes from the adversarial round and CodeRabbit (selectors, redaction ids, capped-JSON envelope, index location, fixture size)</p>
+<blockquote>
+<p>Review record. Each round of reviewer notes makes a new revision: bump
+<strong>Revision</strong>, add a log line naming the export it applied, and commit that
+export beside this file in the same commit. On approval set <strong>Status</strong> to
+<code>approved (YYYY-MM-DD, revision N)</code>.</p>
+<p><strong>Why this exists.</strong> An Android bugreport already holds the full answer to
+"why did my phone freeze / drain / reboot / kill my app": logs, event tags,
+memory and process stats, ANR traces, tombstones, battery history. It is also
+a 100–250 MB text file with 800+ sections in a dozen formats, so the one thing
+nobody can do with it is read it. This document specifies a script set that
+turns it into a short, evidenced list of findings — the same move the <code>har</code>
+skill (design 0002) made for browser captures.</p>
+</blockquote></div>
+<div class="note" data-for="s-spec-intro"><label class="note-head" for="n-s-spec-intro"><span class="note-ico" aria-hidden="true">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC · intro</span></label><textarea class="note-ta" data-key="s-spec-intro" id="n-s-spec-intro" data-label="Preamble &amp; scope" data-part="0005 Bugreport Analysis Toolkit" rows="1" placeholder="Add a note on this section…"></textarea></div>
+</article>
+<article class="sec l2" id="s-spec-1" data-ref="SPEC §1" data-label="§1 Problem statement" data-part="0005 Bugreport Analysis Toolkit">
+<h3 class="sec-h"><span class="chip">§1</span><span class="sec-title">Problem statement</span></h3>
+<div class="sec-body"><p>Diagnosing a bugreport today means grepping a huge flat file by hand, learning
+each section's ad-hoc format on the way, and re-deriving the same parsers every
+time. The provenance case: one real Pixel bugreport (Android 16, 156 MB text,
+234 MB zip) asked "what happened?" took a session ~15 tool calls to reach a
+diagnosis that is fully deterministic — memory thrashing (swap 97 % full,
+<code>kswapd</code> 58 % CPU, I/O PSI <code>some avg10=89</code>) causing two input-dispatch ANRs —
+and two of those calls were lost to format traps (embedded <code>\r</code> bytes shifting
+line numbers; locale decimal commas <code>1,9GB</code> in procstats). The tools that used to
+interpret bugreports are gone: Battery Historian (archived 2022, battery only)
+and ChkBugReport (archived 2026, pre-2016 parsers). Perfetto ingests a
+bugreport zip but stores dumpstate as raw lines and interprets nothing. No
+official or community Claude skill analyses offline bugreports (Google's
+<code>android/skills</code> covers Perfetto traces only). Forum demand is dominated by
+battery drain, then overheating, random reboots, and lag/ANR/crashes — all of
+which a bugreport answers if something reads it.</p>
+<p>The goal: a session (or a human at a terminal) gets a ranked, evidenced
+diagnosis from <strong>one command</strong>, and every follow-up question costs one more
+command whose output is a few hundred bytes — never a section pasted into
+context.</p></div>
+<div class="note" data-for="s-spec-1"><label class="note-head" for="n-s-spec-1"><span class="note-ico" aria-hidden="true">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC §1</span></label><textarea class="note-ta" data-key="s-spec-1" id="n-s-spec-1" data-label="§1 Problem statement" data-part="0005 Bugreport Analysis Toolkit" rows="1" placeholder="Add a note on this section…"></textarea></div>
+</article>
+<article class="sec l3" id="s-spec-requirements-from-the-maintainer" data-ref="SPEC › Requirements (from the maintainer)" data-label="Requirements (from the maintainer)" data-part="0005 Bugreport Analysis Toolkit">
+<h4 class="sec-h"><span class="chip">▸</span><span class="sec-title">Requirements (from the maintainer)</span></h4>
+<div class="sec-body"><ol>
+<li><strong>Scripts, not reading.</strong> Ultra-fast deterministic scripts return only the
+   result; the session judges, it never pays tokens for the search.</li>
+<li><strong>Find problems, not just expose data.</strong> A detector catalogue turns raw
+   sections into findings with severity and evidence.</li>
+<li><strong>Helps more people than its author.</strong> End users (battery, heat, freezes,
+   reboots) and app developers (ANR root cause, native crashes, why the app is
+   killed) are both first-class.</li>
+<li><strong>Efficient reading.</strong> Decide, with measurements, whether to index or convert
+   the file rather than re-scanning it per question.</li>
+<li><strong>Lives in arsenal as a tool</strong>, alongside <code>har</code>, following its conventions.</li>
+<li><strong>An auto-diagnostic, not a parser.</strong> "How is my phone doing?" runs every
+   detector and answers with problems <em>and</em> remedies (close or restrict an app,
+   cut battery use, avoid heat, free storage…), including problems the user
+   has not noticed yet.</li>
+<li><strong>Security and hygiene are in scope</strong>: apps installed outside an app store,
+   risky permissions and app configurations, device-level security settings.</li>
+<li><strong>Nothing is unreachable.</strong> When a section cannot be parsed (a new Android
+   release, an OEM format), cheap generic primitives still let the session
+   locate, sample and interpret it without reading it whole.</li>
+<li><strong>Built to skill-workshop rules</strong> (§ 2.4) — the rubric gates every file in
+   the skill folder.</li>
+<li><strong>No Perfetto dependency</strong>; its ideas may be borrowed.</li>
+<li><strong>Broad coverage</strong>: test material from several Android versions and OEMs,
+    not only the maintainer's phone.</li>
+</ol>
+<p><strong>Success criteria (measurable)</strong></p>
+<ul>
+<li>[ ] <code>index_build_s &lt;= 3</code> for a 160 MB bugreport text on the CI runner (measured today: one <code>mmap</code> + regex pass over 156 MB finds 842 sections in 0.96 s); <code>peak_rss_mb &lt;= 300</code>.</li>
+<li>[ ] <code>query_s &lt;= 1</code> for any single-section command once the index exists (seek to byte range, parse only that slice).</li>
+<li>[ ] <code>checkup_output_bytes &lt;= 4096</code> by default, enforced by truncation; every finding carries an evidence pointer (<code>section</code> + byte offset or file path) so the full text is one <code>show</code> command away.</li>
+<li>[ ] <code>commands_to_diagnosis &lt;= 1</code>: <code>analyze_bugreport.py</code> (full checkup) on the provenance bugreport reports memory thrashing as the top finding, names the ANR'd processes as victims, and lists the top memory holders — judged against the manual diagnosis recorded above. In CI this runs on a synthetic fixture reproducing that report's signals (swap ≥ 95 %, <code>kswapd</code> CPU, PSI, two input ANRs); the real report is re-checked locally before release (D-9).</li>
+<li>[ ] Detector coverage: each problem family F1–F11 in § 2.2 has ≥ 1 detector with a fixture that fires it and one that does not (<code>make test</code> asserts both).</li>
+<li>[ ] Advice coverage: every finding id has an entry in <code>references/advice.md</code> (a test diffs the two id sets; missing entry = build failure).</li>
+<li>[ ] Android version / OEM coverage: synthetic fixtures reproduce the layouts seen in the corpus (§ 2.1.1) — pre-P (no priority blocks), 9–17 with CRITICAL/HIGH, Samsung <code>DUMPSYS NORMAL</code> + OEM sections, Xiaomi/OnePlus/Huawei sections, zips without <code>main_entry.txt</code> — and all parse in CI with zero unhandled exceptions; before each release the real corpus is re-run locally (not in CI) with the same zero-exception bar. Unknown sections degrade to "not parsed", never a crash.</li>
+<li>[ ] Fallback cost: for a section with no parser, <code>commands_to_first_fields &lt;= 2</code> (<code>query … locate</code>, then <code>query … sample</code>), each <code>output_bytes &lt;= 2048</code>.</li>
+<li>[ ] <code>validate_skill.py</code> (skill-workshop) reports 0 <code>must</code> findings on the skill folder.</li>
+<li>[ ] <code>pii_in_default_output == 0</code>: emails, IMEI/IMSI/ICCID, phone numbers, MAC addresses and SSIDs never appear in default output (asserted by a test over a seeded fixture); <code>--no-redact</code> is the explicit opt-out.</li>
+<li>[ ] Zero third-party runtime dependencies for the core scripts (stdlib only, <code>uv run python</code>), including tombstone <code>.pb</code> decoding.</li>
+<li>[ ] Resident listing cost <code>&lt;= 130</code> tokens for installs with the skill's section enabled and <code>0</code> for installs without it (<code>make context-budget</code>).</li>
+</ul></div>
+<div class="note" data-for="s-spec-requirements-from-the-maintainer"><label class="note-head" for="n-s-spec-requirements-from-the-maintainer"><span class="note-ico" aria-hidden="true">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC › Requirements (from the maintainer)</span></label><textarea class="note-ta" data-key="s-spec-requirements-from-the-maintainer" id="n-s-spec-requirements-from-the-maintainer" data-label="Requirements (from the maintainer)" data-part="0005 Bugreport Analysis Toolkit" rows="1" placeholder="Add a note on this section…"></textarea></div>
+</article>
+<article class="sec l2 bare" id="s-spec-2" data-ref="SPEC §2" data-label="§2 Systems &amp; Impact" data-part="0005 Bugreport Analysis Toolkit">
+<h3 class="sec-h"><span class="chip">§2</span><span class="sec-title">Systems &amp; Impact</span></h3>
+</article>
+<article class="sec l3" id="s-spec-2-1" data-ref="SPEC §2.1" data-label="§2.1 What a bugreport contains (parser facts)" data-part="0005 Bugreport Analysis Toolkit">
+<h4 class="sec-h"><span class="chip">§2.1</span><span class="sec-title">What a bugreport contains (parser facts)</span></h4>
+<div class="sec-body"><ul>
+<li><strong>Zip layout</strong>: <code>main_entry.txt</code> names the main text (<code>bugreport-&lt;build&gt;-&lt;date&gt;.txt</code>); <code>version.txt</code> gives the format (<code>2.0</code> since Android P); <code>FS/</code> mirrors device paths — <code>FS/data/anr/</code> (ANR traces, one file per ANR), <code>FS/data/tombstones/tombstone_NN</code> + <code>.pb</code> (native crashes; protobuf since Android 12), <code>FS/data/misc/logd/</code> (persistent logcat, when enabled), <code>FS/data/misc/recovery/</code> and <code>update_engine_log/</code> (OTA); <code>proto/*.proto</code> (binary dumps of some services, build-dependent — 12 files in the provenance report); <code>dumpstate_board.txt</code> (vendor HAL); <code>visible_windows.zip</code>.</li>
+<li><strong>Delimiters</strong>: <code>------ SECTION TITLE (command) ------</code> for top-level sections, <code>DUMP OF SERVICE [CRITICAL|HIGH ]&lt;name&gt;:</code> inside the three DUMPSYS priority blocks (a service can appear more than once), <code>------ 0.123s was the duration of 'SECTION TITLE' ------</code> closers, <code>*** command '…' timed out</code> for truncated sections.</li>
+<li><strong>Where the size is</strong> (provenance report): Wi-Fi HAL dump 16.5 MB, <code>CHECKIN BATTERYSTATS</code> 15.3 MB, <code>batterystats</code> 11.2 MB, <code>activity</code> 9.3 MB, <code>package</code> 7.4 MB, VM traces 5.9 MB, system log 5.1 MB. Logcat is not the bulk; a section index makes almost every question a slice read.</li>
+<li><strong>Traps</strong> (each one has already cost a real session a step): bare <code>\r</code> bytes inside lines (10 757 in the provenance file — text-mode readers shift line numbers); locale-formatted numbers (<code>0,00</code>, <code>1,9GB</code>); UTF-16 text when a <code>.txt</code> was captured through PowerShell redirection; NUL/invalid UTF-8 in logcat; logcat in local time vs batterystats/kernel in UTC/elapsed (offset from the alarm dump's <code>nowRTC</code>/<code>nowELAPSED</code>, as Perfetto does, or <code>persist.sys.timezone</code>); procstats PSS triples reading <code>0,00</code> when unsampled (use RSS as fallback).</li>
+</ul></div>
+<div class="note" data-for="s-spec-2-1"><label class="note-head" for="n-s-spec-2-1"><span class="note-ico" aria-hidden="true">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC §2.1</span></label><textarea class="note-ta" data-key="s-spec-2-1" id="n-s-spec-2-1" data-label="§2.1 What a bugreport contains (parser facts)" data-part="0005 Bugreport Analysis Toolkit" rows="1" placeholder="Add a note on this section…"></textarea></div>
+</article>
+<article class="sec l3" id="s-spec-2-1-1" data-ref="SPEC §2.1.1" data-label="§2.1.1 Public sample corpus (collected for r2)" data-part="0005 Bugreport Analysis Toolkit">
+<h4 class="sec-h"><span class="chip">§2.1.1</span><span class="sec-title">Public sample corpus (collected for r2)</span></h4>
+<div class="sec-body"><p>29 public sample sets (527 MB) were gathered from GitHub: 15 full reports and partial files (legacy 4.x/6.0 dumpstate fragments, MVT/ALEAPP fixtures, text and <code>.pb</code> tombstones, ANR traces, <code>batterystats --checkin</code> at vers 15 and 36, procstats, Android TV meminfo).</p>
+<table>
+<thead>
+<tr>
+<th>Android</th>
+<th>OEM / device (full reports)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>9</td>
+<td>Huawei, LG, Samsung</td>
+</tr>
+<tr>
+<td>10</td>
+<td>LG</td>
+</tr>
+<tr>
+<td>11</td>
+<td>OnePlus, BLU (Android Go), emulator</td>
+</tr>
+<tr>
+<td>12</td>
+<td>Samsung (zip with full <code>FS/</code>)</td>
+</tr>
+<tr>
+<td>13</td>
+<td>Samsung, Sky (Android Go, <code>.pb</code> tombstones)</td>
+</tr>
+<tr>
+<td>14</td>
+<td>Xiaomi (zip with only the text)</td>
+</tr>
+<tr>
+<td>16</td>
+<td>Samsung (229 MB), emulator ×2</td>
+</tr>
+<tr>
+<td>17</td>
+<td>emulator, 16 KB pages</td>
+</tr>
+</tbody>
+</table>
+<p>Plus the maintainer's own five Pixel 8 / Android 16 reports (local only, real PII), which carry known outcomes: memory thrashing + ANRs, battery exhaustion to <code>shutdown,battery</code> driven by one app in the foreground with the screen off.</p>
+<p>Gaps: no full Android 8 or 15, Motorola, Wear OS, Automotive or TV report; two Pixel reports exist but sit on hosts the build environment cannot reach. Almost no sample carries a licence, and nearly every real-device report contains PII, so none is committed (D-9).</p>
+<p>Format differences the parser must absorb (found in the corpus):
+- 4.x/6.0: no <code>DUMPSYS CRITICAL/HIGH</code> blocks and no format-version line. From Android 9 onward, every report has both.
+- Samsung: an extra <code>DUMPSYS NORMAL</code> block and many OEM sections (<code>AP RESET INFO EXTEND</code>, <code>SEC_MEDIA</code>, <code>End of OLOG</code>).
+- Other OEM sections: Xiaomi (<code>POWERUP_REASON</code>, <code>qsee_log</code>, <code>PERFLOCK HISTORY</code>), OnePlus (<code>OMMSERVICE</code>), Huawei (kernel live-patch).
+- Android 9: legacy <code>QTAGUID</code> sections.
+- The header grows: on 16 the format-version line sits near line 43, so detect by pattern, not a fixed prefix.
+- Some zips have no <code>main_entry.txt</code>; the main file may be <code>dumpstate-&lt;date&gt;.txt</code>, an arbitrary name (<code>example.txt</code>), or a bare <code>dumpstate.txt</code>. Pick the largest text entry with a dumpstate header.</p></div>
+<div class="note" data-for="s-spec-2-1-1"><label class="note-head" for="n-s-spec-2-1-1"><span class="note-ico" aria-hidden="true">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC §2.1.1</span></label><textarea class="note-ta" data-key="s-spec-2-1-1" id="n-s-spec-2-1-1" data-label="§2.1.1 Public sample corpus (collected for r2)" data-part="0005 Bugreport Analysis Toolkit" rows="1" placeholder="Add a note on this section…"></textarea></div>
+</article>
+<article class="sec l3" id="s-spec-2-2" data-ref="SPEC §2.2" data-label="§2.2 Problem families the detectors target (ranked by forum demand)" data-part="0005 Bugreport Analysis Toolkit">
+<h4 class="sec-h"><span class="chip">§2.2</span><span class="sec-title">Problem families the detectors target (ranked by forum demand)</span></h4>
+<div class="sec-body"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>Family</th>
+<th>Key signals</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>F1</td>
+<td>Battery drain / standby drain</td>
+<td>batterystats checkin CSV: per-uid and kernel wakelocks, wakeup reasons, screen-off drain, mobile-radio active time, doze (<code>deviceidle</code>), standby buckets, alarms, jobs</td>
+</tr>
+<tr>
+<td>F2</td>
+<td>Overheating / throttling</td>
+<td><code>thermalservice</code> status + throttling history, <code>am_cpu … thermal_pressure</code>, vendor board dump</td>
+</tr>
+<tr>
+<td>F3</td>
+<td>Reboots / bootloops</td>
+<td><code>ro.boot.bootreason</code> / <code>sys.boot.reason(.last)</code>, last kmsg / pstore tail (panic), <code>WATCHDOG KILLING SYSTEM PROCESS</code>, <code>boot_progress_*</code>, uptime</td>
+</tr>
+<tr>
+<td>F4</td>
+<td>Lag / freezes / ANR</td>
+<td>ANR files + <code>ANR in</code> blocks (reason, load, PSI, CPU usage), main-thread stack state, <code>kswapd</code> CPU, PSI memory/io, swap fill, lmkd kills, <code>am_proc_died</code>/<code>am_proc_start</code> churn</td>
+</tr>
+<tr>
+<td>F5</td>
+<td>App crashes / app keeps dying</td>
+<td>tombstones (signal, abort message, crashing frame), <code>FATAL EXCEPTION</code>, <code>dumpsys activity exit-info</code> (ApplicationExitInfo reasons), repeat-crash counts</td>
+</tr>
+<tr>
+<td>F6</td>
+<td>Memory hogs / background abuse</td>
+<td>procstats 24 h aggregates (memory × time per process and state, incl. <strong>foreground while screen off</strong>), meminfo totals, persistent foreground services</td>
+</tr>
+<tr>
+<td>F7</td>
+<td>Network / modem</td>
+<td>signal strength history and radio-active time (batterystats), mobile/Wi-Fi drops and scan storms (<code>connectivity</code>, <code>wifi</code>, <code>telephony.registry</code>), <code>netstats</code> per-app data</td>
+</tr>
+<tr>
+<td>F8</td>
+<td>Bluetooth / GPS / sensors</td>
+<td>Bluetooth HAL crashes and HCI timeouts (tombstones, <code>bluetooth_manager</code>), <code>location</code> request holders and GPS on-time, sensor wakeups</td>
+</tr>
+<tr>
+<td>F9</td>
+<td>Storage / updates</td>
+<td>free space (<code>diskstats</code>), app cache sizes, OTA / <code>update_engine</code> failures, <code>dex2oat</code> storms after updates</td>
+</tr>
+<tr>
+<td>F10</td>
+<td>Security &amp; hygiene</td>
+<td>apps whose installer is not an app store (<code>dumpsys package</code> installer fields); <code>REQUEST_INSTALL_PACKAGES</code> granted; enabled accessibility services, device admins, notification listeners, overlay and usage-access holders; user-installed CA certificates; always-on VPN; ADB / developer options on; bootloader unlocked or verified-boot not green; security patch age; Play Protect status where exposed</td>
+</tr>
+<tr>
+<td>F11</td>
+<td>Battery health &amp; charging</td>
+<td><code>dumpsys battery</code> health, capacity vs design, cycle count, charge-rate limits, temperature while charging</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Full checkup.</strong> A question as broad as "how is my phone doing?" runs every
+detector of F1–F11 in one command and returns findings ranked by severity,
+each with a remedy id (§ Option B). It surfaces latent problems too — a
+background app holding 2 GB with the screen off, a sideloaded app with
+accessibility access, swap at 97 % — not only the one the user came with.</p></div>
+<div class="note" data-for="s-spec-2-2"><label class="note-head" for="n-s-spec-2-2"><span class="note-ico" aria-hidden="true">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC §2.2</span></label><textarea class="note-ta" data-key="s-spec-2-2" id="n-s-spec-2-2" data-label="§2.2 Problem families the detectors target (ranked by forum demand)" data-part="0005 Bugreport Analysis Toolkit" rows="1" placeholder="Add a note on this section…"></textarea></div>
+</article>
+<article class="sec l3" id="s-spec-2-3" data-ref="SPEC §2.3" data-label="§2.3 Systems touched" data-part="0005 Bugreport Analysis Toolkit">
+<h4 class="sec-h"><span class="chip">§2.3</span><span class="sec-title">Systems touched</span></h4>
+<div class="sec-body"><table>
+<thead>
+<tr>
+<th>System</th>
+<th>Type</th>
+<th>Role</th>
+<th>Needs changes?</th>
+<th>Impact</th>
+<th>Severity</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>plugins/core/skills/bugreport/</code></td>
+<td>Primary</td>
+<td>New skill: SKILL.md, references, stdlib scripts, evals. <code>plugins/core/</code> is the folder every vendored skill lives in (<code>har</code> included) — <strong>not</strong> the always-installed tier; who installs it is decided by the section below</td>
+<td>Yes</td>
+<td>New code only</td>
+<td>Med</td>
+</tr>
+<tr>
+<td>Skill sections (<code>init.py</code>, <code>assets/sections.json</code>)</td>
+<td>Dependent</td>
+<td>New default-off section <strong><code>android</code></strong> (frontmatter <code>metadata.section: android</code>); <code>har</code> stays in <code>extract</code>. Room for future Android tools (logcat, ANR/tombstone-only inputs)</td>
+<td>Yes (one section entry, regenerated manifest)</td>
+<td>Listing cost only where enabled; 0 for everyone else</td>
+<td>Low</td>
+</tr>
+<tr>
+<td><code>.bundle-version</code> + <code>CHANGELOG.md</code></td>
+<td>Dependent</td>
+<td>Minor bump (new skill)</td>
+<td>Yes</td>
+<td>Consumer-visible release note</td>
+<td>Low</td>
+</tr>
+<tr>
+<td><code>plugins/core/tests/</code> + fixtures</td>
+<td>Dependent</td>
+<td>Synthetic, PII-free fixtures; detector fire/no-fire tests</td>
+<td>Yes</td>
+<td>CI time; fixtures are generated at test time by the fixture generator, committed seeds stay ≤ 200 KB (the <code>har</code> skill's fixtures are 136 KB)</td>
+<td>Low</td>
+</tr>
+<tr>
+<td><code>har</code> skill</td>
+<td>Reference only</td>
+<td>Source of shared conventions: output cap, index sidecar, redaction stance</td>
+<td>No</td>
+<td>None</td>
+<td>Low</td>
+</tr>
+<tr>
+<td>User's device data</td>
+<td>Shared resource (read-only)</td>
+<td>Bugreports hold accounts, IMEI, SSIDs, locations, notification text</td>
+<td>No (never written back)</td>
+<td>Privacy: local-only processing, redacted output</td>
+<td>High</td>
+</tr>
+</tbody>
+</table></div>
+<div class="note" data-for="s-spec-2-3"><label class="note-head" for="n-s-spec-2-3"><span class="note-ico" aria-hidden="true">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC §2.3</span></label><textarea class="note-ta" data-key="s-spec-2-3" id="n-s-spec-2-3" data-label="§2.3 Systems touched" data-part="0005 Bugreport Analysis Toolkit" rows="1" placeholder="Add a note on this section…"></textarea></div>
+</article>
+<article class="sec l3" id="s-spec-2-4" data-ref="SPEC §2.4" data-label="§2.4 Skill-workshop constraints the design must meet" data-part="0005 Bugreport Analysis Toolkit">
+<h4 class="sec-h"><span class="chip">§2.4</span><span class="sec-title">Skill-workshop constraints the design must meet</span></h4>
+<div class="sec-body"><ul>
+<li>Authoring runs under <code>/skill-workshop:skill-workshop</code>; its validator must report 0 <code>must</code> findings.</li>
+<li>Frontmatter: <code>name: bugreport</code> (folder name, kebab-case), third-person <code>description</code> stating what + when with a negative trigger ("Not for live-device adb sessions or logcat-only files" — or whatever scope v1 ends with), no angle brackets, <code>metadata.section: android</code>, <code>metadata.type: tool</code>, <code>allowed-tools</code> pre-approving the script invocations.</li>
+<li>Body ≤ 500 lines, imperative voice, no second person; standing constraints (privacy, output cap, fallback route) front-loaded; detail in <code>references/</code> with "load when…" triggers; <code>references/_index.md</code> if the body passes 300 lines; each reference ≤ 10K tokens; no PII in references.</li>
+<li>Scripts: <code>verb_noun.py</code> naming, canonical flags (<code>--input</code>, <code>--output</code>, <code>--output-dir</code>, <code>--json</code>, <code>--limit</code>, <code>--since</code>), domain flags <code>--family</code>, <code>--advice</code>, <code>--no-redact</code>, <code>--window</code> registered in the validator's canon list rather than invented ad hoc, stdout = payload only, progress and errors on stderr via <code>_console.py</code>, exit codes 0/1/2, <code>main()</code> + guard, no top-level work, <code>--help</code> on every script.</li>
+<li>Evals: loading-verification + trigger evals in <code>evals/</code>, like <code>har</code>.</li>
+</ul>
+<p>Impact summary: <strong>Data</strong> — read-only on the input, sidecar index in <code>--output-dir</code> (default: a per-user cache dir keyed by the input hash, so read-only inputs and zips work); <strong>API</strong> — new CLI surface, no existing contract changes; <strong>Performance</strong> — bounded by the criteria above; <strong>User</strong> — opt-in skill; <strong>Operational</strong> — fixtures must never contain a real report; <strong>Risk of inaction</strong> — every bugreport question keeps costing ~15 calls and re-learned traps.</p></div>
+<div class="note" data-for="s-spec-2-4"><label class="note-head" for="n-s-spec-2-4"><span class="note-ico" aria-hidden="true">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC §2.4</span></label><textarea class="note-ta" data-key="s-spec-2-4" id="n-s-spec-2-4" data-label="§2.4 Skill-workshop constraints the design must meet" data-part="0005 Bugreport Analysis Toolkit" rows="1" placeholder="Add a note on this section…"></textarea></div>
+</article>
+<article class="sec l2 bare" id="s-spec-3" data-ref="SPEC §3" data-label="§3 Options" data-part="0005 Bugreport Analysis Toolkit">
+<h3 class="sec-h"><span class="chip">§3</span><span class="sec-title">Options</span></h3>
+</article>
+<article class="sec l3" id="s-spec-option-a-recipe-reference-a-hand" data-ref="SPEC › Option A: Recipe reference + a handful of grep scripts (Conservative)" data-label="Option A: Recipe reference + a handful of grep scripts (Conservative)" data-part="0005 Bugreport Analysis Toolkit">
+<h4 class="sec-h"><span class="chip">▸</span><span class="sec-title">Option A: Recipe reference + a handful of grep scripts (Conservative)</span></h4>
+<div class="sec-body"><ul>
+<li><strong>Description</strong>: A SKILL.md plus a <code>references/sections.md</code> cheat-sheet of section names, patterns and traps, and 3–4 small scripts (<code>summary</code>, <code>anr</code>, <code>memory</code>) that each scan the whole file.</li>
+<li><strong>Scope</strong>: New skill folder only.</li>
+<li><strong>Effort</strong>: Small</li>
+<li><strong>Tradeoffs</strong>: Fast to ship and already cuts most wasted calls. No problem detection — the session still diagnoses; each script re-scans the file (~1 s each, fine); format knowledge is spread across scripts and drifts.</li>
+<li><strong>Compatibility</strong>: Additive.</li>
+</ul></div>
+<div class="note" data-for="s-spec-option-a-recipe-reference-a-hand"><label class="note-head" for="n-s-spec-option-a-recipe-reference-a-hand"><span class="note-ico" aria-hidden="true">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC › Option A: Recipe reference + a handful of grep scripts (Conservative)</span></label><textarea class="note-ta" data-key="s-spec-option-a-recipe-reference-a-hand" id="n-s-spec-option-a-recipe-reference-a-hand" data-label="Option A: Recipe reference + a handful of grep scripts (Conservative)" data-part="0005 Bugreport Analysis Toolkit" rows="1" placeholder="Add a note on this section…"></textarea></div>
+</article>
+<article class="sec l3" id="s-spec-option-b-indexed-detector-driven" data-ref="SPEC › Option B: Indexed, detector-driven toolkit, stdlib only (Recommended)" data-label="Option B: Indexed, detector-driven toolkit, stdlib only (Recommended)" data-part="0005 Bugreport Analysis Toolkit">
+<h4 class="sec-h"><span class="chip">▸</span><span class="sec-title">Option B: Indexed, detector-driven toolkit, stdlib only (Recommended)</span></h4>
+<div class="sec-body"><ul>
+<li><strong>Description</strong> — five scripts sharing one library (<code>_brlib.py</code>: index, slice reader, tolerant number parsing, redaction filter, <code>_console.py</code>):<ul>
+<li><strong><code>analyze_bugreport.py</code></strong> — the entry point. Builds or reuses the index, then runs detectors and emits findings. Default mode is the <strong>full checkup</strong> (all families F1–F11); <code>--family memory,anr,…</code> narrows it. Each finding: <code>id</code>, <code>severity</code>, <code>family</code>, one-line <code>claim</code>, key <code>facts</code> (numbers), <code>evidence</code> pointer (section + byte offset, or <code>FS/</code> path), <code>advice_id</code>. Family views give the fixed compact tables a follow-up needs: memory (procstats 24 h memory × time by process and state, meminfo, swap, PSI, lmkd kills), ANR (reason, victim vs pressure, main-thread state, top CPU), crashes (tombstones via a ~100-line stdlib protobuf varint decoder, Java fatal exceptions, exit-info reasons), battery (from the checkin CSV, not the text form), reboots, thermal, churn (kill → restart loops and what restarted them), security &amp; hygiene.</li>
+<li><strong><code>query_bugreport.py</code></strong> — generic primitives, so a section with no parser (new Android release, OEM format) is still cheap to interpret: <code>sections</code> (stable id <code>name#occurrence</code> — a service dumped in several priority blocks gets <code>#1</code>, <code>#2</code>… in file order — plus service, size, parse status; every other command takes that id), <code>locate --grep RE</code> (hit counts per section, no lines), <code>sample SECTION</code> (first lines, plus a format sniff — key=value, table, indented tree, CSV — and the shape of its repeated records), <code>show SECTION --grep RE --context N --limit N</code>, <code>timeline --since HH:MM --window 5m</code> (event log + system log + ANR/kill markers merged). All output capped; full text goes to <code>--output FILE</code>.</li>
+<li><strong><code>validate_bugreport.py</code></strong> — is the input a bugreport, which format version, Android version, OEM, encoding fixed, which detector inputs parsed and which fell back. A falling-back detector names the <code>query</code> command to use instead, so drift shows up as a route, not a silent gap.</li>
+<li><strong><code>create_bugreport.py --redact</code></strong> — writes a scrubbed copy for sharing (emails, IMEI/MEID by Luhn, IMSI and ICCID by prefix + length, phone numbers, MACs, SSIDs, account names, coordinates); the same filter is on by default for all stdout.</li>
+</ul>
+</li>
+<li><strong>Advice split</strong> (D-6): scripts stay deterministic and only emit <code>advice_id</code> plus the facts; <code>references/advice.md</code> maps each id to a remedy template (what to do, Settings path per Android version, when to escalate to repair/support), loaded only when advice is needed; the session phrases it for the user's situation. <code>--advice</code> adds the one-line canned remedy to each finding for terminal use.</li>
+<li><strong>Comparison</strong> (D-7): no analysis of its own. <code>analyze --json</code> has a versioned, stable schema, so "before vs after" means running it on two reports; <code>compare_bugreport.py</code> is a small diff of two such JSON files (new / gone / changed findings, memory and battery ranking deltas), last in the plan and droppable.</li>
+<li><strong>Ideas borrowed from Perfetto, no dependency</strong>: the section/service two-level model, the logcat-local vs UTC offset taken from the alarm dump's <code>nowRTC</code>/<code>nowELAPSED</code>, scanning <code>FS/</code> for embedded traces and logs.</li>
+<li><strong>Output discipline</strong> from <code>har</code> and skill-workshop: compact JSON on stdout ≤ 4096 bytes by default (when capped, the payload stays valid JSON: <code>{"truncated": true, "omitted": N, …}</code> envelope, asserted by a test that parses every capped output), progress on stderr, <code>--output</code> for full fidelity, <code>--help</code> everywhere.</li>
+<li><strong>Scope</strong>: New skill folder, section entry, tests + synthetic fixtures, changelog.</li>
+<li><strong>Effort</strong>: Large (4 stacked PRs: P1 library + index + <code>query</code> + <code>validate</code> + fixture generator; P2 memory/ANR/churn/thermal detectors + checkup; P3 crashes/battery/reboots/network/Bluetooth/storage/battery-health; P4 security &amp; hygiene + advice reference + redaction + <code>compare</code>).</li>
+<li><strong>Tradeoffs</strong>: The detectors are the value and also the maintenance cost: formats shift between Android releases and OEMs, so every detector must fail soft ("section not parsed") and be fixture-tested. Byte-range index over SQLite: one JSON file, no conversion step; SQLite only earns its keep for repeated time-window logcat queries, which <code>timeline</code> can add later behind the same interface.</li>
+<li><strong>Compatibility</strong>: Additive; no dependency on Perfetto or protobuf libraries.</li>
+</ul></div>
+<div class="note" data-for="s-spec-option-b-indexed-detector-driven"><label class="note-head" for="n-s-spec-option-b-indexed-detector-driven"><span class="note-ico" aria-hidden="true">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC › Option B: Indexed, detector-driven toolkit, stdlib only (Recommended)</span></label><textarea class="note-ta" data-key="s-spec-option-b-indexed-detector-driven" id="n-s-spec-option-b-indexed-detector-driven" data-label="Option B: Indexed, detector-driven toolkit, stdlib only (Recommended)" data-part="0005 Bugreport Analysis Toolkit" rows="1" placeholder="Add a note on this section…"></textarea></div>
+</article>
+<article class="sec l3" id="s-spec-option-c-build-on-perfetto-trace" data-ref="SPEC › Option C: Build on Perfetto trace_processor as the substrate (rejected by the maintainer — ideas only)" data-label="Option C: Build on Perfetto trace_processor as the substrate (rejected by the maintainer — ideas only)" data-part="0005 Bugreport Analysis Toolkit">
+<h4 class="sec-h"><span class="chip">▸</span><span class="sec-title">Option C: Build on Perfetto <code>trace_processor</code> as the substrate (rejected by the maintainer — ideas only)</span></h4>
+<div class="sec-body"><ul>
+<li><strong>Description</strong>: Load the zip into Perfetto's SQL tables (<code>android_logs</code>, <code>android_dumpstate</code>, <code>battery_stats</code>) and write the detectors as SQL queries over them.</li>
+<li><strong>Scope</strong>: New skill + a pip dependency (<code>perfetto</code>) that downloads a native binary.</li>
+<li><strong>Effort</strong>: Medium</li>
+<li><strong>Tradeoffs</strong>: Free logcat parsing and SQL joins, and alignment with Google's own trace skill. But dumpstate is stored as raw lines (detectors still parse text, now inside SQL), batterystats import is partial (~30–40 % of events per Perfetto issue #934), load time and RAM are far above a byte-range index, and the binary download fails in network-restricted environments (cloud sessions, CI behind proxies).</li>
+<li><strong>Compatibility</strong>: Additive, but adds a heavy runtime dependency to a stdlib-only bundle.</li>
+</ul></div>
+<div class="note" data-for="s-spec-option-c-build-on-perfetto-trace"><label class="note-head" for="n-s-spec-option-c-build-on-perfetto-trace"><span class="note-ico" aria-hidden="true">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC › Option C: Build on Perfetto trace_processor as the substrate (rejected by the maintainer — ideas only)</span></label><textarea class="note-ta" data-key="s-spec-option-c-build-on-perfetto-trace" id="n-s-spec-option-c-build-on-perfetto-trace" data-label="Option C: Build on Perfetto trace_processor as the substrate (rejected by the maintainer — ideas only)" data-part="0005 Bugreport Analysis Toolkit" rows="1" placeholder="Add a note on this section…"></textarea></div>
+</article>
+<article class="sec l3" id="s-spec-option-d-mcp-server-instead-of-a" data-ref="SPEC › Option D: MCP server instead of a skill" data-label="Option D: MCP server instead of a skill" data-part="0005 Bugreport Analysis Toolkit">
+<h4 class="sec-h"><span class="chip">▸</span><span class="sec-title">Option D: MCP server instead of a skill</span></h4>
+<div class="sec-body"><ul>
+<li><strong>Description</strong>: Expose the same analyses as MCP tools.</li>
+<li><strong>Tradeoffs</strong>: MCP earns its place for remote systems, auth, live state or non-Claude clients. For a local file it adds a server process and up-front tool-definition tokens while doing exactly what <code>uv run python script.py</code> already does; the skill's resident cost is one listing line, and script output is already bounded before it reaches context. Google's Perfetto skill made the same call (bundled CLI, not MCP). A thin MCP wrapper over Option B's CLI stays possible later if non-Claude agents need it; live device capture over adb is already covered by existing MCP servers.</li>
+<li><strong>Effort / Compatibility</strong>: Medium; separate install path outside the marketplace model.</li>
+</ul></div>
+<div class="note" data-for="s-spec-option-d-mcp-server-instead-of-a"><label class="note-head" for="n-s-spec-option-d-mcp-server-instead-of-a"><span class="note-ico" aria-hidden="true">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC › Option D: MCP server instead of a skill</span></label><textarea class="note-ta" data-key="s-spec-option-d-mcp-server-instead-of-a" id="n-s-spec-option-d-mcp-server-instead-of-a" data-label="Option D: MCP server instead of a skill" data-part="0005 Bugreport Analysis Toolkit" rows="1" placeholder="Add a note on this section…"></textarea></div>
+</article>
+<article class="sec l3" id="s-spec-comparison" data-ref="SPEC › Comparison" data-label="Comparison" data-part="0005 Bugreport Analysis Toolkit">
+<h4 class="sec-h"><span class="chip">▸</span><span class="sec-title">Comparison</span></h4>
+<div class="sec-body"><table>
+<thead>
+<tr>
+<th></th>
+<th>Option A</th>
+<th>Option B</th>
+<th>Option C</th>
+<th>Option D</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Effort</td>
+<td>Small</td>
+<td>Large</td>
+<td>Medium</td>
+<td>Medium</td>
+</tr>
+<tr>
+<td>Risk</td>
+<td>Low</td>
+<td>Medium (format drift, mitigated by fail-soft + fixtures)</td>
+<td>Medium–High (binary download, partial import)</td>
+<td>Medium</td>
+</tr>
+<tr>
+<td>Finds problems by itself</td>
+<td>No</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Same as B</td>
+</tr>
+<tr>
+<td>Dependencies</td>
+<td>stdlib</td>
+<td>stdlib</td>
+<td><code>perfetto</code> + native binary</td>
+<td>MCP runtime</td>
+</tr>
+<tr>
+<td>Follow-up query cost</td>
+<td>~1 s re-scan</td>
+<td>≤ 1 s slice</td>
+<td>SQL, after slow load</td>
+<td>as B + tool tokens</td>
+</tr>
+<tr>
+<td>Fits arsenal conventions</td>
+<td>Partly</td>
+<td>Yes (mirrors <code>har</code>)</td>
+<td>Partly</td>
+<td>No</td>
+</tr>
+</tbody>
+</table></div>
+<div class="note" data-for="s-spec-comparison"><label class="note-head" for="n-s-spec-comparison"><span class="note-ico" aria-hidden="true">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC › Comparison</span></label><textarea class="note-ta" data-key="s-spec-comparison" id="n-s-spec-comparison" data-label="Comparison" data-part="0005 Bugreport Analysis Toolkit" rows="1" placeholder="Add a note on this section…"></textarea></div>
+</article>
+<article class="sec l2" id="s-spec-4" data-ref="SPEC §4" data-label="§4 Recommendation" data-part="0005 Bugreport Analysis Toolkit">
+<h3 class="sec-h"><span class="chip">§4</span><span class="sec-title">Recommendation</span></h3>
+<div class="sec-body"><p><strong>Recommended option</strong>: <strong>B</strong> — it is the only option that meets "find problems,
+not just expose data" without a native dependency, and it reuses the decisions
+<code>har</code> already proved (index sidecar, bounded output, redaction by default,
+<code>--json</code> escape hatch). A's scope (a sections reference plus grep-level access) is covered by B's P1 (<code>query</code> + <code>validate</code>); C stays
+an optional backend idea for logcat-heavy questions; D is rejected for v1.</p>
+<p><strong>Immediate next action</strong>: after approval, run <code>design</code> to turn this into
+contracts and a stacked PR plan; first PR = P1 (library, index, <code>query</code>, <code>validate</code>,
+synthetic-fixture generator), so every later detector has a fast, tested
+substrate and the fallback route exists from day one.</p>
+<p><strong>Gates check</strong>: objective (§ 1), scope (§ 2.3), impacted systems (§ 2.3),
+compatibility (additive, minor bump), risk (format drift, PII — § 2.1/§ 2.3),
+validation (success criteria), release readiness (changelog entry + <code>make
+context-budget</code> row).</p>
+<p><strong>Open questions</strong>: none — all resolved in the decisions log.</p>
+<p><strong>Decisions log</strong>:
+- D-1 — Lives inside <code>claude-arsenal</code> (not a separate repo), as a tool skill like <code>har</code> (maintainer, 2026-11-04).
+- D-2 — Skill + stdlib scripts, not an MCP server (this spec, Option D rationale; open to a thin MCP wrapper later).
+- D-3 — Option B approved; Perfetto not used, ideas may be borrowed (maintainer, r2 notes).
+- D-4 — Section <code>android</code>, default-off, skill folder under <code>plugins/core/skills/</code> like every vendored skill (maintainer: "an Android section or inside diagnostics"; <code>android</code> chosen as the narrower, self-describing name).
+- D-5 — Full checkup with remedies, security &amp; hygiene in scope, all families F1–F11 in v1 (maintainer, r2 notes).
+- D-6 — Advice: deterministic <code>advice_id</code> from scripts, remedy text in a reference the session interprets (maintainer: "a part of it could be from the skill for the LLM to interpret").
+- D-7 — No comparison analysis; stable JSON plus a small <code>compare_bugreport.py</code> diff, last and droppable (maintainer, r2 notes).
+- D-8 — Built and validated under skill-workshop rules (maintainer, r2 notes).
+- D-9 — Real reports (public corpus and the maintainer's own) are study material only: they inform which data to read and keep, how to preserve privacy, and which concrete cases detectors must catch. They are never committed, not even as excerpts. CI runs on synthetic fixtures built from what the real reports taught (maintainer, 2026-11-04).</p></div>
+<div class="note" data-for="s-spec-4"><label class="note-head" for="n-s-spec-4"><span class="note-ico" aria-hidden="true">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC §4</span></label><textarea class="note-ta" data-key="s-spec-4" id="n-s-spec-4" data-label="§4 Recommendation" data-part="0005 Bugreport Analysis Toolkit" rows="1" placeholder="Add a note on this section…"></textarea></div>
+</article>
+</section>
+</div>
+
+<div class="fab">
+  <button class="btn" id="btn-top" title="Back to top">↑ Top</button>
+  <button class="btn" id="btn-import">Import</button>
+  <button class="btn" id="btn-clear">Clear</button>
+  <button class="btn primary" id="btn-export2">💾 Save / Export</button>
+</div>
+<input type="file" id="file-import" class="hidden-input" accept=".md,.markdown,.json,text/markdown,application/json">
+
+<div class="modal" id="modal">
+  <div class="modal-card">
+    <h3>Your notes</h3>
+    <p>Downloaded as a Markdown file. You can also copy the text below and paste it back.</p>
+    <textarea id="modal-ta" readonly></textarea>
+    <div class="modal-actions">
+      <button class="btn primary" id="modal-copy">Copy</button>
+      <button class="btn" id="modal-dl">Download again</button>
+      <button class="btn" id="modal-close">Close</button>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+<script>var SPEC_SEED_NOTES={};</script>
+<script>
+(function(){
+  var NS = 'claude-arsenal-0005-bugreport-analysis-toolkit-v2:';
+  var tas = Array.prototype.slice.call(document.querySelectorAll('.note-ta'));
+
+  function autoGrow(t){t.style.height='auto';t.style.height=(t.scrollHeight)+'px';}
+  function setFilled(t){var box=t.closest('.note');if(box){box.classList.toggle('filled',t.value.trim()!=='');}}
+  function updateCount(){
+    var n=0;tas.forEach(function(t){if(t.value.trim()!=='')n++;});
+    var el=document.getElementById('count');if(el){el.textContent=n+' / '+tas.length+' notes';}
+    return n;
+  }
+  var lsOK=true,dirty=false;
+  try{localStorage.setItem('__vs__','1');localStorage.removeItem('__vs__');}catch(e){lsOK=false;}
+  var WARN='⚠ Not saving — tap Save / Export';
+  function nowStamp(){var d=new Date();return pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds());}
+  function setState(txt,cls){var el=document.getElementById('savestate');if(el){el.textContent=txt;el.className='savestate '+(cls||'');}}
+  window.addEventListener('beforeunload',function(e){if(!lsOK&&dirty){e.preventDefault();e.returnValue='';}});
+
+  var saveTimers={};
+  function save(t){
+    if(!lsOK){dirty=true;setState(WARN,'warn');return;}
+    var k=NS+t.dataset.key;
+    try{
+      // An empty note is stored as "", not removed: a missing key means "never
+      // touched" and the loader falls back to the seed, so removing it brought a
+      // seeded note back after the reviewer had deliberately cleared it (#477).
+      localStorage.setItem(k,t.value.trim()===''?'':t.value);
+      // A block note keeps its quote beside it, so it still says what it was
+      // about after its paragraph changes (export and re-seed read `<key>~q`).
+      if(t.closest('.bnote')){localStorage.setItem(k+'~q',t.dataset.quote||'');}
+      dirty=true;setState('✓ Saved '+nowStamp(),'ok');
+    }catch(e){dirty=true;lsOK=false;document.getElementById('warnbar').style.display='block';setState(WARN,'warn');}
+  }
+  var SEED=(typeof SPEC_SEED_NOTES!=='undefined')?SPEC_SEED_NOTES:{};
+  function wire(t){
+    // Seed first, then let storage override it. With the read inside the same
+    // try as the seed, a throwing localStorage skipped the seed too and the
+    // reader came up empty exactly when it could save nothing (#477).
+    if(Object.prototype.hasOwnProperty.call(SEED,t.dataset.key)){
+      var sv=SEED[t.dataset.key];if(typeof sv==='string'){t.value=sv;}}
+    try{var v=localStorage.getItem(NS+t.dataset.key);if(v!=null){t.value=v;}}catch(e){}
+    autoGrow(t);setFilled(t);
+    t.addEventListener('input',function(){
+      autoGrow(t);setFilled(t);updateCount();
+      clearTimeout(saveTimers[t.dataset.key]);
+      saveTimers[t.dataset.key]=setTimeout(function(){save(t);},350);
+    });
+    t.addEventListener('blur',function(){
+      save(t);
+      // An emptied block note folds away again; its ✎ stays to reopen it.
+      var box=t.closest('.bnote');
+      if(box&&t.value.trim()===''){closeBlock(box);}
+    });
+  }
+  tas.forEach(wire);
+
+  // ---- Block notes: a ✎ beside every paragraph, list item and table. The key is
+  // the section id plus a hash of the block's text, so a note stays with its
+  // paragraph when others are added around it; `<key>~q` carries the quoted text.
+  function hash(s){var h=5381;for(var i=0;i<s.length;i++){h=((h<<5)+h+s.charCodeAt(i))|0;}return (h>>>0).toString(36);}
+  function plain(el){var c=el.cloneNode(true);
+    Array.prototype.forEach.call(c.querySelectorAll('.bn-btn,.bnote,ul,ol'),function(x){x.remove();});
+    return c.textContent.replace(/\s+/g,' ').trim();}
+  function quoteOf(text){return text.length>90?text.slice(0,87)+'…':text;}
+  var hosts={},blockBtn={};
+  function hostsOf(body){
+    var out=[];
+    Array.prototype.forEach.call(body.children,function(el){
+      var tag=el.tagName;
+      if(tag==='UL'||tag==='OL'){Array.prototype.forEach.call(el.querySelectorAll('li'),function(li){out.push(li);});return;}
+      if(tag==='HR')return;
+      if(tag==='TABLE'||tag==='PRE'||tag==='FIGURE'){
+        // These scroll sideways; the ✎ goes on a wrapper so it does not scroll away.
+        var w=document.createElement('div');el.parentNode.insertBefore(w,el);w.appendChild(el);el=w;}
+      out.push(el);
+    });
+    return out;
+  }
+  Array.prototype.forEach.call(document.querySelectorAll('article.sec'),function(art){
+    var body=art.querySelector(':scope > .sec-body');if(!body)return;
+    var seen={};
+    hostsOf(body).forEach(function(el){
+      var text=plain(el);if(text==='')return;
+      var h=hash(text);seen[h]=(seen[h]||0)+1;
+      var key=art.id+'~'+h+(seen[h]>1?'-'+seen[h]:'');
+      el.classList.add('bn-host');el.dataset.bkey=key;el.dataset.quote=quoteOf(text);
+      var b=document.createElement('button');
+      b.type='button';b.className='bn-btn';b.textContent='✎';
+      b.title='Note on this';b.setAttribute('aria-label','Add a note on this point');
+      b.addEventListener('click',function(e){e.preventDefault();openBlock(key,true);});
+      el.appendChild(b);hosts[key]=el;blockBtn[key]=b;
+    });
+  });
+  function openBlock(key,focus,quote){
+    var t=document.querySelector('.note-ta[data-key="'+key+'"]');
+    if(!t){
+      var host=hosts[key],art=document.getElementById(key.split('~')[0]);
+      if(!host&&!art)art=unplaced();
+      var q=host?host.dataset.quote:(quote||'');
+      var box=document.createElement('div');box.className='note bnote';
+      var head=document.createElement('label');head.className='note-head';
+      var ico=document.createElement('span');ico.className='note-ico';ico.textContent='✎';
+      var lab=document.createElement('span');lab.className='note-label';lab.textContent='Your note';
+      var ref=document.createElement('span');ref.className='note-ref';
+      ref.textContent=host?'¶ '+q:(q?'¶ (text changed) '+q:'¶ text changed since this note');
+      head.appendChild(ico);head.appendChild(lab);head.appendChild(ref);
+      t=document.createElement('textarea');t.className='note-ta';t.rows=1;
+      t.placeholder='Note on this point…';t.dataset.key=key;t.dataset.quote=q;
+      if(art){t.dataset.label=art.dataset.label||'';t.dataset.part=art.dataset.part||'';t.dataset.ref=art.dataset.ref||'';}
+      box.appendChild(head);box.appendChild(t);
+      if(host&&host.tagName==='LI'){host.appendChild(box);}
+      else if(host){host.parentNode.insertBefore(box,host.nextSibling);}
+      else{var sn=art.querySelector(':scope > .note');art.insertBefore(box,sn);}
+      tas.push(t);wire(t);
+      if(blockBtn[key])blockBtn[key].classList.add('has');
+      updateCount();
+    }
+    if(focus)t.focus();
+    return t;
+  }
+  // Notes whose section no longer exists (a heading renamed or removed) are never
+  // dropped: they collect here, after the document, and still export.
+  function unplaced(){
+    var u=document.getElementById('bn-unplaced');
+    if(!u){u=document.createElement('article');u.id='bn-unplaced';u.className='sec l2';
+      u.dataset.label='Unplaced notes';u.dataset.ref='unplaced';u.dataset.part='Unplaced notes';
+      var h=document.createElement('h3');h.className='sec-h';h.textContent='Unplaced notes — their section changed';
+      u.appendChild(h);var parts=document.querySelectorAll('section.part');
+      var last=parts[parts.length-1];(last||document.body).appendChild(u);}
+    return u;
+  }
+  function closeBlock(box){
+    var t=box.querySelector('.note-ta');var i=tas.indexOf(t);if(i>=0)tas.splice(i,1);
+    if(blockBtn[t.dataset.key])blockBtn[t.dataset.key].classList.remove('has');
+    box.remove();updateCount();
+  }
+  // Reopen every block note that has text, from the seed or this browser —
+  // including one whose paragraph changed, which lands at the end of its section.
+  (function(){
+    var keys={};
+    Object.keys(SEED).forEach(function(k){keys[k]=1;});
+    try{for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);
+      if(k&&k.indexOf(NS)===0)keys[k.slice(NS.length)]=1;}}catch(e){}
+    Object.keys(keys).sort().forEach(function(k){
+      if(k.indexOf('~')<0||/~q$/.test(k))return;
+      var v=null;
+      try{v=localStorage.getItem(NS+k);}catch(e){}
+      if(v==null&&typeof SEED[k]==='string')v=SEED[k];
+      var q=null;try{q=localStorage.getItem(NS+k+'~q');}catch(e){}
+      if(q==null&&typeof SEED[k+'~q']==='string')q=SEED[k+'~q'];
+      if(v&&v.trim()!=='')openBlock(k,false,q||'');
+    });
+  })();
+  updateCount();
+  if(lsOK){setState('✓ Auto-saving','ok');}else{document.getElementById('warnbar').style.display='block';setState(WARN,'warn');}
+
+  function toast(msg){var el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');setTimeout(function(){el.classList.remove('show');},1900);}
+  function pad(n){return n<10?'0'+n:''+n;}
+  function today(){var d=new Date();return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());}
+  function stamp(){var d=new Date();return today()+'-'+pad(d.getHours())+pad(d.getMinutes());}
+  // Named like the reader, <repo>-<doc>-v<N>-<YYYY-MM-DD-HHMM>-notes.md, stamped at export.
+  function exportName(){return 'claude-arsenal-0005-bugreport-analysis-toolkit-v2-'+stamp()+'-notes.md';}
+
+  function buildExport(){
+    var byPart={},order=[],data={},n=0;
+    // Document order, so a block note sits beside its section's own note.
+    tas.slice().sort(function(a,b){return a.compareDocumentPosition(b)&4?-1:1;}).forEach(function(t){
+      var v=t.value.trim();if(v==='')return;n++;
+      data[t.dataset.key]=t.value;
+      if(t.closest('.bnote')){data[t.dataset.key+'~q']=t.dataset.quote||'';}
+      var part=t.dataset.part||'Other';
+      if(!byPart[part]){byPart[part]=[];order.push(part);}
+      byPart[part].push({label:t.dataset.label,ref:t.dataset.ref||keyFromDom(t.dataset.key,t),
+                         quote:t.closest('.bnote')?(t.dataset.quote||''):null,note:t.value});
+    });
+    var lines=['# Specification notes','','_Exported '+today()+' · '+n+' note'+(n===1?'':'s')+'._','',
+      '> Send this file back to continue the review. Notes are embedded as data at the bottom','> so importing this file restores them in the reader.',''];
+    order.forEach(function(part){
+      lines.push('## '+part,'');
+      byPart[part].forEach(function(it){
+        lines.push('**'+it.label+'**  `'+it.ref+'`');
+        if(it.quote!==null){lines.push(it.quote?'> ¶ _“'+it.quote+'”_':'> ¶ _(text changed since this note)_','>');}
+        it.note.split('\n').forEach(function(ln){lines.push('> '+ln);});
+        lines.push('');
+      });
+    });
+    lines.push('<!-- SPEC-NOTES-DATA');
+    lines.push(JSON.stringify(data));
+    lines.push('-->');
+    return{text:lines.join('\n'),n:n};
+  }
+  function keyFromDom(domkey,t){var box=t.closest('.note');var r=box?box.querySelector('.note-ref'):null;return r?r.textContent:domkey;}
+
+  function download(name,text){
+    try{var blob=new Blob([text],{type:'text/markdown'});var url=URL.createObjectURL(blob);
+        var a=document.createElement('a');a.href=url;a.download=name;
+        document.body.appendChild(a);a.click();
+        setTimeout(function(){URL.revokeObjectURL(url);a.remove();},1500);return true;}catch(e){return false;}
+  }
+
+  var modal=document.getElementById('modal');
+  var modalTa=document.getElementById('modal-ta');
+  function openModal(text){modalTa.value=text;modal.classList.add('open');}
+  function closeModal(){modal.classList.remove('open');}
+
+  document.getElementById('btn-export').addEventListener('click',function(){
+    var r=buildExport();
+    if(r.n===0){toast('No notes yet — add some first.');return;}
+    var saved=download(exportName(),r.text);openModal(r.text);
+    // download() returning only means the download was REQUESTED; a browser can
+    // still block or drop it. So `dirty` — what arms the unload warning — is
+    // cleared only on a confirmed copy: the clipboard promise fulfilling.
+    var cp=null;
+    try{if(navigator.clipboard&&navigator.clipboard.writeText){cp=navigator.clipboard.writeText(r.text);}}catch(e){cp=null;}
+    if(cp&&typeof cp.then==='function'){cp.then(function(){dirty=false;setState('✓ Copied to clipboard '+nowStamp(),'ok');},function(){});}
+    if(!saved){setState('⚠ Download blocked — copy the notes from this box','warn');
+               toast('Download blocked — copy the notes before leaving');return;}
+    setState('Download requested '+nowStamp(),'ok');
+    toast('Download requested — '+r.n+' note'+(r.n===1?'':'s'));
+  });
+  document.getElementById('btn-export2').addEventListener('click',function(){document.getElementById('btn-export').click();});
+
+  document.getElementById('modal-copy').addEventListener('click',function(){
+    // Success is reported only once a copy actually happened: the legacy
+    // execCommand returned true, or the clipboard promise fulfilled. Claiming it
+    // before writeText settled told the reviewer a rejected copy had worked (#477).
+    function report(ok){if(ok){dirty=false;setState('✓ Copied to clipboard '+nowStamp(),'ok');}
+                        toast(ok?'Copied to clipboard':'Select the text and copy');}
+    modalTa.select();var legacy=false;try{legacy=document.execCommand('copy')===true;}catch(e){}
+    if(legacy){report(true);return;}
+    var p=null;
+    try{if(navigator.clipboard&&navigator.clipboard.writeText){p=navigator.clipboard.writeText(modalTa.value);}}catch(e){p=null;}
+    if(p&&typeof p.then==='function'){p.then(function(){report(true);},function(){report(false);});}
+    else{report(false);}
+  });
+  document.getElementById('modal-dl').addEventListener('click',function(){download(exportName(),modalTa.value);toast('Download requested');});
+  document.getElementById('modal-close').addEventListener('click',closeModal);
+  modal.addEventListener('click',function(e){if(e.target===modal)closeModal();});
+
+  // buildExport only ever writes strings, but an import takes whatever the file
+  // holds: an object arrives as "[object Object]", an array joins on commas,
+  // null becomes "null" — each then persisted over notes the reviewer wrote.
+  // The realistic trigger is a hand-edited or truncated export, not an attack;
+  // it just fails in the least useful way, silently and destructively. Skip
+  // anything that is not a string and say how many were skipped.
+  function applyData(obj){
+    var applied=0,skipped=0;
+    Object.keys(obj).forEach(function(k){
+      if(k.indexOf('~')>=0&&!/~q$/.test(k)&&typeof obj[k]==='string'&&obj[k].trim()!==''){
+        openBlock(k,false,typeof obj[k+'~q']==='string'?obj[k+'~q']:'');}
+    });
+    tas.forEach(function(t){
+      if(!Object.prototype.hasOwnProperty.call(obj,t.dataset.key))return;
+      var v=obj[t.dataset.key];
+      if(typeof v!=='string'){skipped++;return;}
+      t.value=v;save(t);autoGrow(t);setFilled(t);applied++;
+    });
+    updateCount();return{applied:applied,skipped:skipped};
+  }
+  document.getElementById('file-import').addEventListener('change',function(e){
+    var f=e.target.files[0];if(!f)return;
+    var rd=new FileReader();
+    rd.onload=function(){
+      var txt=String(rd.result||'');var obj=null;
+      // Last LINE-ANCHORED marker. A plain lastIndexOf lands inside the JSON
+      // string of a note that mentions the marker, and the import then reads as
+      // a corrupt file — the same defect the Python seeder had (#239).
+      var mk=/^[ \t]*<!--[ \t]*SPEC-NOTES-DATA/gm,mm=null,mx;
+      while((mx=mk.exec(txt))!==null){mm=mx;}
+      try{
+        if(mm){var after=txt.slice(mm.index+mm[0].length);var jstart=after.indexOf('{');var jend=after.lastIndexOf('}');
+                  if(jstart>=0&&jend>jstart){obj=JSON.parse(after.slice(jstart,jend+1));}}
+        else{obj=JSON.parse(txt);}
+      }catch(err){obj=null;}
+      if(!obj){toast('Could not read notes from that file');return;}
+      var r=applyData(obj);
+      toast('Imported '+r.applied+' note'+(r.applied===1?'':'s')+
+            (r.skipped?' ('+r.skipped+' skipped — not text)':''));
+    };
+    rd.readAsText(f);e.target.value='';
+  });
+  document.getElementById('btn-import').addEventListener('click',function(){document.getElementById('file-import').click();});
+
+  document.getElementById('btn-clear').addEventListener('click',function(){
+    if(!confirm('Clear ALL notes from this browser? Export first if you want to keep them.'))return;
+    tas.slice().forEach(function(t){t.value='';save(t);autoGrow(t);setFilled(t);
+      var box=t.closest('.bnote');if(box)closeBlock(box);});
+    updateCount();toast('All notes cleared');
+  });
+
+  document.getElementById('btn-top').addEventListener('click',function(){window.scrollTo({top:0,behavior:'smooth'});});
+})();
+</script>
+</body>
+</html>
