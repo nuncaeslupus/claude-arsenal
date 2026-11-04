@@ -3,11 +3,12 @@
 **Date**: 2026-11-04
 **Ticket / PR**: none yet (opened with this spec)
 **Author**: Claude, for the maintainer
-**Revision**: 2
-**Status**: approved (2026-11-04, revision 2)
+**Revision**: 3
+**Status**: approved (2026-11-04, revision 3) — without annotations
 **Revision log**:
 - r1 — first draft
 - r2 — applied `0005-bugreport-analysis-toolkit-spec-notes-2026-11-04.md` (7 notes): full-checkup mode with advice, security & hygiene family, extra families (network, Bluetooth/GPS, storage/OTA, battery health), fallback primitives for unparsed sections, `android` section, Perfetto as ideas only, `compare` reduced to a JSON diff, skill-workshop conventions, public multi-OEM samples; then, from conversation: public corpus findings (§ 2.1.1) and D-9 (real reports as study material only); then review fixes from the adversarial round and CodeRabbit (selectors, redaction ids, capped-JSON envelope, index location, fixture size)
+- r3 — maintainer additions in conversation (2026-11-04): file summary command (`query_bugreport.py summary`, requirement 12) and a single version bump for the whole stack (D-10); §§ 5–6 appended by `design`
 
 > Review record. Each round of reviewer notes makes a new revision: bump
 > **Revision**, add a log line naming the export it applied, and commit that
@@ -73,6 +74,7 @@ context.
 10. **No Perfetto dependency**; its ideas may be borrowed.
 11. **Broad coverage**: test material from several Android versions and OEMs,
     not only the maintainer's phone.
+12. **A summary of the file** — device model and OEM, Android build and patch level, which time span each data source covers, and basic statistics — so the first question "what is in here?" costs one command.
 
 **Success criteria (measurable)**
 
@@ -83,6 +85,7 @@ context.
 - [ ] Detector coverage: each problem family F1–F11 in § 2.2 has ≥ 1 detector with a fixture that fires it and one that does not (`make test` asserts both).
 - [ ] Advice coverage: every finding id has an entry in `references/advice.md` (a test diffs the two id sets; missing entry = build failure).
 - [ ] Android version / OEM coverage: synthetic fixtures reproduce the layouts seen in the corpus (§ 2.1.1) — pre-P (no priority blocks), 9–17 with CRITICAL/HIGH, Samsung `DUMPSYS NORMAL` + OEM sections, Xiaomi/OnePlus/Huawei sections, zips without `main_entry.txt` — and all parse in CI with zero unhandled exceptions; before each release the real corpus is re-run locally (not in CI) with the same zero-exception bar. Unknown sections degrade to "not parsed", never a crash.
+- [ ] `summary_output_bytes <= 2048` and every summary field present (value or `unknown`) on every layout fixture; on the provenance report the coverage windows match the hand-read values within one minute.
 - [ ] Fallback cost: for a section with no parser, `commands_to_first_fields <= 2` (`query … locate`, then `query … sample`), each `output_bytes <= 2048`.
 - [ ] `validate_skill.py` (skill-workshop) reports 0 `must` findings on the skill folder.
 - [ ] `pii_in_default_output == 0`: emails, IMEI/IMSI/ICCID, phone numbers, MAC addresses and SSIDs never appear in default output (asserted by a test over a seeded fixture); `--no-redact` is the explicit opt-out.
@@ -550,6 +553,7 @@ them — `--section`, `--grep`, `--context`, `--redact`.
 | `query_bugreport.py locate` | `--input R --grep RE [--limit N]` | hit count + first offset per section, no lines; ≤ 2048 B |
 | `query_bugreport.py sample` | `--input R --section ID [--limit N]` | first lines (default 20, each ≤ 200 chars), format sniff (`kv` · `table` · `tree` · `csv` · `log` · `unknown`) and the repeated-record shape; ≤ 2048 B |
 | `query_bugreport.py show` | `--input R --section ID [--grep RE] [--context N] [--limit N] [--output FILE]` | matching lines with byte offsets |
+| `query_bugreport.py summary` | `--input R [--json]` | ≤ 2048 B: device (manufacturer, model, codename), Android release/SDK/build/security patch, capture time + timezone, uptime + last boot reason, **data coverage per source** (system/event/kernel log first–last timestamps, batterystats since-charge window, procstats windows, ANR and tombstone date ranges), file stats (input and text size, section count, five largest sections, ANR/tombstone/proto counts), battery snapshot (level, status, health, temperature), storage free, installed / user app counts. A field the report lacks reads `unknown`, never omitted. Redacted like all stdout. |
 | `query_bugreport.py timeline` | `--input R --since T [--window D] [--grep RE] [--limit N]` | merged events (§ 5.5): `t`, `src`, `tag`, `level`, excerpt; default level ≥ W plus every ANR/kill/crash/boot/thermal marker |
 | `validate_bugreport.py` | `--input R [--json]` | is-bugreport, input kind, main entry, format/Android/SDK/OEM, encoding facts, section count, each detector input `parsed` · `fallback` (+ route) · `absent` |
 | `create_bugreport.py` | `--redact --input R --output FILE [--force]` | Writes a scrubbed copy; stdout = counts per redaction kind. `--redact` is required (the only v1 mode, named so later modes do not change its meaning). Text input → text; zip input with a `.zip` output → main entry and text `FS/` members redacted, binary members (`.pb`, `proto/`, `visible_windows.zip`) **dropped** and listed, because binary cannot be scrubbed reliably. Refuses an output that resolves to the input or exists without `--force` |
@@ -717,3 +721,4 @@ None. The only persistent state is the per-user cache (§ 5.3), versioned by
 reverting the stack (or shipping a patch that removes the skill from
 `sections.json`); no consumer data or configuration is touched, and the cache
 is disposable.
+- D-10 — One version bump for the whole stack: P4 → P3 → P2 → P1 merge top-down, then P1 → `main` with the single minor bump (maintainer, 2026-11-04). The four extra domain flags of § 5.7 are accepted (maintainer, 2026-11-04).

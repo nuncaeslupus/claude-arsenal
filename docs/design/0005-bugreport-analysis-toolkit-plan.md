@@ -3,10 +3,11 @@
 **Date**: 2026-11-04
 **Specification**: `docs/design/0005-bugreport-analysis-toolkit.md` (approved r2; §§ 5–6 appended by this design)
 **Author**: Claude, for the maintainer
-**Revision**: 1
-**Status**: draft
+**Revision**: 2
+**Status**: approved (2026-11-04, revision 2) — without annotations
 **Revision log**:
 - r1 — first draft
+- r2 — maintainer decisions (2026-11-04): single bump via top-down merge (spec D-10), extra flags accepted, new task T25 `summary`
 
 > Review record, kept the way the spec keeps its own: each round of notes bumps
 > **Revision** with a log line naming the `<repo>-plan-v<N>-<date>-notes.md`
@@ -100,6 +101,7 @@ under `plugins/core/tests/` unless a path says otherwise.
 | T6 | P1 | query primitives | `query_bugreport.py` `sections`, `locate`, `sample`, `show`; selector rules (§ 5.4); format sniff + record shape | `scripts/query_bugreport.py` | L | T4, T5 | `query_s <= 1` (any single-section command, warm index) and `commands_to_first_fields <= 2` with each `output_bytes <= 2048` | `test_unparsed_section_reaches_fields_in_two_commands` in `bugreport_test.sh` — `locate` then `sample` on an OEM section yields its key names · `test_ambiguous_bare_name_exits_2_with_candidates` in `bugreport/test_query.py` · `test_sample_sniffs_kv_table_tree_csv_log` in `bugreport/test_query.py` — each seed format is classified correctly · `test_query_never_writes_the_input` in `bugreport_test.sh` — input digest unchanged |
 | T7 | P1 | Clock + timeline | Clock + `timeline`: offset derivation (alarm → timezone → none), year inference, kernel/batterystats conversion, `--since` grammar, date selection, DST fold, `--window` | `_brlib.py`, `query_bugreport.py` | L | T6 | `timeline_offset_error_s == 0` on the known-offset fixture | `test_alarm_dump_offset_converts_kernel_time_to_local` in `bugreport/test_clock.py` — a dmesg line lands on its seeded local minute · `test_since_matching_two_dates_exits_2_listing_both` in `bugreport/test_clock.py` · `test_december_logs_in_january_report_get_previous_year` in `bugreport/test_clock.py` · `test_no_offset_source_marks_rows_elapsed` in `bugreport/test_clock.py` — rows carry `clock: elapsed`, nothing is guessed |
 | T8 | P1 | validate script | `validate_bugreport.py`: kind, main entry, format/Android/SDK/OEM, encoding facts, per-detector-input status (registry-ready, empty until P2) | `scripts/validate_bugreport.py` | M | T6 | `layout_fixture_unhandled_exceptions == 0` across every layout × container × trap | `test_validate_reports_layout_facts_per_fixture` in `bugreport/test_validate.py` — Android release and OEM match each fixture's seed · `test_non_bugreport_exits_1` in `bugreport_test.sh` — a random text file is rejected with a reason · `test_utf16_input_is_reported_transcoded` in `bugreport/test_validate.py` |
+| T25 | P1 | summary | `query_bugreport.py summary` (spec § 5.7, requirement 12): device, build, capture time, uptime + boot reason, per-source coverage windows, file stats, battery and storage snapshot, app counts; `unknown` for absent fields | `scripts/query_bugreport.py`, `scripts/_summary.py` | M | T6, T7 | `summary_missing_fields == 0` across every layout fixture (output ≤ 2048 B asserted by its test) | `test_summary_reports_every_field_per_layout` in `bugreport/test_summary.py` — every field is present as a value or `unknown` and output stays ≤ 2048 B; `test_summary_coverage_windows_match_fixture_bounds` — per-source first/last timestamps equal the generator's seeded bounds |
 | T9 | P1 | SKILL.md (P1) | SKILL.md (P1 scope: standing constraints front-loaded — privacy, output cap, fallback route; script table), `references/sections.md` (section map, traps, fallback recipe), `evals/loading_verification.json` | `skills/bugreport/SKILL.md`, `references/`, `evals/` | M | T7, T8 | `skill_workshop_must_findings == 0` | `test_skill_md_commands_resolve_to_existing_scripts_and_flags` in `bugreport_test.sh` — every command SKILL.md shows parses under its script's argparse · `test_skill_folder_has_no_must_findings` in `bugreport_test.sh` — skill-workshop `validate.py` on the folder reports 0 `must` |
 | T10 | P2 | Detector framework | `_detectors.py` + `analyze_bugreport.py`: registry, `Finding`, `NotParsed`, fail-soft loop with `error:` reasons, ranking, `bugreport.analyze/1`, `--family`/`--severity`/`--limit`/`--output`, `views`; `validate` reports detector inputs | `scripts/_detectors.py`, `scripts/analyze_bugreport.py`, `validate_bugreport.py` | L | T9 | `capped_outputs_parse_rate == 1.0` and `checkup_output_bytes <= 4096` | `test_raising_detector_becomes_not_parsed_row` in `bugreport/test_detectors.py` — a deliberately broken detector yields `reason: error: …` and the run exits 0 · `test_analyze_json_is_byte_identical_across_runs_modulo_tokens` in `bugreport/test_analyze.py` · `test_family_accepts_slug_and_f_number` in `bugreport/test_analyze.py` |
 | T11 | P2 | F6 memory | F6 memory detectors + `views.memory`: procstats 24 h memory × time (PSS, RSS fallback for `0,00`), foreground-while-screen-off, meminfo, swap, PSI, lmkd kills | `scripts/_det_memory.py` | L | T10 | `family_fire_nofire_failures_f6 == 0` | `test_swap_97pct_with_kswapd_cpu_fires_thrashing` in `bugreport/test_det_memory.py` · `test_unsampled_pss_falls_back_to_rss` in `bugreport/test_det_memory.py` — the holder ranking uses RSS, not 0 · `test_healthy_memory_fixture_fires_nothing` in `bugreport/test_det_memory.py` |
@@ -124,9 +126,9 @@ under `plugins/core/tests/` unless a path says otherwise.
 ```drawspec
 {"version": 1, "kind": "flow", "title": "Task dependencies — phases",
  "nodes": [
-  {"id": "P1", "text": "Phase 1\nT1, T2, T3, T4, T5, T6, T7, T8"},
+  {"id": "P1", "text": "Phase 1\nT1, T2, T3, T4, T5, T6, T7, T8, T25"},
   {"id": "P2", "text": "Phase 2\nT9, T10, T11, T12, T13, T14, T15, T…"},
-  {"id": "P3", "text": "Phase 3\nT17, T18, T19, T20, T21, T22, T23,…"}
+  {"id": "P3", "text": "Phase 3\nT18, T19, T20, T21, T22, T23, T24"}
  ],
  "edges": [
   {"from": "P1", "to": "P2"},
@@ -134,7 +136,7 @@ under `plugins/core/tests/` unless a path says otherwise.
  ]}
 ```
 
-**Phase 1** — T1, T2, T3, T4, T5, T6, T7, T8
+**Phase 1** — T1, T2, T3, T4, T5, T6, T7, T8, T25
 
 ```drawspec
 {"version": 1, "kind": "flow", "title": "Task dependencies — phase 1",
@@ -146,7 +148,8 @@ under `plugins/core/tests/` unless a path says otherwise.
   {"id": "T5", "text": "T5\nRedaction + budget"},
   {"id": "T6", "text": "T6\nquery primitives"},
   {"id": "T7", "text": "T7\nClock + timeline"},
-  {"id": "T8", "text": "T8\nvalidate script"}
+  {"id": "T8", "text": "T8\nvalidate script"},
+  {"id": "T25", "text": "T25\nsummary"}
  ],
  "edges": [
   {"from": "T1", "to": "T2"},
@@ -156,11 +159,12 @@ under `plugins/core/tests/` unless a path says otherwise.
   {"from": "T4", "to": "T6"},
   {"from": "T5", "to": "T6"},
   {"from": "T6", "to": "T7"},
-  {"from": "T6", "to": "T8"}
+  {"from": "T6", "to": "T8"},
+  {"from": "T7", "to": "T25"}
  ]}
 ```
 
-**Phase 2** — T9, T10, T11, T12, T13, T14, T15, T16 (with T7, T8 from earlier phases)
+**Phase 2** — T9, T10, T11, T12, T13, T14, T15, T16, T17 (with T7, T8 from earlier phases)
 
 ```drawspec
 {"version": 1, "kind": "flow", "title": "Task dependencies — phase 2",
@@ -174,7 +178,8 @@ under `plugins/core/tests/` unless a path says otherwise.
   {"id": "T13", "text": "T13\nChurn + F2 thermal"},
   {"id": "T14", "text": "T14\nProvenance checkup"},
   {"id": "T15", "text": "T15\nF5 crashes"},
-  {"id": "T16", "text": "T16\nF1 battery"}
+  {"id": "T16", "text": "T16\nF1 battery"},
+  {"id": "T17", "text": "T17\nF3 reboots"}
  ],
  "edges": [
   {"from": "T7", "to": "T9"},
@@ -187,11 +192,12 @@ under `plugins/core/tests/` unless a path says otherwise.
   {"from": "T12", "to": "T14"},
   {"from": "T13", "to": "T14"},
   {"from": "T14", "to": "T15"},
-  {"from": "T14", "to": "T16"}
+  {"from": "T14", "to": "T16"},
+  {"from": "T14", "to": "T17"}
  ]}
 ```
 
-**Phase 3** — T17, T18, T19, T20, T21, T22, T23, T24 (with T14, T15, T16 from earlier phases)
+**Phase 3** — T18, T19, T20, T21, T22, T23, T24 (with T14, T15, T16, T17 from earlier phases)
 
 ```drawspec
 {"version": 1, "kind": "flow", "title": "Task dependencies — phase 3",
@@ -199,7 +205,7 @@ under `plugins/core/tests/` unless a path says otherwise.
   {"id": "T14", "text": "T14\nphase 2"},
   {"id": "T15", "text": "T15\nphase 2"},
   {"id": "T16", "text": "T16\nphase 2"},
-  {"id": "T17", "text": "T17\nF3 reboots"},
+  {"id": "T17", "text": "T17\nphase 2"},
   {"id": "T18", "text": "T18\nF7 + F8"},
   {"id": "T19", "text": "T19\nF9 + F11"},
   {"id": "T20", "text": "T20\nF10 security"},
@@ -209,7 +215,6 @@ under `plugins/core/tests/` unless a path says otherwise.
   {"id": "T24", "text": "T24\nRelease"}
  ],
  "edges": [
-  {"from": "T14", "to": "T17"},
   {"from": "T14", "to": "T18"},
   {"from": "T14", "to": "T19"},
   {"from": "T14", "to": "T20"},
@@ -230,7 +235,7 @@ under `plugins/core/tests/` unless a path says otherwise.
 
 | PR | Tasks | Branch | Bump |
 |---|---|---|---|
-| P1 | T1–T9 | `feat/bugreport-p1-substrate` from `main` | none |
+| P1 | T1–T9, T25 | `feat/bugreport-p1-substrate` from `main` | none |
 | P2 | T10–T14 | `feat/bugreport-p2-memory-anr` on P1 | none |
 | P3 | T15–T19 | `feat/bugreport-p3-families` on P2 | none |
 | P4 | T20–T24 | `feat/bugreport-p4-security-release` on P3 | **minor** — new skill, new section |
@@ -247,9 +252,7 @@ whose diff against its base touches `plugins/*/skills/` — true of P1–P3. Des
 stacking rule, this plan merges the stack **top-down into P1's branch**: P4 →
 P3 → P2 → P1 (each approved on its own diff), then P1 → `main` as one squash
 carrying the bump. P1–P3's `version bump` check is red while they are open and
-is not the merge gate for them; the P1 → `main` merge is. The maintainer may
-instead choose bump-per-PR as in 0002/0004 — it changes only the Bump column
-and T24's gate, not the tasks.
+is not the merge gate for them; the P1 → `main` merge is. **Chosen by the maintainer (spec D-10): one bump, top-down merge.**
 
 **P1 alone is useful**: `query` + `validate` are the spec's Option A coverage
 (sections map, traps, cheap fallback) — but under top-down merging nothing ships
