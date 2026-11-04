@@ -91,6 +91,16 @@ done < <(sed -n '/^```bash$/,/^```$/p' "$skill/SKILL.md" | grep '_bugreport.py')
 [ "$n" -ge 5 ] || fail "found only $n SKILL.md commands — the block parser is broken"
 echo "PASS: all $n SKILL.md commands run as written"
 
+# --- test_checkup_default_output_fits_4096_bytes ----------------------------
+#     Every scenario at once: the most findings a fixture can raise, default caps.
+py "$here/bugreport/make_fixture.py" --layout modern --scenario thrashing --scenario churn \
+    --scenario thermal --seed 1 --out "$tmp" >/dev/null || fail "checkup fixture generation failed"
+out="$(py "$scripts/analyze_bugreport.py" --input "$tmp/modern+thrashing+churn+thermal-1.txt" \
+    --family memory,anr,thermal,churn --output-dir "$tmp/cache" --json)" || fail "analyze exited non-zero"
+[ "$(printf '%s' "$out" | wc -c)" -le 4096 ] || fail "checkup output is over 4096 bytes"
+grep -q '"memory.swap_thrashing"' <<<"$out" || fail "checkup did not report thrashing: $out"
+echo "PASS: the checkup's default output fits 4096 bytes"
+
 # --- the T4 index gates at a tenth of the scale ------------------------------
 #     The full 160 MB run is bugreport-benchmark.yml (dispatch); this one keeps
 #     a regression from waiting for someone to dispatch it.

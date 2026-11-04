@@ -28,7 +28,8 @@ SEEDS = Path(__file__).resolve().parent / "seeds"
 LAYOUTS = ("pre-p", "modern", "samsung", "xiaomi", "oneplus", "huawei", "android9")
 CONTAINERS = ("txt", "zip", "zip-bare", "zip-text")
 TRAPS = ("cr", "utf16", "nul", "locale", "unsampled-pss", "timeout", "dup-service")
-SCENARIOS = ("multi-day", "new-year", "no-clock")
+# The last four are the P2 detector scenarios; each is a composable fire block.
+SCENARIOS = ("multi-day", "new-year", "no-clock", "thrashing", "anr-idle", "churn", "thermal")
 
 UTC_OFFSET_S = 3600  # Europe/Berlin in November and January
 KERNEL_MARKER_AGO_S = 425  # the lowmemorykiller line sits this far before capture
@@ -133,7 +134,7 @@ def _model(layout: str, scenarios: Sequence[str], seed: int) -> dict[str, Any]:
     clock = "no-clock" not in scenarios
     seed_blocks = seeds()
 
-    def logs(block: str, step: tuple[int, int]) -> list[tuple[dt.datetime, str]]:
+    def logs(block: str, step: tuple[int, int], prefix: str) -> list[tuple[dt.datetime, str]]:
         messages = seed_blocks[block].splitlines()
         start, end = captured - dt.timedelta(minutes=82, seconds=5), captured
         quiet = (captured - QUIET[0], captured - QUIET[1])
@@ -150,7 +151,16 @@ def _model(layout: str, scenarios: Sequence[str], seed: int) -> dict[str, Any]:
             t += dt.timedelta(seconds=rng.randint(*step), milliseconds=rng.randint(0, 999))
         last = end - dt.timedelta(seconds=1)
         out.append((last.replace(microsecond=rng.randint(0, 999) * 1000), messages[0]))
-        return out
+        return sorted(out + scripted(prefix), key=lambda row: row[0])
+
+    def scripted(prefix: str) -> list[tuple[dt.datetime, str]]:
+        """Scenario rows `AGO_S|level|tag|msg`, at fixed offsets before capture."""
+        rows: list[tuple[dt.datetime, str]] = []
+        for name in scenarios:
+            for i, line in enumerate(seed_blocks.get(f"{prefix}_{name}", "").splitlines()):
+                ago, spec = line.split("|", 1)
+                rows.append((captured - dt.timedelta(seconds=int(ago), milliseconds=-i), spec))
+        return rows
 
     kernel: list[tuple[float, str]] = []
     k_messages = seed_blocks["kernel_messages"].splitlines()
@@ -172,8 +182,8 @@ def _model(layout: str, scenarios: Sequence[str], seed: int) -> dict[str, Any]:
         "captured": captured,
         "uptime_s": uptime_s,
         "clock": clock,
-        "system_log": logs("log_messages", (20, 40)),
-        "event_log": logs("event_messages", (60, 120)),
+        "system_log": logs("log_messages", (20, 40), "sys"),
+        "event_log": logs("event_messages", (60, 120), "ev"),
         "kernel": kernel,
         "kernel_marker_s": marker,
     }
@@ -256,6 +266,14 @@ def render(
         "free_ram": "2.612.345K" if locale else "2,612,345K",
         "sys_total": "1,9GB" if locale else "1.9GB",
         "pct": "0,00%" if locale else "61%",
+        "heavy_pss": "2,097,152K" if "thrashing" in scenarios else "234,567K",
+        "swap_used": "4,072,345K" if "thrashing" in scenarios else "2,412,345K",
+        "kswapd_cpu": "58.0" if "thrashing" in scenarios else " 0.3",
+        "psi_mem": "34.50" if "thrashing" in scenarios else "0.12",
+        "psi_io": "89.00" if "thrashing" in scenarios else "0.80",
+        "main_state": "Blocked" if "anr-idle" in scenarios else "Native",
+        "thermal_status": "1" if "thermal" in scenarios else "0",
+        "cpu_temp": "46.2" if "thermal" in scenarios else "38.5",
         "pss_triple": (
             ("0,00-0,00-0,00" if locale else "0.00-0.00-0.00")
             if "unsampled-pss" in traps
@@ -316,6 +334,18 @@ def render(
     top("KERNEL LOG (dmesg)", "\n".join(f"<6>[{s:12.6f}] {msg}" for s, msg in m["kernel"]))
     top("CHECKIN BATTERYSTATS (/system/bin/dumpsys -T 30000 batterystats -c)", body("checkin"))
     top("PROCESSES AND THREADS (ps -A -T -Z -O pri,nice,rtprio,sched,pcy,time)", body("ps"))
+    top(
+        "CPU INFO (top -b -n 1 -H -s 6 -o pid,tid,user,pr,ni,%cpu,s,virt,res,pcy,cmd,name)",
+        body("cpu_info"),
+    )
+    if m["sdk"] >= 29:  # /proc/pressure arrived with Android 10
+        top("PSI memory (/proc/pressure/memory)", body("psi_memory"))
+        top("PSI io (/proc/pressure/io)", body("psi_io"))
+    if {"thrashing", "anr-idle"} & set(scenarios):
+        top(
+            "VM TRACES AT LAST ANR (/data/anr/anr_2026-11-03-14-10-00-123: 2026-11-03 14:10:00)",
+            body("vm_traces"),
+        )
     for name in _OEM_SECTIONS.get(layout, ()):
         top(f"{name} (/proc/example/{name.lower().replace(' ', '_')})", body(f"oem_{name}"))
     if "timeout" in traps:

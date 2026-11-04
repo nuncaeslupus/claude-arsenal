@@ -6,7 +6,7 @@
 Prints one JSON document: is_bugreport, input kind and main entry, format
 version, Android release/SDK/OEM/model, encoding facts (UTF-16 transcoded, bare
 CR and NUL bytes), clock source, section and timed-out counts, and the status
-of each detector input (empty until the detectors land). Exit 0 a bugreport,
+of each detector input (parsed, fallback with its route, or absent). Exit 0 a bugreport,
 1 not one (with the reason), 2 bad usage or internal error.
 """
 
@@ -18,6 +18,7 @@ import sys
 from typing import Any
 
 import _brlib as br
+import _detectors as det
 
 SCHEMA = "bugreport.validate/1"
 
@@ -43,7 +44,7 @@ def report(rpt: br.Report) -> dict[str, Any]:
         "clock": rpt.clock["source"],
         "sections": len(rpt.sections),
         "timed_out": sum(1 for s in rpt.sections if s["timed_out"]),
-        "detector_inputs": {},
+        "detector_inputs": det.run(rpt)["inputs"],
     }
 
 

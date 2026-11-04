@@ -1,6 +1,6 @@
 ---
 name: bugreport
-description: Reads Android bugreports (dumpstate .txt or .zip) through a byte-offset index — device summary, section lookup, merged timeline, redacted output. Use when the user has a bugreport to read or diagnose. Not for live-device adb sessions or logcat-only files.
+description: Reads Android bugreports (dumpstate .txt or .zip) through a byte-offset index — device summary, ranked checkup, section lookup, merged timeline, redacted output. Use when the user has a bugreport to read or diagnose. Not for live-device adb sessions or logcat-only files.
 argument-hint: "--input bugreport.zip"
 user-invocable: true
 allowed-tools: Bash(python3 *_bugreport.py *)
@@ -47,6 +47,8 @@ later runs reuse it. `--force` rebuilds it.
 ```bash
 python3 "${CLAUDE_SKILL_DIR}/scripts/validate_bugreport.py" --input bugreport.zip              # is it a bugreport; kind, encoding, clock
 python3 "${CLAUDE_SKILL_DIR}/scripts/query_bugreport.py" summary --input bugreport.zip         # device, build, coverage, battery, storage
+python3 "${CLAUDE_SKILL_DIR}/scripts/analyze_bugreport.py" --input bugreport.zip              # the checkup: ranked findings
+python3 "${CLAUDE_SKILL_DIR}/scripts/analyze_bugreport.py" --input bugreport.zip --family memory  # one family, plus its tables
 python3 "${CLAUDE_SKILL_DIR}/scripts/query_bugreport.py" sections --input bugreport.zip        # every section id, kind, size
 python3 "${CLAUDE_SKILL_DIR}/scripts/query_bugreport.py" locate --input bugreport.zip --grep lowmemorykiller
 python3 "${CLAUDE_SKILL_DIR}/scripts/query_bugreport.py" sample --input bugreport.zip --section meminfo
@@ -56,16 +58,21 @@ python3 "${CLAUDE_SKILL_DIR}/scripts/query_bugreport.py" timeline --input bugrep
 
 | Script | Gives |
 |---|---|
-| `validate_bugreport.py` | Whether the input is a bugreport, its container and main entry, encoding facts (CR, NUL, transcoding), header, clock source, section count |
+| `validate_bugreport.py` | Whether the input is a bugreport, its container and main entry, encoding facts (CR, NUL, transcoding), header, clock source, section count, each detector input's status (`parsed`, `fallback` with its route, `absent`) |
 | `query_bugreport.py summary` | Device, Android build, capture time and timezone, uptime, boot reason, per-source coverage windows, file stats, battery snapshot, storage, app counts — `unknown` where the report lacks a field |
+| `analyze_bugreport.py` | Findings ranked by severity then score: `claim`, `facts`, `subjects` with a role (`cause`, `victim`, `holder`), `evidence` offsets, `advice_id`. Families so far: `memory` (F6), `anr` (F4), `thermal` (F2), `churn` (a view over F6); `--family` takes slugs or F-numbers and adds that family's `views` tables; `--severity` sets a floor. A section a detector could not read is a `not_parsed` row with the `query` command that reaches it |
 | `query_bugreport.py sections` | Section ids (`name#occurrence`), kind, dumpsys block, offset and size |
 | `query_bugreport.py locate` | Hit count and first offset per section for `--grep RE`, no lines |
 | `query_bugreport.py sample` | The first lines of `--section ID` and its sniffed format (`kv`, `table`, `tree`, `csv`, `log`, `unknown`) |
 | `query_bugreport.py show` | Lines of `--section ID`, optionally filtered by `--grep` with `--context N`, with byte offsets |
 | `query_bugreport.py timeline` | System, event and kernel log rows merged on one clock from `--since T` over `--window D` (default level ≥ W plus ANR, kill, crash, boot and thermal markers; `--grep RE` replaces that filter) |
 
-`analyze_bugreport.py`, `create_bugreport.py` and `compare_bugreport.py`
-answer `--help` but are not implemented yet; they exit 2.
+Start a diagnosis with the checkup, then open the top finding's `evidence`
+with `show`. An ANR whose subjects are `victim`s was caused by the system
+(read the memory finding beside it), not by the app.
+
+`create_bugreport.py` and `compare_bugreport.py` answer `--help` but are not
+implemented yet; they exit 2.
 
 **Selectors.** `--section` takes an exact id (`meminfo#2`) or a name that
 matches one section (`meminfo`, case-insensitive). An ambiguous name exits 2
