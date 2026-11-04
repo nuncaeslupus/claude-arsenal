@@ -1,4 +1,4 @@
-# Claude Arsenal — Specification (annotated edition)
+# Bugreport analysis toolkit — Specification (annotated edition)
 
 > Generated 2026-11-04. This is the document with a **note slot** after every section that has text of its own. Read it in any Markdown app. To annotate, replace the `_(your notes…)_` placeholder under any section. When done, send the file back — notes are acted on.
 

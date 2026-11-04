@@ -309,6 +309,17 @@ CANONICAL_ARGS = {
     # the local fallback review ran — actions with no canonical equivalent
     "--trigger",
     "--local-review-done",
+    # bugreport skill — the nouns of an Android bugreport (problem families,
+    # canned advice, a time window) and the grep-like reads of one section;
+    # `--redact` names the only mode of create_bugreport.py, `--no-redact` the
+    # opt-out of the filter every other script applies by default.
+    "--family",
+    "--advice",
+    "--no-redact",
+    "--window",
+    "--grep",
+    "--context",
+    "--redact",
 }
 FORBIDDEN_ARG_SYNONYMS = {
     "--out": "--output",
