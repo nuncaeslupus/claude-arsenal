@@ -30,7 +30,7 @@ repo="${base}/yourproject"
 mkdir -p "${repo}/status"
 # Pin the clock (read as UTC) so the reader's `<YYYY-MM-DD-HHMM>` stamp is known.
 export SOURCE_DATE_EPOCH=1760462100
-today=$(date -u -d "@${SOURCE_DATE_EPOCH}" +%F-%H%M)
+today=$(python3 -c 'import sys,time; print(time.strftime("%Y-%m-%d-%H%M", time.gmtime(int(sys.argv[1]))))' "${SOURCE_DATE_EPOCH}")
 run_reader() { (cd "${repo}" && "${PY[@]}" "${READER}" "$@" 2>&1); }
 
 cat > "${repo}/status/specification.md" <<'EOF'

@@ -24,7 +24,7 @@ trap 'rm -rf "$tmp"' EXIT
 fail() { echo "FAIL: $1" >&2; exit 1; }
 # Pin the clock (read as UTC) so the reader's `<YYYY-MM-DD-HHMM>` stamp is known.
 export SOURCE_DATE_EPOCH=1760462100
-stamp=$(date -u -d "@${SOURCE_DATE_EPOCH}" +%F-%H%M)
+stamp=$(python3 -c 'import sys,time; print(time.strftime("%Y-%m-%d-%H%M", time.gmtime(int(sys.argv[1]))))' "${SOURCE_DATE_EPOCH}")
 
 repo="$tmp/yourproject"
 mkdir -p "$repo/status" "$repo/src"
@@ -158,9 +158,9 @@ python3 "$SPEC_V" --input "$spec" --require-approved >/dev/null 2>&1 && fail "--
 write_spec "approved (2026-01-03, revision 2)"
 python3 "$SPEC_V" --input "$spec" --require-approved >/dev/null 2>&1 \
     || fail "--require-approved refused revision 2, whose log names a committed export"
-sed -i 's/^- r2 .*/- r2 — reworded/' "$spec"
+perl -pi -e 's/^- r2 .*/- r2 — reworded/' "$spec"
 python3 "$SPEC_V" --input "$spec" --require-approved >/dev/null 2>&1 && fail "--require-approved passed an approval backed by nothing"
-sed -i 's/^\*\*Status\*\*: .*/**Status**: approved (2026-01-03, revision 2) — without annotations/' "$spec"
+perl -pi -e 's/^\*\*Status\*\*: .*/**Status**: approved (2026-01-03, revision 2) — without annotations/' "$spec"
 python3 "$SPEC_V" --input "$spec" --require-approved >/dev/null 2>&1 || fail "--require-approved refused an explicit 'without annotations'"
 printf '# Plan\n\n**Revision**: 1\n**Status**: draft\n**Revision log**:\n- r1 — applied `yourproject-plan-notes-2026-01-04-r1.md`\n\n## Technical solution\n' > "$repo/status/plan2.md"
 out="$(python3 "$PLAN_V" --input "$repo/status/plan2.md" 2>&1)"

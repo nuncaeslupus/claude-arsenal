@@ -44,7 +44,7 @@ run() {  # run <script> <issues-file> — prints exit code, stderr to $tmp/err
     # issue_for_task resolves one task rather than reading the whole board.
     [[ "${script}" == "issue_for_task" ]] && extra=(--task t-payload1)
     python3 "${SCRIPTS}/${script}.py" --issues "${issues}" --tasks-dir "${tasks}" \
-        "${extra[@]}" >/dev/null 2>"${tmp}/err"
+        ${extra[@]+"${extra[@]}"} >/dev/null 2>"${tmp}/err"
     echo $?
 }
 

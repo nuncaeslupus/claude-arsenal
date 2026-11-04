@@ -183,7 +183,8 @@ fi
 echo "PASS: this session's own transcript is excluded"
 
 # Outside the window → not counted.
-touch -d "20 minutes ago" "${PROJ}/sess-other.jsonl"
+touch "${PROJ}/sess-other.jsonl"
+python3 -c 'import os,sys,time; t=time.time()-1200; os.utime(sys.argv[1],(t,t))' "${PROJ}/sess-other.jsonl"
 out=$(concurrency_stderr 15)
 if [[ "${out}" == *"other session"* ]]; then
     echo "FAIL: a transcript outside the window should not be reported, got: ${out}" >&2; exit 1

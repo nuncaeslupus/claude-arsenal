@@ -270,6 +270,7 @@ CANONICAL_ARGS = {
     "--always-human-paths",
     "--digest-decisions",
     "--merge-policy",
+    "--review-bots",
     # init: the user skipped the interview; recorded so it is not asked again
     "--interview-declined",
     # repo-audit audit_estimate.py: the estimate's one tunable and the worker cap

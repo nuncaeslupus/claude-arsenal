@@ -51,8 +51,9 @@ which records `"declined"`, and neither is asked again.
    `autonomous`.
 2. How deep should local verification go? `balanced` (default), `fast`, `strict`.
 3. Minutes per review round (10) and minutes to wait on a silent review bot (20)?
-4. Which manual review triggers to post? Offer what `init.py --suggest-bot-triggers`
-   prints for the configured bots. CodeRabbit skips auto-review on repos under 10
+4. Which review bots post on this repo's PRs (`review-bots`; none means CI-only)? Then
+   which manual review triggers to post: offer what `init.py --suggest-bot-triggers`
+   prints for them. CodeRabbit skips auto-review on repos under 10
    stars; on a public repo recommend `@coderabbitai review` (about one on-demand
    review per hour). On a private Free-plan repo it posts only a summary, so the
    local adversarial review stands in.
@@ -72,7 +73,7 @@ Pass only what was answered; a skipped question writes nothing and keeps its def
 ```bash
 python3 "${CLAUDE_SKILL_DIR}/scripts/init.py" --repo-path . --autonomy autonomous \
   --verification balanced --review-budget-min 10 --bot-wait-min 20 \
-  --bot-triggers "reviewbot[bot]=@reviewbot review" --review-preset solo-trust \
+  --review-bots "reviewbot[bot]" --bot-triggers "reviewbot[bot]=@reviewbot review" --review-preset solo-trust \
   --merge-policy after-ci-and-review
 python3 "${CLAUDE_SKILL_DIR}/scripts/init.py" --repo-path . --interview-declined  # skipped
 ```
@@ -130,7 +131,8 @@ creates `arsenal/project/<NAME>/` stubs and updates `arsenal/project/overview.md
 
 - **Upstream owns `claude-arsenal/`, the host owns `arsenal/`.** Re-runs overwrite
   stale bundle files by checksum and never touch `arsenal/` (tasks, project data,
-  settings).
+  settings). A file or vendored skill with *uncommitted* changes is left as is and
+  reported `MODIFIED LOCALLY`; relay that line, since the user must commit or discard it.
 - **Cloud sessions need the commit.** A cloud session runs on a fresh clone and
   never sees `~/.claude/`, so what reaches it is the vendored `.claude/skills/`
   and the hooks in `.claude/settings.json` — commit both.
