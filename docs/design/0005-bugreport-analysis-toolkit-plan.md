@@ -288,6 +288,16 @@ diagnosis and the T25 summary coverage windows (within one minute of the hand-re
 
 | T# | Gate | Measured | Command | SHA | Env | Date |
 |----|------|----------|---------|-----|-----|------|
+| T1 | `resident_token_delta_general == 0`, `arg_canon_warnings_bugreport == 0` | general row 3053 → 3053 (Δ 0); 0 arg-canon warnings; listing 70 tok | `make context-budget`; `validate.py plugins/core/skills/bugreport` | 92bc00d | local Linux x86_64 py3.12 | 2026-11-04 |
+| T2 | `committed_seed_bytes <= 204800`, `fixture_build_determinism_failures == 0` | 9857 B; 0 failures | `uv run pytest plugins/core/tests/bugreport/test_fixture.py` | 92bc00d | local Linux x86_64 py3.12 | 2026-11-04 |
+| T3 | `section_boundary_mismatches == 0` | 0 over every layout × container | `uv run pytest plugins/core/tests/bugreport/test_scanner.py test_input.py test_numbers.py` | 92bc00d | local Linux x86_64 py3.12 | 2026-11-04 |
+| T4 | build ≤ 3 s / ≤ 300 MB (160 MB txt); zip ≤ 6 s / ≤ 300 MB; reuse ≤ 0.5 s | txt 167.8 MB: 0.70 s / 200.6 MB; zip: 1.68 s / 271.8 MB; reuse 0.004 s — CI ubuntu-22.04 row owed (dispatch `bugreport-benchmark.yml`) | `python3 plugins/core/tests/bugreport/benchmark.py` | 92bc00d | local Linux x86_64 py3.12 | 2026-11-04 |
+| T5 | `pii_in_default_output == 0` | 0 over every canary kind | `uv run pytest plugins/core/tests/bugreport/test_redact.py test_budget.py` | 92bc00d | local Linux x86_64 py3.12 | 2026-11-04 |
+| T6 | `query_s <= 1`, `commands_to_first_fields <= 2`, each ≤ 2048 B | 160 MB warm: show 0.135 s / 967 B, sample 0.138 s / 1061 B, locate 0.263 s / 158 B; 2 commands | `uv run pytest plugins/core/tests/bugreport/test_query.py`; `bugreport_test.sh` | 92bc00d | local Linux x86_64 py3.12 | 2026-11-04 |
+| T7 | `timeline_offset_error_s == 0` | 0 | `uv run pytest plugins/core/tests/bugreport/test_clock.py` | 92bc00d | local Linux x86_64 py3.12 | 2026-11-04 |
+| T8 | `layout_fixture_unhandled_exceptions == 0` | 0 | `uv run pytest plugins/core/tests/bugreport/test_validate.py` | 92bc00d | local Linux x86_64 py3.12 | 2026-11-04 |
+| T25 | `summary_missing_fields == 0`, output ≤ 2048 B | 0; 1494 B at 160 MB | `uv run pytest plugins/core/tests/bugreport/test_summary.py` | 92bc00d | local Linux x86_64 py3.12 | 2026-11-04 |
+| T9 | `skill_workshop_must_findings == 0` | 0 | `validate.py plugins/core/skills/bugreport`; `bugreport_test.sh` | 92bc00d | local Linux x86_64 py3.12 | 2026-11-04 |
 
 **Benchmark provenance.** `index_build_s`, `index_build_zip_s`, `index_reuse_s`
 and `peak_rss_mb` are measured on the CI `ubuntu-22.04` runner against a report

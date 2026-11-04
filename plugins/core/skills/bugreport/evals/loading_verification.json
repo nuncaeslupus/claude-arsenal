@@ -1,0 +1,14 @@
+{
+  "skill": "bugreport",
+  "canary": "bugreport-loaded-2026-11-04-da2adc41-b71d285c189d31db",
+  "negative_control": "this-fact-is-false-and-must-not-appear-in-the-skill-body",
+  "load_prompts": [
+    "Here is a bugreport zip from my phone — what device and Android version is it?",
+    "My Pixel rebooted at 14:20, look at bugreport.txt and tell me what happened around then",
+    "Which section of this dumpstate file has the meminfo for com.example.app?"
+  ],
+  "no_load_prompts": [
+    "Run adb logcat on my connected phone and watch for crashes",
+    "Parse this logcat.txt I exported from Android Studio"
+  ]
+}

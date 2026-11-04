@@ -39,6 +39,17 @@ grep -q '^python = false' "$repo/arsenal/config.toml" || fail "fresh: python not
 grep -q '^workflow = true' "$repo/arsenal/config.toml" || fail "fresh: workflow not recorded true"
 echo "PASS: fresh install — core + workflow, python off, decision recorded"
 
+# --- test_section_android_defaults_off / test_profile_all_includes_android ---
+# `android` ships with no _SECTION_DEFAULTS entry, so it is opt-in: a default
+# /init must not put the bugreport skill in every consumer's listing.
+have "$repo" bugreport && fail "fresh: android section should default OFF"
+grep -q '^android = false' "$repo/arsenal/config.toml" || fail "fresh: android not recorded false"
+repo="$tmp/all"; mkdir -p "$repo"
+python3 "$init_py" --repo-path "$repo" --profile all >/dev/null 2>&1 \
+    || fail "--profile all exited non-zero"
+have "$repo" bugreport || fail "--profile all did not install the android section"
+echo "PASS: android is off by default and included by --profile all"
+
 # --- a profile is an explicit answer ----------------------------------------
 repo="$tmp/py"; mkdir -p "$repo"
 python3 "$init_py" --repo-path "$repo" --profile python >/dev/null 2>&1 \
