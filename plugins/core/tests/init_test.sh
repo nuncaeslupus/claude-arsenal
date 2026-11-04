@@ -133,6 +133,22 @@ if ! grep -q '\.claude/skills/\*/findings\.md' "${tmpdir}/.gitignore" 2>/dev/nul
 fi
 echo "PASS: .gitignore covers per-skill findings.md"
 
+# Gate 6c: an entry the host already has, spelled with or without the leading
+# slash, is not appended a second time (#539). `tmp/` vs `/tmp/` differ — the
+# unanchored one matches at any depth — so that pair must not be merged.
+dedupe="${tmpdir}/dedupe"
+mkdir -p "${dedupe}"
+printf '.claude/worktrees/\n/tmp/\n' > "${dedupe}/.gitignore"
+(cd "$(dirname "${INIT_PY}")" && python3 -c "
+import sys; from pathlib import Path; import init
+r = Path(sys.argv[1])
+init._add_gitignore_entry(r, '/.claude/worktrees/')
+init._add_gitignore_entry(r, 'tmp/')" "${dedupe}") >/dev/null
+if [[ "$(cat "${dedupe}/.gitignore")" != $'.claude/worktrees/\n/tmp/\n\ntmp/' ]]; then
+    echo "FAIL: .gitignore dedupe by leading slash: $(cat "${dedupe}/.gitignore")" >&2; exit 1
+fi
+echo "PASS: .gitignore entries equal up to the leading slash are not duplicated"
+
 # Gate 7: ARSENAL_HOME relocates the host tree, and the config it writes is the
 # config the readers read. Every runtime script resolves the host tree that way
 # — `arsenal_config.py` included — while init hardcoded `arsenal/`, so a

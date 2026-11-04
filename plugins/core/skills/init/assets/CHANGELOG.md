@@ -18,6 +18,16 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [5.20.1] - 2026-11-05
+
+### Fixed
+
+- `/init` no longer adds a `.gitignore` line your repo already has in another
+  spelling: `.claude/worktrees/` and `/.claude/worktrees/` ignore the same path,
+  so the second is now recognised and skipped (#539). Patterns whose meaning
+  changes with the leading slash, such as `tmp/` and `/tmp/`, are still kept
+  apart.
+
 ## [5.20.0] - 2026-11-04
 
 - **`bugreport` (android section, off by default) is feature-complete.** New in this release:
