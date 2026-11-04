@@ -98,6 +98,33 @@ context.
 - **Where the size is** (provenance report): Wi-Fi HAL dump 16.5 MB, `CHECKIN BATTERYSTATS` 15.3 MB, `batterystats` 11.2 MB, `activity` 9.3 MB, `package` 7.4 MB, VM traces 5.9 MB, system log 5.1 MB. Logcat is not the bulk; a section index makes almost every question a slice read.
 - **Traps** (each one has already cost a real session a step): bare `\r` bytes inside lines (10 757 in the provenance file — text-mode readers shift line numbers); locale-formatted numbers (`0,00`, `1,9GB`); UTF-16 text when a `.txt` was captured through PowerShell redirection; NUL/invalid UTF-8 in logcat; logcat in local time vs batterystats/kernel in UTC/elapsed (offset from the alarm dump's `nowRTC`/`nowELAPSED`, as Perfetto does, or `persist.sys.timezone`); procstats PSS triples reading `0,00` when unsampled (use RSS as fallback).
 
+### 2.1.1 Public sample corpus (collected for r2)
+
+29 public sample sets (527 MB) were gathered from GitHub: 15 full reports and partial files (legacy 4.x/6.0 dumpstate fragments, MVT/ALEAPP fixtures, text and `.pb` tombstones, ANR traces, `batterystats --checkin` at vers 15 and 36, procstats, Android TV meminfo).
+
+| Android | OEM / device (full reports) |
+|---|---|
+| 9 | Huawei, LG, Samsung |
+| 10 | LG |
+| 11 | OnePlus, BLU (Android Go), emulator |
+| 12 | Samsung (zip with full `FS/`) |
+| 13 | Samsung, Sky (Android Go, `.pb` tombstones) |
+| 14 | Xiaomi (zip with only the text) |
+| 16 | Samsung (229 MB), emulator ×2 |
+| 17 | emulator, 16 KB pages |
+
+Plus the maintainer's own five Pixel 8 / Android 16 reports (local only, real PII), which carry known outcomes: memory thrashing + ANRs, battery exhaustion to `shutdown,battery` driven by one app in the foreground with the screen off.
+
+Gaps: no full Android 8 or 15, Motorola, Wear OS, Automotive or TV report; two Pixel reports exist but sit on hosts the build environment cannot reach. Almost no sample carries a licence, and nearly every real-device report contains PII — see open question 1.
+
+Format differences the parser must absorb (found in the corpus):
+- 4.x/6.0: no `DUMPSYS CRITICAL/HIGH` blocks and no format-version line. From Android 9 onward, every report has both.
+- Samsung: an extra `DUMPSYS NORMAL` block and many OEM sections (`AP RESET INFO EXTEND`, `SEC_MEDIA`, `End of OLOG`).
+- Other OEM sections: Xiaomi (`POWERUP_REASON`, `qsee_log`, `PERFLOCK HISTORY`), OnePlus (`OMMSERVICE`), Huawei (kernel live-patch).
+- Android 9: legacy `QTAGUID` sections.
+- The header grows: on 16 the format-version line sits near line 43, so detect by pattern, not a fixed prefix.
+- Some zips have no `main_entry.txt`; the main file may be `dumpstate-<date>.txt`, an arbitrary name (`example.txt`), or a bare `dumpstate.txt`. Pick the largest text entry with a dumpstate header.
+
 ### 2.2 Problem families the detectors target (ranked by forum demand)
 
 | # | Family | Key signals |
@@ -211,7 +238,7 @@ validation (success criteria), release readiness (changelog entry + `make
 context-budget` row).
 
 **Open questions**:
-1. Public samples: which of the collected public bugreports (§ fixtures index, gathered in r2) may be committed — only permissive-licence ones, and only after `create_bugreport.py --redact`? Draft: commit redacted excerpts of permissive samples; keep the rest as local-only benchmark inputs listed by URL.
+1. Public samples: almost none carry a licence, so committing even excerpts is doubtful. Draft: commit only synthetic fixtures; list the public samples by pinned URL + sha256 in a corpus manifest, and add an opt-in `make test-corpus` that downloads and runs them (parse-without-exception + timing), never part of default CI. Agree?
 2. Maintainer's own reports: commit redacted excerpts as fixtures, or use them only as local benchmarks? Draft: local benchmarks plus small redacted excerpts for the detectors they uniquely exercise.
 
 **Decisions log**:

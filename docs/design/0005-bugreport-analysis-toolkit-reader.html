@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
-<meta name="arsenal-source-sha256" content="9562cec6720be66814e8a7062043f808d1e5632c02e9f58c9ab212692fcd47ba">
+<meta name="arsenal-source-sha256" content="b562f3c4d40674aef88f65fa08b13a9f2d037ec790569ffec4533ee8714f2166">
 <title>Claude Arsenal — Specification (annotatable)</title>
 <style>
 :root{
@@ -194,7 +194,7 @@ li>.note.bnote{margin:6px 0}
     <button class="btn primary" id="btn-export">Save / Export</button>
   </div>
 </div>
-<div class="statusbar"><div class="wrap"><span class="count" id="count">0 / 13 notes</span><span class="hint"> · notes save automatically; <strong>Save / Export</strong> keeps a file you can send back</span></div></div>
+<div class="statusbar"><div class="wrap"><span class="count" id="count">0 / 14 notes</span><span class="hint"> · notes save automatically; <strong>Save / Export</strong> keeps a file you can send back</span></div></div>
 <div id="warnbar"><div class="wrap"><strong>Heads up —</strong> this browser isn't storing your notes automatically (private/incognito mode or restricted file view). Tap <strong>Save / Export</strong> regularly.</div></div>
 
 <div class="wrap">
@@ -220,6 +220,7 @@ li>.note.bnote{margin:6px 0}
 <li class="sub"><a href="#s-spec-requirements-from-the-maintainer">Requirements (from the maintainer)</a></li>
 <li><a href="#s-spec-2">§2 Systems &amp; Impact</a></li>
 <li class="sub"><a href="#s-spec-2-1">§2.1 What a bugreport contains (parser facts)</a></li>
+<li class="sub"><a href="#s-spec-2-1-1">§2.1.1 Public sample corpus (collected for r2)</a></li>
 <li class="sub"><a href="#s-spec-2-2">§2.2 Problem families the detectors target (ranked by forum demand)</a></li>
 <li class="sub"><a href="#s-spec-2-3">§2.3 Systems touched</a></li>
 <li class="sub"><a href="#s-spec-2-4">§2.4 Skill-workshop constraints the design must meet</a></li>
@@ -338,6 +339,62 @@ context.</p></div>
 <li><strong>Traps</strong> (each one has already cost a real session a step): bare <code>\r</code> bytes inside lines (10 757 in the provenance file — text-mode readers shift line numbers); locale-formatted numbers (<code>0,00</code>, <code>1,9GB</code>); UTF-16 text when a <code>.txt</code> was captured through PowerShell redirection; NUL/invalid UTF-8 in logcat; logcat in local time vs batterystats/kernel in UTC/elapsed (offset from the alarm dump's <code>nowRTC</code>/<code>nowELAPSED</code>, as Perfetto does, or <code>persist.sys.timezone</code>); procstats PSS triples reading <code>0,00</code> when unsampled (use RSS as fallback).</li>
 </ul></div>
 <div class="note" data-for="s-spec-2-1"><label class="note-head" for="n-s-spec-2-1"><span class="note-ico" aria-hidden="true">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC §2.1</span></label><textarea class="note-ta" data-key="s-spec-2-1" id="n-s-spec-2-1" data-label="§2.1 What a bugreport contains (parser facts)" data-part="0005 Bugreport Analysis Toolkit" rows="1" placeholder="Add a note on this section…"></textarea></div>
+</article>
+<article class="sec l3" id="s-spec-2-1-1" data-ref="SPEC §2.1.1" data-label="§2.1.1 Public sample corpus (collected for r2)" data-part="0005 Bugreport Analysis Toolkit">
+<h4 class="sec-h"><span class="chip">§2.1.1</span><span class="sec-title">Public sample corpus (collected for r2)</span></h4>
+<div class="sec-body"><p>29 public sample sets (527 MB) were gathered from GitHub: 15 full reports and partial files (legacy 4.x/6.0 dumpstate fragments, MVT/ALEAPP fixtures, text and <code>.pb</code> tombstones, ANR traces, <code>batterystats --checkin</code> at vers 15 and 36, procstats, Android TV meminfo).</p>
+<table>
+<thead>
+<tr>
+<th>Android</th>
+<th>OEM / device (full reports)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>9</td>
+<td>Huawei, LG, Samsung</td>
+</tr>
+<tr>
+<td>10</td>
+<td>LG</td>
+</tr>
+<tr>
+<td>11</td>
+<td>OnePlus, BLU (Android Go), emulator</td>
+</tr>
+<tr>
+<td>12</td>
+<td>Samsung (zip with full <code>FS/</code>)</td>
+</tr>
+<tr>
+<td>13</td>
+<td>Samsung, Sky (Android Go, <code>.pb</code> tombstones)</td>
+</tr>
+<tr>
+<td>14</td>
+<td>Xiaomi (zip with only the text)</td>
+</tr>
+<tr>
+<td>16</td>
+<td>Samsung (229 MB), emulator ×2</td>
+</tr>
+<tr>
+<td>17</td>
+<td>emulator, 16 KB pages</td>
+</tr>
+</tbody>
+</table>
+<p>Plus the maintainer's own five Pixel 8 / Android 16 reports (local only, real PII), which carry known outcomes: memory thrashing + ANRs, battery exhaustion to <code>shutdown,battery</code> driven by one app in the foreground with the screen off.</p>
+<p>Gaps: no full Android 8 or 15, Motorola, Wear OS, Automotive or TV report; two Pixel reports exist but sit on hosts the build environment cannot reach. Almost no sample carries a licence, and nearly every real-device report contains PII — see open question 1.</p>
+<p>Format differences the parser must absorb (found in the corpus):
+- 4.x/6.0: no <code>DUMPSYS CRITICAL/HIGH</code> blocks and no format-version line. From Android 9 onward, every report has both.
+- Samsung: an extra <code>DUMPSYS NORMAL</code> block and many OEM sections (<code>AP RESET INFO EXTEND</code>, <code>SEC_MEDIA</code>, <code>End of OLOG</code>).
+- Other OEM sections: Xiaomi (<code>POWERUP_REASON</code>, <code>qsee_log</code>, <code>PERFLOCK HISTORY</code>), OnePlus (<code>OMMSERVICE</code>), Huawei (kernel live-patch).
+- Android 9: legacy <code>QTAGUID</code> sections.
+- The header grows: on 16 the format-version line sits near line 43, so detect by pattern, not a fixed prefix.
+- Some zips have no <code>main_entry.txt</code>; the main file may be <code>dumpstate-&lt;date&gt;.txt</code>, an arbitrary name (<code>example.txt</code>), or a bare <code>dumpstate.txt</code>. Pick the largest text entry with a dumpstate header.</p></div>
+<div class="note" data-for="s-spec-2-1-1"><label class="note-head" for="n-s-spec-2-1-1"><span class="note-ico" aria-hidden="true">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC §2.1.1</span></label><textarea class="note-ta" data-key="s-spec-2-1-1" id="n-s-spec-2-1-1" data-label="§2.1.1 Public sample corpus (collected for r2)" data-part="0005 Bugreport Analysis Toolkit" rows="1" placeholder="Add a note on this section…"></textarea></div>
 </article>
 <article class="sec l3" id="s-spec-2-2" data-ref="SPEC §2.2" data-label="§2.2 Problem families the detectors target (ranked by forum demand)" data-part="0005 Bugreport Analysis Toolkit">
 <h4 class="sec-h"><span class="chip">§2.2</span><span class="sec-title">Problem families the detectors target (ranked by forum demand)</span></h4>
@@ -622,7 +679,7 @@ compatibility (additive, minor bump), risk (format drift, PII — § 2.1/§ 2.3)
 validation (success criteria), release readiness (changelog entry + <code>make
 context-budget</code> row).</p>
 <p><strong>Open questions</strong>:
-1. Public samples: which of the collected public bugreports (§ fixtures index, gathered in r2) may be committed — only permissive-licence ones, and only after <code>create_bugreport.py --redact</code>? Draft: commit redacted excerpts of permissive samples; keep the rest as local-only benchmark inputs listed by URL.
+1. Public samples: almost none carry a licence, so committing even excerpts is doubtful. Draft: commit only synthetic fixtures; list the public samples by pinned URL + sha256 in a corpus manifest, and add an opt-in <code>make test-corpus</code> that downloads and runs them (parse-without-exception + timing), never part of default CI. Agree?
 2. Maintainer's own reports: commit redacted excerpts as fixtures, or use them only as local benchmarks? Draft: local benchmarks plus small redacted excerpts for the detectors they uniquely exercise.</p>
 <p><strong>Decisions log</strong>:
 - D-1 — Lives inside <code>claude-arsenal</code> (not a separate repo), as a tool skill like <code>har</code> (maintainer, 2026-11-04).
