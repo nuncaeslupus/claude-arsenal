@@ -326,3 +326,549 @@ context-budget` row).
 > **✎ Notes** · `SPEC §4`
 > _(your notes here — replace this line)_
 
+## §5 Contracts
+
+Sections 5–6 are appended by `design` (2026-11-04). They settle the items the
+spec's reviewers left for design — the index/cache, zip input, the clock behind
+`timeline --since`, the output schema, the CLI surface, detectors, advice,
+redaction and the fixture generator — so the plan
+(`0005-bugreport-analysis-toolkit-plan.md`) can gate each task against a
+written contract, not against intent. Nothing here changes §§ 1–4.
+
+<!-- -->
+
+> **✎ Notes** · `SPEC §5`
+> _(your notes here — replace this line)_
+
+### §5.1 Module layout
+
+```text
+plugins/core/skills/bugreport/        metadata.section: android   (default OFF)
+  SKILL.md
+  references/
+    advice.md                         advice_id -> remedy template (§ 5.9)
+    sections.md                       section map, format traps, fallback recipe
+    detectors.md                      the detector catalogue, one row per finding id
+  scripts/
+    _brlib.py                         input resolution, scanner, index/cache, slice reader,
+                                      tolerant numbers, clock, output budget — no CLI
+    _redact.py                        the redaction filter (§ 5.10) — no CLI
+    _detectors.py                     registry, Finding, NotParsed, run loop — no CLI
+    _det_<family>.py                  one module per family slug (§ 5.8) — no CLI
+    _pbwire.py                        stdlib protobuf wire-format reader (tombstone .pb)
+    _console.py                       ▶ ✓ ✗ ⚠ ℹ on stderr (skill-workshop copy, duplication header)
+    analyze_bugreport.py  query_bugreport.py  validate_bugreport.py
+    create_bugreport.py   compare_bugreport.py
+  evals/
+plugins/core/tests/
+  bugreport_test.sh                   CLI layer, bare python3, `--stage N`
+  bugreport/test_*.py                 pytest unit layer
+  bugreport/make_fixture.py           the synthetic fixture generator (§ 5.11)
+  bugreport/seeds/                    committed seed templates, ≤ 200 KB total
+  bugreport/benchmark.py              full-size timing run (SC index_build_s)
+```
+
+No module imports from `har`: the two skills sit in different sections and must
+install apart. The few shared helpers (`apply_budget`, `_console.py`) are
+copied with a `DUPLICATED ACROSS SKILLS:` header, which `sync_duplicates.py`
+already polices.
+
+<!-- -->
+
+> **✎ Notes** · `SPEC §5.1`
+> _(your notes here — replace this line)_
+
+### §5.2 Input resolution
+
+`--input` takes a `.txt` or a `.zip`. Detection is by content (zip magic
+`PK\x03\x04`), not extension.
+
+**Text input.** Read in binary mode throughout — never text mode, which is what
+shifts line numbers at bare `\r` bytes. Encoding is sniffed from the first
+4 KiB: a UTF-16 BOM (or ≥ 30 % NUL bytes in even/odd positions without one) means
+UTF-16 and the file is **transcoded once** into the cache as UTF-8 (§ 5.3);
+otherwise the input is used in place via `mmap`. Invalid UTF-8 and NUL bytes
+inside logcat are decoded `errors="replace"` per slice, never fatal.
+
+**Zip input — finding the main entry**, in order:
+
+1. `main_entry.txt` exists and names a member that exists → that member.
+2. Otherwise, every `.txt` member outside `FS/` and `proto/`, other than
+   `version.txt`, `main_entry.txt`, `dumpstate_board.txt` and `dumpstate_log.txt`,
+   whose first 64 KiB holds a dumpstate header (`^== dumpstate: \d{4}-\d{2}-\d{2}`
+   or `^Bugreport format version:`) → the **largest** of them. This covers
+   `dumpstate-<date>.txt`, `dumpstate.txt` and arbitrary names (`example.txt`).
+3. None → exit 1, listing up to five largest text members, so the session can
+   point `--input` at one by hand.
+
+**Streaming vs extracting.** The main entry is **extracted once** into the cache,
+streamed in 1 MiB chunks through the same scanner that builds the index (one
+decompression pass; never held whole in memory). Deflate has no random access,
+so a streaming-only design would re-decompress up to a section's offset on every
+`show` — ~0.5 s per 100 MB, which breaks `query_s <= 1` for sections near the
+end of a 156 MB entry. The cost is disk: the cache holds a copy the size of the
+main entry. `FS/` members (ANR traces, tombstones, `.pb`, persistent logd,
+recovery logs) are **not** extracted; they are read on demand by member name,
+streamed, since each is small or read once.
+
+**Build-time criterion covering the zip.** Alongside the spec's text criterion
+(`index_build_s <= 3`, `peak_rss_mb <= 300` for 160 MB text), the zip path is
+gated as `index_build_zip_s <= 6` and `peak_rss_mb <= 300` for a 234 MB zip whose
+main entry is 156 MB (extract + scan, cold cache), and `index_reuse_s <= 0.5` for
+any later command on the same input (warm cache). Both are measured on the CI
+runner against a generated report of that shape (§ 5.11, scale mode).
+
+<!-- -->
+
+> **✎ Notes** · `SPEC §5.2`
+> _(your notes here — replace this line)_
+
+### §5.3 Index and cache
+
+**Location.** Unlike `har`, which writes `<file>.har.index.jsonl` beside its
+input, this skill never writes beside the input: bugreports often sit on
+read-only media or in a download folder, a zip has nowhere sensible to put a
+sidecar, and the extracted main entry is a full-PII copy that must not land in a
+working tree where it can be committed. The default root is the standard
+per-user cache directory:
+
+| Platform | Default root |
+|---|---|
+| Linux / BSD | `$XDG_CACHE_HOME/claude-arsenal/bugreport/`, else `~/.cache/claude-arsenal/bugreport/` |
+| macOS | `~/Library/Caches/claude-arsenal/bugreport/` |
+| Windows | `%LOCALAPPDATA%\claude-arsenal\bugreport\Cache\` |
+
+`--output-dir DIR` **always** overrides the root (the cache lands at
+`DIR/<key>/`). Directories are created `0700`, files `0600`. Each input gets
+`<root>/<key>/` holding `index.json` and, for zip or UTF-16 input, `main.txt`.
+Builds write to a temp file in the same directory and `os.replace` it, so an
+interrupted build leaves the previous index intact. On each build the root is
+pruned to the five most recently used keys (a module constant, stated as a
+starting value); the cache is otherwise disposable and documented as such.
+
+**Key.** `key = sha256(f"{size}:{mtime_ns}:" + sha256(first 1 MiB ‖ last 1 MiB))[:16]`
+— about 3 ms on a 160 MB file, against ~1 s for a full hash. **Stale-index
+trade-off:** an in-place edit that keeps size and mtime and touches only the
+middle of the file is not detected by the key. Bugreports are not edited in
+place, so the residual case is deliberate tampering; it is covered cheaply by a
+**delimiter check on every slice read** — the bytes at a section's `start` must
+be that section's opening line (`------ TITLE` or `DUMP OF SERVICE …`). A
+mismatch rebuilds the index once, then fails with exit 1 if it recurs.
+`--force` rebuilds unconditionally.
+
+**Contents — offsets and metadata only, never section text** (asserted by a test
+that greps every `index.json` for each fixture's canary strings):
+
+```json
+{
+  "schema": "bugreport.index/1",
+  "key": {"size": 163577856, "mtime_ns": 1762263725000000000, "head_tail_sha256": "9c1f…"},
+  "input": {"kind": "zip", "main_entry": "bugreport-<build>-2026-11-03-14-22-05.txt",
+            "reading_target": "main.txt", "encoding": "utf-8", "transcoded": false,
+            "cr_bytes": 10757, "nul_bytes": 0},
+  "header": {"format_version": "2.0", "android_release": "16", "sdk": 36,
+             "oem": "Google", "model": "Pixel 8", "build_id": "BP2A.250605.031",
+             "captured_local": "2026-11-03 14:22:05", "uptime_s": 312455},
+  "clock": {"utc_offset_s": 3600, "source": "alarm", "boot_rtc_ms": 1761951270000},
+  "sections": [
+    {"id": "meminfo#1", "name": "meminfo", "kind": "service", "block": "HIGH",
+     "start": 81234567, "end": 81519000, "size": 284433, "duration_s": 0.41,
+     "timed_out": false}
+  ],
+  "fs": [{"path": "FS/data/anr/anr_2026-11-03-14-18-02-117", "size": 401233}]
+}
+```
+
+No serial number, account, IMEI or path inside the device user's data is
+stored; `header` fields are the ones `validate_bugreport.py` reports.
+
+<!-- -->
+
+> **✎ Notes** · `SPEC §5.3`
+> _(your notes here — replace this line)_
+
+### §5.4 Section ids and selectors
+
+- A section's **name** is the title between `------ ` and ` (` for top-level
+  sections (`SYSTEM LOG`, `KERNEL LOG (dmesg)` keeps its own parentheses —
+  the scanner splits on the last ` (` before ` ------`), and the service name
+  for `DUMP OF SERVICE` blocks (`meminfo`, `batterystats`).
+- **id = `name#occurrence`**, occurrence 1-based in file order. Every id carries
+  its occurrence (`meminfo#1`), so ids are stable across runs on the same file.
+- `--section` accepts an exact id; a bare name when it has exactly one
+  occurrence; and a case-insensitive match when that is unique. Anything
+  ambiguous is exit 2 with the candidate ids on stderr — never a silent pick.
+- Ids are not stable **across** reports (a service can gain a priority block
+  between releases), which is why `compare_bugreport.py` never keys on them
+  (§ 5.7).
+
+<!-- -->
+
+> **✎ Notes** · `SPEC §5.4`
+> _(your notes here — replace this line)_
+
+### §5.5 Clock and timeline --since
+
+**Clock domain: device local wall-clock time.** Every timestamp the scripts emit
+is normalised to `YYYY-MM-DD HH:MM:SS.mmm` in device local time, because that is
+what logcat prints and what the user remembers ("it froze at about 14:15").
+
+| Source | Native form | Conversion to local |
+|---|---|---|
+| logcat (`SYSTEM`, `EVENT`, `RADIO`, `LAST LOGCAT`, `FS/…/logd`) | `MM-DD HH:MM:SS.mmm`, local, no year | Year from `captured_local`; a month later than the capture month belongs to the previous year (December logs in a January report) |
+| ANR trace files | `----- pid N at YYYY-MM-DD HH:MM:SS -----`, local | none |
+| kernel log | `[  12345.678901]` seconds since boot | `boot_rtc_ms + s×1000` → UTC → `+ utc_offset_s` |
+| batterystats history | offsets from `RESET:TIME:` (UTC ms) | → UTC → `+ utc_offset_s` |
+
+**Offset derivation**, in order (recorded in `index.clock.source`):
+
+1. `alarm` — `dumpsys alarm` prints `nowRTC=<UTC ms>` and `nowELAPSED=<ms>`
+   together. `boot_rtc_ms = nowRTC − nowELAPSED`; `utc_offset_s` = the
+   difference between the dumpstate header's local timestamp and the UTC time
+   of the same instant (header time ≈ alarm dump time within the report's
+   capture window), rounded to the nearest 15 minutes.
+2. `timezone` — `persist.sys.timezone` from the properties section, resolved
+   with stdlib `zoneinfo` at `captured_local`. Where `zoneinfo` has no data
+   (some Windows Pythons lack `tzdata`), the step is skipped.
+3. `none` — kernel and batterystats events keep elapsed time only and carry
+   `"clock": "elapsed"` in their row; `timeline` says so on stderr. Nothing is
+   guessed.
+
+**`--since` grammar.** `HH:MM[:SS]`, `MM-DD HH:MM[:SS]`, `YYYY-MM-DD HH:MM[:SS]`,
+or relative `-30m` / `-2h` (back from `captured_local`). `--window` is a duration
+`90s` / `5m` / `1h`, default `5m`; the window is `[since, since + window)`.
+
+**Date selection on multi-day reports.** A time with no date resolves against the
+span the report's logs actually cover (earliest to latest normalised timestamp
+across the merged sources). If that clock time falls on exactly one date in the
+span, that date is used. If it falls on **more than one** (persistent logd, long
+`LAST LOGCAT`), the command exits 2 and lists the candidates:
+
+```text
+✗ --since 14:15 is ambiguous: the logs cover 2026-11-01 09:02 … 2026-11-03 14:22
+  candidates: 2026-11-01 14:15, 2026-11-02 14:15, 2026-11-03 14:15
+  pass a date, e.g. --since "2026-11-03 14:15"
+```
+
+A time outside the span is exit 1 ("no events in window"), with the span
+printed. A local time inside a DST fold resolves to its first occurrence and the
+output says so.
+
+<!-- -->
+
+> **✎ Notes** · `SPEC §5.5`
+> _(your notes here — replace this line)_
+
+### §5.6 Output, JSON schema and exit codes
+
+**Envelope.** Every command writes **one JSON document** to stdout; progress
+and errors go to stderr via `_console.py`. `--json` is accepted on every script
+for canon parity and silences stderr progress. Default output is capped at
+**4096 bytes** (2048 for `query … sample` and `locate`, per the fallback
+criterion); when the cap bites, whole rows are dropped from the end of the
+ranked list — never bytes — and the document stays valid JSON:
+
+```json
+{"schema": "bugreport.query.sections/1", "truncated": true, "shown": 61, "omitted": 781,
+ "total": 842, "full": "rerun with --limit 0 or --output FILE", "rows": [ … ]}
+```
+
+`truncated` is always present (`false` when nothing was dropped), so callers
+branch on one key. `--limit N` caps rows; `--limit 0` removes both the row and
+the byte cap; `--output FILE` writes the full, uncapped document to a file and
+prints only a one-line summary envelope to stdout. Redaction (§ 5.10) applies to
+every one of those paths unless `--no-redact` is given.
+
+**`analyze_bugreport.py` schema** (`bugreport.analyze/1`; a major bump on any
+removed or renamed field, a minor `1.x` never needed since additions are
+backward compatible and the string carries only the major):
+
+```json
+{
+  "schema": "bugreport.analyze/1",
+  "truncated": false,
+  "report": {"android_release": "16", "sdk": 36, "oem": "Google", "model": "Pixel 8",
+             "build_id": "BP2A.250605.031", "captured_local": "2026-11-03 14:22:05",
+             "uptime_s": 312455, "clock_source": "alarm"},
+  "summary": {"findings": 7, "by_severity": {"critical": 1, "high": 2, "medium": 3, "low": 1},
+              "detectors_run": 58, "not_parsed": 2},
+  "findings": [
+    {
+      "id": "memory.swap_thrashing",
+      "family": "F6",
+      "severity": "critical",
+      "score": 0.97,
+      "claim": "Memory thrashing: swap 97% full, kswapd at 58% CPU, I/O pressure some avg10=89",
+      "facts": {"swap_used_pct": 97.1, "kswapd_cpu_pct": 58.0, "psi_io_some_avg10": 89.0},
+      "subjects": [
+        {"package": "com.example.app", "uid": 10234, "role": "victim"},
+        {"package": "com.example.heavy", "uid": 10211, "role": "holder", "pss_mb": 2048}
+      ],
+      "evidence": [
+        {"section": "meminfo#1", "offset": 81240112},
+        {"path": "FS/data/anr/anr_2026-11-03-14-18-02-117"}
+      ],
+      "advice_id": "memory.free-ram",
+      "detector": "memory.pressure"
+    }
+  ],
+  "not_parsed": [
+    {"detector": "network.wifi_drops", "family": "F7", "section": "wifi#1",
+     "reason": "unrecognised layout", "route": "query_bugreport.py sample --input R --section wifi#1"}
+  ]
+}
+```
+
+Finding fields: `id` (stable, `<family-slug>.<problem>`), `family` (`F1`–`F11`),
+`severity` (`critical` · `high` · `medium` · `low` · `info`), `score` (0–1,
+orders findings within a severity), `claim` (one line, ≤ 160 chars, redacted),
+`facts` (numbers and short strings — the measured values the claim rests on),
+`subjects` (packages/processes with a `role` of `cause` · `victim` · `holder`),
+`evidence` (≥ 1 pointer: `section` + byte `offset`, or an `FS/` `path`),
+`advice_id`, `detector`. `--advice` adds `advice` (the canned one-line remedy).
+Ranking: severity, then score, then id. Family views (`--family memory` etc.)
+add a `views.<slug>` table capped the same way. `report` never carries the
+serial number or any account.
+
+**Exit codes** (all five scripts):
+
+| Code | Meaning |
+|---|---|
+| 0 | Ran and produced its document — including "no findings" and "no matches" |
+| 1 | The data is unusable for the request: not a bugreport, no main entry in the zip, nothing in the `--since` window, schema mismatch in `compare` |
+| 2 | Usage or internal error: bad flag, ambiguous `--section` or `--since`, unwritable `--output`, unexpected exception |
+
+<!-- -->
+
+> **✎ Notes** · `SPEC §5.6`
+> _(your notes here — replace this line)_
+
+### §5.7 CLI surface
+
+Canonical flags from skill-workshop (`--input`, `--output`, `--output-dir`,
+`--json`, `--limit`, `--since`, `--severity`, `--force`, `--against`) are used
+wherever the concept applies. Domain flags, registered in `validate.py`'s
+`CANONICAL_ARGS` with a comment, rather than left to warn: `--family`, `--advice`,
+`--no-redact`, `--window`, plus four this contract adds because §§ 3–4 already use
+them — `--section`, `--grep`, `--context`, `--redact`.
+
+| Script | Synopsis | Default output |
+|---|---|---|
+| `analyze_bugreport.py` | `--input R [--family LIST] [--severity MIN] [--advice] [--limit N] [--output FILE] [--output-dir DIR] [--force] [--no-redact] [--json]` | `bugreport.analyze/1`, ≤ 4096 B. `--family` takes slugs or `F`-numbers, comma-separated; default all |
+| `query_bugreport.py sections` | `--input R [--grep RE] [--limit N] [--output FILE]` | id, kind, block, size, parse status per section |
+| `query_bugreport.py locate` | `--input R --grep RE [--limit N]` | hit count + first offset per section, no lines; ≤ 2048 B |
+| `query_bugreport.py sample` | `--input R --section ID [--limit N]` | first lines (default 20, each ≤ 200 chars), format sniff (`kv` · `table` · `tree` · `csv` · `log` · `unknown`) and the repeated-record shape; ≤ 2048 B |
+| `query_bugreport.py show` | `--input R --section ID [--grep RE] [--context N] [--limit N] [--output FILE]` | matching lines with byte offsets |
+| `query_bugreport.py timeline` | `--input R --since T [--window D] [--grep RE] [--limit N]` | merged events (§ 5.5): `t`, `src`, `tag`, `level`, excerpt; default level ≥ W plus every ANR/kill/crash/boot/thermal marker |
+| `validate_bugreport.py` | `--input R [--json]` | is-bugreport, input kind, main entry, format/Android/SDK/OEM, encoding facts, section count, each detector input `parsed` · `fallback` (+ route) · `absent` |
+| `create_bugreport.py` | `--redact --input R --output FILE [--force]` | Writes a scrubbed copy; stdout = counts per redaction kind. `--redact` is required (the only v1 mode, named so later modes do not change its meaning). Text input → text; zip input with a `.zip` output → main entry and text `FS/` members redacted, binary members (`.pb`, `proto/`, `visible_windows.zip`) **dropped** and listed, because binary cannot be scrubbed reliably. Refuses an output that resolves to the input or exists without `--force` |
+| `compare_bugreport.py` | `--input A.json --against B.json [--limit N] [--output FILE]` | `new` / `gone` / `changed` findings (paired on `id` + primary subject package — never on section ids or redacted tokens, which differ across reports and runs), memory and battery ranking deltas. Exit 1 when the two schema majors differ |
+
+Every script: `main()` + `__main__` guard, no top-level work, `--help`.
+
+<!-- -->
+
+> **✎ Notes** · `SPEC §5.7`
+> _(your notes here — replace this line)_
+
+### §5.8 Detector contract
+
+```python
+@detector(
+    id="memory.pressure",                  # unique; prefix = family slug
+    family="F6",
+    inputs=("meminfo", "procstats", "SYSTEM LOG", "PSI"),  # section names it reads
+    findings={"memory.swap_thrashing": "memory.free-ram",  # finding id -> advice_id
+              "memory.background_hog": "memory.restrict-app"},
+)
+def detect(ctx: Context) -> Iterable[Finding]: ...
+```
+
+- **Family slugs** (for `--family` and id prefixes): F1 `battery`, F2 `thermal`,
+  F3 `reboots`, F4 `anr`, F5 `crashes`, F6 `memory` (also `churn`, a view whose
+  detectors are F6), F7 `network`, F8 `peripherals` (Bluetooth, GPS, sensors),
+  F9 `storage`, F10 `security`, F11 `battery-health`.
+- **Inputs** are read only through `ctx.section(name) -> Slice | None` and
+  `ctx.fs(glob) -> Iterator[Member]`; a detector never opens the file itself, so
+  every read is a bounded slice.
+- **Fail soft.** A missing input returns no findings and records `absent`; an
+  input whose layout the detector does not recognise raises
+  `NotParsed(section, reason)`; any other exception is caught by the run loop.
+  Both land in `not_parsed` with a `route` naming the `query` command to use
+  instead. The run never dies on one detector. Unexpected exceptions carry
+  `reason: "error: <ExceptionType>"`, and the fixture suite asserts that count is
+  zero — that is how "zero unhandled exceptions" stays testable while the run
+  stays fail-soft.
+- **Deterministic.** Same input → same findings, same order, byte-identical
+  JSON (apart from redaction tokens, which are salted per run).
+- **Tested both ways.** Each detector has one fixture scenario that fires it
+  and one that does not (spec success criterion, family coverage).
+- The registry is the single source of finding ids and their `advice_id`s;
+  `references/detectors.md` is generated from it.
+
+<!-- -->
+
+> **✎ Notes** · `SPEC §5.8`
+> _(your notes here — replace this line)_
+
+### §5.9 Advice reference
+
+`references/advice.md` holds one entry per `advice_id`, headed `### <advice_id>`.
+Each entry: a first line that is the canned one-sentence remedy (`--advice`
+reads exactly that line, so there is one source), then what to do, the Settings
+path per Android version where it differs (≤ 3 variants), and when to escalate
+to repair/support. Several finding ids may share one `advice_id`. A test diffs
+the registry's `advice_id` set against the headings: a missing entry or an
+orphan heading fails the build. If the file passes the 10K-token reference cap,
+it splits by family into `advice-<slug>.md` behind `references/_index.md`, with
+the same test reading all of them.
+
+<!-- -->
+
+> **✎ Notes** · `SPEC §5.9`
+> _(your notes here — replace this line)_
+
+### §5.10 Redaction
+
+One filter (`_redact.py`), on by default for every string a script emits —
+claims, excerpts, `show`/`sample`/`timeline` lines, `create_bugreport.py`
+output. Numeric `facts` are computed before redaction and are not identifiers.
+Each match becomes `<kind:xxxxxxxx>`, eight hex characters of an HMAC-SHA256 of
+the value under a **per-run salt that is never stored** — the `har` rule: equal
+values stay equal within one output, nothing links across two.
+
+| Kind | Rule |
+|---|---|
+| `email` | `[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}` |
+| `imei` | 15 digits passing Luhn, bare or keyed (`imei`, `mImei`, `deviceId`); MEID: 14 hex digits when keyed (`meid`) |
+| `imsi` | 14–15 digits with an MCC prefix (2xx–7xx) when keyed (`imsi`, `subscriberId`) |
+| `iccid` | 19–20 digits starting `89`, Luhn-valid, bare or keyed (`iccid`, `mIccId`) |
+| `phone` | E.164 `\+[1-9]\d{7,14}`; keyed national forms (`mLine1Number`, `phoneNumber`, `number=`) |
+| `mac` | `([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}`, except all-zero, broadcast and Android's masked `02:00:00:00:00:00` |
+| `ssid` | quoted or keyed values in Wi-Fi contexts (`SSID: "…"`, `SSID=…`, `ssid=…`, `WifiConfiguration … SSID`) |
+| `account` | `Account {name=…, type=…}` and `name=…` in `account` sections — name redacted, type kept |
+| `coord` | latitude/longitude pairs with ≥ 3 decimals in `location` contexts (`Location[gps 41.381,2.173 …]`, `lat=…, lon=…`) |
+| `serial` | `ro.serialno`, `ro.boot.serialno` values (added: same class of identifier) |
+
+**Known-value harvest.** Before output, the filter reads a fixed short list of
+sections (`iphonesubinfo`, `telephony.registry`, `account`, the properties
+section) for this device's own IMEI, IMSI, ICCID, line number, serial and
+account names, and adds them as exact-match terms — catching an unkeyed
+national phone number or IMSI the patterns alone would miss. The harvested set
+lives in memory only; it is never written to the cache or any output.
+
+Bare Luhn-valid 15-digit runs may over-redact an unrelated number in an excerpt;
+that is accepted — an over-redacted excerpt costs a `--no-redact` rerun, an
+under-redacted one leaks.
+
+<!-- -->
+
+> **✎ Notes** · `SPEC §5.10`
+> _(your notes here — replace this line)_
+
+### §5.11 Synthetic fixture generator
+
+D-9 is the rule: **no real report, and no excerpt of one, is ever committed.**
+
+- `plugins/core/tests/bugreport/make_fixture.py`, stdlib only:
+  `build(layout, scenarios, *, seed, target_mb=None, container="txt") -> Path`,
+  also a CLI for the benchmark. Output is **byte-identical for the same
+  arguments** (asserted by hashing two builds).
+- Committed **seeds ≤ 200 KB total** (`seeds/*.tmpl`): synthetic section bodies
+  written from what the corpus taught (field names, layouts, number formats),
+  never copied text.
+- **Layouts** reproduced from spec § 2.1.1: `pre-p` (no priority blocks, no
+  format-version line), `modern` (9–17, CRITICAL/HIGH, header ~43 lines before
+  the format line), `samsung` (+ `DUMPSYS NORMAL`, `AP RESET INFO EXTEND`,
+  `SEC_MEDIA`, `End of OLOG`), `xiaomi` (`POWERUP_REASON`, `qsee_log`,
+  `PERFLOCK HISTORY`), `oneplus` (`OMMSERVICE`), `huawei` (kernel live-patch),
+  `android9` (`QTAGUID`). **Containers**: `txt`; `zip` with `main_entry.txt` and
+  `FS/`; `zip` without `main_entry.txt` with the main file named
+  `dumpstate-<date>.txt`, `dumpstate.txt` or `example.txt`; text-only zip.
+- **Traps** as switches on any layout: bare `\r`, UTF-16LE with BOM, NUL and
+  invalid UTF-8 in logcat, locale decimal commas (`1,9GB`, `0,00`), unsampled
+  PSS triples, a timed-out section, a service dumped in two priority blocks.
+- **Scenarios** are composable signal blocks, one per detector branch (fire and
+  no-fire), including the provenance scenario `thrashing` (swap ≥ 95 %,
+  `kswapd` CPU, PSI io, two input-dispatch ANRs) and `battery-exhaustion`
+  (`shutdown,battery`, one app foreground with the screen off).
+- **PII canaries** from reserved ranges only (`example.com` addresses,
+  `+1-555-01xx` numbers, RFC 7042 documentation MACs `00:00:5e:00:53:xx`,
+  test-TAC IMEIs, invented SSIDs), one of each § 5.10 kind, so
+  `pii_in_default_output == 0` has something to find.
+- **Scale mode** (`target_mb`) pads with synthetic sections in the provenance
+  size distribution (Wi-Fi HAL, checkin batterystats, `activity`, `package`…)
+  for the benchmark; never committed.
+
+<!-- -->
+
+> **✎ Notes** · `SPEC §5.11`
+> _(your notes here — replace this line)_
+
+### §5.12 Section registration and packaging
+
+- `metadata.section: android` in the SKILL.md frontmatter; a blurb added to
+  `SECTION_BLURBS` in `scripts/sync_sections.py`; `make sync-sections`
+  regenerates `assets/sections.json` (CI's `sync-sections-check` fails on drift).
+  No entry in `init.py`'s `_SECTION_DEFAULTS` is needed for default-off — an
+  unlisted shipped section is off — but `--profile all` must be checked to
+  include it, as `extract` is.
+- Release: one minor bump of `.bundle-version`, a `CHANGELOG.md` entry, and
+  `make sync-version`, in the last PR of the stack (see the plan for how that
+  meets CI's `version bump` job).
+
+<!-- -->
+
+> **✎ Notes** · `SPEC §5.12`
+> _(your notes here — replace this line)_
+
+### Inter-component contracts
+
+| Caller | Callee | Contract | Failure handling |
+|---|---|---|---|
+| every script | `_brlib.open_report` | returns a `Report` (reading target, index, clock) or raises `NotABugreport` | exit 1 with the reason |
+| `analyze` | detector registry | `detect(ctx) -> Iterable[Finding]` | `NotParsed`/exception → `not_parsed` row, run continues |
+| every script | `_redact.filter(text, salt, harvested)` | pure function, no I/O | none — cannot fail open: an exception inside it is exit 2, never unredacted output |
+| `compare` | two `bugreport.analyze/N` documents | same major `N` | exit 1 naming both versions |
+| `--advice` | `references/advice.md` | first line under `### <advice_id>` | missing entry → finding keeps `advice_id`, `advice` omitted, ⚠ on stderr (the coverage test keeps this from shipping) |
+
+<!-- -->
+
+> **✎ Notes** · `SPEC › Inter-component contracts`
+> _(your notes here — replace this line)_
+
+### Database migrations
+
+None. The only persistent state is the per-user cache (§ 5.3), versioned by
+`index.schema`; an index with an unknown schema is rebuilt, never migrated.
+
+<!-- -->
+
+> **✎ Notes** · `SPEC › Database migrations`
+> _(your notes here — replace this line)_
+
+## §6 Risks & Validation
+
+| Risk | Likelihood | Impact | Mitigation | Validation |
+|------|-----------|--------|------------|------------|
+| Format drift: a new Android release or OEM changes a section layout and a detector misreads it | High | Medium | Fail-soft `NotParsed` with a `query` route; `validate_bugreport.py` reports per-input parse status; delimiter scan is pattern-based, not positional | unit: every layout fixture parses with `error:` count 0; manual: corpus re-run before release (D-9) |
+| A detector reports a confident wrong diagnosis (e.g. blames the ANR victim, not the memory holder) | Medium | High | `subjects[].role` separates victim from cause/holder; every finding carries evidence pointers; fire/no-fire fixtures per detector | unit: provenance scenario ranks `memory.swap_thrashing` first with the ANR'd processes as `victim`; manual: real-report check before release |
+| PII leaks into stdout, the cache, a shared redacted copy, or a committed fixture | Medium | High | Redaction on by default, known-value harvest, cache `0700`/`0600` outside the working tree, index holds no text, fixtures generated from reserved-range canaries; `create_bugreport` drops binary members | security: `pii_in_default_output == 0` over every command × fixture; `index.json` canary grep; `generic_examples_test.sh`-style check that seeds hold no real identifiers |
+| Stale index after an in-place edit that keeps size and mtime | Low | Medium | Head/tail hash in the key; delimiter check on every slice read with one automatic rebuild; `--force` | unit: mutate a middle section keeping size + mtime → read rebuilds, result correct |
+| Zip extraction fills the disk or leaves full-PII copies behind | Medium | Medium | Cache pruned to five keys; documented as disposable; `--output-dir` to place it elsewhere | unit: prune keeps exactly five; manual: cache size equals main entry + index |
+| Wrong clock offset puts `timeline` events in the wrong minute | Medium | Medium | Ordered derivation (alarm → timezone → none), source recorded; elapsed-only rows marked instead of guessed; ambiguous `--since` is an error | unit: fixture with a known offset → `timeline_offset_error_s == 0`; multi-day fixture → exit 2 with candidates |
+| Performance regresses past the build/query criteria as detectors are added | Medium | Low | Detectors read slices only; the index is built once; benchmark at full size on CI dispatch, 1/10 scale on every push | perf: `index_build_s`, `index_build_zip_s`, `query_s` gates |
+| Hand-rolled protobuf reader misdecodes a newer tombstone schema | Medium | Low | Wire-format only (varint, length-delimited), unknown fields skipped; falls back to the text tombstone beside the `.pb` | unit: synthetic `.pb` round-trip; unknown-field fixture still yields signal + abort message |
+| Resident listing cost grows past the criterion | Low | Low | One-line description; section default-off | perf: `make context-budget` row with `android` ≤ 130 tokens, 0 without |
+| Advice goes stale or gives wrong Settings paths for an OEM | Medium | Low | Advice is a template the session adapts; per-version variants capped at three; escalation path in every entry | unit: advice coverage diff; manual: review of `advice.md` in P4 |
+
+**Rollback.** Everything is additive in a default-off section: rolling back is
+reverting the stack (or shipping a patch that removes the skill from
+`sections.json`); no consumer data or configuration is touched, and the cache
+is disposable.
+
+<!-- -->
+
+> **✎ Notes** · `SPEC §6`
+> _(your notes here — replace this line)_
+
