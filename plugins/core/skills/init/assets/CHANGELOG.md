@@ -18,6 +18,14 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [5.20.5] - 2026-11-05
+
+### Fixed
+
+- `arsenal-queue.yml` pins `actions/checkout` to the v4.4.0 commit SHA instead
+  of the movable `@v4` tag, so a retagged or compromised upstream release cannot
+  change what runs with the workflow's write token. Re-run `/init` to pick it up.
+
 ## [5.20.4] - 2026-11-05
 
 ### Fixed
