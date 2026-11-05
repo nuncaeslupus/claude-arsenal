@@ -18,6 +18,18 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [5.20.4] - 2026-11-05
+
+### Fixed
+
+- `adversarial_review.sh emit` no longer takes minutes on a tree with large
+  untracked files that git does not ignore. Only the first 1 MiB of untracked
+  content is inlined as diffs. Files past that are fingerprinted: they stay in
+  the digest, so changing one still makes a receipt stale, and `emit` warns and
+  suggests `.git/info/exclude`. The cap is set by `ARSENAL_REVIEW_UNTRACKED_BYTES`.
+  The emptiness check was a quadratic bash substitution and is now a regex
+  match. On 51 MB of untracked HTML, `emit` went from 183 s to 17 s (#546).
+
 ## [5.20.3] - 2026-11-05
 
 ### Fixed
