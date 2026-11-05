@@ -298,6 +298,23 @@ bash "${REVIEW}" check >/dev/null 2>&1
 rm -rf nested_checkout tmp/arsenal-review
 echo "PASS: an untracked directory is fingerprinted, so it is neither refused nor invisible"
 
+# --- 23b: untracked bulk past the byte cap is fingerprinted, not inlined ---
+# A user's unignored 48 MB `html/` was rendered whole and emit ran for minutes.
+rm -rf tmp/arsenal-review
+mkdir -p bulk; head -c 3000 /dev/zero | tr '\0' a > bulk/big.html
+err=$(ARSENAL_REVIEW_UNTRACKED_BYTES=2000 bash "${REVIEW}" emit 2>&1 >/dev/null) || fail "emit with capped untracked files: ${err}"
+grep -q "^diff --arsenal-untracked-capped bulk/big.html" tmp/arsenal-review/packet.md \
+    || fail "a file past the untracked cap must be named in the packet"
+grep -q "aaaaaaaaaa" tmp/arsenal-review/packet.md && fail "a file past the untracked cap must not be inlined"
+grep -q "info/exclude" <<<"${err}" || fail "emit must warn about capped untracked files: ${err}"
+printf 'VERDICT: CLEAR — ok\n' > "${V}"
+ARSENAL_REVIEW_UNTRACKED_BYTES=2000 bash "${REVIEW}" verdict >/dev/null 2>&1 || fail "setup: clearing with a capped file present"
+echo b >> bulk/big.html
+ARSENAL_REVIEW_UNTRACKED_BYTES=2000 bash "${REVIEW}" check >/dev/null 2>&1
+(( $? == 3 )) || fail "a change to a capped file must still invalidate the receipt"
+rm -rf bulk tmp/arsenal-review
+echo "PASS: untracked bulk past the cap is fingerprinted, warned about, and still in the digest"
+
 # --- 24: a usage error never borrows the BLOCK exit code ---
 # `${2:?message}` was the natural way to write the option guards and exits 1 —
 # produced by the shell, not by `die`, which is why fixing die's default did not
