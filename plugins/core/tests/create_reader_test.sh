@@ -398,6 +398,7 @@ grep -q "writeText(modalTa.value).then(function(){},function(){});ok=true" "${r4
 grep -q "p.then(function(){report(true);},function(){report(false);})" "${r477}" \
     || fail "modal-copy does not wait on the clipboard promise before reporting"
 echo "PASS: #477 — the generated JS stores cleared notes, seeds first, and waits on the clipboard"
+grep -q 'role="dialog" aria-modal="true"' "${r477}" || fail "#541: the notes modal has no dialog semantics"
 
 if command -v node >/dev/null 2>&1; then
     key=$(grep -o 'class="note-ta" data-key="[^"]*"' "${r477}" | head -1 | sed 's/.*data-key="\([^"]*\)"/\1/')
@@ -415,35 +416,43 @@ const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1
 const keys = [...html.matchAll(/class="note-ta" data-key="([^"]*)"/g)].map(m => m[1]);
 function el() {
   return { value: '', textContent: '', style: {}, dataset: {}, h: {}, scrollHeight: 0,
-    classList: { add() {}, remove() {}, toggle() {} },
+    classList: (() => { const c = new Set();
+      return { add: x => c.add(x), remove: x => c.delete(x), toggle() {}, contains: x => c.has(x) }; })(),
     addEventListener(t, f) { this.h[t] = f; }, click() { if (this.h.click) this.h.click({}); },
-    select() {}, closest() { return null; }, querySelector() { return null; } };
+    select() {}, closest() { return null; }, querySelector() { return null; },
+    appendChild() {}, insertBefore() {}, remove() {}, compareDocumentPosition() { return 4; },
+    focus() { doc.activeElement = this; } };
 }
-function boot(storage, clipboard, execResult) {
-  const byId = {}, toasts = [];
+let doc;
+function boot(storage, clipboard, execResult, timers) {
+  const byId = {}, toasts = [], win = {};
   const tas = keys.map(k => { const t = el(); t.dataset = { key: k, part: 'P', label: 'L' }; return t; });
   const document = {
     querySelectorAll: () => tas,
     getElementById(id) { if (!byId[id]) byId[id] = el(); return byId[id]; },
     execCommand: () => { if (execResult === 'throw') throw new Error('no'); return execResult; },
-    createElement: el, body: { appendChild() {} },
+    createElement: el, body: { appendChild() {}, children: [el(), el()] },
   };
-  const window = { addEventListener() {}, scrollTo() {} };
+  doc = document;
+  const window = { addEventListener(t, f) { win[t] = f; }, scrollTo() {} };
   const navigator = clipboard ? { clipboard } : {};
-  const setTimeoutStub = () => 0;  // debounced saves are driven by blur below
+  // Debounced saves never fire on their own: blur, or a test's `timers` list, drives them.
+  const setTimeoutStub = (f) => { if (timers) timers.push(f); return 0; };
+  function FileReader() {}
+  FileReader.prototype.readAsText = function (f) { this.result = f.text; this.onload(); };
   const toastEl = document.getElementById('toast');
   Object.defineProperty(toastEl, 'textContent', { set(v) { toasts.push(v); }, get() { return toasts[toasts.length - 1]; } });
   const src = scripts.join(';\n').replace(/\bvar SPEC_SEED_NOTES\b/, 'SPEC_SEED_NOTES');
   const fn = new Function('document', 'window', 'navigator', 'localStorage', 'setTimeout', 'clearTimeout',
     'confirm', 'FileReader', 'Blob', 'URL', 'SPEC_SEED_NOTES', src);
-  fn(document, window, navigator, storage, setTimeoutStub, () => {}, () => true, function () {}, function () {},
+  fn(document, window, navigator, storage, setTimeoutStub, () => {}, () => true, FileReader, function () {},
      { createObjectURL() { return ''; }, revokeObjectURL() {} }, undefined);
-  return { tas, byId, toasts, t: tas.find(t => t.dataset.key === key) };
+  return { tas, byId, toasts, win, document, t: tas.find(t => t.dataset.key === key) };
 }
 function memStorage() {
   const m = new Map();
   return { getItem: k => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)),
-           removeItem: k => m.delete(k) };
+           removeItem: k => m.delete(k), m };
 }
 const throwing = { getItem() { throw new Error('blocked'); }, setItem() { throw new Error('blocked'); },
                    removeItem() { throw new Error('blocked'); } };
@@ -477,11 +486,43 @@ const fails = [];
   // neither path available
   c = boot(memStorage(), null, 'throw'); c.byId['modal-copy'].click();
   if (c.toasts[c.toasts.length - 1] !== 'Select the text and copy') fails.push('no copy path did not show the manual instruction');
+
+  // #541.1 an edit still inside the debounce is saved when the page goes away
+  let timers = [], s541 = memStorage(), d = boot(s541, null, false, timers);
+  d.t.value = 'typed then closed'; d.t.h.input();
+  d.win.pagehide();
+  if (!timers.length) fails.push('#541: input no longer debounces its save — the flush test proves nothing');
+  if (![...s541.m.values()].includes('typed then closed'))
+    fails.push('#541: an edit inside the 350 ms debounce was not saved on pagehide');
+  // ...and with storage blocked, an edit inside the debounce still arms the unload warning
+  d = boot(throwing, null, false, []);
+  d.t.value = 'typed in a private window'; d.t.h.input();
+  let warned = false; d.win.beforeunload({ preventDefault() { warned = true; } });
+  if (!warned) fails.push('#541: closing within the debounce with storage blocked gave no unload warning');
+
+  // #541.2 an imported section note whose section is gone is kept, and exports again
+  d = boot(memStorage(), null, false);
+  d.byId['file-import'].h.change({ target: { files: [{ text: JSON.stringify({ 'gone-section': 'orphan note' }) }], value: '' } });
+  if (d.toasts[d.toasts.length - 1] !== 'Imported 1 note')
+    fails.push('#541: an imported note for a removed section was dropped: ' + JSON.stringify(d.toasts));
+  d.byId['btn-export'].click();
+  if (!d.byId['modal-ta'].value.includes('"gone-section":"orphan note"'))
+    fails.push('#541: an unplaced section note is missing from the next export');
+
+  // #541.3 the notes modal takes focus, makes the page inert, and gives both back
+  d = boot(memStorage(), null, false);
+  d.t.value = 'a note'; d.document.activeElement = d.byId['btn-export'];
+  d.byId['btn-export'].click();
+  if (d.document.activeElement !== d.byId['modal-copy']) fails.push('#541: focus did not move into the modal');
+  if (!d.document.body.children.every(c => c.inert === true)) fails.push('#541: the page behind the modal is not inert');
+  d.byId['modal'].h.keydown({ key: 'Escape' });
+  if (d.document.activeElement !== d.byId['btn-export']) fails.push('#541: focus was not restored on close');
+  if (d.document.body.children.some(c => c.inert)) fails.push('#541: the page stayed inert after the modal closed');
   if (fails.length) { console.error(fails.join('\n')); process.exit(1); }
 })().catch(e => { console.error('harness error: ' + e.stack); process.exit(1); });
 JS
-    out=$(node "${tmp}/harness.js" "${r477}" "${key}" 2>&1) || fail "#477 behaviour: ${out}"
-    echo "PASS: #477 — behavioural check (stubbed localStorage/clipboard) under node"
+    out=$(node "${tmp}/harness.js" "${r477}" "${key}" 2>&1) || fail "#477/#541 behaviour: ${out}"
+    echo "PASS: #477/#541 — behavioural check (stubbed localStorage/clipboard) under node"
 else
     echo "SKIP: #477 behavioural check — node not available" >&2
 fi

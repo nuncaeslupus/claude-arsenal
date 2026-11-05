@@ -1087,9 +1087,13 @@ JS = r"""
   var WARN='⚠ Not saving — tap Save / Export';
   function nowStamp(){var d=new Date();return pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds());}
   function setState(txt,cls){var el=document.getElementById('savestate');if(el){el.textContent=txt;el.className='savestate '+(cls||'');}}
-  window.addEventListener('beforeunload',function(e){if(!lsOK&&dirty){e.preventDefault();e.returnValue='';}});
+  // An edit still inside the 350 ms debounce is saved on the way out, so closing
+  // the page right after typing (no blur) no longer loses it (#541).
+  function flushSaves(){Object.keys(pending).forEach(function(k){clearTimeout(saveTimers[k]);save(pending[k]);});pending={};}
+  window.addEventListener('pagehide',flushSaves);
+  window.addEventListener('beforeunload',function(e){flushSaves();if(!lsOK&&dirty){e.preventDefault();e.returnValue='';}});
 
-  var saveTimers={};
+  var saveTimers={},pending={};
   function save(t){
     if(!lsOK){dirty=true;setState(WARN,'warn');return;}
     var k=NS+t.dataset.key;
@@ -1114,9 +1118,10 @@ JS = r"""
     try{var v=localStorage.getItem(NS+t.dataset.key);if(v!=null){t.value=v;}}catch(e){}
     autoGrow(t);setFilled(t);
     t.addEventListener('input',function(){
-      autoGrow(t);setFilled(t);updateCount();
-      clearTimeout(saveTimers[t.dataset.key]);
-      saveTimers[t.dataset.key]=setTimeout(function(){save(t);},350);
+      autoGrow(t);setFilled(t);updateCount();dirty=true;
+      var k=t.dataset.key;pending[k]=t;
+      clearTimeout(saveTimers[k]);
+      saveTimers[k]=setTimeout(function(){delete pending[k];save(t);},350);
     });
     t.addEventListener('blur',function(){
       save(t);
@@ -1164,10 +1169,12 @@ JS = r"""
       el.appendChild(b);hosts[key]=el;blockBtn[key]=b;
     });
   });
+  // A key with no `~` is a section note whose section is gone; it goes to the
+  // unplaced area, never into whatever element happens to share its id (#541).
   function openBlock(key,focus,quote){
-    var t=document.querySelector('.note-ta[data-key="'+key+'"]');
+    var t=null;tas.forEach(function(x){if(x.dataset.key===key)t=x;});
     if(!t){
-      var host=hosts[key],art=document.getElementById(key.split('~')[0]);
+      var host=hosts[key],art=key.indexOf('~')<0?null:document.getElementById(key.split('~')[0]);
       if(!host&&!art)art=unplaced();
       var q=host?host.dataset.quote:(quote||'');
       var box=document.createElement('div');box.className='note bnote';
@@ -1215,7 +1222,7 @@ JS = r"""
     try{for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);
       if(k&&k.indexOf(NS)===0)keys[k.slice(NS.length)]=1;}}catch(e){}
     Object.keys(keys).sort().forEach(function(k){
-      if(k.indexOf('~')<0||/~q$/.test(k))return;
+      if(/~q$/.test(k))return;
       var v=null;
       try{v=localStorage.getItem(NS+k);}catch(e){}
       if(v==null&&typeof SEED[k]==='string')v=SEED[k];
@@ -1273,8 +1280,15 @@ JS = r"""
 
   var modal=document.getElementById('modal');
   var modalTa=document.getElementById('modal-ta');
-  function openModal(text){modalTa.value=text;modal.classList.add('open');}
-  function closeModal(){modal.classList.remove('open');}
+  // A real dialog: focus moves in and comes back, and the page behind is inert
+  // so Tab cannot wander off under the overlay (#541).
+  var modalReturn=null;
+  function setInert(on){Array.prototype.forEach.call(document.body.children,function(c){if(c!==modal)c.inert=on;});}
+  function openModal(text){modalTa.value=text;modalReturn=document.activeElement;
+    modal.classList.add('open');setInert(true);document.getElementById('modal-copy').focus();}
+  function closeModal(){if(!modal.classList.contains('open'))return;
+    modal.classList.remove('open');setInert(false);
+    if(modalReturn&&modalReturn.focus)modalReturn.focus();modalReturn=null;}
 
   document.getElementById('btn-export').addEventListener('click',function(){
     var r=buildExport();
@@ -1309,6 +1323,7 @@ JS = r"""
   document.getElementById('modal-dl').addEventListener('click',function(){download(exportName(),modalTa.value);toast('Download requested');});
   document.getElementById('modal-close').addEventListener('click',closeModal);
   modal.addEventListener('click',function(e){if(e.target===modal)closeModal();});
+  modal.addEventListener('keydown',function(e){if(e.key==='Escape')closeModal();});
 
   // buildExport only ever writes strings, but an import takes whatever the file
   // holds: an object arrives as "[object Object]", an array joins on commas,
@@ -1318,8 +1333,10 @@ JS = r"""
   // anything that is not a string and say how many were skipped.
   function applyData(obj){
     var applied=0,skipped=0;
+    // Every note gets a textarea first — including a section note whose section
+    // is gone, which lands under "Unplaced notes" instead of being dropped (#541).
     Object.keys(obj).forEach(function(k){
-      if(k.indexOf('~')>=0&&!/~q$/.test(k)&&typeof obj[k]==='string'&&obj[k].trim()!==''){
+      if(!/~q$/.test(k)&&typeof obj[k]==='string'&&obj[k].trim()!==''){
         openBlock(k,false,typeof obj[k+'~q']==='string'?obj[k+'~q']:'');}
     });
     tas.forEach(function(t){
@@ -1415,8 +1432,8 @@ HTML_TEMPLATE = r"""<!doctype html>
 <input type="file" id="file-import" class="hidden-input" accept=".md,.markdown,.json,text/markdown,application/json">
 
 <div class="modal" id="modal">
-  <div class="modal-card">
-    <h3>Your notes</h3>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <h3 id="modal-title">Your notes</h3>
     <p>Downloaded as a Markdown file. You can also copy the text below and paste it back.</p>
     <textarea id="modal-ta" readonly></textarea>
     <div class="modal-actions">
