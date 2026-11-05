@@ -18,6 +18,22 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [5.20.6] - 2026-11-05
+
+### Fixed
+
+- The annotatable reader from `create_reader.py` no longer loses a note typed
+  just before the page closes: pending saves are flushed on `pagehide` /
+  `beforeunload`, and with storage blocked the unload warning fires for an
+  edit still inside the save debounce.
+- Importing notes into a newer reader keeps a section note whose heading was
+  renamed or removed: it lands under "Unplaced notes" and is in the next
+  export, instead of being silently dropped.
+- The reader's notes dialog is now a real modal dialog for keyboard and
+  screen-reader users: `role="dialog"`, `aria-modal`, focus moves in on open
+  and returns on close (also on Escape), and the page behind is `inert`.
+  Regenerate existing readers to pick these up.
+
 ## [5.20.5] - 2026-11-05
 
 ### Fixed
