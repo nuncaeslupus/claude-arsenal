@@ -340,6 +340,9 @@ _LOGCAT_LINE = re.compile(
     r"^(\d\d-\d\d \d\d:\d\d:\d\d\.\d{3})(?:\s+\S+)?\s+\d+\s+\d+\s+([VDIWEFA])\s+(.*?)\s*: (.*)$"
 )
 _KERNEL_LINE = re.compile(r"^(?:<\d+>)?\[\s*(\d+\.\d+)\]\s?(.*)$")
+_SUSPEND = re.compile(
+    r"PM: suspend (?:entry|exit) (\d{4}-\d\d-\d\d \d\d:\d\d:\d\d\.\d{1,6})\d* UTC"
+)
 _ALARM_RE = re.compile(rb"nowRTC=(\d+)[^\n]*?nowELAPSED=(\d+)")
 _PROP_RE = re.compile(r"^\[([^\]]+)\]: \[([^\]]*)\]", re.M)
 LOGCAT_SECTIONS = ("SYSTEM LOG", "EVENT LOG", "RADIO LOG", "LAST LOGCAT")
@@ -545,13 +548,23 @@ class Report:
                             "offset": off,
                         }
             elif sec["name"] in KERNEL_SECTIONS:
-                for off, line in self.lines(sec):
-                    m = _KERNEL_LINE.match(line)
-                    if not m:
-                        continue
+                rows = [(o, m) for o, line in self.lines(sec) if (m := _KERNEL_LINE.match(line))]
+                # dmesg seconds stop while suspended, so boot + secs runs early by every sleep
+                # since boot; the kernel's own `PM: suspend entry/exit <UTC>` lines pin it.
+                anchors = [
+                    (float(m.group(1)), dt.datetime.fromisoformat(a.group(1)))
+                    for _, m in rows
+                    if (a := _SUSPEND.search(m.group(2)))
+                ]
+                for off, m in rows:
                     secs = float(m.group(1))
                     row: dict[str, Any] = {"src": sec["name"], "level": None, "tag": "kernel"}
-                    if boot is not None and offset is not None:
+                    if anchors and offset is not None:
+                        a_secs, a_utc = next(
+                            (a for a in reversed(anchors) if a[0] <= secs), anchors[0]
+                        )
+                        row["t"] = a_utc + dt.timedelta(seconds=secs - a_secs + offset)
+                    elif boot is not None and offset is not None:
                         row["t"] = dt.datetime.fromtimestamp(
                             boot / 1000 + secs + offset, dt.UTC
                         ).replace(tzinfo=None)

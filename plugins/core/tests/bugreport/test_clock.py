@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import re
 
 import _brlib as br
 
@@ -14,6 +15,29 @@ def _tl(cli, path, *argv):
 def test_alarm_dump_offset_converts_kernel_time_to_local(fx, built, tmp_path):
     rpt = br.open_report(built("modern"), output_dir=tmp_path)
     assert rpt.clock["source"] == "alarm" and rpt.clock["utc_offset_s"] == fx.UTC_OFFSET_S
+    marker = next(e for e in rpt.events() if "lowmemorykiller" in e["text"])
+    assert br.fmt_ts(marker["t"]) == fx.facts("modern")["kernel_marker_local"]
+
+
+def test_suspend_anchor_keeps_kernel_time_right_after_sleep(fx, built, tmp_path):
+    """dmesg seconds stop while suspended: shift them back by a sleep and add the
+    kernel's `PM: suspend exit` wall-clock line, and the marker must not move."""
+    sleep_s = 5 * 3600
+    local = dt.datetime.fromisoformat(fx.facts("modern")["kernel_marker_local"])
+    utc = local - dt.timedelta(seconds=fx.UTC_OFFSET_S)
+
+    def shift(m: re.Match[str]) -> str:
+        line = f"<6>[{float(m.group(1)) - sleep_s:12.6f}]{m.group(2)}"
+        if "lowmemorykiller" not in line:
+            return line
+        anchor = f"<6>[{float(m.group(1)) - sleep_s:12.6f}] PM: suspend exit {utc:%F %T.%f}123 UTC"
+        return f"{line}\n{anchor}"
+
+    path = tmp_path / "slept.txt"
+    path.write_text(
+        re.sub(r"^<6>\[\s*(\d+\.\d+)\](.*)$", shift, built("modern").read_text(), flags=re.M)
+    )
+    rpt = br.open_report(path, output_dir=tmp_path)
     marker = next(e for e in rpt.events() if "lowmemorykiller" in e["text"])
     assert br.fmt_ts(marker["t"]) == fx.facts("modern")["kernel_marker_local"]
 
