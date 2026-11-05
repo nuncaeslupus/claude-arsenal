@@ -20,6 +20,11 @@ Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
 ## [5.20.6] - 2026-11-05
 
+- `bugreport`: kernel log times in `timeline` and the summary no longer run
+  early by the device's total time asleep since boot. dmesg seconds stop
+  during suspend, so the old boot-based conversion drifted by hours on a
+  phone that had slept; the kernel's own `PM: suspend entry/exit … UTC`
+  lines now pin each stretch to the wall clock when the report has them.
 ### Fixed
 
 - The annotatable reader from `create_reader.py` no longer loses a note typed
