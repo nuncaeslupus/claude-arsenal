@@ -18,6 +18,12 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [5.22.0] - 2026-11-09
+
+- `query_status.py --fix`: stamps `status: merged` on archived task files in
+  `_history/` whose issue closed as completed but that predate the required
+  `status:` field. Without the flag, the problem line now points at it.
+
 ## [5.21.2] - 2026-11-09
 
 - `references/repo-housekeeping.md`: the release-workflow example now pins
