@@ -18,6 +18,15 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [5.21.0] - 2026-11-09
+
+- `claim_task.sh`: in serialized in-place mode a claim is now refused (exit 2)
+  while the checkout already has changes no task made, and the stray paths are
+  listed. In that mode the task's PR commits the whole tree with `git add -A`,
+  so a local settings edit or a large untracked directory of yours used to ride
+  into it. Commit or stash them, or list the directory in `.git/info/exclude`.
+  Worktree-isolated runs are unaffected; `ARSENAL_ALLOW_SHARED_ADD=1` skips it.
+
 ## [5.20.7] - 2026-11-05
 
 - `bugreport`: kernel log times in `timeline` and the summary no longer run

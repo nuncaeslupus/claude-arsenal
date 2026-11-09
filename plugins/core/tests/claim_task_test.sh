@@ -78,6 +78,24 @@ python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); sys.exit(0 if "quo\
     || fail "the ref payload is not valid JSON carrying the id: $(cat "${payload}" 2>/dev/null)"
 echo "PASS: the claim payload survives a task id with a quote in it"
 
+# --- #546: serialized in-place mode refuses a dirty tree before claiming -----
+#     In-place, the worker runs in this checkout and open_task_pr.sh commits it
+#     with `git add -A`, so an edit of the user's already here would ride into
+#     the task's PR. The precondition is checked before any claim ref exists.
+SESSION="${tmpdir}/session"; mkdir -p "${SESSION}"
+echo unavailable > "${SESSION}/worktree_isolation"
+echo mine > "${REPO}/settings.json"
+out=$(ARSENAL_SESSION_DIR="${SESSION}" CLAIM_STUB_PAYLOAD="${tmpdir}/dirty.json" run t-dirty); rc=$?
+[[ ${rc} -eq 2 ]] || fail "#546: an in-place claim on a dirty tree should exit 2, got ${rc}: ${out}"
+grep -q 'settings.json' <<<"${out}" || fail "#546: the refusal should name the stray path: ${out}"
+[[ -e "${tmpdir}/dirty.json" ]] && fail "#546: no claim ref may be attempted on a dirty tree"
+out=$(run t-dirty); rc=$?
+[[ "${out}" == "lost" ]] || fail "#546: outside in-place mode a dirty tree must not block the claim: ${out}"
+rm -f "${REPO}/settings.json"
+out=$(ARSENAL_SESSION_DIR="${SESSION}" run t-dirty); rc=$?
+[[ "${out}" == "lost" ]] || fail "#546: a clean in-place tree claims normally: ${out}"
+echo "PASS: in-place mode refuses to claim over a dirty tree"
+
 # --- #502: a refused write hands back a call whose 403 is explained ---------
 #     `--detect` says `rest` when reads work; the claim POST is then refused and
 #     handed back as `manual`. Repeating it with the same token answers 403, so
