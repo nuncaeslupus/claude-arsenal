@@ -222,8 +222,12 @@ write_task t-dddd4444 "${drift}/_history"
 printf '%s\n' "$(sed 's/^priority: 5$/priority: 5\nstatus: merged/' "${drift}/_history/t-dddd4444.md")" \
     > "${drift}/_history/t-dddd4444.md"
 write_task t-eeee5555 "${drift}"
+# #554: already archived, just written before `status:` was required.
+write_task t-ffff6666 "${drift}/_history"
 cat > "${tmp}/drift-issues.json" <<'JSON'
 [
+  {"number": 22, "state": "closed", "state_reason": "completed",
+   "labels": [{"name": "arsenal:task"}], "body": "`arsenal-task: t-ffff6666`"},
   {"number": 20, "state": "open", "labels": [{"name": "arsenal:task"}],
    "body": "`arsenal-task: t-dddd4444`"},
   {"number": 21, "state": "closed", "state_reason": "completed",
@@ -238,6 +242,8 @@ echo "${out}" | grep >/dev/null "archived as merged but #20 is still open" \
     || fail "merged-but-issue-open drift not reported: ${out}"
 echo "${out}" | grep >/dev/null "#21 is closed as completed but the task file is still live" \
     || fail "closed-but-not-archived drift not reported: ${out}"
+echo "${out}" | grep >/dev/null "#22 is closed as completed but its archived file has no \`status:\` — add \`status: merged\`" \
+    || fail "#554: an archived file missing status: must not be told to move to _history/: ${out}"
 echo "PASS: query_status fails on a task and its issue disagreeing"
 
 # Gate 8: `create-issue` reaches the API. It is the one action with no issue
