@@ -18,6 +18,16 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [5.21.1] - 2026-11-09
+
+- `query_status`: a task whose issue closed as completed and whose file is
+  already in `_history/` but has no `status:` line (archives written before the
+  field was required) now reads "its archived file has no `status:` — add
+  `status: merged`", instead of telling you to move it to `_history/`, where it
+  already is.
+- `repo-housekeeping` reference: the release-workflow example pins
+  `actions/checkout` to the v4.4.0 commit SHA, as the shipped queue workflow does.
+
 ## [5.21.0] - 2026-11-09
 
 - `claim_task.sh`: in serialized in-place mode a claim is now refused (exit 2)

@@ -355,10 +355,18 @@ def main(argv: list[str] | None = None) -> int:
                     "the PR merged without closing it; close it as completed"
                 )
         elif task.get("status") not in TERMINAL and actual == "done":
-            problems.append(
-                f"{task['id']}: {where} is closed as completed but the task file is still live "
-                f"in {args.tasks_dir} — move it to _history/ with `status: merged`"
-            )
+            # An archive written before `status:` was required is already where
+            # it belongs; telling it to move to _history/ names a no-op (#554).
+            if "_history" in Path(task["path"]).parts:
+                problems.append(
+                    f"{task['id']}: {where} is closed as completed but its archived file has "
+                    "no `status:` — add `status: merged`"
+                )
+            else:
+                problems.append(
+                    f"{task['id']}: {where} is closed as completed but the task file is still "
+                    f"live in {args.tasks_dir} — move it to _history/ with `status: merged`"
+                )
 
     # The derived answer, for anything outside this repo that needs it.
     #
