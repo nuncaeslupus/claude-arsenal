@@ -244,6 +244,15 @@ echo "${out}" | grep >/dev/null "#21 is closed as completed but the task file is
     || fail "closed-but-not-archived drift not reported: ${out}"
 echo "${out}" | grep >/dev/null "#22 is closed as completed but its archived file has no \`status:\` — add \`status: merged\`" \
     || fail "#554: an archived file missing status: must not be told to move to _history/: ${out}"
+# --fix stamps the archived file instead of reporting it, and only that one.
+python3 "${STATUS}" --tasks-dir "${drift}" --issues "${tmp}/drift-issues.json" --fix \
+    >/dev/null 2>&1
+grep -q '^status: merged$' "${drift}/_history/t-ffff6666.md" \
+    || fail "--fix did not stamp status: merged on the archived file"
+grep -q '^status:' "${drift}/t-eeee5555.md" \
+    && fail "--fix must not touch a live task file"
+out=$(python3 "${STATUS}" --tasks-dir "${drift}" --issues "${tmp}/drift-issues.json" 2>&1)
+echo "${out}" | grep -q 't-ffff6666' && fail "after --fix t-ffff6666 still reported: ${out}"
 echo "PASS: query_status fails on a task and its issue disagreeing"
 
 # Gate 8: `create-issue` reaches the API. It is the one action with no issue
