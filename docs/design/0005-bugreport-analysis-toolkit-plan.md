@@ -311,6 +311,7 @@ diagnosis and the T25 summary coverage windows (within one minute of the hand-re
 | T23 | `invented_changes_on_identical_inputs == 0` | 0 (differing salts) | `uv run pytest plugins/core/tests/bugreport/test_compare.py` | P4 PR | local Linux x86_64 py3.14 | 2026-11-04 |
 | T24 | `test_runtime_imports_are_stdlib_only` | 0 non-stdlib imports (try-guarded optional imports excepted) | `uv run pytest plugins/core/tests/bugreport/test_parity.py` | closeout PR | local Linux x86_64 py3.14 | 2026-11-05 |
 | T24 | `resident_listing_tokens_with_android <= 130`, `resident_token_delta_without_android == 0`, `families_without_fire_nofire_fixture == 0`, `skill_workshop_must_findings == 0` | 78; 0; 0; 0 | `make context-budget`; `uv run pytest plugins/core/tests/bugreport/test_coverage.py test_parity.py test_evals.py`; `bugreport_test.sh` | P4 PR | local Linux x86_64 py3.14 | 2026-11-04 |
+| T25 | summary coverage windows within one minute of hand-read values (manual, D-9) | kernel log window within 3 s of hand-read bounds; 31 real reports (2 device families) run with 0 `error:` lines; report not committed | `python3 plugins/core/skills/bugreport/scripts/query_bugreport.py summary --input <report>` | main @ v5.21.1 | local Linux x86_64 | 2026-11-09 |
 
 **Benchmark provenance.** `index_build_s`, `index_build_zip_s`, `index_reuse_s`
 and `peak_rss_mb` are measured on the CI `ubuntu-22.04` runner against a report
@@ -324,6 +325,6 @@ measurement may sit beside it; it never replaces it.
 - [x] Every spec § 1 success criterion maps to a gate row (T4, T5, T6, T8, T10, T14, T21, T24, T25 cover them; T24 also carries the stdlib-only check — `test_runtime_imports_are_stdlib_only` scans every script, `_pbwire.py` included, for non-stdlib imports)
 - [x] Every spec § 6 risk has a test or an accepted-risk note (the prune and ceiling risks are `test_prune_leaves_foreign_dirs_alone` and `test_zip_past_the_extract_ceiling_is_refused` in `test_index.py`; the two manual real-report checks stay with the maintainer, D-9)
 - [x] Merge strategy chosen: one PR into `main` per phase, one bump each (r3, superseding spec D-10)
-- [ ] T25 summary gate green, and before release the provenance report's summary coverage windows checked locally against the hand-read values (within one minute; real report never committed, D-9)
+- [x] T25 summary gate green, and before release the provenance report's summary coverage windows checked locally against the hand-read values (within one minute; real report never committed, D-9)
 - [x] `make context-budget`: `android` row ≤ 130 tokens, `general` row unchanged
 - [x] Ready for execution — executed; P1–P4 shipped in 5.15.0, 5.16.0, 5.17.0 and 5.20.0
