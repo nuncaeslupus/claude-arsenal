@@ -18,6 +18,14 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [5.21.2] - 2026-11-09
+
+- `references/repo-housekeeping.md`: the release-workflow example now pins
+  `astral-sh/setup-uv`, `actions/upload-artifact`, `actions/download-artifact`
+  and `pypa/gh-action-pypi-publish` to commit SHAs (version in a trailing
+  comment), like `actions/checkout` in 5.21.1. Copying the example no longer
+  gives you a workflow that follows moving tags.
+
 ## [5.21.1] - 2026-11-09
 
 - `query_status`: a task whose issue closed as completed and whose file is
