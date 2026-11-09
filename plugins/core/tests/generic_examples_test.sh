@@ -25,7 +25,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 # `nuncaeslupus/claude-arsenal` — the public upstream, which shipped prose may
 # legitimately name — does not trip the owner pattern, and neither does
 # `nuncaeslupus/drawspec`, the public tool specs and plans draw diagrams with.
-DENY=('integral-job-search' 'nuncaeslupus/(?!claude-arsenal|drawspec)')
+DENY=('integral-job-search' 'aworkers' 'FlanksAPI' 'nuncaeslupus/(?!claude-arsenal|drawspec)')
 
 fail=0
 for name in "${DENY[@]}"; do

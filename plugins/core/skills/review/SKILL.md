@@ -48,11 +48,7 @@ If engineering standards exist in the host repo (a project-level engineering-sta
 - Do tests actually assert meaningful behavior (not just "it doesn't crash")?
 - If no tests exist and the change is non-trivial → flag as blocker
 
-**Gate evidence**: for a plan with task Gates, every Evidence log row must be complete and meet its gate:
-
-```bash
-python3 "${CLAUDE_SKILL_DIR}/../gate-check/scripts/run_gate.py" --input status/plan.md
-```
+**Gate evidence**: for a plan with task Gates, every Evidence log row must be complete and meet its gate — the `gate-check` skill's `run_gate.py --input status/plan.md` answers it.
 
 Exit 1 (a gate failed or lacks evidence) is a blocker. Exit 2 means no Gate column or a usage error: confirm the plan path first, then treat it as a should-flag only for a plan that predates gates.
 

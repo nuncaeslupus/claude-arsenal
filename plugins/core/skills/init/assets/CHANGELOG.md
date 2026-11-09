@@ -18,6 +18,21 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [5.23.0] - 2026-11-09
+
+### Fixed
+- Skills no longer reach into sibling skills through `${CLAUDE_SKILL_DIR}/..`
+  (`design`, `review`, `ship`, `github`, `explore-idea`). Those paths do not
+  resolve once a skill is installed outside the marketplace layout; each now
+  cites the vendored `claude-arsenal/` path or names the sibling skill.
+- `session-end`'s handoff reference no longer mentions a `--merge` flag that
+  `write_handoff.py` never had, nor a private project name in an example.
+
+### Added
+- `skill-workshop`'s validator fails any `${CLAUDE_SKILL_DIR}/..` path,
+  fenced or inline (`skill-dir-escape`), and resolves `claude-arsenal/…`
+  script cites against init's assets so vendored paths validate upstream.
+
 ## [5.22.0] - 2026-11-09
 
 - `query_status.py --fix`: stamps `status: merged` on archived task files in
