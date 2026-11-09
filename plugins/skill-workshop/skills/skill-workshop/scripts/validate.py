@@ -540,6 +540,11 @@ def _check_script_paths(
             candidates_to_try = [Path(candidate)]
         else:
             candidates_to_try = [repo_root / candidate]
+            # `claude-arsenal/` is the vendored copy of init's assets; upstream
+            # has only the source tree it is copied from.
+            if candidate.startswith("claude-arsenal/"):
+                rest = candidate.removeprefix("claude-arsenal/")
+                candidates_to_try.append(repo_root / "plugins/core/skills/init/assets" / rest)
         if any(p.exists() for p in candidates_to_try):
             continue
         result.fail(
@@ -1184,6 +1189,16 @@ def _check_inline_parent_traversal(
             result.warn(
                 f"{check_prefix}.parent-traversal-code",
                 f"inline code contains parent-traversal path: {snippet!r}",
+                source,
+            )
+    # Unlike a bare `..`, this one is never documentation of something else: it
+    # is the skill reaching out of its own folder, fenced block or not.
+    for line_no, line in enumerate(text.splitlines(), 1):
+        if "${CLAUDE_SKILL_DIR}/.." in line:
+            result.fail(
+                f"{check_prefix}.skill-dir-escape",
+                f"line {line_no}: `${{CLAUDE_SKILL_DIR}}/..` leaves the skill folder; "
+                "cite the vendored claude-arsenal/ path or name the sibling skill",
                 source,
             )
 
