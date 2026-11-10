@@ -81,7 +81,15 @@ That writes `<repo>-<doc>-v<N>-<stamp>-reviewed.html` and nothing else; a rebuil
 does not remove it. Run it before the bump, while the text still matches the notes.
 Applying the export makes the next revision: bump `**Revision**`, add a
 `**Revision log**` line naming the export, regenerate the reader, and commit the
-export and the reviewed copy **in the same commit** as that revision. Left in Downloads it is gone by
+export and the reviewed copy **in the same commit** as that revision.
+
+**Before that commit, read both for personal data, with the same weight as the
+commit itself.** Notes are free text from a private review; once committed they
+are in history, and on a public repo published. Redact names of real people,
+email addresses, phone numbers, account handles and home paths (`/home/<user>`);
+when a note loses its meaning without one, ask the reviewer. `--bake` warns on
+emails and home paths it finds in the notes. It cannot see names, so the read is
+still yours. Left in Downloads it is gone by
 the next session; `query_status.py` names any export of this project's still
 sitting in a Downloads folder (`~/Downloads`, `~/Descargas`, the XDG download
 dir, …) that the repo does not track.
@@ -105,8 +113,8 @@ A note under `> ¶ “…”` was taken on that exact paragraph, list item or ta
 reading `(text changed since this note)` was taken on a paragraph a later
 revision rewrote; it is shown at the end of its section.
 
-Pictures and SVG diagrams in a reader zoom in place: a tap or click enlarges one
-within the column and pushes the note field down, pinch or Ctrl+wheel zooms the
+Pictures and SVG diagrams in a reader zoom in place: a tap or click widens one to
+the window (a wide screen shows more of it) and pushes the note field down, pinch or Ctrl+wheel zooms the
 picture only, a second tap fits it again. Local images are embedded, so the HTML
 works alone from a Downloads folder or a phone.
 
