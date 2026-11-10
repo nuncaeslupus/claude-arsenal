@@ -243,6 +243,12 @@ def break_field_lines(text: str) -> str:
     return "\n".join(lines)
 
 
+# The reader is light only; an SVG's own dark-mode ink would go pale on its white page.
+DARK_MEDIA_RE = re.compile(
+    r"@media\s*\(prefers-color-scheme:\s*dark\)\s*\{(?:[^{}]*\{[^{}]*\})*[^{}]*\}"
+)
+
+
 def render_md(text: str, where: str = "") -> str:
     text, diagrams = extract_drawspec(text)
     _md.reset()
@@ -253,7 +259,7 @@ def render_md(text: str, where: str = "") -> str:
         svg = run_drawspec("render", source, label).strip()
         if not svg.startswith("<svg"):
             raise DrawspecError(f"{label}: drawspec render produced no SVG")
-        figure = f'<figure class="drawspec">{svg}</figure>'
+        figure = f'<figure class="drawspec">{DARK_MEDIA_RE.sub("", svg)}</figure>'
         html = html.replace(f"<p>{token}</p>", figure).replace(token, figure)
     return html
 
@@ -643,6 +649,12 @@ def infer_title(cwd: Path) -> str:
 MARKER_RE = re.compile(r"^[ \t]*<!--[ \t]*SPEC-NOTES-DATA\s*", re.MULTILINE)
 DOC_LINE_RE = re.compile(r"^<!-- SPEC-NOTES-DOC (\S+) -->$", re.MULTILINE)
 VERSION_RE = re.compile(r"-v\d+$")
+# What a reviewed copy must not carry into git history unread: an email address, or
+# a home directory that names its user. Names of people cannot be matched; the
+# reference asks for a read of the notes as well.
+PERSONAL_RE = re.compile(
+    r"[\w.+-]+@[\w-]+\.[\w.-]+|/home/[^/\s]+|/Users/[^/\s]+|[A-Za-z]:\\Users\\[^\\\s]+"
+)
 
 
 def read_notes(path: Path) -> dict:
@@ -734,7 +746,7 @@ def build_html(
     # One document is one part: its sections go straight into the contents and
     # under the page title, without a part band repeating the title a third time.
     single = len(parts) == 1
-    toc = ['<details class="toc" open><summary>Contents</summary>']
+    toc = ['<details class="toc"><summary>Contents</summary>']
     if single:
         toc.append('<ul class="toc-flat">')
         for it in parts[0][1]["items"]:
@@ -945,19 +957,12 @@ CSS = r"""
   --serif:Charter,"Bitstream Charter","Iowan Old Style","Sitka Text",Cambria,Georgia,serif;
   --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
 }
-@media(prefers-color-scheme:dark){
-  :root{
-    --bg:#16151a;--fg:#ebe9e4;--muted:#aaa69f;--line:#34313a;
-    --card:#1e1d23;--accent:#5eead4;--accent2:#fbbf24;--chip:#24302f;
-    --note:#221d12;--note-line:#8a6a22;--note-fg:#fcd34d;--code:#26242b;--link:#7ff0dc;
-  }
-}
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
 body{
   margin:0;background:var(--bg);color:var(--fg);
   font:17px/1.65 var(--sans);
-  padding-bottom:96px;
+  padding-bottom:48px;
 }
 /* The document reads in a book face; the reader's own chrome (bars, buttons,
    headings, notes) stays in the UI face, so the two never blur together. */
@@ -981,17 +986,14 @@ pre code{background:none;padding:0;font-size:1em}
 .btn:active{transform:translateY(1px)}
 .btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
-@media(prefers-color-scheme:dark){.btn.primary{color:#06201d}}
 .count{font-size:12px;color:var(--muted);white-space:nowrap;font-weight:600}
 .savestate{font-size:12px;font-weight:700;white-space:nowrap;transition:color .2s}
 .savestate.ok{color:var(--accent)}
 .savestate.warn{color:#9a4a0b}
-@media(prefers-color-scheme:dark){.savestate.warn{color:#fbbf24}}
 .statusbar{border-bottom:1px solid var(--line);background:var(--card)}
 .statusbar .wrap{padding:7px 16px;font-size:12px;color:var(--muted)}
 #warnbar{display:none;background:#fff4e5;border-bottom:1px solid var(--note-line);color:#7c2d12}
 #warnbar .wrap{padding:10px 16px;font-size:13px;line-height:1.45}
-@media(prefers-color-scheme:dark){#warnbar{background:#3a2a0e;color:#fde68a;border-color:#6b531c}}
 .hero{padding:34px 0 8px}
 .hero h1{font-size:2rem;line-height:1.15;margin:.1em 0 .3em;letter-spacing:-.02em}
 .hero p{color:var(--muted);margin:.3em 0;max-width:var(--measure)}
@@ -1075,8 +1077,6 @@ h4 .chip{font-size:11px;color:var(--muted)}
   resize:none;outline:none;line-height:1.55;padding:2px 0;overflow:hidden;min-height:1.6em}
 .note:focus-within .note-ta{min-height:4.8em}
 .note-ta::placeholder{color:var(--muted);opacity:1;font-style:italic}
-.fab{position:fixed;right:14px;bottom:16px;z-index:40;display:flex;flex-direction:column;gap:8px;align-items:flex-end}
-.fab .btn{box-shadow:0 4px 14px #0003}
 .modal{position:fixed;inset:0;z-index:60;background:#0008;display:none;align-items:center;justify-content:center;padding:16px}
 .modal.open{display:flex}
 .modal-card{background:var(--card);border:1px solid var(--line);border-radius:14px;max-width:680px;width:100%;
@@ -1087,22 +1087,20 @@ h4 .chip{font-size:11px;color:var(--muted)}
   background:var(--bg);color:var(--fg);font:13px/1.5 ui-monospace,Menlo,monospace;padding:10px;resize:vertical}
 .modal-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
 .hidden-input{display:none}
-.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:84px;z-index:70;background:#111;color:#fff;
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:32px;z-index:70;background:#111;color:#fff;
   padding:9px 14px;border-radius:9px;font-size:13px;opacity:0;transition:opacity .25s;pointer-events:none}
 .toast.show{opacity:.96}
-/* Phone width: smaller type, no floating column over the text, the hint dropped. */
+/* Phone width: smaller type, the hint dropped. */
 @media(max-width:600px){
-  body{font-size:16px;padding-bottom:76px}
+  body{font-size:16px}
   .hero h1{font-size:1.45rem}
   .part-title{font-size:1.25rem}
   h3.sec-h{font-size:1.15rem}
   h4.sec-h{font-size:1rem}
   .sec.l3{padding-left:10px}
   .statusbar .hint{display:none}
-  .fab{left:0;right:0;bottom:0;flex-direction:row;justify-content:flex-end;gap:6px;padding:8px 10px;
-    flex-wrap:wrap;background:var(--bg);border-top:1px solid var(--line)}
-  .fab .btn{box-shadow:none;padding:7px 9px}
-  .toast{bottom:64px}
+  .topbar .btn{padding:7px 9px}
+  .toast{bottom:24px}
 }
 /* Block notes: a faint ✎ in the right margin of every paragraph, item and table. */
 .bn-host{position:relative}
@@ -1113,14 +1111,14 @@ h4 .chip{font-size:11px;color:var(--muted)}
 .note.bnote{margin:6px 0 12px}
 li>.note.bnote{margin:6px 0}
 @media(max-width:820px){.bn-host{padding-right:30px}.bn-btn{right:0}}
-@media print{.topbar,.statusbar,.fab,.help,.bn-btn,.note:not(.filled){display:none}}
+@media print{.topbar,.statusbar,.help,.bn-btn,.note:not(.filled){display:none}}
 /* Pictures: full column width, zoomed in place (see the zoom script). The frame
    scrolls sideways; its height follows the picture, so the page scrolls past it. */
 .sec-body p:has(img){max-width:none}
 .zwrap{margin:.6em 0}
 .zbox{overflow-x:auto;overflow-y:hidden;touch-action:pan-x pan-y;border:1px solid var(--line);border-radius:8px;
   background:#fff;overscroll-behavior-x:contain}
-.zbox>img,.zbox>svg{display:block;width:100%;max-width:none!important;height:auto;cursor:zoom-in;-webkit-user-drag:none;user-select:none}
+.zbox>img,.zbox>svg{display:block;margin:0 auto;width:100%;max-width:none!important;height:auto;cursor:zoom-in;-webkit-user-drag:none;user-select:none}
 .zwrap.on .zbox>img,.zwrap.on .zbox>svg{cursor:zoom-out}
 .zbar{display:none;position:sticky;top:58px;z-index:5;align-items:center;gap:6px;padding:4px 0;background:var(--bg)}
 .zwrap.on .zbar{display:flex}
@@ -1130,7 +1128,7 @@ li>.note.bnote{margin:6px 0}
 .zhint{font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 /* Reviewed copy (--bake): the notes as text, no controls. */
 .note-text{white-space:pre-wrap;font-size:16px;line-height:1.55;overflow-wrap:anywhere}
-body.baked .fab,body.baked #btn-export,body.baked .savestate,body.baked .statusbar,body.baked .help,
+body.baked #btn-import,body.baked #btn-export,body.baked .savestate,body.baked .statusbar,body.baked .help,
 body.baked .bn-btn,body.baked #warnbar{display:none!important}
 """
 
@@ -1386,7 +1384,6 @@ JS = r"""
     setState('Download requested '+nowStamp(),'ok');
     toast('Download requested — '+r.n+' note'+(r.n===1?'':'s'));
   });
-  document.getElementById('btn-export2').addEventListener('click',function(){document.getElementById('btn-export').click();});
 
   document.getElementById('modal-copy').addEventListener('click',function(){
     // Success is reported only once a copy actually happened: the legacy
@@ -1454,19 +1451,10 @@ JS = r"""
     rd.readAsText(f);e.target.value='';
   });
   document.getElementById('btn-import').addEventListener('click',function(){document.getElementById('file-import').click();});
-
-  document.getElementById('btn-clear').addEventListener('click',function(){
-    if(!confirm('Clear ALL notes from this browser? Export first if you want to keep them.'))return;
-    tas.slice().forEach(function(t){t.value='';save(t);autoGrow(t);setFilled(t);
-      var box=t.closest('.bnote');if(box)closeBlock(box);});
-    updateCount();toast('All notes cleared');
-  });
-
-  document.getElementById('btn-top').addEventListener('click',function(){window.scrollTo({top:0,behavior:'smooth'});});
 })();
 
-// ---- Pictures and SVG diagrams zoom in place, never over the page. Tap or click one: it grows in the
-// column and pushes the text below it down, so scrolling on reaches the note field
+// ---- Pictures and SVG diagrams zoom in place, never over the page. Tap or click one: it
+// widens to the window (a wide screen shows more of it), grows, and pushes the text below it down, so scrolling on reaches the note field
 // at its normal size. Pinch, Ctrl+wheel or a trackpad pinch on the picture zooms the
 // picture only; one finger (or a mouse drag) pans it. Tap again: back to fit.
 (function(){
@@ -1483,12 +1471,17 @@ JS = r"""
     img.parentNode.insertBefore(wrap,img);wrap.appendChild(bar);wrap.appendChild(box);box.appendChild(img);
     img.tabIndex=0;img.title='Tap to zoom';
     var s=1;
+    // s is relative to the column; zoomed, the frame spans the window less a 16px gutter.
+    function col(){return wrap.parentNode.clientWidth;}
+    function span(){var W=document.documentElement.clientWidth-32;
+      wrap.style.width=W+'px';wrap.style.marginLeft=(16-wrap.parentNode.getBoundingClientRect().left)+'px';}
     // Scale to ns, keeping the point under (cx,cy) where it was on screen.
     function set(ns,cx,cy){
       ns=Math.max(1,Math.min(MAX,ns));
       var r=img.getBoundingClientRect(),fx=(cx-r.left)/r.width,fy=(cy-r.top)/r.height;
       s=ns;wrap.classList.toggle('on',s>1);
-      img.style.width=s>1?(box.clientWidth*s)+'px':'';
+      if(s>1)span();else{wrap.style.width='';wrap.style.marginLeft='';}
+      img.style.width=s>1?(col()*s)+'px':'';
       var r2=img.getBoundingClientRect();
       box.scrollLeft+=r2.left+fx*r2.width-cx;
       window.scrollBy(0,r2.top+fy*r2.height-cy);
@@ -1496,7 +1489,8 @@ JS = r"""
     }
     function mid(){var r=box.getBoundingClientRect();
       return[r.left+r.width/2,(Math.max(r.top,0)+Math.min(r.bottom,innerHeight))/2];}
-    function toggle(cx,cy){set(s>1?1:FIRST,cx,cy);}
+    // First tap: the window's full width on a wide screen; FIRST on a phone, where the column already is the window.
+    function toggle(cx,cy){var r=(document.documentElement.clientWidth-32)/col();set(s>1?1:(r>1.5?r:FIRST),cx,cy);}
     var drag=null,moved=false;
     img.addEventListener('click',function(e){if(moved){moved=false;return;}toggle(e.clientX,e.clientY);});
     img.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();var m=mid();toggle(m[0],m[1]);}});
@@ -1517,7 +1511,7 @@ JS = r"""
     addEventListener('pointermove',function(e){if(!drag)return;var dx=e.clientX-drag[0],dy=e.clientY-drag[1];
       if(Math.abs(dx)+Math.abs(dy)>4)moved=true;box.scrollLeft-=dx;window.scrollBy(0,-dy);drag=[e.clientX,e.clientY];});
     addEventListener('pointerup',function(){drag=null;});
-    addEventListener('resize',function(){if(s>1)img.style.width=(box.clientWidth*s)+'px';});
+    addEventListener('resize',function(){if(s>1){wrap.style.marginLeft='';span();img.style.width=(col()*s)+'px';}});
   });
 })();
 """
@@ -1527,7 +1521,7 @@ HTML_TEMPLATE = r"""<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="color-scheme" content="light dark">
+<meta name="color-scheme" content="light">
 <meta name="arsenal-source-sha256" content="__SOURCE_SHA__">
 <title>__TITLE__ — __DOC_LABEL__ (annotatable)</title>
 <style>__CSS__</style>
@@ -1537,6 +1531,7 @@ HTML_TEMPLATE = r"""<!doctype html>
   <div class="wrap">
     <div class="brand">__TITLE__ — __DOC_LABEL__<small>annotatable reader · __GEN_DATE__</small></div>
     <span class="savestate ok" id="savestate">✓ Auto-saving</span>
+    <button class="btn" id="btn-import">Import</button>
     <button class="btn primary" id="btn-export">Save / Export</button>
   </div>
 </div>
@@ -1556,19 +1551,12 @@ HTML_TEMPLATE = r"""<!doctype html>
       <li><strong>Notes save automatically</strong> in this browser as you type.</li>
       <li><strong>Save / Export</strong> downloads a Markdown file of your notes — the copy to send back. Tap whenever you pause, especially on a phone.</li>
       <li><strong>Import</strong> reloads notes from a file you exported earlier (after clearing the browser or switching devices).</li>
-      <li><strong>Clear</strong> erases every note in this browser. Export first.</li>
     </ul>
   </details>
   __TOC__
   __BODY__
 </div>
 
-<div class="fab">
-  <button class="btn" id="btn-top" title="Back to top">↑ Top</button>
-  <button class="btn" id="btn-import">Import</button>
-  <button class="btn" id="btn-clear">Clear</button>
-  <button class="btn primary" id="btn-export2">💾 Save / Export</button>
-</div>
 <input type="file" id="file-import" class="hidden-input" accept=".md,.markdown,.json,text/markdown,application/json">
 
 <div class="modal" id="modal">
@@ -1743,6 +1731,9 @@ def _main() -> int:
         return 2
 
     if args.bake:
+        for key, text in seed_notes.items():
+            for hit in sorted(set(PERSONAL_RE.findall(text))):
+                print(f"⚠  note {key} holds {hit!r}: redact it before committing", file=sys.stderr)
         if not args.output:
             html_file = out_dir / f"{stem}-reviewed.html"
         html_file.write_text(

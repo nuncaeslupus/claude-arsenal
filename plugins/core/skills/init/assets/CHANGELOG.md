@@ -18,6 +18,23 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [5.25.0] - 2026-11-10
+
+### Changed
+- **The annotatable reader is lighter to use.** Import now sits in the top bar
+  next to Save / Export; the floating bottom-right buttons (Top, Import, Clear,
+  Export) are gone, and Clear with them. The page is light only, and inline
+  diagram SVGs lose their dark-mode ink so they stay readable on it. The
+  Contents index starts collapsed.
+- **Zoom uses a wide screen.** The first tap or click on a picture or diagram
+  widens it to the window, less a 16px gutter, rather than zooming inside the
+  text column; on a phone it still zooms to 250% with pan.
+
+### Added
+- **`--bake` warns on personal data** in a note: an email address or a
+  `/home/<user>`, `/Users/<user>` or `C:\Users\<user>` path. The reader
+  reference now asks for both the export and the reviewed copy to be read for
+  names, emails, phones, handles and home paths before they are committed.
 ## [5.24.0] - 2026-11-10
 
 ### Added

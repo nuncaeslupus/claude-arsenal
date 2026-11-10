@@ -148,10 +148,10 @@ grep -q "data-key=\"${key}\"" "${html}" || fail "a seeded note on a bare heading
 grep -q "a note from an earlier revision" "${md}" || fail "a seeded note on a bare heading was dropped from the Markdown"
 echo "PASS: a note seeded on a bare heading is kept, not dropped"
 
-# --- 3: the styles: measure, hierarchy, distinct notes, dark mode, phone width ---
+# --- 3: the styles: measure, hierarchy, distinct notes, light only, phone width ---
 grep -q -- "--measure:70ch" "${html}" || fail "no readable line length (~70ch)"
 grep -q "max-width:var(--measure)" "${html}" || fail "prose is not held to the measure"
-grep -q "prefers-color-scheme:dark" "${html}" || fail "no dark palette"
+grep -q "prefers-color-scheme:dark" "${html}" && fail "the reader has a dark palette again — it is light only"
 grep -q "@media(max-width:600px)" "${html}" || fail "no phone-width layout"
 grep -q "h3.sec-h{font-size:1.3rem" "${html}" && grep -q "h4.sec-h{font-size:1.08rem" "${html}" \
     || fail "## and ### headings are not told apart"

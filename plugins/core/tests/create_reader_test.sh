@@ -285,6 +285,13 @@ grep -q 'var BAKED = true;' "${BAKED_HTML}" || fail "the reviewed copy is still 
 grep -q 'make the hint a full line' "${BAKED_HTML}" || fail "the reviewed copy lost the returned note"
 run_reader --input screens/screens.md --output-dir screens --name Demo >/dev/null || fail "rebuilding after a bake failed"
 [[ -f "${BAKED_HTML}" ]] || fail "a rebuild removed the reviewed copy"
+grep -q 'redact' <<<"${out}" && fail "a clean note was flagged as personal data: ${out}"
+sed 's#make the hint a full line#ask me@example.com, see /home/someone/x#' "${tmp}/screens/notes.md" > "${tmp}/screens/pii.md"
+out=$(run_reader --input screens/screens.md --output-dir screens --name Demo --notes screens/pii.md --bake)
+grep -q "me@example.com.*redact" <<<"${out}" || fail "--bake did not warn on an email in a note: ${out}"
+grep -q "/home/someone.*redact" <<<"${out}" || fail "--bake did not warn on a home path in a note: ${out}"
+grep -q 'class="fab"' "${SCR_HTML}" && fail "the floating buttons are back"
+grep -q 'id="btn-import"' "${SCR_HTML}" || fail "Import is missing from the top bar"
 
 # --- 9: ```drawspec fences render to inline SVG (#466) ---
 #     A fake drawspec via ARSENAL_DRAWSPEC, so none of this needs the network.
