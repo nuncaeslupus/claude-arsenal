@@ -55,8 +55,10 @@ Usage (run from repo root):
 """
 
 import argparse
+import base64
 import hashlib
 import json
+import mimetypes
 import os
 import re
 import shlex
@@ -353,9 +355,36 @@ def parse_doc(raw: str) -> tuple[str, str, list[dict]]:
     return h1, intro_md, sections
 
 
+IMG_SRC_RE = re.compile(r'(<img\b[^>]*?\ssrc=")([^"]+)(")')
+
+
+def inline_images(html: str, base: Path, where: str) -> str:
+    """Embed each local image as a data: URI, so the reader stays one file.
+
+    A screens review is opened from a Downloads folder or a phone, where a relative
+    `shots/s01.png` resolves to nothing. Remote and data: sources are left alone; a
+    missing file is warned about and left as written.
+    """
+
+    def swap(m: re.Match[str]) -> str:
+        src = m.group(2)
+        if re.match(r"^(?:[a-z][a-z0-9+.-]*:|//)", src, re.I):
+            return m.group(0)
+        f = base / src.replace("%20", " ")
+        if not f.is_file():
+            print(f"⚠  {where}: image {src} not found — left as a link", file=sys.stderr)
+            return m.group(0)
+        mime = mimetypes.guess_type(f.name)[0] or "application/octet-stream"
+        data = base64.b64encode(f.read_bytes()).decode("ascii")
+        return f"{m.group(1)}data:{mime};base64,{data}{m.group(3)}"
+
+    return IMG_SRC_RE.sub(swap, html)
+
+
 def build_part(file_md: str, code: str, part_label: str, title: str, source: str = "") -> dict:
     """Parse one document into a structured part with stable ids/labels."""
     where = source or title
+    base = Path(source).parent if source else Path.cwd()
     h1, intro_md, sections = parse_doc(file_md)
     items: list[dict] = []
     used: set[str] = set()
@@ -380,7 +409,7 @@ def build_part(file_md: str, code: str, part_label: str, title: str, source: str
                 "title_html": "Preamble &amp; scope",
                 "label": "Preamble & scope",
                 "level": 2,
-                "body_html": render_md(intro_md, f"{where} § preamble"),
+                "body_html": inline_images(render_md(intro_md, f"{where} § preamble"), base, where),
                 "toc": "Preamble & scope",
                 "raw_body": intro_md,
             }
@@ -412,7 +441,9 @@ def build_part(file_md: str, code: str, part_label: str, title: str, source: str
                 "title_html": title_html,
                 "label": label,
                 "level": s["level"],
-                "body_html": render_md(s["body_md"], f"{where} § {strip_inline_md(heading)}"),
+                "body_html": inline_images(
+                    render_md(s["body_md"], f"{where} § {strip_inline_md(heading)}"), base, where
+                ),
                 "toc": toc,
                 "raw_body": s["body_md"],
             }
@@ -431,7 +462,7 @@ def build_part(file_md: str, code: str, part_label: str, title: str, source: str
 # The input stem decides which document this is, the same way it already decides the
 # title. A plan and a spec want different badges and different output filenames, and
 # nothing else about the reader changes between them.
-DOC_KINDS = {"plan": ("PLAN", "Plan", "plan")}
+DOC_KINDS = {"plan": ("PLAN", "Plan", "plan"), "screens": ("SCREENS", "Screens", "screens")}
 # The header line `specify` / `design` write, read only above the first section.
 REVISION_RE = re.compile(r"^\*\*Revision\*\*:\s*r?(\d+)\b", re.MULTILINE)
 
@@ -450,7 +481,7 @@ def source_digest(raw: str) -> str:
 
 DEFAULT_DOC_KIND = ("SPEC", "Specification", "spec")
 # Stems whose reader is `<kind>-reader.html`; any other stem gets `<stem>-reader.html`.
-CANONICAL_STEMS = {"spec", "specification", "plan"}
+CANONICAL_STEMS = {"spec", "specification", "plan", "screens"}
 
 
 def doc_kind(stem: str) -> tuple[str, str, str]:
@@ -610,6 +641,8 @@ def infer_title(cwd: Path) -> str:
 # mid-line — a note is rendered as `> …` prose, and a note that mentions the
 # marker also carries it inside a JSON string, which cannot hold a raw newline.
 MARKER_RE = re.compile(r"^[ \t]*<!--[ \t]*SPEC-NOTES-DATA\s*", re.MULTILINE)
+DOC_LINE_RE = re.compile(r"^<!-- SPEC-NOTES-DOC (\S+) -->$", re.MULTILINE)
+VERSION_RE = re.compile(r"-v\d+$")
 
 
 def read_notes(path: Path) -> dict:
@@ -677,8 +710,12 @@ def build_html(
     doc_slug: str = "spec",
     ns_key: str | None = None,
     export_stem: str | None = None,
+    baked: bool = False,
 ) -> str:
     """The self-contained HTML reader.
+
+    `baked` renders the seed notes as read-only boxes in place of note fields:
+    the reviewed copy committed beside the export (`--bake`).
 
     `export_stem` is `<repo>-<doc>-v<N>`, the part of the reader's own filename
     before the stamp; the Export button appends the export's own stamp and `-notes.md`.
@@ -784,8 +821,17 @@ def build_html(
         "__JS__",
         JS.replace("__LS_NS__", ls_ns)
         .replace("__EXPORT_STEM__", export_stem)
-        .replace("__DOC_LABEL__", single_label),
+        .replace("__DOC_LABEL__", single_label)
+        .replace("__BAKED__", "true" if baked else "false"),
     )
+    if baked:
+        page = page.replace("(annotatable)</title>", "(reviewed)</title>")
+        page = page.replace("annotatable reader ·", "reviewed copy ·")
+        page = page.replace(
+            "<p>Read at your own pace and leave a note on any point you want to discuss.</p>",
+            "<p>Reviewed copy: the notes returned on this revision, in place beside what "
+            "they are about. Read-only.</p>",
+        )
     page = page.replace(
         "__SEED_NOTES__",
         json.dumps(seed_notes, ensure_ascii=False).replace("<", "\\u003c"),
@@ -1068,11 +1114,32 @@ h4 .chip{font-size:11px;color:var(--muted)}
 li>.note.bnote{margin:6px 0}
 @media(max-width:820px){.bn-host{padding-right:30px}.bn-btn{right:0}}
 @media print{.topbar,.statusbar,.fab,.help,.bn-btn,.note:not(.filled){display:none}}
+/* Pictures: full column width, zoomed in place (see the zoom script). The frame
+   scrolls sideways; its height follows the picture, so the page scrolls past it. */
+.sec-body p:has(img){max-width:none}
+.zwrap{margin:.6em 0}
+.zbox{overflow-x:auto;overflow-y:hidden;touch-action:pan-x pan-y;border:1px solid var(--line);border-radius:8px;
+  background:#fff;overscroll-behavior-x:contain}
+.zbox>img,.zbox>svg{display:block;width:100%;max-width:none!important;height:auto;cursor:zoom-in;-webkit-user-drag:none;user-select:none}
+.zwrap.on .zbox>img,.zwrap.on .zbox>svg{cursor:zoom-out}
+.zbar{display:none;position:sticky;top:58px;z-index:5;align-items:center;gap:6px;padding:4px 0;background:var(--bg)}
+.zwrap.on .zbar{display:flex}
+.zbar button{font:inherit;font-size:14px;min-width:34px;height:30px;border:1px solid var(--line);border-radius:7px;
+  background:var(--card);color:var(--fg);cursor:pointer}
+.zpct{font-size:12px;color:var(--muted);min-width:3.4em;text-align:center}
+.zhint{font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+/* Reviewed copy (--bake): the notes as text, no controls. */
+.note-text{white-space:pre-wrap;font-size:16px;line-height:1.55;overflow-wrap:anywhere}
+body.baked .fab,body.baked #btn-export,body.baked .savestate,body.baked .statusbar,body.baked .help,
+body.baked .bn-btn,body.baked #warnbar{display:none!important}
 """
 
 JS = r"""
 (function(){
   var NS = '__LS_NS__';
+  // A reviewed copy (--bake) shows only the notes it was built with: nothing from
+  // this browser's storage, nothing editable.
+  var BAKED = __BAKED__;
   var tas = Array.prototype.slice.call(document.querySelectorAll('.note-ta'));
 
   function autoGrow(t){t.style.height='auto';t.style.height=(t.scrollHeight)+'px';}
@@ -1115,7 +1182,7 @@ JS = r"""
     // reader came up empty exactly when it could save nothing (#477).
     if(Object.prototype.hasOwnProperty.call(SEED,t.dataset.key)){
       var sv=SEED[t.dataset.key];if(typeof sv==='string'){t.value=sv;}}
-    try{var v=localStorage.getItem(NS+t.dataset.key);if(v!=null){t.value=v;}}catch(e){}
+    if(!BAKED){try{var v=localStorage.getItem(NS+t.dataset.key);if(v!=null){t.value=v;}}catch(e){}}
     autoGrow(t);setFilled(t);
     t.addEventListener('input',function(){
       autoGrow(t);setFilled(t);updateCount();dirty=true;
@@ -1219,18 +1286,30 @@ JS = r"""
   (function(){
     var keys={};
     Object.keys(SEED).forEach(function(k){keys[k]=1;});
-    try{for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);
-      if(k&&k.indexOf(NS)===0)keys[k.slice(NS.length)]=1;}}catch(e){}
+    if(!BAKED){try{for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);
+      if(k&&k.indexOf(NS)===0)keys[k.slice(NS.length)]=1;}}catch(e){}}
     Object.keys(keys).sort().forEach(function(k){
       if(/~q$/.test(k))return;
       var v=null;
-      try{v=localStorage.getItem(NS+k);}catch(e){}
+      if(!BAKED){try{v=localStorage.getItem(NS+k);}catch(e){}}
       if(v==null&&typeof SEED[k]==='string')v=SEED[k];
       var q=null;try{q=localStorage.getItem(NS+k+'~q');}catch(e){}
       if(q==null&&typeof SEED[k+'~q']==='string')q=SEED[k+'~q'];
       if(v&&v.trim()!=='')openBlock(k,false,q||'');
     });
   })();
+  // Reviewed copy: each note becomes its text at full length, and an empty field goes.
+  if(BAKED){
+    document.body.classList.add('baked');
+    tas.forEach(function(t){
+      var box=t.closest('.note');
+      if(t.value.trim()===''){box.remove();return;}
+      var d=document.createElement('div');d.className='note-text';d.textContent=t.value;
+      t.replaceWith(d);box.classList.add('filled');
+      var lab=box.querySelector('.note-label');if(lab)lab.textContent='Review note';
+    });
+    return;
+  }
   updateCount();
   if(lsOK){setState('✓ Auto-saving','ok');}else{document.getElementById('warnbar').style.display='block';setState(WARN,'warn');}
 
@@ -1264,6 +1343,8 @@ JS = r"""
         lines.push('');
       });
     });
+    // Which page wrote this, so an import into a different page can say so.
+    lines.push('<!-- SPEC-NOTES-DOC __EXPORT_STEM__ -->');
     lines.push('<!-- SPEC-NOTES-DATA');
     lines.push(JSON.stringify(data));
     lines.push('-->');
@@ -1363,6 +1444,9 @@ JS = r"""
         else{obj=JSON.parse(txt);}
       }catch(err){obj=null;}
       if(!obj){toast('Could not read notes from that file');return;}
+      var dm=/^<!-- SPEC-NOTES-DOC (\S+) -->/m.exec(txt);
+      if(dm&&dm[1]!=='__EXPORT_STEM__'&&
+         !confirm('That file holds notes for '+dm[1]+', not for this page (__EXPORT_STEM__). Import anyway?'))return;
       var r=applyData(obj);
       toast('Imported '+r.applied+' note'+(r.applied===1?'':'s')+
             (r.skipped?' ('+r.skipped+' skipped — not text)':''));
@@ -1379,6 +1463,62 @@ JS = r"""
   });
 
   document.getElementById('btn-top').addEventListener('click',function(){window.scrollTo({top:0,behavior:'smooth'});});
+})();
+
+// ---- Pictures and SVG diagrams zoom in place, never over the page. Tap or click one: it grows in the
+// column and pushes the text below it down, so scrolling on reaches the note field
+// at its normal size. Pinch, Ctrl+wheel or a trackpad pinch on the picture zooms the
+// picture only; one finger (or a mouse drag) pans it. Tap again: back to fit.
+(function(){
+  var FIRST=2.5,MAX=12;
+  Array.prototype.forEach.call(document.querySelectorAll('.sec-body img,.sec-body svg'),function(img){
+    if(img.parentNode.closest('svg,button'))return;
+    var wrap=document.createElement('div');wrap.className='zwrap';
+    var bar=document.createElement('div');bar.className='zbar';
+    bar.innerHTML='<button type="button" data-z="out" aria-label="Zoom out">−</button>'+
+      '<span class="zpct"></span><button type="button" data-z="in" aria-label="Zoom in">+</button>'+
+      '<button type="button" data-z="fit">Fit</button>'+
+      '<span class="zhint">tap the picture to zoom out · pinch or Ctrl+wheel zooms it</span>';
+    var box=document.createElement('div');box.className='zbox';
+    img.parentNode.insertBefore(wrap,img);wrap.appendChild(bar);wrap.appendChild(box);box.appendChild(img);
+    img.tabIndex=0;img.title='Tap to zoom';
+    var s=1;
+    // Scale to ns, keeping the point under (cx,cy) where it was on screen.
+    function set(ns,cx,cy){
+      ns=Math.max(1,Math.min(MAX,ns));
+      var r=img.getBoundingClientRect(),fx=(cx-r.left)/r.width,fy=(cy-r.top)/r.height;
+      s=ns;wrap.classList.toggle('on',s>1);
+      img.style.width=s>1?(box.clientWidth*s)+'px':'';
+      var r2=img.getBoundingClientRect();
+      box.scrollLeft+=r2.left+fx*r2.width-cx;
+      window.scrollBy(0,r2.top+fy*r2.height-cy);
+      bar.querySelector('.zpct').textContent=Math.round(s*100)+'%';
+    }
+    function mid(){var r=box.getBoundingClientRect();
+      return[r.left+r.width/2,(Math.max(r.top,0)+Math.min(r.bottom,innerHeight))/2];}
+    function toggle(cx,cy){set(s>1?1:FIRST,cx,cy);}
+    var drag=null,moved=false;
+    img.addEventListener('click',function(e){if(moved){moved=false;return;}toggle(e.clientX,e.clientY);});
+    img.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();var m=mid();toggle(m[0],m[1]);}});
+    bar.addEventListener('click',function(e){var z=e.target.dataset&&e.target.dataset.z;if(!z)return;var m=mid();
+      set(z==='in'?s*1.5:z==='out'?s/1.5:1,m[0],m[1]);});
+    box.addEventListener('wheel',function(e){if(!e.ctrlKey)return;e.preventDefault();
+      set(s*Math.exp(-Math.max(-50,Math.min(50,e.deltaY))*0.01),e.clientX,e.clientY);},{passive:false});
+    // Two fingers on the picture zoom the picture; the page's own pinch is off here.
+    var pin=null;
+    function dist(t){return Math.hypot(t[0].clientX-t[1].clientX,t[0].clientY-t[1].clientY);}
+    box.addEventListener('touchstart',function(e){if(e.touches.length===2)pin={d:dist(e.touches),s:s};},{passive:true});
+    box.addEventListener('touchmove',function(e){if(!pin||e.touches.length!==2)return;e.preventDefault();
+      set(pin.s*dist(e.touches)/pin.d,(e.touches[0].clientX+e.touches[1].clientX)/2,(e.touches[0].clientY+e.touches[1].clientY)/2);},{passive:false});
+    box.addEventListener('touchend',function(e){if(e.touches.length<2)pin=null;});
+    // A mouse drag pans a zoomed picture: sideways in its frame, up and down the page.
+    img.addEventListener('pointerdown',function(e){if(e.pointerType!=='mouse'||s===1)return;
+      e.preventDefault();drag=[e.clientX,e.clientY];moved=false;});
+    addEventListener('pointermove',function(e){if(!drag)return;var dx=e.clientX-drag[0],dy=e.clientY-drag[1];
+      if(Math.abs(dx)+Math.abs(dy)>4)moved=true;box.scrollLeft-=dx;window.scrollBy(0,-dy);drag=[e.clientX,e.clientY];});
+    addEventListener('pointerup',function(){drag=null;});
+    addEventListener('resize',function(){if(s>1)img.style.width=(box.clientWidth*s)+'px';});
+  });
 })();
 """
 
@@ -1485,9 +1625,18 @@ def _main() -> int:
         "Markdown is written beside it as <stem>-annotated.md",
     )
     parser.add_argument(
+        "--bake",
+        action="store_true",
+        help="with --notes: write only <name>-reviewed.html, the notes shown read-only "
+        "in place — the reviewed copy committed beside the export",
+    )
+    parser.add_argument(
         "--name", metavar="TEXT", help="project name for the reader title (default: git repo name)"
     )
     args = parser.parse_args()
+    if args.bake and not args.notes:
+        print("✗ --bake needs --notes <the returned export>", file=sys.stderr)
+        return 2
 
     cwd = Path.cwd()
     single_label, doc_slug = DEFAULT_DOC_KIND[1], DEFAULT_DOC_KIND[2]
@@ -1578,10 +1727,44 @@ def _main() -> int:
                 return 2
         else:
             seed_notes = loaded
+            # An export names the page that wrote it. Another document's notes would
+            # land under whatever headings share their ids; a revision apart is the
+            # normal re-seed, so only the repo and document are compared.
+            m = DOC_LINE_RE.search(notes_path.read_text(encoding="utf-8"))
+            if m and VERSION_RE.sub("", m.group(1)) != VERSION_RE.sub("", export_stem):
+                print(
+                    f"✗ {notes_path} holds notes for {m.group(1)}, not {export_stem}",
+                    file=sys.stderr,
+                )
+                return 2
             print(f"ℹ  seeding from {notes_path} ({len(seed_notes)} notes)", file=sys.stderr)
     elif args.notes:
         print(f"✗ {notes_path} does not exist", file=sys.stderr)
         return 2
+
+    if args.bake:
+        if not args.output:
+            html_file = out_dir / f"{stem}-reviewed.html"
+        html_file.write_text(
+            build_html(
+                parts,
+                title,
+                gen_date,
+                seed_notes,
+                single_label,
+                doc_slug,
+                ns_key=ns_key or out_base or None,
+                export_stem=export_stem,
+                baked=True,
+            ),
+            encoding="utf-8",
+        )
+        print(
+            f"✓ reviewed copy, {sum(1 for v in seed_notes.values() if v.strip())} note(s)",
+            file=sys.stderr,
+        )
+        print(f"  {html_file}", file=sys.stderr)
+        return 0
 
     html_out = build_html(
         parts,
