@@ -259,6 +259,33 @@ perl -0pi -e 's/^\*\*Revision\*\*: 3\n[^\n]*\n//m' "${tmp}/status/specification.
 run_reader --input status/specification.md --output-dir status --name "Widget Overhaul" >/dev/null \
     || fail "regenerating the unrevisioned reader failed"
 
+# --- 10: a screens review: pictures inline, notes bake, a wrong export is refused ---
+#     The page is opened from Downloads or a phone, where `shots/s01.png` resolves
+#     to nothing, so the picture has to travel inside the HTML.
+mkdir -p "${tmp}/screens/shots"
+python3 -c 'import base64,sys; open(sys.argv[1],"wb").write(base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="))' "${tmp}/screens/shots/s01.png"
+printf '# Demo\n\n## S01 · Start\n\nThe first screen.\n\n![start](shots/s01.png)\n' > "${tmp}/screens/screens.md"
+run_reader --input screens/screens.md --output-dir screens --name Demo >/dev/null || fail "a screens reader failed"
+SCR_HTML="${tmp}/screens/yourproject-screens-v1-${today}-reader.html"
+[[ -f "${SCR_HTML}" ]] || fail "screens.md is not named as a screens doc: $(ls "${tmp}/screens")"
+grep -q 'src="data:image/png;base64,' "${SCR_HTML}" || fail "the screenshot was not inlined as a data: URI"
+skey=$(grep -o 'data-key="[^"]*"' "${SCR_HTML}" | sed -n 2p | sed 's/data-key="//; s/"//')
+printf '<!-- SPEC-NOTES-DOC yourproject-screens-v1 -->\n<!-- SPEC-NOTES-DATA\n{"%s": "make the hint a full line"}\n-->\n' "${skey}" \
+    > "${tmp}/screens/notes.md"
+sed 's/yourproject-screens-v1/yourproject-spec-v4/' "${tmp}/screens/notes.md" > "${tmp}/screens/other.md"
+out=$(run_reader --input screens/screens.md --output-dir screens --notes screens/other.md); rc=$?
+[[ ${rc} -eq 2 ]] || fail "an export from another document seeded this one: ${out}"
+out=$(run_reader --input screens/screens.md --output-dir screens --bake); rc=$?
+[[ ${rc} -eq 2 ]] || fail "--bake without --notes should be refused: ${out}"
+out=$(run_reader --input screens/screens.md --output-dir screens --name Demo --notes screens/notes.md --bake) \
+    || fail "baking the returned notes failed: ${out}"
+BAKED_HTML="${tmp}/screens/yourproject-screens-v1-${today}-reviewed.html"
+[[ -f "${BAKED_HTML}" ]] || fail "--bake wrote no -reviewed.html: $(ls "${tmp}/screens")"
+grep -q 'var BAKED = true;' "${BAKED_HTML}" || fail "the reviewed copy is still editable"
+grep -q 'make the hint a full line' "${BAKED_HTML}" || fail "the reviewed copy lost the returned note"
+run_reader --input screens/screens.md --output-dir screens --name Demo >/dev/null || fail "rebuilding after a bake failed"
+[[ -f "${BAKED_HTML}" ]] || fail "a rebuild removed the reviewed copy"
+
 # --- 9: ```drawspec fences render to inline SVG (#466) ---
 #     A fake drawspec via ARSENAL_DRAWSPEC, so none of this needs the network.
 #     It logs every call, fails `validate` on a document containing BROKEN, and
@@ -428,7 +455,7 @@ function boot(storage, clipboard, execResult, timers) {
   const byId = {}, toasts = [], win = {};
   const tas = keys.map(k => { const t = el(); t.dataset = { key: k, part: 'P', label: 'L' }; return t; });
   const document = {
-    querySelectorAll: () => tas,
+    querySelectorAll: (q) => (/img/.test(q) ? [] : tas),
     getElementById(id) { if (!byId[id]) byId[id] = el(); return byId[id]; },
     execCommand: () => { if (execResult === 'throw') throw new Error('no'); return execResult; },
     createElement: el, body: { appendChild() {}, children: [el(), el()] },

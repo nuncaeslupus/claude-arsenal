@@ -18,6 +18,28 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [5.24.0] - 2026-11-10
+
+### Added
+- `create_reader.py --notes <export> --bake` writes `…-reviewed.html`: the
+  reviewer's returned notes pasted in place, read-only and full length, beside
+  the text they were written on. Run it before bumping the revision and commit it
+  with the export, so the review lives in the repo next to the document. A rebuild
+  does not remove it.
+- Screens review: a `screens.md` (one `## Sxx · name` per screen, a summary, the
+  picture) runs through the same reader, for UI projects that review screenshots
+  or mockups. `specify` offers it for user-facing problems; the recipe is in
+  `references/annotatable-reader.md`.
+- Pictures and SVG diagrams in any reader zoom in place: tap or click enlarges one
+  inside the column and pushes the note field below it, pinch or Ctrl+wheel zooms
+  the picture only (not the page), tap again to fit. No overlay to close.
+- Local images are embedded as data: URIs, so a reader opened from Downloads or a
+  phone shows them.
+
+### Changed
+- An export now names the document it came from. `--notes` refuses another
+  document's export (exit 2); the page's Import asks before loading one.
+
 ## [5.23.0] - 2026-11-09
 
 ### Fixed
