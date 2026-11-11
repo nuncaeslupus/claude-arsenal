@@ -13,6 +13,16 @@ on:
 permissions:
   contents: read
 
+# A new push to a PR cancels the run it superseded. Only PRs: every other run
+# gets its own group (run_id), so a push to main is never cancelled or replaced
+# while queued — tag-release needs a CI conclusion for each merged commit.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# No `paths-ignore` on the trigger, on purpose: these jobs are required checks,
+# and a workflow skipped by a path filter never reports, which blocks the PR.
+# Docs-only PRs are narrowed inside the `changes` job instead.
 jobs:
   # macOS runners queue far longer than Linux ones, and the macOS leg exists to
   # catch BSD-userland / bash 3.2 breakage in what the bundle ships — scripts.
@@ -20,6 +30,7 @@ jobs:
   # main and manual runs always run both.
   changes:
     name: changes
+    timeout-minutes: 5
     runs-on: ubuntu-22.04
     permissions:
       contents: read
@@ -52,6 +63,7 @@ jobs:
   # macOS leg is not needed, so a docs-only PR is not blocked forever.
   smoke-macos-skipped:
     name: smoke + lint (macos-latest)
+    timeout-minutes: 5
     needs: changes
     # always(): when `changes` itself fails, this job still runs and fails, so a
     # broken file listing blocks the merge instead of reading as a skipped pass.
@@ -67,6 +79,7 @@ jobs:
 
   smoke:
     name: smoke + lint
+    timeout-minutes: 20
     needs: changes
     runs-on: ${{ matrix.os }}
     strategy:
@@ -117,6 +130,7 @@ jobs:
 
   test:
     name: core tests
+    timeout-minutes: 15
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout
@@ -141,6 +155,7 @@ jobs:
 
   unit-tests:
     name: unit tests
+    timeout-minutes: 10
     runs-on: ubuntu-22.04
     # Separate from `core tests` on purpose: that job runs bare python3 to prove
     # the shipped scripts work the way a consumer runs them, so pytest — a dev
@@ -165,6 +180,7 @@ jobs:
 
   version-bump:
     name: version bump
+    timeout-minutes: 5
     runs-on: ubuntu-22.04
     if: github.event_name == 'pull_request'
     steps:
@@ -207,6 +223,7 @@ jobs:
 
   queue-doctor:
     name: queue doctor (dogfood)
+    timeout-minutes: 10
     runs-on: ubuntu-22.04
     # The handle check is only worth running if it can fail: without a token the
     # target has no channel, skips the check, and the job goes green on a board
