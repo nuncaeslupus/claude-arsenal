@@ -1,75 +1,75 @@
-# Test cost — what a test is owed for, and what it may cost
+# Test cost — the default rules for what to test and what a test may cost
 
 Load this when a task adds more than a handful of tests, when a new test takes
 about a second or more, when a test needs a large fixture or a re-imported
-module, or when reviewing the tests a diff adds.
+module, when a module ships with no test file, or when reviewing the tests a
+diff adds.
 
-Where this comes from: a measured review of seven repositories built with this
-workflow, prompted by slow CI. None of them was slow because it had too many
-tests. The time was in four places, and each is cheap to avoid when the test is
-written and expensive to find afterwards.
+These are **defaults**. A project may override any of them by writing the reason
+where the next reader will find it (a comment beside the test, a line in the
+test config). Provenance: measured across several host repos with slow CI. None
+was slow from having too many tests — deletable tests were 1–3% of test lines.
+The time was in the patterns below, and in the other direction some large core
+modules had no test at all.
 
-## What a test is owed for
+## Owed — all code that can fail is tested
 
-One test per **failure mode** of logic that can actually fail: a branch, a
-boundary, a parser, an error path, anything that can lose or corrupt data or
-money. Not one per function, and not one per line of the diff.
+- Every module with branching, parsing, boundary or data-loss logic has a test
+  file. **A core module with none is a finding**, however large the rest of the
+  suite is.
+- One test per **failure mode** — a branch, a boundary, an error path, anything
+  that can lose or corrupt data or money. Not one per function or per diff line.
+- Before writing a test, name the bug it would catch. If it can only fail when
+  someone deliberately changes what it pins, it is a change detector.
 
-Before writing a test, name the bug it would catch. If the only way it fails is
-someone deliberately changing what it pins, it is a change detector.
-
-## Do not write
+## Not owed — do not write
 
 | Kind | What it looks like | Instead |
 |---|---|---|
-| Prose test | Greps a README, a skill, a doc or a changelog for wording; polices a number written in a doc | Nothing, or a linter step outside the suite. Derive the number from the source rather than testing the copy. |
-| Gate re-measurement | Re-runs an acceptance gate or evidence measurement (a whole-corpus run, a benchmark, a regenerate-and-diff) that a gate command or CI job already runs | Test the measuring function on a three-row input; leave the full measurement to the gate. |
-| Constant or glue | Pins a constant, a format string, a config value, a getter, a layer that only forwards, "is defined" | Nothing. The caller's test covers it. |
-| Duplicate | A second test for a path another test already pins | One test; a table when the cases differ only in data. |
-| Implementation pin | Asserts on internals or mocks so tightly that any refactor fails it and no behaviour bug does | Assert on what a caller can observe. |
+| Prose test | Greps a README, doc, skill or changelog for wording, or polices a number written in a doc | A lint step outside the suite, or nothing. Derive the number from the source. |
+| Gate re-measurement | Re-runs an acceptance gate, evidence or benchmark measurement (whole corpus, regenerate-and-diff) that a gate command or CI job already runs | Test the measuring function on a three-row input; the gate owns the full run. |
+| Constant or glue | Pins a constant, format string, config value, getter, "is defined", or a layer that only forwards | Nothing. The caller's test covers it. |
+| Duplicate | A second test of a path already pinned; N copies differing only in data | One table-driven (parametrized) or property test. |
+| Implementation pin | Asserts internals or mocks so tightly that every refactor fails it and no behaviour bug does | Assert on what a caller can observe. |
 
-## Build expensive fixtures once
+## How — keep each test cheap
 
-The single largest cost found: 73% of one suite's time was a module re-imported,
-or a large capture re-parsed, before **every** test. A sibling file that loaded
-the same module once ran the same kind of test twenty times faster.
-
-- Parse, import, build or start it once per module or file (`scope="module"`,
-  `beforeAll`, a `setUpClass`, one `mktemp` tree per shell file) and share it
-  across tests that only read it.
-- Keep a per-test rebuild only for tests that mutate the fixture, and group
-  those together so the rest do not pay for them.
-- Prefer a small hand-written input over a real capture. Keep one test on the
+- **Expensive fixture once.** Import, parse, render, build or start it once per
+  module or session (`scope="module"`/`"session"`, `beforeAll`) and share it
+  with every test that only reads it. Rebuild per test only where the test
+  mutates it, grouped apart. A module re-imported or a large capture re-parsed
+  before every test was the largest single cost measured; a corpus rendered by
+  several test files wants one shared cache, not one render per file.
+- **Small input over real capture.** Hand-write a few rows; keep one test on the
   real capture, not every test.
+- **Batch subprocess spawns.** One process that handles N inputs, not N fresh
+  interpreters. Call the function in-process unless the process boundary is the
+  thing under test.
+- **Parallel by default.** Run the runner across the available cores (for
+  example `pytest -n auto`, or the runner's worker setting). A test that breaks
+  in parallel shares state it should not — fix that, do not serialise the suite.
+- **Mark slow tests and keep them off every push.** A test slower than about a
+  second carries a stated reason, or a slow marker (`@pytest.mark.slow`, a tag,
+  a separate directory or target) that runs on the default branch, nightly, or
+  when its paths change. Sleeping to wait is slow with no reason: inject the
+  clock or the timeout.
 
-## The one-second rule
+**Fast-tier budget:** the tests that run on every push finish in about 60
+seconds of wall time on the CI runner. A starting value — set the project's own
+number in its test config, and treat exceeding it as the trigger to look, with
+the runner's duration report (`pytest --durations=20`, a verbose or JSON
+reporter), before pushing rather than after CI feels slow.
 
-A test slower than about a second needs a reason written beside it, or it goes
-in a slow tier (a marker, a tag, a separate directory or target) that does not
-run on every push: main-only, nightly, or when the paths it covers change. In
-one suite 0.8% of the tests were half the run. Find them with the runner's own
-report (`pytest --durations=20`, a verbose or JSON reporter, `time` per shell
-test file) before pushing, not after CI feels slow.
+## Then the CI shape
 
-Sleeping to wait for something is a slow test with no reason: inject the clock
-or the timeout.
-
-## Then check the CI shape
-
-Most of the cost in that review was not tests at all but workflows that ran
-everything on every push. With the bundle vendored, this prints what is missing
-(cancel-in-progress, job timeouts, costly runners on pull requests, path
-filters):
+Most measured cost was workflow shape, not tests. The CI defaults (one language
+version and Linux only on pull requests, cancel superseded runs, a timeout per
+job, nothing run twice) are in `claude-arsenal/references/ci-minutes.md`
+§ CI defaults; with the bundle vendored, this prints what a repo's workflows miss:
 
 ```bash
 python3 claude-arsenal/scripts/ci_shape.py
 ```
 
-`claude-arsenal/references/ci-minutes.md` has the trigger block that fixes it.
-
-## What this is not
-
-Not a reason to skip tests on logic that branches, parses or can lose data, and
-not a licence to delete an existing test without saying what protection goes
-with it. A suite can be large and proportionate; the question is always what
-each test would catch and what it costs per push.
+None of this is a licence to skip tests on logic that branches, parses or can
+lose data, or to delete a test without saying what protection goes with it.

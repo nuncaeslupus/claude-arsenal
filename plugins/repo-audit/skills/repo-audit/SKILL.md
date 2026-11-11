@@ -37,13 +37,15 @@ feature, use `review` or `execution`.
    catches. A bug finding needs a real check: a repro, a failing test, or a
    code path traced end to end, plus a file:line and a one-sentence failure
    scenario ("input X causes Y"). Architecture observations need evidence but
-   not a repro. A hunch with no trigger is not a finding. When tests or CI
-   are in scope, or CI is reported slow, load
-   [Test diet](references/test-diet.md) and measure before reading.
+   not a repro. A hunch with no trigger is not a finding. Every audit
+   includes the test diet: before reading any test file, load
+   [Test diet](references/test-diet.md) and measure first.
 4. **Report.** Give every finding a severity (high / medium / low) and a
    confidence (high / medium / low), and report all of them, including
    uncertain ones, labelled as such. Build the ledger as JSON and validate it
-   (load [Output shape](references/output-shape.md) before building it):
+   (load [Output shape](references/output-shape.md) before building it; the
+   report always carries a `Test diet` section, even when its verdict is
+   "proportionate, keep"):
 
    ```bash
    python3 "${CLAUDE_SKILL_DIR}/scripts/validate_findings.py" --input findings.json
@@ -84,8 +86,8 @@ feature, use `review` or `execution`.
   understanding, to scope each subsystem read.
 - [Issue taxonomy](references/issue-taxonomy.md) — before hunting; includes
   optional architecture prompts.
-- [Test diet](references/test-diet.md) — load when tests or CI are in scope, or
-  CI is slow: measure, then name the tests and CI jobs that cost more than they protect.
+- [Test diet](references/test-diet.md) — load before the hunt pass reads any test, in every audit:
+  measure, then name what is tested at a cost it does not earn and what is not tested at all.
 - [Overnight audit](references/overnight.md) — load when the run is unattended or too
   big for one sitting: price it, ask scope and a token ceiling, chunk, stop cleanly.
 - [Output shape](references/output-shape.md) — before reporting and queueing:

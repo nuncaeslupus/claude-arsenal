@@ -62,11 +62,13 @@ long pole) when a test file needs splitting. With `<!-- test-discipline: test-af
 the test alongside the change instead.
 
 A test is owed per failure mode of logic that branches, parses, has boundaries or
-can lose data, not per function. Write none that greps prose, re-runs a measurement
-a gate already runs, or pins a constant or glue. Build an expensive fixture once per
-module, and give a test slower than about a second a stated reason or a slow tier
-that does not run on every push. Load `references/test-cost.md` when a task adds
-more than a handful of tests or one of them is slow.
+can lose data, not per function; a module with such logic and no test file gets one.
+Write none that greps prose, re-runs a measurement a gate already runs, or pins a
+constant or glue. Build an expensive fixture once per module, and give a test slower
+than about a second a stated reason or a slow tier that does not run on every push.
+Load `references/test-cost.md` when a task adds more than a handful of tests or one
+of them is slow. When a task writes or changes a CI workflow, load
+`claude-arsenal:core:init § references/ci-minutes.md` (§ CI defaults) first.
 
 **GREEN.** Implement until the check passes:
 

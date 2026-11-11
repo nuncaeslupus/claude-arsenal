@@ -23,15 +23,33 @@ Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 Slow CI, addressed where it starts. A measured review of seven repositories
 built with this workflow found none was slow from having too many tests: the
 time was in workflow shape, fixtures rebuilt per test, tests re-running a
-measurement a gate already runs, and tests that grep prose.
+measurement a gate already runs, and tests that grep prose. What that review
+found is now the default a session works to, so the same mistakes are not made
+again in the next repo.
+
+### The defaults (each can be overridden with a written reason)
+- **CI** (`references/ci-minutes.md` § CI defaults): pull requests run **one
+  language version** — the oldest supported — on **Linux only**; the full
+  version/OS matrix, release and installer builds and the slow test tier run on
+  the default branch, nightly or tags; superseded runs are cancelled; every job
+  has a timeout; no step runs twice; the test runner runs in parallel.
+- **Tests** (`execution` § `references/test-cost.md`): every module with
+  branching, parsing, boundary or data-loss logic has tests, and a core module
+  with none is a finding; no tests that grep prose, pin constants or glue, or
+  re-run a gate's measurement; duplicates become one table or property test;
+  an expensive fixture is built once per module or session; subprocess spawns
+  are batched; slow tests are marked and kept off every push. Fast tier: about
+  60 seconds, a starting value.
+- **`python-bootstrap`** applies both when it writes a test target or CI.
 
 ### Added
 - **`scripts/ci_shape.py` checks your workflows.** Run
   `python3 claude-arsenal/scripts/ci_shape.py` to see, per push/PR workflow, a
   missing `cancel-in-progress`, jobs with no `timeout-minutes`, a macOS or
-  Windows runner on the pull-request path, and a missing path filter (a note,
-  not a problem: a filtered workflow carrying a required check blocks the PRs it
-  skips). Read-only, stdlib only; `--fail-on-problems` makes it a gate.
+  Windows runner on the pull-request path, a `matrix` spelling out more than
+  one language version or OS where pull requests reach it, and as notes: the
+  same command run by two jobs, and a missing path filter (a filtered workflow
+  carrying a required check blocks the PRs it skips). Read-only, stdlib only; `--fail-on-problems` makes it a gate.
   `references/ci-minutes.md` § Measuring it points at it.
 - **`execution` has a test-cost rule.** A test is owed per failure mode of logic
   that branches, parses or can lose data, not per function; no tests that grep
@@ -44,6 +62,8 @@ measurement a gate already runs, and tests that grep prose.
 - **`repo-audit` has a test-diet pass** (`references/test-diet.md`): measure
   first, classify what should be cut, merged or moved off the every-push path,
   state the protection each cut loses. "Proportionate, keep" is a valid result.
+  It runs in **every** audit, and the report always has a `Test diet` section:
+  verdict, measurements, what to trim, and core modules with no tests.
 
 Nothing changes in an existing repo until you run the script or a skill loads
 the new reference; no test of yours is touched.
