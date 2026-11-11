@@ -48,6 +48,10 @@ pyproject (ruff + mypy), Makefile and uv blocks. Apply only what the report flag
 - On an untyped codebase, stage strict mypy with per-module
   `[[tool.mypy.overrides]]` rather than weakening the global block.
 
+When the retrofit writes or changes a CI workflow or the test target, load
+`claude-arsenal:core:init § references/ci-minutes.md` (§ CI defaults) first: one
+Python version and Linux only on pull requests, parallel pytest.
+
 Then run the project's `make lint` and `make test` (or `uv run ruff check .`
 and `uv run mypy .`) to confirm the new config is clean.
 

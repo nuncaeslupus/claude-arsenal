@@ -21,6 +21,18 @@ contracts.
    treatment — interview prep, onboarding, a pitch, a deep-dive — hand the
    same findings JSON to the `explain-repo` skill rather than growing this
    one into a second narrative generator.
+
+   **Required section: `Test diet`.** Every audit report has one — a `sections`
+   entry with `"id": "test-diet"`, `"heading": "Test diet"` — whatever subset of
+   the taxonomy was asked for. It states, in this order: the verdict
+   (`proportionate, keep` / `trim` / `under-tested`); the measurements behind it
+   (test count, test-to-source line ratio, suite wall time, or "not run" and
+   why); a table of the CI defaults the repo misses and the tests or fixtures
+   that cost more than they protect, each with its saving and the protection
+   lost; and the core modules with no test file. A scope that left tests out
+   still gets the section, with the measurements that were cheap and "not
+   examined" for the rest. The rules for what goes in it are in
+   `references/test-diet.md` § 3. Report.
 2. **Verified, low-risk doc fixes.** A stale number, a broken cross-link, a
    factual claim the code contradicts — corrected directly in the target
    repo, through its own normal contribution path (its branch naming,

@@ -39,7 +39,8 @@ as a bug.
    can realistically get large.
 7. **Tests and verification gaps.** Which claim is untested, and which test
    does not pin what its name says? This group names the gap; use the
-   `pin-check` skill to confirm one specific suspect.
+   `pin-check` skill to confirm one specific suspect. When CI is slow or
+   tests cost more than they protect, load the test-diet reference.
 8. **Conventions and documentation.** Where does the repo disagree with
    itself? Its own `CLAUDE.md`, a linter config nothing enforces, a documented
    count that has drifted. Architecture and mechanism questions belong to the
