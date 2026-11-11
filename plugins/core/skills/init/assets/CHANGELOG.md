@@ -18,6 +18,36 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [5.26.0] - 2026-11-11
+
+Slow CI, addressed where it starts. A measured review of seven repositories
+built with this workflow found none was slow from having too many tests: the
+time was in workflow shape, fixtures rebuilt per test, tests re-running a
+measurement a gate already runs, and tests that grep prose.
+
+### Added
+- **`scripts/ci_shape.py` checks your workflows.** Run
+  `python3 claude-arsenal/scripts/ci_shape.py` to see, per push/PR workflow, a
+  missing `cancel-in-progress`, jobs with no `timeout-minutes`, a macOS or
+  Windows runner on the pull-request path, and a missing path filter (a note,
+  not a problem: a filtered workflow carrying a required check blocks the PRs it
+  skips). Read-only, stdlib only; `--fail-on-problems` makes it a gate.
+  `references/ci-minutes.md` § Measuring it points at it.
+- **`execution` has a test-cost rule.** A test is owed per failure mode of logic
+  that branches, parses or can lose data, not per function; no tests that grep
+  prose, re-run a gate's measurement, or pin constants; expensive fixtures are
+  built once per module; a test slower than about a second needs a reason or a
+  slow tier. The detail is in the skill's `references/test-cost.md`, loaded only
+  when a task adds many tests or a slow one.
+- **`review` flags tests that do not earn their cost**, citing the same
+  reference.
+- **`repo-audit` has a test-diet pass** (`references/test-diet.md`): measure
+  first, classify what should be cut, merged or moved off the every-push path,
+  state the protection each cut loses. "Proportionate, keep" is a valid result.
+
+Nothing changes in an existing repo until you run the script or a skill loads
+the new reference; no test of yours is touched.
+
 ## [5.25.0] - 2026-11-10
 
 ### Changed

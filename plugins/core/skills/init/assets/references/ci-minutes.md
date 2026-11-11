@@ -1,7 +1,7 @@
 # CI minutes — the local gates are the CI
 
 Read this when a repo's GitHub Actions minutes run out (or are about to), when
-choosing `merge-policy` for a private repo, or when writing the host's own CI
+choosing `merge-policy` for a private repo, when CI is slow, or when writing the host's own CI
 workflow. It is the frugal default, not a ban on CI: a repo with minutes to spare
 can keep every workflow it has.
 
@@ -146,3 +146,14 @@ python3 claude-arsenal/scripts/usage_report.py --actions --repo o/r --since 2026
 Per workflow: runs, runs that billed, estimated minutes. It is an estimate from
 job timings; the repository's billing page is the authority. Needs `gh`, and
 says so without it.
+
+```bash
+python3 claude-arsenal/scripts/ci_shape.py            # add --fail-on-problems to gate on it
+```
+
+Reads `.github/workflows/` and prints, per push/PR workflow, what of the trigger block in
+*Host CI* is missing: no `cancel-in-progress`, jobs with no `timeout-minutes`, a
+macOS or Windows runner on the pull-request path, no path filter (a NOTE, since
+a filtered workflow that carries a required check blocks the PRs it skips).
+Run it after writing or changing a workflow, and when CI feels slow, before
+suspecting the tests.

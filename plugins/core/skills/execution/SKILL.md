@@ -61,6 +61,13 @@ clock; load `claude-arsenal:core:init § references/performance-tuning.md` (§ T
 long pole) when a test file needs splitting. With `<!-- test-discipline: test-after -->` in the host `CLAUDE.md`, write
 the test alongside the change instead.
 
+A test is owed per failure mode of logic that branches, parses, has boundaries or
+can lose data, not per function. Write none that greps prose, re-runs a measurement
+a gate already runs, or pins a constant or glue. Build an expensive fixture once per
+module, and give a test slower than about a second a stated reason or a slow tier
+that does not run on every push. Load `references/test-cost.md` when a task adds
+more than a handful of tests or one of them is slow.
+
 **GREEN.** Implement until the check passes:
 
 - Read the target code first and match its style, naming and structure.
