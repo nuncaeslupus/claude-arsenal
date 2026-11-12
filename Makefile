@@ -79,7 +79,8 @@ tag:  ## publish v<.bundle-version> as a remote tag from HEAD — manual fallbac
 	if [ $$s -eq 0 ]; then echo "make tag: $$t already published — nothing to release"; exit 0; fi; \
 	if [ $$s -ne 2 ]; then \
 		echo "make tag: could not query origin (git ls-remote exit $$s) — refusing to guess" >&2; exit 1; fi; \
-	main=$$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's#^origin/##'); main=$${main:-main}; \
+	main=$$(git ls-remote --symref origin HEAD 2>/dev/null | sed -n 's#^ref: refs/heads/\([^[:space:]]*\)[[:space:]]*HEAD$$#\1#p'); \
+	test -n "$$main" || { echo "make tag: could not read origin's default branch — refusing to guess" >&2; exit 1; }; \
 	git fetch origin "$$main" --quiet 2>/dev/null || { echo "make tag: could not fetch origin/$$main — refusing to guess" >&2; exit 1; }; \
 	if [ "$$(git rev-parse 'HEAD^{commit}')" != "$$(git rev-parse "origin/$$main^{commit}")" ]; then \
 		echo "make tag: HEAD is not origin/$$main. A release tag must name the merged commit every" >&2; \

@@ -20,7 +20,7 @@ fail() { echo "FAIL: $1" >&2; exit 1; }
 
 setup_repo() {  # $1 = version
     rm -rf "${tmp}/origin.git" "${tmp}/work"
-    git init -q --bare "${tmp}/origin.git"
+    git init -q --bare -b main "${tmp}/origin.git"
     git init -q -b main "${tmp}/work"
     cd "${tmp}/work"
     git config user.email "test@arsenal.example"

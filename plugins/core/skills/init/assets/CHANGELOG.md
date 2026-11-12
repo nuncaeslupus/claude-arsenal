@@ -25,10 +25,11 @@ Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
   branch from the default and carry only uncommitted edits, so the PR claimed a
   passing gate over a diff holding just the task-file archive. It now refuses
   and names the way out (`--branch <current branch>`).
-- **Issue lookup honours `task-label` and reads every page.** The fallback that
-  resolves a task's issue over the API hardcoded `arsenal:task` and read one
-  page of 100, so a board with more task issues than that, or a renamed label,
-  failed with "cannot resolve the issue handle".
+- **Issue lookup honours `task-label` and reads up to 1,000 issues.** The
+  fallback that resolves a task's issue over the API hardcoded `arsenal:task`
+  and read one page of 100, so a board with more task issues than that, or a
+  renamed label, failed with "cannot resolve the issue handle". It now uses the
+  configured label and reads up to 10 pages.
 - **A claim only reads `lost` when the ref already exists.** Any HTTP 422 used
   to mean "someone else has it", including an unpushed or invalid anchor commit;
   that is now an error with the message shown, so a task is not silently skipped.

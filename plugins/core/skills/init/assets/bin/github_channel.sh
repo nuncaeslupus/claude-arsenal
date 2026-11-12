@@ -112,7 +112,7 @@ api() {
             [[ ${status} -eq 0 ]] && return 0
             # 422 is "already exists" for a lost race but also "Object does not
             # exist" / invalid ref: only the former is a lost claim.
-            grep -qi 'already exists' <<<"${out}" && return 3
+            grep -qi 'HTTP 422' <<<"${out}" && grep -qi 'already exists' <<<"${out}" && return 3
             # The same reasoning the `rest` branch below spells out, which this
             # one was missing: a write this channel is not permitted to make is
             # not a broken channel, it is the no-channel case the caller already

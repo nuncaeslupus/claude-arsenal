@@ -696,9 +696,16 @@ elif [[ "${current}" != "${BRANCH}" ]]; then
     # the session already COMMITTED on its own branch would be silently left
     # behind, and the PR would claim a passing gate over a diff that is only the
     # task-file archive. Refuse instead and name the way out.
-    _ahead="$(git rev-list --count "${default_ref}..HEAD" 2>/dev/null || echo 0)"
+    # An existing destination branch is the base when there is one: switching to
+    # it only drops commits it does not already contain.
+    _base="${default_ref}"
+    git rev-parse --verify --quiet "${BRANCH}" >/dev/null 2>&1 && _base="${BRANCH}"
+    if ! _ahead="$(git rev-list --count "${_base}..HEAD" 2>/dev/null)"; then
+        echo "open_task_pr: cannot compare HEAD with '${_base}', so unpublished commits cannot be ruled out. Fetch the default branch and re-run." >&2
+        exit 1
+    fi
     if [[ "${_ahead}" =~ ^[0-9]+$ ]] && (( _ahead > 0 )); then
-        echo "open_task_pr: HEAD (${current:-detached}) has ${_ahead} commit(s) not on ${default_ref}; cutting ${BRANCH} from the default branch would drop them." >&2
+        echo "open_task_pr: HEAD (${current:-detached}) has ${_ahead} commit(s) not on ${_base}; switching to ${BRANCH} would drop them." >&2
         echo "  To publish that work, re-run with  --branch ${current:-<name>}  (commit and push on the current branch)," >&2
         echo "  or move the commits yourself first. Nothing has been committed." >&2
         exit 1
