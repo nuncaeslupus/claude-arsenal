@@ -64,6 +64,7 @@ setup_repo 3.0.0
 stale=$(git rev-parse HEAD)
 git tag -a v3.0.0 -m "stale" >/dev/null
 echo "later work" > later.txt && git add -A && git commit -q -m "the actual release commit"
+git push -q origin main   # `make tag` only releases what origin/main points at
 out=$(make tag 2>&1)
 grep -q "points at ${stale}" <<<"${out}" || fail "should refuse a stale tag and say where it points: ${out}"
 git ls-remote --exit-code --tags origin 'refs/tags/v3.0.0' >/dev/null 2>&1 \

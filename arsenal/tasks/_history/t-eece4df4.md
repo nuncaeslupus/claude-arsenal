@@ -2,7 +2,7 @@
 id: t-eece4df4
 title: "review: repo_slug only understands four literal github.com URL shapes"
 priority: 5
-requires: [human:gate]
+status: merged
 ---
 
 Imported from issue #591

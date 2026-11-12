@@ -79,6 +79,15 @@ tag:  ## publish v<.bundle-version> as a remote tag from HEAD — manual fallbac
 	if [ $$s -eq 0 ]; then echo "make tag: $$t already published — nothing to release"; exit 0; fi; \
 	if [ $$s -ne 2 ]; then \
 		echo "make tag: could not query origin (git ls-remote exit $$s) — refusing to guess" >&2; exit 1; fi; \
+	main=$$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's#^origin/##'); main=$${main:-main}; \
+	git fetch origin "$$main" --quiet 2>/dev/null || { echo "make tag: could not fetch origin/$$main — refusing to guess" >&2; exit 1; }; \
+	if [ "$$(git rev-parse 'HEAD^{commit}')" != "$$(git rev-parse "origin/$$main^{commit}")" ]; then \
+		echo "make tag: HEAD is not origin/$$main. A release tag must name the merged commit every" >&2; \
+		echo "  consumer will fetch, not a feature branch or a pre-squash commit:" >&2; \
+		echo "  git checkout $$main && git pull && make tag" >&2; exit 1; fi; \
+	if command -v gh >/dev/null 2>&1; then \
+		echo "make tag: CI on $$(git rev-parse --short HEAD):"; \
+		gh run list --commit "$$(git rev-parse HEAD)" --workflow ci --json conclusion,status --jq '.[] | "  \(.status) \(.conclusion)"' 2>/dev/null || true; fi; \
 	latest=$$(git tag -l 'v*.*.*' --sort=v:refname | tail -1 | sed 's/^v//'); \
 	if [ -n "$$latest" ] && ! python3 -c "import sys; p=lambda x: list(map(int, x.split('.'))); sys.exit(0 if p(sys.argv[1]) >= p(sys.argv[2]) else 1)" "$$v" "$$latest"; then \
 		echo "make tag: $$t is lower than latest v$$latest — refusing" >&2; exit 1; fi; \

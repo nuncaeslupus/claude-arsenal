@@ -140,4 +140,52 @@ chmod +x "${BIN}/curl"
 [[ "$(bash "${BIN}/github_channel.sh" --detect)" == "none" ]] \
     || fail "a proxy answering the reachability probe must not read as a usable channel"
 
+# --- 7: repo_slug survives every URL shape and never echoes a credential ---
+check_slug() {  # <remote-url> <expected slug, or FAIL>
+    git remote set-url origin "$1"
+    local got rc; got="$(bash "${BIN}/github_channel.sh" --slug 2>/dev/null)"; rc=$?
+    if [[ "$2" == FAIL ]]; then
+        [[ ${rc} -ne 0 && -z "${got}" ]] || fail "slug for '$1' should fail, got '${got}'"
+    else
+        [[ "${got}" == "$2" ]] || fail "slug for '$1' should be '$2', got '${got}'"
+    fi
+}
+check_slug https://github.com/o/r.git o/r
+check_slug https://github.com/o/r/ o/r
+check_slug https://x-access-token:SECRET@github.com/o/r.git o/r
+check_slug git@gh-work:o/r.git o/r
+check_slug ssh://git@ghe.example.com:2222/o/r.git o/r
+check_slug https://github.com/justowner FAIL
+
+# --- 8: only "already exists" is a lost claim; any other 422 is a fault ---
+write_curl422() {
+    cat > "${BIN}/curl" <<EOF2
+#!/usr/bin/env bash
+out=""; url=""
+args=("\$@")
+for i in "\${!args[@]}"; do
+    case "\${args[\$i]}" in
+        -o) out="\${args[\$((i+1))]}" ;;
+        https://*) url="\${args[\$i]}" ;;
+    esac
+done
+if [[ "\${url}" == *"/rate_limit" || "\${url}" == *"/user" ]]; then
+    [[ -n "\${out}" ]] && echo '{"ok":true}' > "\${out}"; printf '200'; exit 0
+fi
+[[ -n "\${out}" ]] && echo '$1' > "\${out}"
+printf '422'; exit 0
+EOF2
+    chmod +x "${BIN}/curl"
+}
+git remote set-url origin https://github.com/o/r.git
+write_curl422 '{"message":"Reference already exists"}'
+bash "${BIN}/github_channel.sh" --api POST "/repos/o/r/git/refs" '{"ref":"x"}' >/dev/null 2>&1; rc=$?
+[[ ${rc} -eq 3 ]] || fail "'Reference already exists' must stay exit 3, got ${rc}"
+write_curl422 '{"message":"Object does not exist"}'
+bash "${BIN}/github_channel.sh" --api POST "/repos/o/r/git/refs" '{"ref":"x"}' >/dev/null 2>&1; rc=$?
+[[ ${rc} -eq 4 ]] || fail "an invalid-sha 422 must be a fault (exit 4), got ${rc}"
+out=$(ARSENAL_DEFAULT_BRANCH=main bash "${BIN}/claim_task.sh" t-422 2>&1); rc=$?
+[[ ${rc} -eq 2 ]] && ! grep -q '^lost' <<<"${out}" \
+    || fail "claim_task.sh must report an error, not 'lost', for a non-collision 422 (rc=${rc}): ${out}"
+
 echo "PASS: github_channel_test — all gates passed"

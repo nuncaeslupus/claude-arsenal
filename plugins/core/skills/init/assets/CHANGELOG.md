@@ -18,6 +18,28 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [5.26.2] - 2026-11-12
+
+- **`open_task_pr.sh` no longer drops work you already committed.** Run from a
+  branch that has commits not on the default branch, it used to cut a fresh
+  branch from the default and carry only uncommitted edits, so the PR claimed a
+  passing gate over a diff holding just the task-file archive. It now refuses
+  and names the way out (`--branch <current branch>`).
+- **Issue lookup honours `task-label` and reads every page.** The fallback that
+  resolves a task's issue over the API hardcoded `arsenal:task` and read one
+  page of 100, so a board with more task issues than that, or a renamed label,
+  failed with "cannot resolve the issue handle".
+- **A claim only reads `lost` when the ref already exists.** Any HTTP 422 used
+  to mean "someone else has it", including an unpushed or invalid anchor commit;
+  that is now an error with the message shown, so a task is not silently skipped.
+- **Remote URLs of any shape resolve to `owner/repo`.** Token-bearing https
+  URLs, ssh host aliases, ports, other hosts and trailing slashes work, and a
+  credential in the URL is never echoed into a printed API path. A remote that
+  is not `owner/repo` fails instead of producing a garbage slug.
+- **`park_task.sh` pushes to `ARSENAL_QUEUE_REMOTE`** like every other queue
+  script, not `ARSENAL_REMOTE` (the update-check remote), where it could force-push
+  a whole working tree to the marketplace remote.
+
 ## [5.26.1] - 2026-11-12
 
 - **Imported task files pass Markdown lint.** `issue_import.py` pasted an
