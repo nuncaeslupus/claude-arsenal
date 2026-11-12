@@ -51,6 +51,18 @@ bash -c "${resume}" >/dev/null 2>&1 || fail "the resume command failed: ${resume
 [[ -z "$(git diff --cached --name-only)" ]] || fail "resume staged the work; open_task_pr.sh wants it uncommitted"
 pass "a fresh clone restores the work uncommitted, deletions included"
 
+# ARSENAL_REMOTE belongs to check_update.sh (the upstream marketplace remote);
+# parking must follow ARSENAL_QUEUE_REMOTE and never push the tree there.
+git init -q --bare -b main "${tmp}/upstream.git"
+git remote add arsenal "${tmp}/upstream.git"
+printf 'more\n' > more.txt
+ARSENAL_REMOTE=arsenal bash "${PARK}" t-remote >/dev/null || fail "park with ARSENAL_REMOTE set failed"
+git ls-remote --exit-code "${tmp}/upstream.git" refs/heads/arsenal/wip/t-remote >/dev/null 2>&1 \
+    && fail "the WIP snapshot was pushed to the ARSENAL_REMOTE (update-check) remote"
+git ls-remote --exit-code "${tmp}/remote.git" refs/heads/arsenal/wip/t-remote >/dev/null \
+    || fail "the WIP snapshot did not reach origin"
+pass "ARSENAL_REMOTE does not redirect the snapshot push"
+
 bash "${PARK}" "bad..id" >/dev/null 2>&1 && fail "an id git cannot use as a branch must be refused"
 pass "an unusable task id is refused"
 

@@ -2,7 +2,7 @@
 id: t-cbb2c98f
 title: "review: open_task_pr issue lookup hardcodes the label and reads one page of 100"
 priority: 5
-requires: [human:gate]
+status: merged
 ---
 
 Imported from issue #593
