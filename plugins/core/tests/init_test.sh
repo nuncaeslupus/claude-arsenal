@@ -413,5 +413,42 @@ if python3 "${INIT_PY}" --repo-path "${declined_i}" --bundle-dir "${BUNDLE_DIR}"
 fi
 echo "PASS: test_setup_interview_pending"
 
+# test_init_side_effects — what init does to the host without being asked is
+# announced and has an opt-out (#585, #610, #596), and the queue workflow is only
+# "removed by you" when git history says it was committed (#607).
+home_plain="${tmpdir}/home-plain"; mkdir -p "${home_plain}"
+home_own="${tmpdir}/home-own"; mkdir -p "${home_own}/.claude"
+echo '{"statusLine":{"type":"command","command":"mine"}}' > "${home_own}/.claude/settings.json"
+side() { HOME="$1" python3 "${INIT_PY}" --repo-path "$2" --bundle-dir "${BUNDLE_DIR}" "${@:3}" 2>&1; }
+has_sl() { python3 -c 'import json,sys; sys.exit(0 if "statusLine" in json.load(open(sys.argv[1])) else 1)' "$1/.claude/settings.json" 2>/dev/null; }
+r="${tmpdir}/se-default"; mkdir -p "${r}"; printf '# P\n' > "${r}/README.md"
+out=$(side "${home_plain}" "${r}" --no-branch-protection)
+has_sl "${r}" || { echo "FAIL: default init did not register the statusLine" >&2; exit 1; }
+grep -q 'badge under README.md' <<<"${out}" || { echo "FAIL: badge not announced" >&2; exit 1; }
+grep -qE 'git add .*README\.md' <<<"${out}" || { echo "FAIL: stage line omits README.md: ${out}" >&2; exit 1; }
+r="${tmpdir}/se-personal"; mkdir -p "${r}"
+side "${home_own}" "${r}" --silent >/dev/null
+! has_sl "${r}" || { echo "FAIL: a personal statusLine was overridden by the project one" >&2; exit 1; }
+r="${tmpdir}/se-optout"; mkdir -p "${r}"; printf '# P\n' > "${r}/README.md"
+side "${home_plain}" "${r}" --silent --no-statusline --no-attribution >/dev/null
+! has_sl "${r}" || { echo "FAIL: --no-statusline still registered it" >&2; exit 1; }
+! grep -q 'claude-arsenal:attribution' "${r}/README.md" || { echo "FAIL: --no-attribution added the badge" >&2; exit 1; }
+[[ "$(python3 "${CFG_PY}" --repo-root "${r}" --get attribution)" == "False" ]] \
+    || { echo "FAIL: --no-attribution not recorded" >&2; exit 1; }
+# #607: config says true, workflow never committed -> reinstalled, not "removed by you"
+r="${tmpdir}/se-wf"; mkdir -p "${r}"; git -C "${r}" init -q
+side "${home_plain}" "${r}" --silent >/dev/null
+rm "${r}/.github/workflows/arsenal-queue.yml"
+out=$(side "${home_plain}" "${r}" --silent)
+[[ -f "${r}/.github/workflows/arsenal-queue.yml" ]] || { echo "FAIL: never-committed workflow not reinstalled" >&2; exit 1; }
+! grep -q 'removed by you' <<<"${out}" || { echo "FAIL: blamed the user for an uncommitted workflow" >&2; exit 1; }
+# committed, then deleted -> the user's choice is honoured
+git -C "${r}" add -A >/dev/null; git -C "${r}" -c user.name=t -c user.email=t@example.com commit -qm wf
+git -C "${r}" rm -q .github/workflows/arsenal-queue.yml
+out=$(side "${home_plain}" "${r}" --silent)
+grep -q 'removed by you' <<<"${out}" || { echo "FAIL: a committed-then-deleted workflow was not honoured" >&2; exit 1; }
+[[ ! -f "${r}/.github/workflows/arsenal-queue.yml" ]] || { echo "FAIL: deleted workflow came back" >&2; exit 1; }
+echo "PASS: test_init_side_effects"
+
 echo "PASS: init_test — all gates passed"
 exit 0

@@ -3,6 +3,7 @@ id: t-bea65d26
 title: "review: Documented `git add` after /init leaves the README badge uncommitted"
 priority: 5
 requires: [human:gate]
+status: merged
 ---
 
 Imported from issue #596
