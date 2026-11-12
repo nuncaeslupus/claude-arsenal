@@ -348,4 +348,58 @@ survivor=$(grep -rl 'PRE-EXISTING TASK' "${fresh}" || true)
 [[ -n ${survivor} ]] || fail "the other writer's task file was destroyed: $(ls -A "${fresh}")"
 echo "PASS: a path won by another writer is left intact and reported, not overwritten"
 
+# Gate 14: an imported body lands lint-clean. An issue body is written by a
+# person or a tool, not by a linter, and the task file is committed into a
+# repository that may gate on Markdown lint — eleven imported files once turned
+# a consumer's CI red. One process, one assertion per failure mode, asserted on
+# structure so the gate needs no linter installed.
+IMPORT="${IMPORT}" python3 - <<'PY' || fail "an imported body is not normalised (see the assertion above)"
+import importlib.util, os, sys
+
+spec = importlib.util.spec_from_file_location("issue_import", os.environ["IMPORT"])
+mod = importlib.util.module_from_spec(spec)
+sys.modules["issue_import"] = mod
+spec.loader.exec_module(mod)
+norm = mod.normalise_body
+
+# Blank line before and after every heading; nothing dropped.
+assert norm("intro\n### One\ntext\n### Two\n```\nx\n```") == (
+    "intro\n\n## One\n\ntext\n\n## Two\n\n```\nx\n```"
+), norm("intro\n### One\ntext\n### Two\n```\nx\n```")
+
+# The shallowest heading becomes `##`, relative depth kept, capped at six —
+# deeper bodies are raised, a body-level `#` is lowered.
+assert norm("### A\r\ntext\r\n#### B") == "## A\n\ntext\n\n### B"
+assert norm("# A\n\n## B\n\n###### C") == "## A\n\n### B\n\n###### C"
+
+# `__` in prose cannot open underscore-strong; an escape already there stays.
+assert norm("call __init__ then \\__x") == "call \\_\\_init\\_\\_ then \\__x"
+
+# Code is never altered: fences, inline spans, indented blocks. Nor is a URL
+# (an escape there changes where the link goes) or a `___` thematic break.
+code = (
+    "```py\n# not a heading\n__all__ = []\n```\n\n"
+    "use `__main__` here\n\n    __indented__ = 1\n\n"
+    "<https://example.com/a__b> https://example.com/c__d\n\n___"
+)
+assert norm(code) == code, norm(code)
+
+# A fence inside a block quote is still code.
+quoted = "> ```py\n> __all__ = []\n> ```\n\nafter \\_\\_x\\_\\_"
+assert norm(quoted) == quoted, norm(quoted)
+
+# A backtick "fence" with a backtick in its info string opens nothing, so the
+# heading under it is still normalised.
+assert norm("```foo`bar\n### H\ntext") == "```foo`bar\n\n## H\n\ntext"
+
+# Normalising twice equals normalising once.
+messy = "# T\ntext __a__ `__b__`\n#### Deep\n~~~\n# x __y__\n~~~\n##### Deeper\nend"
+assert norm(norm(messy)) == norm(messy)
+
+# And it is wired into the file `--apply` writes, not just defined.
+out = mod.render({"number": 1, "title": "t", "body": "### H\nsee __doc__"}, "t-x")
+assert "\n\n## H\n\nsee \\_\\_doc\\_\\_\n\n## Acceptance gate" in out, out
+PY
+echo "PASS: an imported body is normalised to pass common Markdown lint defaults"
+
 echo "PASS: issue_import_test — all gates passed"

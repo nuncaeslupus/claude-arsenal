@@ -18,6 +18,21 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [5.26.1] - 2026-11-12
+
+- **Imported task files pass Markdown lint.** `issue_import.py` pasted an
+  issue's body into `arsenal/tasks/<id>.md` exactly as written, and issue
+  bodies are not lint-clean: in a repository that gates on a Markdown linter,
+  eleven imported task files turned CI red and each had to be fixed by hand.
+  The body is now normalised as it is imported: a blank line before and after
+  every heading; heading levels shifted so the shallowest is `##` (the task's
+  title is the document title; relative depth is kept); `__` in prose escaped,
+  so a word like `__init__` shows as written instead of reading as bold; CRLF
+  line endings converted. Fenced code, indented code, inline code spans and
+  URLs are never touched, and no text is dropped.
+- Task files imported before this release are not rewritten. Fix those once by
+  hand if your linter flags them; nothing needs configuring.
+
 ## [5.26.0] - 2026-11-11
 
 Slow CI, addressed where it starts. A measured review of seven repositories
