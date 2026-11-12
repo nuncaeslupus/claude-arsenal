@@ -18,6 +18,28 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [5.27.0] - 2026-11-12
+
+- **`/init` says what it does to your repo, and you can decline each part.**
+  New flags `--no-statusline` and `--no-attribution` join
+  `--no-branch-protection`. The README badge is now announced on `--silent`
+  runs too, and the branch-protection change is announced before it is made.
+  A deliberate run ends with the exact `git add` line for everything it
+  touched, `README.md` included; the documented quick-start command now stages
+  `README.md` as well, so the badge no longer lingers as an uncommitted change
+  that trips the "clean working tree" check.
+- **Your personal `statusLine` is no longer overridden.** `/init` registers the
+  project `statusLine` (the token-budget stop) only when none is set in the
+  project or in `~/.claude/settings.json`. An existing registration is left as
+  it is.
+- **No `tmp/arsenal-metrics/` in repos that never ran `/init`.** The skill-load
+  hook now writes only in a repo that has `claude-arsenal/` or `arsenal/`.
+- **A queue workflow that was never committed is no longer "removed by you".**
+  With `queue-automation = true` and no workflow file on disk, `/init` records
+  the opt-out only if git history shows the file was committed and later
+  deleted. Otherwise it reinstalls it, which is what happened to a session
+  whose token could not push workflow files.
+
 ## [5.26.1] - 2026-11-12
 
 - **Imported task files pass Markdown lint.** `issue_import.py` pasted an

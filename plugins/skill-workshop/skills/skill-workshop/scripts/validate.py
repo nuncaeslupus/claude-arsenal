@@ -259,6 +259,9 @@ CANONICAL_ARGS = {
     "--allow-stale",
     # init: opt out of protecting the default branch on GitHub at install time
     "--no-branch-protection",
+    # init: opt out of the project statusLine and the README badge
+    "--no-statusline",
+    "--no-attribution",
     # init: the setup interview's answers, each named after its config key
     "--autonomy",
     "--verification",

@@ -12,6 +12,7 @@ fail() { echo "FAIL: skill_load_hook_test — $*" >&2; exit 1; }
 tmp="$(mktemp -d)"
 trap 'rm -rf "${tmp}"' EXIT
 git -C "${tmp}" init -q
+mkdir "${tmp}/claude-arsenal"
 
 test_skill_load_hook_records_row() {
   local out
@@ -39,6 +40,7 @@ test_skill_load_hook_ignores_symlinks() {
   for link in tmp tmp/arsenal-metrics tmp/arsenal-metrics/skill-loads.tsv; do
     repo="$(mktemp -d "${tmp}/sym.XXXXXX")"
     git -C "${repo}" init -q
+    mkdir "${repo}/claude-arsenal"
     target="$(mktemp -d "${tmp}/target.XXXXXX")"
     printf 'keep\n' >"${target}/victim"
     mkdir -p "${repo}/$(dirname "${link}")"
@@ -53,6 +55,15 @@ test_skill_load_hook_ignores_symlinks() {
   done
 }
 
+# A repo that never ran /init gets nothing written into it (#595).
+test_skill_load_hook_skips_uninitialised_repo() {
+  local repo
+  repo="$(mktemp -d "${tmp}/bare.XXXXXX")"
+  git -C "${repo}" init -q
+  (cd "${repo}" && printf '%s' '{"tool_input":{"skill":"specify"}}' | bash "${HOOK}") || fail "must exit 0"
+  [[ ! -e "${repo}/tmp" ]] || fail "hook created tmp/ in a repo without the arsenal"
+}
+
 test_skill_load_hook_registered() {
   grep -q 'record_skill_load.sh' "${core}/hooks/hooks.json" || fail "not registered in core hooks.json"
   python3 - "${core}/hooks/hooks.json" <<'PY' || fail "PostToolUse Skill matcher missing"
@@ -65,5 +76,6 @@ PY
 test_skill_load_hook_records_row
 test_skill_load_hook_never_fails
 test_skill_load_hook_ignores_symlinks
+test_skill_load_hook_skips_uninitialised_repo
 test_skill_load_hook_registered
 echo "PASS: skill_load_hook_test — all gates passed"

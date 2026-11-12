@@ -2,7 +2,7 @@
 name: init
 description: Installs or refreshes claude-arsenal/ in a host repo, or adds a workspace. Use when the user wants the arsenal set up, updated or a workspace added. Not for queueing tasks.
 user-invocable: true
-argument-hint: "[--repo-path PATH] [--profile NAME] [--sections A,B] [--no-branch-protection] [--interview] [--workspace NAME] [--root PATH] [--spec PATH] [--plan PATH]"
+argument-hint: "[--repo-path PATH] [--profile NAME] [--sections A,B] [--no-branch-protection] [--no-statusline] [--no-attribution] [--interview] [--workspace NAME] [--root PATH] [--spec PATH] [--plan PATH]"
 ---
 
 # init
@@ -142,7 +142,12 @@ creates `arsenal/project/<NAME>/` stubs and updates `arsenal/project/overview.md
 - **The injected block belongs in the root `CLAUDE.md`**, not a nested one.
 - **README credit.** Init adds a "built with claude-arsenal" badge under
   `README.md`'s title once and records `attribution = true`; a host that deletes
-  the block keeps it deleted, and `attribution = false` stops it being added.
+  the block keeps it deleted, and `attribution = false` (or `--no-attribution`)
+  stops it being added. It is announced even on `--silent`, and the closing
+  `git add` line names `README.md` when the badge is there.
+- **statusLine.** Init registers the project `statusLine` for the token-budget
+  stop unless one is already set (project or `~/.claude/settings.json`) or
+  `--no-statusline` is passed.
 - **Refresh only moves forward.** When the host's bundle is newer than this
   skill's copy, init writes nothing and says so; update the plugin instead.
   `--allow-downgrade` is for recovering a broken install.
