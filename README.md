@@ -33,7 +33,7 @@ Then, in the project you want set up:
 ```
 
 ```bash
-git add .claude claude-arsenal arsenal .github CLAUDE.md .gitignore
+git add -A .claude claude-arsenal arsenal .github CLAUDE.md .gitignore README.md
 git commit -m "chore: add claude-arsenal"
 ```
 

@@ -788,12 +788,29 @@ def _check_bundle_version(bundle: Path, arsenal: Path) -> tuple[str, str] | None
 _STATUSLINE_SCRIPT = "claude-arsenal/bin/statusline_capture.sh"
 
 
-def _register_statusline(repo_path: Path) -> None:
+def _has_personal_statusline() -> bool:
+    """Whether ~/.claude/settings.json carries a statusLine of the person running init."""
+    try:
+        personal = json.loads((Path.home() / ".claude" / "settings.json").read_text("utf-8"))
+    except (OSError, ValueError, RuntimeError):
+        return False
+    return isinstance(personal, dict) and "statusLine" in personal
+
+
+def _skip_statusline(enabled: bool) -> None:
+    why = "--no-statusline" if not enabled else "you already have a personal statusLine"
+    print(f"  settings.json: statusLine not registered ({why}); the token-budget stop is off")
+
+
+def _register_statusline(repo_path: Path, enabled: bool = True) -> None:
     """Register statusline_capture.sh as the host statusLine command.
 
     Writes/merges .claude/settings.json. A user's existing statusLine is never
     clobbered — the budget guard is best-effort and must not override a custom
-    status line the user already configured.
+    status line the user already configured. That includes a personal one in
+    ~/.claude/settings.json: project settings win over user settings and this
+    file is committed, so registering here would replace it for every
+    contributor (#610). `--no-statusline` opts out outright.
     """
     settings_path = repo_path / ".claude" / "settings.json"
     block = {
@@ -813,8 +830,12 @@ def _register_statusline(repo_path: Path) -> None:
         if "statusLine" in settings and settings["statusLine"] != legacy:
             print("  settings.json: statusLine already set — skipping")
             return
+        if not enabled or _has_personal_statusline():
+            return _skip_statusline(enabled)
         settings["statusLine"] = block
     else:
+        if not enabled or _has_personal_statusline():
+            return _skip_statusline(enabled)
         settings = {"statusLine": block}
 
     settings_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1646,7 +1667,7 @@ ATTRIBUTION_BLOCK = (
 )
 
 
-def _add_attribution(repo_path: Path, silent: bool = False) -> None:
+def _add_attribution(repo_path: Path, silent: bool = False, enabled: bool = True) -> None:
     """Put the "built with claude-arsenal" badge under README.md's title, once.
 
     The badge credits and links the tooling the way a license notice would, and
@@ -1659,6 +1680,9 @@ def _add_attribution(repo_path: Path, silent: bool = False) -> None:
     """
     config = _home(repo_path) / "config.toml"
     setting = _config_value(config, "attribution")
+    if setting is None and not enabled:
+        _upsert_bare_key(config, "attribution", "false")
+        setting = False
     if setting is False:
         return
     readme = repo_path / "README.md"
@@ -1679,8 +1703,12 @@ def _add_attribution(repo_path: Path, silent: bool = False) -> None:
             block.append("")
         lines[at:at] = block
         new = "\n".join(lines)
-        if not silent:
-            print("init: added the 'built with claude-arsenal' badge under README.md's title")
+        # Printed on --silent too: README.md is the host's file, and this is the
+        # one place a first run would otherwise change it without a word (#585).
+        print(
+            "init: added the 'built with claude-arsenal' badge under README.md's title "
+            "(stage README.md; opt out with --no-attribution or `attribution = false`)"
+        )
     else:
         return
     if new != text:
@@ -1883,6 +1911,21 @@ def _shipped_shas(source: Path) -> set[str]:
     return {ln.strip() for ln in lines.splitlines() if ln.strip() and not ln.startswith("#")}
 
 
+def _workflow_was_committed(repo_path: Path, target: Path) -> bool:
+    """Whether git history shows `target` was committed at some point."""
+    rel = target.relative_to(repo_path).as_posix()
+    try:
+        proc = subprocess.run(
+            ["git", "-C", str(repo_path), "log", "--all", "-1", "--format=%h", "--", rel],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return bool(proc.stdout.strip())
+
+
 def _install_queue_workflow(repo_path: Path, arsenal: Path, silent: bool = False) -> None:
     """Install .github/workflows/arsenal-queue.yml, and say plainly what it does.
 
@@ -1945,8 +1988,10 @@ def _install_queue_workflow(repo_path: Path, arsenal: Path, silent: bool = False
             )
         return
 
-    if setting == "true":
-        # Installed before, gone now: the user removed it. Honour that.
+    if setting == "true" and _workflow_was_committed(repo_path, target):
+        # Committed before, gone now: the user removed it. Honour that. One only
+        # ever written locally (a token without the `workflow` scope cannot push
+        # it) was removed by nobody, so it falls through to a reinstall (#607).
         _record_queue_automation(config, "false")
         print(
             f"  .github/workflows/{_QUEUE_WORKFLOW}: removed by you — recorded "
@@ -2014,6 +2059,10 @@ def _setup_branch_protection(repo_path: Path, arsenal: Path, enabled: bool) -> b
     script = arsenal / "scripts" / "branch_protection.py"
     if not script.is_file():
         return False
+    print(
+        "  branch protection: about to change the default branch's protection on GitHub "
+        "(skip with --no-branch-protection)"
+    )
     try:
         proc = subprocess.run(
             [sys.executable, str(script), "--repo-root", str(repo_path)],
@@ -2218,6 +2267,8 @@ def init_base(
     sections: list[str] | None = None,
     allow_stale: bool = False,
     branch_protection: bool = True,
+    statusline: bool = True,
+    attribution: bool = True,
 ) -> bool:
     """True when the install ran; False when it refused (nothing written)."""
     bundle = _bundle_dir(bundle_override)
@@ -2353,7 +2404,7 @@ def init_base(
     _install_queue_workflow(repo_path, arsenal, silent=silent)
 
     # statusLine command feeding budget_check.sh (token-budget stop)
-    _register_statusline(repo_path)
+    _register_statusline(repo_path, enabled=statusline)
 
     # The other half of the token story: statusLine reports the window, this
     # bounds what each turn puts in it.
@@ -2367,7 +2418,7 @@ def init_base(
 
     # CLAUDE.md, and the README's credit line
     _inject_claude_md(repo_path)
-    _add_attribution(repo_path, silent=silent)
+    _add_attribution(repo_path, silent=silent, enabled=attribution)
 
     # The GitHub-side and config-side safety nets. Deliberate runs only: the
     # session-start refresh is --silent and must stay cheap and offline.
@@ -2390,7 +2441,24 @@ def init_base(
             print(f"claude-arsenal {ver_path.read_text(encoding='utf-8').strip()}")
     else:
         print(f"\ninit: claude-arsenal/ ready at {repo_path}")
+        print(f"init: stage everything it touched with: {_stage_command(repo_path)}")
     return True
+
+
+def _stage_command(repo_path: Path) -> str:
+    """The `git add` for every path init may have written that exists here."""
+    paths = [
+        ".claude",
+        "claude-arsenal",
+        _home(repo_path).relative_to(repo_path).as_posix(),
+        ".github",
+        "CLAUDE.md",
+        ".gitignore",
+    ]
+    readme = repo_path / "README.md"
+    if readme.is_file() and ATTRIBUTION_OPEN in readme.read_text(encoding="utf-8"):
+        paths.append("README.md")
+    return "git add " + " ".join(dict.fromkeys(p for p in paths if (repo_path / p).exists()))
 
 
 def init_workspace(
@@ -2405,6 +2473,8 @@ def init_workspace(
     sections: list[str] | None = None,
     allow_stale: bool = False,
     branch_protection: bool = True,
+    statusline: bool = True,
+    attribution: bool = True,
 ) -> None:
     # The workspace name becomes a directory under arsenal/project/ — host-owned,
     # so a bundle upgrade never touches a workspace's spec, plan, or context.
@@ -2445,6 +2515,8 @@ def init_workspace(
         sections=sections,
         allow_stale=allow_stale,
         branch_protection=branch_protection,
+        statusline=statusline,
+        attribution=attribution,
     ):
         sys.exit("init: workspace not registered — the bundle refused to install (see above)")
 
@@ -2757,6 +2829,16 @@ def main() -> None:
         action="store_true",
         help='Do not protect the default branch on GitHub; records branch-protection = "off".',
     )
+    p.add_argument(
+        "--no-statusline",
+        action="store_true",
+        help="Do not register the project statusLine (the token-budget stop is off).",
+    )
+    p.add_argument(
+        "--no-attribution",
+        action="store_true",
+        help="Do not add the README badge; records attribution = false.",
+    )
     # The setup interview: /init asks, then passes the answers here. A flag left
     # out writes nothing, so the key keeps its default. Values are checked
     # against arsenal_config.ENUMS, loaded only when a flag is given.
@@ -2858,6 +2940,8 @@ def main() -> None:
             sections=_parse_sections(args.sections),
             allow_stale=args.allow_stale,
             branch_protection=not args.no_branch_protection,
+            statusline=not args.no_statusline,
+            attribution=not args.no_attribution,
         )
         installed = True
     else:
@@ -2870,6 +2954,8 @@ def main() -> None:
             sections=_parse_sections(args.sections),
             allow_stale=args.allow_stale,
             branch_protection=not args.no_branch_protection,
+            statusline=not args.no_statusline,
+            attribution=not args.no_attribution,
         )
     if installed and interview:
         _record_interview(repo_path, interview)
