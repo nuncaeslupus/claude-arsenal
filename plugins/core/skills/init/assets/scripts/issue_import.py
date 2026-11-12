@@ -112,7 +112,9 @@ false
 # an ATX heading may be indented by at most three spaces, and four or more is
 # an indented code block — or a list continuation, which cannot be told apart
 # without parsing the list, so it is left alone like code.
-_FENCE_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
+# A fence may sit inside block quotes (`> ```), and a backtick fence whose info
+# string holds a backtick is not a fence at all — it is an inline code span.
+_FENCE_RE = re.compile(r"^(?: {0,3}>)* {0,3}(`{3,}(?!.*`)|~{3,})")
 _HEADING_RE = re.compile(r"^( {0,3})(#{1,6})(?=[ \t]|$)")
 _INDENTED_RE = re.compile(r"^(?: {4}|\t)")
 _RULE_RE = re.compile(r"^ {0,3}(?:_[ \t]*){3,}$")
@@ -171,7 +173,7 @@ def normalise_body(text: str) -> str:
                 m
                 and m.group(1)[0] == fence[0]
                 and len(m.group(1)) >= len(fence)
-                and not line.strip().strip(fence[0])
+                and not line[m.end() :].strip()
             ):
                 fence = ""
         elif m:

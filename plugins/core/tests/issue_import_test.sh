@@ -384,6 +384,14 @@ code = (
 )
 assert norm(code) == code, norm(code)
 
+# A fence inside a block quote is still code.
+quoted = "> ```py\n> __all__ = []\n> ```\n\nafter \\_\\_x\\_\\_"
+assert norm(quoted) == quoted, norm(quoted)
+
+# A backtick "fence" with a backtick in its info string opens nothing, so the
+# heading under it is still normalised.
+assert norm("```foo`bar\n### H\ntext") == "```foo`bar\n\n## H\n\ntext"
+
 # Normalising twice equals normalising once.
 messy = "# T\ntext __a__ `__b__`\n#### Deep\n~~~\n# x __y__\n~~~\n##### Deeper\nend"
 assert norm(norm(messy)) == norm(messy)
