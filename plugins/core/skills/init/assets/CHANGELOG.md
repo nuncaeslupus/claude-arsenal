@@ -18,6 +18,16 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [5.28.0] - 2026-11-17
+
+- `create_reader.py` now writes a GitHub-readable Markdown copy beside every
+  reader and `--bake` copy: `<stem>-reader.md` / `<stem>-reviewed.md`, the
+  pictures as files in `<stem>-img/` (JPEG downscaled to 1400 px when Pillow is
+  available, drawspec diagrams as SVG) and every note as a `> [!NOTE]` alert
+  under its section, anchored notes with their quote. Link that `.md` — GitHub
+  shows the HTML as source. New flags: `--no-markdown`, `--picture-width`,
+  `--picture-quality`.
+
 ## [5.27.1] - 2026-11-12
 
 - **`open_task_pr.sh` no longer drops work you already committed.** Run from a

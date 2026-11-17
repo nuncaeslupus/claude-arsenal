@@ -290,6 +290,31 @@ sed 's#make the hint a full line#ask me@example.com, see /home/someone/x#' "${tm
 out=$(run_reader --input screens/screens.md --output-dir screens --name Demo --notes screens/pii.md --bake)
 grep -q "me@example.com.*redact" <<<"${out}" || fail "--bake did not warn on an email in a note: ${out}"
 grep -q "/home/someone.*redact" <<<"${out}" || fail "--bake did not warn on a home path in a note: ${out}"
+# The GitHub copy (#630): the HTML shows as source on GitHub, so every run writes a
+# Markdown copy with the pictures as files and each note as an alert.
+SCR_MD="${SCR_HTML%.html}.md"
+SCR_IMG="${tmp}/screens/yourproject-screens-v1-${today}-img"
+[[ -f "${SCR_MD}" ]] || fail "a reader wrote no -reader.md: $(ls "${tmp}/screens")"
+pic=$(ls "${SCR_IMG}" 2>/dev/null | head -1)
+[[ -n "${pic}" ]] || fail "the screenshot was not written to ${SCR_IMG##*/}/"
+grep -qF "![start](${SCR_IMG##*/}/${pic})" "${SCR_MD}" || fail "the -reader.md does not link its picture: $(cat "${SCR_MD}")"
+grep -q 'data:' "${SCR_MD}" && fail "the -reader.md carries a data: URI"
+grep -q '\[!NOTE\]' "${SCR_MD}" && fail "a reader without notes shows notes"
+skey=$(grep -o 'data-key="[^"]*"' "${SCR_HTML}" | sed -n 1p | sed 's/data-key="//; s/"//')
+printf '<!-- SPEC-NOTES-DOC yourproject-screens-v1 -->\n<!-- SPEC-NOTES-DATA\n{"%s": "make the hint\\na full line", "%s~b1": "too wordy", "%s~b1~q": "The first screen."}\n-->\n' \
+    "${skey}" "${skey}" "${skey}" > "${tmp}/screens/both.md"
+run_reader --input screens/screens.md --output-dir screens --name Demo --notes screens/both.md --bake >/dev/null \
+    || fail "baking section and anchored notes failed"
+BAKED_MD="${BAKED_HTML%.html}.md"
+[[ -f "${BAKED_MD}" ]] || fail "--bake wrote no -reviewed.md: $(ls "${tmp}/screens")"
+grep -qF '> **Review note** · S01 · Start' "${BAKED_MD}" || fail "the section note is not under its section: $(cat "${BAKED_MD}")"
+grep -qF '> a full line' "${BAKED_MD}" || fail "a multi-line note lost its second line"
+grep -qF '> **Review note** on _“The first screen.”_' "${BAKED_MD}" || fail "the anchored note lost its quote"
+[[ $(grep -c '^> \[!NOTE\]' "${BAKED_MD}") -eq 2 ]] || fail "the -reviewed.md does not hold exactly two notes"
+rm -f "${tmp}/screens/"*-reviewed.* "${SCR_MD}"; rm -rf "${SCR_IMG}"
+run_reader --input screens/screens.md --output-dir screens --name Demo --no-markdown >/dev/null \
+    || fail "--no-markdown failed"
+[[ -e "${SCR_MD}" || -e "${SCR_IMG}" ]] && fail "--no-markdown still wrote the GitHub copy"
 grep -q 'class="fab"' "${SCR_HTML}" && fail "the floating buttons are back"
 grep -q 'id="btn-import"' "${SCR_HTML}" || fail "Import is missing from the top bar"
 
@@ -348,6 +373,9 @@ html="${tmp}/diagrams/yourproject-plan-v1-${today}-reader.html"
 grep -q '<figure class="drawspec"><svg xmlns="http://www.w3.org/2000/svg" data-fake="drawspec">' "${html}" \
     || fail "the drawspec fence was not rendered to inline SVG"
 grep -q 'DRAWSPEC-FIGURE' "${html}" && fail "a drawspec placeholder leaked into the reader"
+grep -qE '^!\[diagram\]\(yourproject-plan-v1-[0-9-]+-img/01-flow-diagram\.svg\)$' "${html%.html}.md" \
+    || fail "the -reader.md does not link the diagram as an SVG file: $(cat "${html%.html}.md")"
+grep -q 'data-fake="drawspec"' "${tmp}/diagrams/"*-img/01-flow-diagram.svg || fail "the diagram SVG file is not the render"
 grep -q '&quot;kind&quot;: &quot;flow&quot;' "${html}" \
     && fail "the drawspec source was shown as code instead of drawn"
 grep -q '<code class="language-json">' "${html}" || fail "an ordinary JSON fence stopped rendering as code"
