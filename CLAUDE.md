@@ -97,18 +97,23 @@ review**, plus `workflow_dispatch` and the push to `main` that `tag-release`
 depends on. The macOS leg (`smoke + lint (macos-latest)`) runs on `main` only;
 on a PR it reports as *skipped*, which satisfies the required check.
 
-So a fix pushed to an open PR is **not** checked by anything. Before merging,
-verify the final head by dispatching the workflow on the branch:
+So a fix pushed to an open PR gets no `pull_request` run. A `workflow_dispatch`
+run on the branch head verifies the code, but **it does not satisfy branch
+protection**: its check suite is not associated with the PR (`pull_requests: []`),
+so the six Actions-owned required checks (`core tests`, `unit tests`,
+`queue doctor (dogfood)`, `version bump`, and both `smoke + lint` legs) stay
+"expected" and the merge is refused with *"6 of 8 required status checks are
+expected"*. Only `CodeRabbit` and `GitGuardian Security Checks` (apps that report
+on every push) are unaffected. Measured on #638 and #641.
 
 ```
-gh workflow run ci.yml --ref <branch>      # or the Actions UI / run_workflow
+gh workflow run ci.yml --ref <branch>      # verifies the head; does NOT unblock the merge
 ```
 
-Checks attach to the commit, so a green dispatch run on the PR's head SHA
-satisfies the required checks for it. A dispatch on a non-`main` branch also
-runs `version bump` and `queue doctor` in their PR mode. Never merge a head
-whose latest push has no green run. Closing and reopening a PR to get a
-`pull_request` run is not a way to kick CI and is not allowed.
+Closing and reopening a PR (or toggling draft) to get a `pull_request` run is not
+a way to kick CI and is not allowed. Until the owner decides how later pushes get
+a `pull_request` run (e.g. adding `synchronize`, or relaxing the six required
+Actions checks), put everything in the PR's first push and do not push again.
 
 ### Multi-PR autonomous work — stacking rule
 
