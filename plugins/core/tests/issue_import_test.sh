@@ -11,7 +11,7 @@ IMPORT="${SCRIPTS}/issue_import.py"
 SELECT="${SCRIPTS}/task_select.py"
 AUDIT="${SCRIPT_DIR}/../../skill-workshop/skills/skill-workshop/scripts/audit_library.py"
 
-[[ -f "${IMPORT}" ]] || { echo "SKIP: issue_import.py not found" >&2; exit 0; }
+[[ -f "${IMPORT}" ]] || { echo "FAIL: issue_import.py not found" >&2; exit 1; }
 
 tmp=$(mktemp -d)
 trap 'rm -rf "${tmp}"' EXIT

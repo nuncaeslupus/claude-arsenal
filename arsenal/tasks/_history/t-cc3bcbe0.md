@@ -3,6 +3,7 @@ id: t-cc3bcbe0
 title: "review: Session-start protocol runs ~9 steps and 3 GitHub fetches before any request"
 priority: 5
 requires: [human:gate]
+status: merged
 ---
 
 Imported from issue #598

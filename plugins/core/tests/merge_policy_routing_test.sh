@@ -25,7 +25,7 @@ AGENTS="${ASSETS}/AGENTS.md"
 REF="${ASSETS}/references/github-automation.md"
 
 [[ -f "${CFG}" && -f "${AGENTS}" && -f "${REF}" ]] \
-    || { echo "SKIP: bundle not found under ${ASSETS}" >&2; exit 0; }
+    || { echo "FAIL: bundle not found under ${ASSETS}" >&2; exit 1; }
 
 fail=0
 note() { echo "FAIL: $1" >&2; fail=1; }

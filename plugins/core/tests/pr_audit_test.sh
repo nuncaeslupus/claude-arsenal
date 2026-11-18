@@ -19,7 +19,7 @@ set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 AUDIT="${SCRIPT_DIR}/../skills/init/assets/scripts/pr_audit.py"
-[[ -f "${AUDIT}" ]] || { echo "SKIP: pr_audit.py not found at ${AUDIT}" >&2; exit 0; }
+[[ -f "${AUDIT}" ]] || { echo "FAIL: pr_audit.py not found at ${AUDIT}" >&2; exit 1; }
 
 tmp=$(mktemp -d)
 trap 'rm -rf "${tmp}"' EXIT

@@ -19,7 +19,7 @@ MARK="${HOOKS}/mark_skill_workshop_loaded.sh"
 CHECK="${HOOKS}/check_skill_workshop_loaded.sh"
 
 for f in "${MARK}" "${CHECK}"; do
-    [[ -f "$f" ]] || { echo "SKIP: ${f} not found" >&2; exit 0; }
+    [[ -f "$f" ]] || { echo "FAIL: ${f} not found" >&2; exit 1; }
 done
 command -v python3 >/dev/null 2>&1 || { echo "SKIP: python3 required by the hooks" >&2; exit 0; }
 

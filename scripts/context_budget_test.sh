@@ -12,7 +12,7 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUDGET_PY="${SCRIPT_DIR}/context_budget.py"
 REPO_ROOT="${SCRIPT_DIR}/.."
-[[ -f "${BUDGET_PY}" ]] || { echo "SKIP: ${BUDGET_PY} not found" >&2; exit 0; }
+[[ -f "${BUDGET_PY}" ]] || { echo "FAIL: ${BUDGET_PY} not found" >&2; exit 1; }
 
 fail() { echo "FAIL: $1" >&2; exit 1; }
 

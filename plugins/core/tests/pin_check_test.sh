@@ -23,7 +23,7 @@ set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PIN="${SCRIPT_DIR}/../skills/pin-check/scripts/pin_check.py"
-[[ -f "${PIN}" ]] || { echo "SKIP: pin_check.py not found at ${PIN}" >&2; exit 0; }
+[[ -f "${PIN}" ]] || { echo "FAIL: pin_check.py not found at ${PIN}" >&2; exit 1; }
 
 tmp=$(mktemp -d)
 trap 'rm -rf "${tmp}"' EXIT

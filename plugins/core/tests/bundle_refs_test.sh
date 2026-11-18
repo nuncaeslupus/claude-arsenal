@@ -30,7 +30,7 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INIT_SKILL="${SCRIPT_DIR}/../skills/init"
 ASSETS="${INIT_SKILL}/assets"
-[[ -d "${ASSETS}" ]] || { echo "SKIP: ${ASSETS} not found" >&2; exit 0; }
+[[ -d "${ASSETS}" ]] || { echo "FAIL: ${ASSETS} not found" >&2; exit 1; }
 
 fail=0
 note() { echo "FAIL: $1" >&2; fail=1; }

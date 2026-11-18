@@ -1,6 +1,6 @@
 # Claude Arsenal
 
-<!-- claude-arsenal v5.29.0 — imported via @claude-arsenal/AGENTS.md -->
+<!-- claude-arsenal v5.30.0 — imported via @claude-arsenal/AGENTS.md -->
 
 This file is in context on every turn, so it holds only what a session needs before it
 knows what kind of session it is. The rest lives in `claude-arsenal/references/`: plain
@@ -33,48 +33,23 @@ them. `claude-arsenal/` is the vendored bundle and never moves.
 
 At the start of every session (fresh start, context compaction, or cold restart):
 
-0. **Refresh the bundle.**
-   a. If `claude-arsenal/bin/check_update.sh` exists, run it with `--check-only` (without
-      it the script merges and commits) and surface what it reports. An
-      `UNTAGGED UPSTREAM RELEASE` is fixed upstream (`make tag`), not here. On a
-      non-subtree install the report is `INERT` — the expected answer: say so once per
-      session and open no work on it.
-   b. Run `python3 .claude/skills/init/scripts/init.py --repo-path . --silent` and report
-      anything it refreshes, and each `NEW SETTING` line once (`config-acknowledged` in
-      `arsenal/config.toml` silences them). On `SETUP INTERVIEW PENDING`, ask the init skill's
-      setup interview with AskUserQuestion before picking up work. If it says the installed
-      bundle is newer, report that and update the plugin; never pass `--allow-downgrade`. Skip (b) if (a) reported
-      `VENDORED SKILL BEHIND BUNDLE`. Skip (a) and (b) when the script is absent.
-   c. Read the capability map: `python3 .claude/skills/init/scripts/init.py --list-sections`.
-      When a task is squarely covered by a section this repo did not install, say so once,
-      then do what was asked. → `claude-arsenal/references/capability-map.md`
-
-1. **Establish the GitHub channel** — `bash claude-arsenal/bin/github_channel.sh --detect`
-   prints `gh`, `rest`, or `none`. `none` means: perform every GitHub step below with your
-   own GitHub tools. Skipping those steps is the one wrong answer.
-
-2. **Fetch the task issues** — issues labelled `arsenal:task`, open and closed (a closed
-   issue is what marks a dependency satisfied), saved as JSON (e.g.
-   `/tmp/arsenal-issues.json`). Request `number,title,state,labels,assignees` and not
-   `body`: the `arsenal-id:<id>` label pairs an issue to its task. Also save open issues
-   carrying neither `arsenal:task` nor `arsenal:queue` (`number,title`) for `--open-issues`.
-
-3. **Read the board** — `git fetch --quiet origin`, then
-   `python3 claude-arsenal/scripts/query_status.py --issues /tmp/arsenal-issues.json \
-   --open-issues /tmp/arsenal-unfiled.json`. Report everything it flags. If the fetch
-   fails, say so and treat the counts as unverified.
-
-4. **Create missing handles** —
-   `python3 claude-arsenal/scripts/handle_sync.py --issues /tmp/arsenal-issues.json`;
-   create each printed issue with every label the row lists and a visible
-   `` `arsenal-task: <id>` `` body line. Resolve an `ambiguous` row before creating anything.
-   → `claude-arsenal/references/queue-seeding.md`
-
-4b. **Import issues filed between sessions** — fetch open issues with the import label
-   (default `arsenal:queue`, set by `import-label`), **including `body`**, then
-   `python3 claude-arsenal/scripts/issue_import.py --issues /tmp/arsenal-import.json --apply`.
-   Apply every change each row prints and commit the new task files.
-   → `claude-arsenal/references/queue-seeding.md`
+0. **Run the script** — `bash claude-arsenal/bin/session_start.sh`. It refreshes the bundle
+   (`check_update.sh --check-only`, `init.py --silent`), prints the capability map, detects the
+   GitHub channel, fetches the task issues itself on `gh` (no `body`: the `arsenal-id:<id>`
+   label pairs issue to task), and prints the board from `query_status.py`. Report everything
+   it flags; a failed fetch makes the counts unverified.
+   - `UNTAGGED UPSTREAM RELEASE` is fixed upstream (`make tag`), not here. `INERT` on a
+     non-subtree install is the expected answer: say so once and open no work on it.
+   - Each `NEW SETTING` line: report once (`config-acknowledged` in `arsenal/config.toml`
+     silences them). `SETUP INTERVIEW PENDING`: ask the init skill's setup interview with
+     AskUserQuestion before picking up work. If the installed bundle is newer, report it and
+     update the plugin; never pass `--allow-downgrade`.
+   - A section this repo did not install that squarely covers the task: say so once, then do
+     what was asked. → `claude-arsenal/references/capability-map.md`
+   - Every `ACTION:` line is yours, because it needs your own GitHub tools: on `rest`/`none`
+     write the issue files it names, then run it again with `--board`; create the handle
+     issues it prints; apply the filed-issue import changes and commit the new task files.
+     → `claude-arsenal/references/queue-seeding.md`
 
 5. **Read handover** — read `arsenal/session/handover.md` if it has real content; it is a
    snapshot, so re-read the board before resuming anything it names. Also

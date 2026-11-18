@@ -16,7 +16,7 @@ QUERY="${ASSETS}/query_status.py"
 SELECT="${ASSETS}/task_select.py"
 
 for f in "${QUERY}" "${SELECT}"; do
-    [[ -f "$f" ]] || { echo "SKIP: $f not found" >&2; exit 0; }
+    [[ -f "$f" ]] || { echo "FAIL: $f not found" >&2; exit 1; }
 done
 
 fail() { echo "FAIL: $*" >&2; exit 1; }

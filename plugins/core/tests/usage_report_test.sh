@@ -22,7 +22,7 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPORT="${SCRIPT_DIR}/../skills/init/assets/scripts/usage_report.py"
 
-[[ -f "${REPORT}" ]] || { echo "SKIP: usage_report.py not found at ${REPORT}" >&2; exit 0; }
+[[ -f "${REPORT}" ]] || { echo "FAIL: usage_report.py not found at ${REPORT}" >&2; exit 1; }
 
 tmp=$(mktemp -d)
 trap 'rm -rf "${tmp}"' EXIT

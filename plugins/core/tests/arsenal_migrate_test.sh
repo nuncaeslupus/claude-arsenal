@@ -11,7 +11,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MIGRATE_PY="${SCRIPT_DIR}/../skills/init/assets/scripts/arsenal_migrate.py"
 SELECT_PY="${SCRIPT_DIR}/../skills/init/assets/scripts/task_select.py"
-[[ -f "${MIGRATE_PY}" ]] || { echo "SKIP: ${MIGRATE_PY} not found" >&2; exit 0; }
+[[ -f "${MIGRATE_PY}" ]] || { echo "FAIL: ${MIGRATE_PY} not found" >&2; exit 1; }
 
 tmpdir=$(mktemp -d)
 trap 'rm -rf "${tmpdir}"' EXIT

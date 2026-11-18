@@ -14,7 +14,7 @@ set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CLAIM="${SCRIPT_DIR}/../skills/init/assets/bin/claim_task.sh"
-[[ -f "${CLAIM}" ]] || { echo "SKIP: ${CLAIM} not found" >&2; exit 0; }
+[[ -f "${CLAIM}" ]] || { echo "FAIL: ${CLAIM} not found" >&2; exit 1; }
 
 tmpdir=$(mktemp -d)
 trap 'rm -rf "${tmpdir}"' EXIT

@@ -11,7 +11,7 @@ SELECT_PY="${SCRIPT_DIR}/../skills/init/assets/scripts/task_select.py"
 CONFIG_PY="${SCRIPT_DIR}/../skills/init/assets/scripts/arsenal_config.py"
 
 for f in "${SELECT_PY}" "${CONFIG_PY}"; do
-    [[ -f "${f}" ]] || { echo "SKIP: ${f} not found" >&2; exit 0; }
+    [[ -f "${f}" ]] || { echo "FAIL: ${f} not found" >&2; exit 1; }
 done
 
 tmpdir=$(mktemp -d)

@@ -14,7 +14,7 @@ INIT_PY="${SCRIPT_DIR}/../skills/init/scripts/init.py"
 BUNDLE_DIR="${SCRIPT_DIR}/../skills/init/assets"
 
 if [[ ! -f "${INIT_PY}" ]]; then
-    echo "SKIP: init.py not found at ${INIT_PY}" >&2
+    echo "FAIL: init.py not found at ${INIT_PY}" >&2
     exit 0
 fi
 

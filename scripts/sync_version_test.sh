@@ -12,7 +12,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SYNC="${SCRIPT_DIR}/sync_version.py"
 
 if [[ ! -f "${SYNC}" ]]; then
-    echo "SKIP: sync_version.py not found at ${SYNC}" >&2; exit 0
+    echo "FAIL: sync_version.py not found at ${SYNC}" >&2; exit 1
 fi
 
 tmp=$(mktemp -d)

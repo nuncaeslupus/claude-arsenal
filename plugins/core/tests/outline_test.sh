@@ -13,7 +13,7 @@ set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OUTLINE="${SCRIPT_DIR}/../skills/init/assets/bin/outline.sh"
-[[ -f "${OUTLINE}" ]] || { echo "SKIP: ${OUTLINE} not found" >&2; exit 0; }
+[[ -f "${OUTLINE}" ]] || { echo "FAIL: ${OUTLINE} not found" >&2; exit 1; }
 
 tmpdir=$(mktemp -d)
 trap 'rm -rf "${tmpdir}"' EXIT

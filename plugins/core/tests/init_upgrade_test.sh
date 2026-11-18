@@ -15,7 +15,7 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INIT_PY="${SCRIPT_DIR}/../skills/init/scripts/init.py"
 BUNDLE="${SCRIPT_DIR}/../skills/init/assets"
-[[ -f "${INIT_PY}" ]] || { echo "SKIP: ${INIT_PY} not found" >&2; exit 0; }
+[[ -f "${INIT_PY}" ]] || { echo "FAIL: ${INIT_PY} not found" >&2; exit 1; }
 # Read from init.py, so the fixture cannot drift from the name it writes.
 MANIFEST_NAME=$(sed -n 's/^_MANIFEST = "\(.*\)"$/\1/p' "${INIT_PY}")
 [[ -n "${MANIFEST_NAME}" ]] || { echo "FAIL: no _MANIFEST in ${INIT_PY}" >&2; exit 1; }

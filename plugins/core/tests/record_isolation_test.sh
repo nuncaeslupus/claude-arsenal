@@ -20,7 +20,7 @@ ASSETS="${SCRIPT_DIR}/../skills/init/assets"
 REC="${ASSETS}/bin/record_isolation.sh"
 SELECT="${ASSETS}/scripts/task_select.py"
 
-[[ -f "${REC}" ]] || { echo "SKIP: record_isolation.sh not found" >&2; exit 0; }
+[[ -f "${REC}" ]] || { echo "FAIL: record_isolation.sh not found" >&2; exit 1; }
 
 fail() { echo "FAIL: $*" >&2; exit 1; }
 

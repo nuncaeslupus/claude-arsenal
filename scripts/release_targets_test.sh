@@ -12,7 +12,7 @@ set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MAKEFILE="${REPO_ROOT}/Makefile"
-[[ -f "${MAKEFILE}" ]] || { echo "SKIP: ${MAKEFILE} not found" >&2; exit 0; }
+[[ -f "${MAKEFILE}" ]] || { echo "FAIL: ${MAKEFILE} not found" >&2; exit 1; }
 
 tmp=$(mktemp -d)
 trap 'rm -rf "${tmp}"' EXIT

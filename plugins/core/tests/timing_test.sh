@@ -24,7 +24,7 @@ HELPER="${ASSETS}/bin/_timing.sh"
 REPORTER="${ASSETS}/scripts/arsenal_timings.py"
 
 [[ -f "${HELPER}" && -f "${REPORTER}" ]] \
-    || { echo "SKIP: timing helper not found under ${ASSETS}" >&2; exit 0; }
+    || { echo "FAIL: timing helper not found under ${ASSETS}" >&2; exit 1; }
 
 fail=0
 note() { echo "FAIL: $1" >&2; fail=1; }

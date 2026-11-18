@@ -14,7 +14,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 HOST_SETUP="${SCRIPT_DIR}/../skills/init/assets/bin/host_setup.sh"
 
 if [[ ! -f "${HOST_SETUP}" ]]; then
-    echo "SKIP: host_setup.sh not found at ${HOST_SETUP}" >&2
+    echo "FAIL: host_setup.sh not found at ${HOST_SETUP}" >&2
     exit 0
 fi
 

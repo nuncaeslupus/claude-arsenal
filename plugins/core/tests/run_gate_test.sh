@@ -17,7 +17,7 @@ set -uo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RUN_GATE="${here}/../skills/gate-check/scripts/run_gate.py"
-[[ -f "${RUN_GATE}" ]] || { echo "SKIP: run_gate.py not found" >&2; exit 0; }
+[[ -f "${RUN_GATE}" ]] || { echo "FAIL: run_gate.py not found" >&2; exit 1; }
 
 tmp="$(mktemp -d)" || { echo "FAIL: mktemp -d failed" >&2; exit 1; }
 trap 'rm -rf "${tmp}"' EXIT

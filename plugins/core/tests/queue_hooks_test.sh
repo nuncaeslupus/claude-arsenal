@@ -11,7 +11,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 HOOKS="${SCRIPT_DIR}/../skills/init/assets/scripts/queue_hooks.py"
 STATUS="${SCRIPT_DIR}/../skills/init/assets/scripts/query_status.py"
 
-[[ -f "${HOOKS}" ]] || { echo "SKIP: queue_hooks.py not found" >&2; exit 0; }
+[[ -f "${HOOKS}" ]] || { echo "FAIL: queue_hooks.py not found" >&2; exit 1; }
 
 tmp=$(mktemp -d)
 trap 'rm -rf "${tmp}"' EXIT
