@@ -45,10 +45,29 @@ echo "PASS: plugin declaration retired, gate hook registered"
 [ -f "$repo/claude-arsenal/bin/gate_target.py" ] || fail "gate_target.py not installed"
 export CLAUDE_PLUGIN_DATA="$tmp/markers"
 payload='{"session_id":"s1","tool_name":"Bash","tool_input":{"command":"sed -i s/a/b/ .claude/skills/specify/SKILL.md"}}'
-if printf '%s' "$payload" | (cd "$repo" && bash claude-arsenal/bin/check_skill_workshop_loaded.sh) >/dev/null 2>&1; then
+# A HOME of our own: whether the gate blocks depends on whether skill-workshop is
+# reachable, and the machine running this test may have it in its plugin cache.
+mkdir -p "$tmp/home"
+gate() { (cd "$repo" && HOME="$tmp/home" CLAUDE_PROJECT_DIR="$repo" bash claude-arsenal/bin/check_skill_workshop_loaded.sh); }
+
+# #586: init vendors core only, so with no skill-workshop anywhere the gate's key
+# does not exist. It must not block behind a skill the session cannot load.
+printf '%s' "$payload" | gate >/dev/null 2>&1 \
+    || fail "#586: the vendored gate blocked a skill edit although no skill-workshop is reachable"
+echo "PASS: the vendored gate is advisory where skill-workshop cannot be loaded"
+
+mkdir -p "$repo/.claude/skills/skill-workshop" && echo x > "$repo/.claude/skills/skill-workshop/SKILL.md"
+if printf '%s' "$payload" | gate >/dev/null 2>&1; then
     fail "the vendored gate allowed a skill edit with no marker"
 fi
-echo "PASS: the vendored gate blocks a Bash skill edit — plugin hooks never travelled"
+mkdir -p "$tmp/home/.claude/plugins/cache/m/skill-workshop/1/skills/skill-workshop"
+rm -rf "$repo/.claude/skills/skill-workshop"
+touch "$tmp/home/.claude/plugins/cache/m/skill-workshop/1/skills/skill-workshop/SKILL.md"
+if printf '%s' "$payload" | gate >/dev/null 2>&1; then
+    fail "the vendored gate allowed a skill edit while skill-workshop is in the plugin cache"
+fi
+rm -rf "$tmp/home/.claude"
+echo "PASS: the vendored gate blocks a Bash skill edit once skill-workshop is reachable"
 
 # #468: the registered command, run as settings.json runs it, must still work
 # once the session's cwd has moved into a subdirectory.

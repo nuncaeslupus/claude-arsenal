@@ -166,7 +166,7 @@ updating one does not update the other.
 | Type `Investigate why login is slow` | `specify` loads. |
 | Type `Set up the task queue in this repo` | `init` loads. |
 | `ls .claude/skills` | one folder per installed skill (13 for `general`, 19 for `python`, 21 for `all`), each with a `.arsenal-vendored` marker |
-| Ask Claude to edit any `SKILL.md` without loading the meta-skill | **blocked** by the gate |
+| Ask Claude to edit any `SKILL.md` without loading the meta-skill | **blocked** by the gate when `skill-workshop` is installed (plugin, `~/.claude/skills` or the repo); allowed where it is not, since the session could not load it |
 | (local checkout) `make audit` | Per-plugin listing-budget breakdown; `PASS — under cap.` |
 
 Skills loaded from the project are **unprefixed** (`specify`). If you also
