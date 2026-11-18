@@ -74,7 +74,7 @@ echo "PASS: the gate fails a spec/plan changed without a reader built from it"
 # a real reader, when create_reader can run here
 if python3 -c "import markdown" 2>/dev/null; then PY=(python3)
 elif command -v uv >/dev/null 2>&1; then PY=(uv run --quiet --with markdown python3)
-else PY=(); fi
+else PY=(); [[ -n "${CI:-}" ]] && fail "no markdown in CI; the reader half would go untested"; fi
 if [ ${#PY[@]} -gt 0 ]; then
     echo "edited" >> "$repo/status/plan.md"
     (cd "$repo" && "${PY[@]}" "$assets/scripts/create_reader.py" --input status/plan.md \

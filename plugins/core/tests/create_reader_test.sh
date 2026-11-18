@@ -22,6 +22,8 @@ if python3 -c "import markdown" 2>/dev/null; then
 elif command -v uv >/dev/null 2>&1; then
     PY=(uv run --quiet --with markdown python3)
 else
+    # CI sets CI=true and installs markdown: a skip there is a reader nobody tested.
+    [[ -n "${CI:-}" ]] && { echo "FAIL: no markdown in CI; the reader would go untested" >&2; exit 1; }
     echo "SKIP: no python3 with markdown, and no uv to supply it" >&2; exit 0
 fi
 
@@ -67,6 +69,15 @@ grep -q "'yourproject-spec-v1-'+stamp()+'-notes.md'" "${SPEC_HTML}" \
 [[ ! -e "${tmp}"/status/spec-reader.html ]] || fail "the undated reader it supersedes was left behind"
 [[ ! -e "${tmp}"/status/yourproject-spec-v1-2026-01-02-reader.html ]] \
     || fail "a date-only reader from before the HHMM stamp was left behind"
+
+# --- 1a: --json names the written files, so a wrapper never guesses the name (#623) ---
+json_out=$(cd "${tmp}" && "${PY[@]}" "${READER}" --input status/specification.md --output-dir status \
+    --name "Widget Overhaul" --json 2>/dev/null) || fail "--json run failed"
+json_html=$(python3 -c 'import json,sys; print(json.loads(sys.stdin.read())["html"])' <<<"${json_out}") \
+    || fail "--json did not print one JSON object on stdout: ${json_out}"
+[[ "${json_html}" == "${SPEC_HTML}" || "${json_html}" == "status/$(basename "${SPEC_HTML}")" || "${json_html}" == */status/"$(basename "${SPEC_HTML}")" ]] \
+    || fail "--json html path is not the written reader: ${json_html}"
+echo "PASS: --json reports the reader's real path"
 
 # --- 1b: two workspace specs built the same day get different names (#517) ---
 for ws in alpha beta; do

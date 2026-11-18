@@ -89,7 +89,7 @@ cmp -s "${doc}" "${tmp}/once.md" || fail "a rerun changed the document: $(diff "
 python3 "${RENDER}" --check "${doc}" >/dev/null || fail "--check failed a current document"
 
 # 4: an edited diagram is drift; a removed one leaves no orphan SVG.
-sed -i 's/"Two"/"Three"/' "${doc}"
+sed -i.bak 's/"Two"/"Three"/' "${doc}"
 python3 "${RENDER}" --check "${doc}" >/dev/null && fail "--check missed an edited diagram"
 python3 - "${doc}" <<'PY'
 import re, sys
@@ -102,17 +102,20 @@ python3 "${RENDER}" "${doc}" >/dev/null || fail "render after removing a block f
 [[ -e "${tmp}/status/diagrams/plan-2.svg" ]] && fail "an orphan SVG was left behind"
 
 # 5: a block drawspec refuses fails the run and names it.
-sed -i 's/"One"/"BROKEN"/' "${doc}"
+sed -i.bak 's/"One"/"BROKEN"/' "${doc}"
 out=$(python3 "${RENDER}" "${doc}" 2>&1) && fail "a refused block passed"
 grep -q "drawspec block 1" <<<"${out}" || fail "the failure does not name the block: ${out}"
-sed -i 's/"BROKEN"/"One"/' "${doc}"
+sed -i.bak 's/"BROKEN"/"One"/' "${doc}"
 python3 "${RENDER}" "${doc}" >/dev/null || fail "render failed after the fix"
 
 # 6: the reader drops the image and the wrapper, draws each diagram once, keeps the
 #    author's own <details>.
 if python3 -c "import markdown" 2>/dev/null; then PY=(python3)
 elif command -v uv >/dev/null 2>&1; then PY=(uv run --quiet --with markdown python3)
-else echo "PASS (reader half skipped: no markdown)"; exit 0; fi
+else
+    [[ -n "${CI:-}" ]] && { echo "FAIL: no markdown in CI; the reader half would go untested" >&2; exit 1; }
+    echo "PASS (reader half skipped: no markdown)"; exit 0
+fi
 (cd "${tmp}" && "${PY[@]}" "${READER}" --input status/plan.md --output-dir status --name demo >/dev/null) \
     || fail "the reader failed on a rendered document"
 html=$(ls "${tmp}"/status/*-reader.html | head -1)

@@ -1842,6 +1842,12 @@ def _main() -> int:
     parser.add_argument(
         "--name", metavar="TEXT", help="project name for the reader title (default: git repo name)"
     )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="print the written paths as one JSON object on stdout "
+        '({"html", "annotated", "markdown"}), so a wrapper need not guess the generated names',
+    )
     args = parser.parse_args()
     if args.bake and not args.notes:
         print("✗ --bake needs --notes <the returned export>", file=sys.stderr)
@@ -1978,6 +1984,7 @@ def _main() -> int:
         print(f"  {html_file}", file=sys.stderr)
         if not args.no_markdown:
             write_copy(parts, title, gen_date, seed_notes, single_label, html_file, args, True)
+        _print_paths(args, html_file, None)
         return 0
 
     html_out = build_html(
@@ -2006,7 +2013,16 @@ def _main() -> int:
     print(f"  {md_file}", file=sys.stderr)
     if not args.no_markdown:
         write_copy(parts, title, gen_date, seed_notes, single_label, html_file, args, False)
+    _print_paths(args, html_file, md_file)
     return 0
+
+
+def _print_paths(args: argparse.Namespace, html_file: Path, md_file: Path | None) -> None:
+    """With --json: the written paths on stdout, the one stable part of the output."""
+    if args.json:
+        copy = None if args.no_markdown else html_file.with_suffix(".md")
+        paths = {"html": html_file, "annotated": md_file, "markdown": copy}
+        print(json.dumps({k: str(v) if v else None for k, v in paths.items()}))
 
 
 def write_copy(
