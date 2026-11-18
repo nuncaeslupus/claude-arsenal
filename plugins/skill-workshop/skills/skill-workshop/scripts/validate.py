@@ -276,6 +276,8 @@ CANONICAL_ARGS = {
     "--review-bots",
     # init: the user skipped the interview; recorded so it is not asked again
     "--interview-declined",
+    # init: remove what /init wrote (dry run unless --apply)
+    "--uninstall",
     # repo-audit audit_estimate.py: the estimate's one tunable and the worker cap
     "--tokens-per-line",
     "--max-workers",

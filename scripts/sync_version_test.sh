@@ -68,7 +68,7 @@ ARSENAL_REF     ?= v0.11.0   # pin to a tag
 git commit -m "chore: vendor claude-arsenal skills @ v0.11.0"
 MD
 
-printf 'git clone --depth 1 --branch v0.11.0 https://example.com/x.git\n' > "${tmp}/README.md"
+printf 'git clone --depth 1 --branch v0.11.0 https://example.com/x.git\n/plugin marketplace add https://example.com/x.git#v0.11.0\n' > "${tmp}/README.md"
 
 fail() { echo "FAIL: $1" >&2; exit 1; }
 
@@ -97,6 +97,7 @@ grep -q "<!-- claude-arsenal v0.15.0 " "${tmp}/plugins/core/skills/init/assets/A
 grep -q "v0.11.0" "${tmp}/docs/INSTALL.md" \
     && fail "INSTALL.md still has a stale v0.11.0 pin (count=1 regression?)"
 grep -q -- "--branch v0.15.0" "${tmp}/README.md" || fail "README.md --branch pin not synced to v0.15.0"
+grep -q -- "x.git#v0.15.0" "${tmp}/README.md" || fail "#613: README.md marketplace #ref pin not synced to v0.15.0"
 echo "PASS: apply rewrites every target to the canonical version"
 
 # --- Gate 3: formatting around the version token is preserved. ---

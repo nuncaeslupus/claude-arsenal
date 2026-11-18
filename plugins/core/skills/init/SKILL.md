@@ -16,7 +16,9 @@ CANARY: init-loaded-2026-06-13-fb78d23e-a1b2c3d4e5f6a7b8
 
 ## When to load
 
-- A repo needs the task queue set up for the first time ("init the arsenal", "/init").
+- A repo needs the task queue set up for the first time ("init the arsenal",
+  "/arsenal-init", "/init"). `/arsenal-init` is this skill under a name Claude
+  Code's built-in `/init` does not share; tell users to type that one.
 - Adding a new workspace to an existing `claude-arsenal/` setup.
 
 ## First install — ask for the profile
@@ -62,11 +64,14 @@ which records `"declined"`, and neither is asked again.
    `manual`, or skip to keep merge-policy alone. Optionally, paths that always need a human.
    With `solo-trust` or `solo-gated`, also ask whether a digest approval counts as the
    user's (`--digest-decisions true`): needed when PRs are opened with their own account.
-6. How far must a PR get before the agent merges it (`--merge-policy`)? `always` (the
-   local gates are the bar), `after-ci` (default: every required check reported green),
-   `after-review` (a review landed and its comments are answered; CI not consulted),
-   `after-ci-and-review` (both), `never` (a human merges). Say that whichever is chosen,
-   the agent merges by itself once `merge_ready.sh` passes, without asking.
+6. How far must a PR get before the agent merges it (`--merge-policy`)? Always ask this
+   one, even when the others are skipped. `never` (default: a human merges every PR),
+   `after-ci-and-review` (green checks and an answered review), `after-ci` (every
+   required check reported green), `after-review` (a review landed and its comments are
+   answered; CI not consulted), `always` (the local gates are the bar). Say that with
+   any value but `never` the agent merges its own PRs by itself once `merge_ready.sh`
+   passes, without asking, so the choice is how much the repo's CI and reviewers must
+   catch before code reaches the default branch.
 
 Pass only what was answered; a skipped question writes nothing and keeps its default:
 
@@ -121,7 +126,11 @@ python3 "${CLAUDE_SKILL_DIR}/scripts/init.py" --repo-path . --silent         # s
 python3 "${CLAUDE_SKILL_DIR}/scripts/init.py" --repo-path . --list-sections  # capability map, read-only
 python3 "${CLAUDE_SKILL_DIR}/scripts/init.py" --repo-path . --section python  # one section's skills
 python3 "${CLAUDE_SKILL_DIR}/scripts/init.py" --workspace BACKEND --root ./backend/
+python3 "${CLAUDE_SKILL_DIR}/scripts/init.py" --repo-path . --uninstall      # dry run; --apply removes
 ```
+
+`--uninstall` removes only what is still exactly as init wrote it and never
+`arsenal/`; show the user its list before running it with `--apply`.
 
 `--silent` is what the session-start protocol runs; it refreshes stale bundle
 files and prints an upgrade banner when the plugin is newer. `--workspace NAME`

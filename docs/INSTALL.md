@@ -59,20 +59,27 @@ wires the skill-edit gate into `.claude/settings.json`, and creates the
 ### If you have Claude Code on your machine
 
 ```text
-/plugin marketplace add github:nuncaeslupus/claude-arsenal
+/plugin marketplace add https://github.com/nuncaeslupus/claude-arsenal.git#v5.31.0
 /plugin install core@claude-arsenal
 ```
 
-Claude Code does not auto-update third-party marketplaces by default, so a
-plugin installed once stays at that version. Turn auto-update on for
-`claude-arsenal` in `/plugin` → **Marketplaces**, or update by hand before
-running `/init` on a new repo:
+The `#v…` pins the marketplace to a release tag. A tag is cut only for a merge
+whose CI went green, and it is what every other install route (`--branch` below,
+`check_update.sh` for a subtree) updates to; a marketplace added without a ref
+follows the tip of `main` instead, which receives every merge, tagged or not.
+
+To move to a newer release, re-add the marketplace at its tag:
 
 ```bash
-claude plugin marketplace update claude-arsenal
-claude plugin update core@claude-arsenal
-claude plugin update skill-workshop@claude-arsenal
+claude plugin marketplace remove claude-arsenal
+claude plugin marketplace add https://github.com/nuncaeslupus/claude-arsenal.git#vX.Y.Z
+claude plugin install core@claude-arsenal
 ```
+
+An existing install added without a ref keeps working the way it always has
+(`claude plugin marketplace update claude-arsenal`, then
+`claude plugin update core@claude-arsenal`); re-add it with a `#v…` ref when
+you want it gated on releases.
 
 `/init` checks the newest release tag and prints `ARSENAL OUTDATED` when the
 plugin is behind; on a repo it has never set up, it refuses until you update
@@ -81,14 +88,22 @@ plugin is behind; on a repo it has never set up, it refuses until you update
 Then, from the project you want set up:
 
 ```text
-/init
+/arsenal-init
 ```
+
+Type `/arsenal-init`, not `/init`: Claude Code has a built-in `/init` that writes
+a `CLAUDE.md`, and a bare `/init` can reach it instead of this installer. They
+are easy to tell apart by what they print: this one starts with
+`Initializing claude-arsenal/...`. `/core:init` (the plugin's namespaced name) and
+`/init` from a vendored `.claude/skills/init/` name the same skill. The same goes
+for `/review`: Claude Code has a built-in of that name too, so use `/core:review`
+when the plugin is installed.
 
 ```bash
 git add -A .claude claude-arsenal arsenal .github CLAUDE.md .gitignore README.md && git commit -m "chore: add claude-arsenal"
 ```
 
-That is it. The plugin gave you `/init`; the commit is what every later
+That is it. The plugin gave you `/arsenal-init`; the commit is what every later
 session — yours, a teammate's, a cloud one — actually loads.
 
 ### Choosing what gets installed
@@ -130,7 +145,7 @@ existed changes nothing: the sections already in use are detected and recorded.
 No plugin needed — the same script runs straight from a clone:
 
 ```bash
-git clone --depth 1 --branch v5.30.0 https://github.com/nuncaeslupus/claude-arsenal.git /tmp/arsenal
+git clone --depth 1 --branch v5.31.0 https://github.com/nuncaeslupus/claude-arsenal.git /tmp/arsenal
 python3 /tmp/arsenal/plugins/core/skills/init/scripts/init.py --repo-path .
 git add -A .claude claude-arsenal arsenal .github CLAUDE.md .gitignore README.md && git commit -m "chore: add claude-arsenal"
 ```
@@ -165,8 +180,8 @@ updating one does not update the other.
 |---|---|
 | Type `Investigate why login is slow` | `specify` loads. |
 | Type `Set up the task queue in this repo` | `init` loads. |
-| `ls .claude/skills` | one folder per installed skill (13 for `general`, 19 for `python`, 21 for `all`), each with a `.arsenal-vendored` marker |
-| Ask Claude to edit any `SKILL.md` without loading the meta-skill | **blocked** by the gate |
+| `ls .claude/skills` | one folder per installed skill (14 for `general`, 20 for `python`, 22 for `all`), each with a `.arsenal-vendored` marker |
+| Ask Claude to edit any `SKILL.md` without loading the meta-skill | **blocked** by the gate when `skill-workshop` is installed (plugin, `~/.claude/skills` or the repo); allowed where it is not, since the session could not load it |
 | (local checkout) `make audit` | Per-plugin listing-budget breakdown; `PASS — under cap.` |
 
 Skills loaded from the project are **unprefixed** (`specify`). If you also
@@ -181,6 +196,17 @@ If you want the meta-skill on a short slash, bind `/sc` →
 JSON shape if you have not edited that file before.
 
 ## 6. Uninstall
+
+Removing the plugins does not remove what `/arsenal-init` put in a project — every
+session there keeps running the protocol until that is gone too. Do the project
+first (`docs/UPDATE.md` § *Uninstalling from a project*):
+
+```bash
+python3 .claude/skills/init/scripts/init.py --repo-path . --uninstall          # dry run: lists everything
+python3 .claude/skills/init/scripts/init.py --repo-path . --uninstall --apply  # then remove it
+```
+
+Then the plugins:
 
 ```text
 /plugin uninstall core@claude-arsenal

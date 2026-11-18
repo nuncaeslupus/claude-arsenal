@@ -9,6 +9,10 @@
       "blurb": "the bundle itself — installer, queue engine, and the skills the protocol names",
       "skills": [
         {
+          "name": "arsenal-init",
+          "description": "Runs the claude-arsenal installer (the init skill) under a name that does not collide with Claude Code's built-in /init. Use when the user types /arsenal-init. Not for writing a CLAUDE.md."
+        },
+        {
           "name": "github",
           "description": "Applies commit and PR conventions, then polls review bots and CI until the PR can merge. Use when the user commits, opens a PR or handles review feedback. Not for judging a diff."
         },
