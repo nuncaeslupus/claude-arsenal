@@ -80,8 +80,8 @@ marker="${marker_dir}/loaded-${session_id}"
 # that has no skill-workshop (or skill-creator) to load would be blocked behind
 # a skill it cannot invoke. Block only when one is reachable from this session:
 # beside this hook (it is running as the plugin's own hook), in the project
-# (vendored, or a marketplace checkout), in ~/.claude/skills, or in the plugin
-# cache. Otherwise allow: a gate nobody can open is not a gate, it is an outage.
+# (vendored, or a marketplace checkout), in ~/.claude/skills, or among the
+# installed plugins. Otherwise allow: a gate nobody can open is not a gate, it is an outage.
 skill_reachable() {
     local project="${CLAUDE_PROJECT_DIR:-$PWD}" name
     for name in skill-workshop skill-creator; do
@@ -92,10 +92,9 @@ skill_reachable() {
             [[ -f "$f" ]] && return 0
         done
     done
-    [[ -d "${HOME}/.claude/plugins" ]] || return 1
-    [[ -n "$(find "${HOME}/.claude/plugins" -maxdepth 8 -path '*/skills/skill-*/SKILL.md' \
-        \( -path '*/skill-workshop/SKILL.md' -o -path '*/skill-creator/SKILL.md' \) \
-        -print -quit 2>/dev/null)" ]]
+    # The installed-plugins registry, not the cache: the cache and the marketplace
+    # clone hold every plugin the marketplace ships, installed or not.
+    grep -qE '"(skill-workshop|skill-creator)@' "${HOME}/.claude/plugins/installed_plugins.json" 2>/dev/null
 }
 skill_reachable || exit 0
 

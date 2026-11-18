@@ -71,11 +71,15 @@ mkdir -p "$repo/.claude/skills/skill-workshop" && echo x > "$repo/.claude/skills
 if printf '%s' "$payload" | gate >/dev/null 2>&1; then
     fail "the vendored gate allowed a skill edit with no marker"
 fi
-mkdir -p "$tmp/home/.claude/plugins/cache/m/skill-workshop/1/skills/skill-workshop"
 rm -rf "$repo/.claude/skills/skill-workshop"
-touch "$tmp/home/.claude/plugins/cache/m/skill-workshop/1/skills/skill-workshop/SKILL.md"
+# A marketplace cache holds every plugin it ships, installed or not: not enough.
+mkdir -p "$tmp/home/.claude/plugins/cache/m/plugins/skill-workshop/skills/skill-workshop"
+touch "$tmp/home/.claude/plugins/cache/m/plugins/skill-workshop/skills/skill-workshop/SKILL.md"
+printf '%s' "$payload" | gate >/dev/null 2>&1 \
+    || fail "#586: the gate blocked behind a skill-workshop that is only cached, not installed"
+echo '{"plugins": {"skill-workshop@m": [{}]}}' > "$tmp/home/.claude/plugins/installed_plugins.json"
 if printf '%s' "$payload" | gate >/dev/null 2>&1; then
-    fail "the vendored gate allowed a skill edit while skill-workshop is in the plugin cache"
+    fail "the vendored gate allowed a skill edit while the skill-workshop plugin is installed"
 fi
 rm -rf "$tmp/home/.claude"
 echo "PASS: the vendored gate blocks a Bash skill edit once skill-workshop is reachable"
