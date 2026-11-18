@@ -109,7 +109,13 @@ config-acknowledged = "@BUNDLE_VERSION@"
 # and stopping to ask a question this file already answers. Do not set a policy
 # nothing in the repo can ever satisfy — it gets waved through, and then it
 # stays waved through on the day it starts meaning something again.
-merge-policy = "after-ci"
+#
+# A fresh install starts at `never` (#597): until someone answers the setup
+# interview, nothing but a human merges agent-written code to the default
+# branch. Pick one of the others once you know what your CI and reviewers
+# actually check. (Upgrades never rewrite this file; a repo that already has a
+# value keeps it, and a file with no key at all still reads as `after-ci`.)
+merge-policy = "never"
 
 # Shell command run before any task PR is opened; a non-zero exit means no PR.
 # Point it at everything your repo actually checks, not just lint — whatever is
@@ -2211,6 +2217,8 @@ def _report_gate_choices(repo_path: Path, private: bool = False) -> None:
         )
     else:
         advice = "CI workflows found; `after-ci-and-review` if a review bot reports on PRs"
+    if policy == "never":
+        advice = f"a human merges every PR until this changes, the safe start; {advice}"
     print(f"  MERGE-POLICY is `{policy}` — confirm it with the user ({advice}).")
 
 

@@ -62,11 +62,14 @@ which records `"declined"`, and neither is asked again.
    `manual`, or skip to keep merge-policy alone. Optionally, paths that always need a human.
    With `solo-trust` or `solo-gated`, also ask whether a digest approval counts as the
    user's (`--digest-decisions true`): needed when PRs are opened with their own account.
-6. How far must a PR get before the agent merges it (`--merge-policy`)? `always` (the
-   local gates are the bar), `after-ci` (default: every required check reported green),
-   `after-review` (a review landed and its comments are answered; CI not consulted),
-   `after-ci-and-review` (both), `never` (a human merges). Say that whichever is chosen,
-   the agent merges by itself once `merge_ready.sh` passes, without asking.
+6. How far must a PR get before the agent merges it (`--merge-policy`)? Always ask this
+   one, even when the others are skipped. `never` (default: a human merges every PR),
+   `after-ci-and-review` (green checks and an answered review), `after-ci` (every
+   required check reported green), `after-review` (a review landed and its comments are
+   answered; CI not consulted), `always` (the local gates are the bar). Say that with
+   any value but `never` the agent merges its own PRs by itself once `merge_ready.sh`
+   passes, without asking, so the choice is how much the repo's CI and reviewers must
+   catch before code reaches the default branch.
 
 Pass only what was answered; a skipped question writes nothing and keeps its default:
 
