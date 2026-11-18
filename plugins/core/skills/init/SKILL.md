@@ -16,7 +16,9 @@ CANARY: init-loaded-2026-06-13-fb78d23e-a1b2c3d4e5f6a7b8
 
 ## When to load
 
-- A repo needs the task queue set up for the first time ("init the arsenal", "/init").
+- A repo needs the task queue set up for the first time ("init the arsenal",
+  "/arsenal-init", "/init"). `/arsenal-init` is this skill under a name Claude
+  Code's built-in `/init` does not share; tell users to type that one.
 - Adding a new workspace to an existing `claude-arsenal/` setup.
 
 ## First install — ask for the profile

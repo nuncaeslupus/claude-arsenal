@@ -690,12 +690,27 @@ _UPSTREAM_CACHE_TTL = 6 * 3600  # one `git ls-remote` per six hours, not per ses
 # A failed lookup is cached too, for less time: offline or behind a proxy that
 # drops github.com, retrying on every session start would pay the timeout each time.
 _UPSTREAM_FAIL_TTL = 3600
-_UPDATE_COMMANDS = (
-    "claude plugin marketplace update claude-arsenal\n"
-    "    claude plugin update core@claude-arsenal\n"
-    "    claude plugin update skill-workshop@claude-arsenal\n"
-    "  then restart Claude Code and re-run /init."
-)
+def _update_commands(latest: str) -> str:
+    """How to move the CLI plugin to release `latest` — by its tag, not the tip of main.
+
+    Tags are the release gate: `tag-release` tags only a merge whose CI went green,
+    and check_update.sh offers subtree installs nothing else. A marketplace added
+    without a ref follows `main` and receives every merge, tagged or not, so the
+    documented route pins the marketplace to the tag (#613). The unpinned commands
+    still work for an install that was added that way, and are shown second.
+    """
+    url = os.environ.get("ARSENAL_UPSTREAM_URL", _UPSTREAM_URL)
+    if url.startswith("https://github.com/") and not url.endswith(".git"):
+        url += ".git"
+    return (
+        "claude plugin marketplace remove claude-arsenal\n"
+        f"    claude plugin marketplace add {url}#v{latest}\n"
+        "    claude plugin install core@claude-arsenal\n"
+        "  (a marketplace added without a #ref tracks main instead: "
+        "claude plugin marketplace update claude-arsenal && "
+        "claude plugin update core@claude-arsenal)\n"
+        "  then restart Claude Code and run /arsenal-init."
+    )
 
 
 def _latest_upstream_version() -> str | None:
@@ -757,7 +772,7 @@ def _check_upstream(bundle: Path, first_install: bool, allow_stale: bool) -> boo
         return True
     print(
         f"ARSENAL OUTDATED: this init is {ours}, the latest release is {latest}.\n"
-        f"  Update the plugin:\n    {_UPDATE_COMMANDS}"
+        f"  Update the plugin to the release tag:\n    {_update_commands(str(latest))}"
     )
     if first_install and not allow_stale:
         print(

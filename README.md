@@ -22,15 +22,21 @@ so every session, local or cloud, loads the same skills.
 Inside a Claude Code session:
 
 ```text
-/plugin marketplace add github:nuncaeslupus/claude-arsenal
+/plugin marketplace add https://github.com/nuncaeslupus/claude-arsenal.git#v5.29.0
 /plugin install core@claude-arsenal
 ```
 
-Then, in the project you want set up:
+The `#v…` pins the marketplace to a release tag, which only ever points at a
+commit whose CI went green; without it the plugin follows `main` and receives
+every merge. Then, in the project you want set up:
 
 ```text
-/init
+/arsenal-init
 ```
+
+`/arsenal-init` is the installer under a name of its own: Claude Code's built-in
+`/init` writes a `CLAUDE.md` and can answer a bare `/init` instead. `/core:init`
+reaches the same skill.
 
 ```bash
 git add -A .claude claude-arsenal arsenal .github CLAUDE.md .gitignore README.md
@@ -149,14 +155,14 @@ Merging follows `merge-policy` in `arsenal/config.toml`. Full protocol:
 
 | Command | What it does |
 |---|---|
-| `/init` | Vendor skills, scripts and workflows into the repo; safe to re-run |
+| `/arsenal-init` | Vendor skills, scripts and workflows into the repo; safe to re-run (`/init` names the same skill but can hit Claude Code's built-in) |
 | `/queue-add --title "..." --priority 5 --deps t-xxxxxxxx` | Add a task file |
 | `/queue-next [TAG \| WORKSPACE \| text]` | Claim and work the next unblocked task |
 | `/queue-status` | Counts plus an audit for missing gates and broken deps |
 | `/session-end` | Handoff, retrospective, PR audit |
 
 Configuration lives in `arsenal/config.toml`: `host-gate`, `preflight-gate`,
-`merge-policy`, `[models]`, `[skills]`. Updating and uninstalling:
+`merge-policy` (a fresh install starts at `never`: a human merges), `[models]`, `[skills]`. Updating and uninstalling:
 [`docs/UPDATE.md`](docs/UPDATE.md).
 
 ## Limitations

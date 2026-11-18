@@ -272,7 +272,7 @@ _source_url() {
 _url="$(_source_url || true)"
 _url_hint="${_url:-<marketplace-url>}"
 
-_nonsubtree_route="if you have the CLI plugin, /plugin update claude-arsenal then /init; if you do not (cloud-only, CI, a fresh container), re-clone upstream (${_url_hint}) at the newer tag and run its plugins/core/skills/init/scripts/init.py --repo-path . — see docs/INSTALL.md. Either way, finish with: python3 .claude/skills/init/scripts/init.py --repo-path . --silent"
+_nonsubtree_route="if you have the CLI plugin, re-add the marketplace at the newer tag (claude plugin marketplace add <url>.git#v<version>, see docs/UPDATE.md) then /arsenal-init; if you do not (cloud-only, CI, a fresh container), re-clone upstream (${_url_hint}) at the newer tag and run its plugins/core/skills/init/scripts/init.py --repo-path . — see docs/INSTALL.md. Either way, finish with: python3 .claude/skills/init/scripts/init.py --repo-path . --silent"
 
 if ! git remote get-url "${REMOTE}" >/dev/null 2>&1; then
     if _is_subtree; then

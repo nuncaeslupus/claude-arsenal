@@ -29,6 +29,17 @@ python3 "$init_py" --repo-path "$repo" >/dev/null 2>&1 || fail "init exited non-
 [ ! -f "$repo/.claude/skills/mine/.arsenal-vendored" ] || fail "marked a skill we do not own"
 echo "PASS: skills vendored, consumer's own skill untouched"
 
+# #589: Claude Code's built-in /init shadows the installer, so the same skill ships
+# under a name nothing else uses — vendored with core, and out of the model's
+# listing (disable-model-invocation) so it adds nothing to every session's context.
+alias_md="$repo/.claude/skills/arsenal-init/SKILL.md"
+[ -f "$alias_md" ] || fail "#589: /arsenal-init was not vendored"
+grep -qx 'name: arsenal-init' "$alias_md" || fail "#589: arsenal-init has the wrong name"
+grep -qx 'disable-model-invocation: true' "$alias_md" || fail "#589: arsenal-init is in the model's listing"
+grep -q '`init` skill' "$alias_md" || fail "#589: arsenal-init does not hand over to the init skill"
+grep -q '^section:\|^  section:' "$alias_md" && fail "#589: arsenal-init must be core, installed by every profile"
+echo "PASS: /arsenal-init is vendored as a non-colliding, listing-free name for init"
+
 python3 - "$repo/.claude/settings.json" <<'PY' || fail "settings.json is wrong after init"
 import json, sys
 s = json.load(open(sys.argv[1]))
