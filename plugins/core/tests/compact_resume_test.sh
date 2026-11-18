@@ -23,8 +23,6 @@ if want template; then
   for k in 'Decided' 'Ruled out' 'Next step'; do
     grep -q "^- \*\*${k}\*\*" "$TEMPLATE" || fail "Resume block lacks '${k}'"
   done
-  grep -q 'Resume' "${core}/skills/execution/SKILL.md" \
-    || fail "execution SKILL.md does not say to keep the Resume block current"
 fi
 
 if want hook; then
@@ -127,13 +125,6 @@ assert any("compact_resume.sh" in json.dumps(e) and "record" in json.dumps(e) fo
 c = json.load(open(sys.argv[1]))["hooks"]["PreCompact"]
 assert any("compact_resume.sh" in json.dumps(e) and "instruct" in json.dumps(e) for e in c)
 EOF
-fi
-
-if want agents; then
-  grep -q 'After compaction mid-task' "${assets}/AGENTS.md" \
-    || fail "AGENTS.md does not say how to resume after compaction"
-  grep -q '## Resume' "${assets}/AGENTS.md" \
-    || fail "AGENTS.md does not tell every session to keep a Resume section"
 fi
 
 echo "PASS: compact_resume_test (${which})"

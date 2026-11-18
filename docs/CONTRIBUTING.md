@@ -21,7 +21,7 @@ working tree (so edits take effect without going through `/plugin
 update`):
 
 ```bash
-make dev             # → claude --plugin-dir ./plugins/skill-workshop --plugin-dir ./plugins/core
+make dev             # → claude --plugin-dir for every plugins/* directory
 ```
 
 Inside the session, edit a skill, then `/reload-plugins` to pick up
@@ -60,14 +60,20 @@ file:line back-references.
 | Target | What it does |
 |---|---|
 | `make sync` | `uv sync` — install/refresh dependencies. |
-| `make smoke` | `validate` + `audit` + `tests/skills_smoke.sh`. CI runs this. |
+| `make smoke` | `validate-manifests` + `validate` + `audit` + `skills_smoke.sh` (under `plugins/skill-workshop/skills/skill-workshop/tests/`). CI runs this. |
 | `make validate` | Validator on every plugin's skills, fail-fast. |
 | `make audit` | `audit_library.py plugins/*/skills --by-plugin`. |
+| `make test` | Every shell behaviour test under `plugins/*/tests/` and `scripts/` (parallel). CI runs this; it is the bar. |
+| `make test-changed` | Only the tests the diff touches (`BASE=<ref>`) — the editing loop. |
+| `make test-units` | The pytest unit tests. CI runs this. |
+| `make context-budget` | Resident / on-invocation / on-demand token tiers; fails over the resident cap. |
+| `make sync-version` | Propagate `.bundle-version` into manifests, `AGENTS.md` and `docs/INSTALL.md`. |
+| `make queue-doctor` | Consistency check of `arsenal/tasks/` (dogfood). |
 | `make audit-rule-drift` | Diff rule IDs between `skill-rules.md` and the research doc. |
 | `make sync-dupes` | `sync_duplicates.py --check` across `plugins/*/scripts/_shared/`. |
 | `make lint` | `ruff check plugins` + `mypy plugins`. |
 | `make format` | `ruff format .` + `ruff check --fix .`. |
-| `make dev` | Launch Claude Code with `plugins/*` mounted. |
+| `make dev` | Launch Claude Code with every `plugins/*` directory mounted. |
 | `make new-skill` | Prints the slash to invoke inside Claude Code. |
 | `make clean` | Drop caches and `__pycache__`. |
 
@@ -172,7 +178,8 @@ plugins/
         coverage-gaps/ mutmut-report/                     # python toolchain
       har/                                                 # applied example
 Makefile  pyproject.toml  .pre-commit-config.yaml
-.github/workflows/                  # ci.yml (`uv sync && make smoke`),
+.github/workflows/                  # ci.yml (smoke + lint, core tests, unit tests,
+                                     #  version bump, queue doctor; macOS on main),
                                      # tag-release.yml, benchmark.yml
 ```
 
@@ -185,7 +192,10 @@ to consumers.
 ## Branch + commit policy
 
 - Feature work goes on short-lived `feat/*` branches off `main`. Open
-  a PR for review; let CI run `make smoke` before merging.
+  a PR for review. CI runs only when the PR is opened, reopened or marked
+  ready for review, not on later pushes: before merging, dispatch it on the
+  branch (`gh workflow run ci.yml --ref <branch>`) and wait for green on the
+  final head (CLAUDE.md § CI triggers).
 - Commit messages follow Conventional Commits. The `github` skill
   under `core` documents the format in detail; the gist:
   `<type>(<scope>): <subject>` with `feat | fix | docs | refactor |

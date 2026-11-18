@@ -5,6 +5,7 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+    types: [opened, reopened, ready_for_review]
   # tag-release's recovery path starts this for a commit that has no CI run —
   # what an Actions outage at merge time leaves behind. Without a manual
   # trigger there is no way to produce the conclusion a tag now requires.
@@ -13,79 +14,23 @@ on:
 permissions:
   contents: read
 
-# A new push to a PR cancels the run it superseded. Only PRs: every other run
-# gets its own group (run_id), so a push to main is never cancelled or replaced
-# while queued — tag-release needs a CI conclusion for each merged commit.
+# PR CI runs when a PR is opened, reopened or marked ready for review — not on
+# every push (owner decision: runner minutes). Later pushes are verified by
+# dispatching this workflow on the branch before merge; see CLAUDE.md
+# § CI triggers. Checks attach to the commit, so a dispatch run on the final
+# head satisfies the required checks for it.
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # No `paths-ignore` on the trigger, on purpose: these jobs are required checks,
 # and a workflow skipped by a path filter never reports, which blocks the PR.
-# Docs-only PRs are narrowed inside the `changes` job instead.
 jobs:
-  # macOS runners queue far longer than Linux ones, and the macOS leg exists to
-  # catch BSD-userland / bash 3.2 breakage in what the bundle ships — scripts.
-  # A PR that touches no script (docs, specs, plans) runs Linux only. Pushes to
-  # main and manual runs always run both.
-  changes:
-    name: changes
-    timeout-minutes: 5
-    runs-on: ubuntu-22.04
-    permissions:
-      contents: read
-      pull-requests: read
-    outputs:
-      os: ${{ steps.pick.outputs.os }}
-      mac: ${{ steps.pick.outputs.mac }}
-    steps:
-      - id: pick
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PR: ${{ github.event.pull_request.number }}
-        run: |
-          mac=true
-          if [ "${{ github.event_name }}" = pull_request ]; then
-            files=$(gh api "repos/${{ github.repository }}/pulls/$PR/files" --paginate --jq '.[].filename')
-            if ! printf '%s\n' "$files" | grep -Eq '\.(sh|py)$|(^|/)bin/|(^|/)scripts/|^Makefile$|^\.github/workflows/|^pyproject\.toml$|^uv\.lock$'; then
-              mac=false
-            fi
-          fi
-          echo "mac=$mac" >> "$GITHUB_OUTPUT"
-          if [ "$mac" = true ]; then
-            echo 'os=["ubuntu-22.04","macos-latest"]' >> "$GITHUB_OUTPUT"
-          else
-            echo 'os=["ubuntu-22.04"]' >> "$GITHUB_OUTPUT"
-          fi
-          echo "macOS leg: $mac"
-
-  # Keeps the required check "smoke + lint (macos-latest)" reporting when the
-  # macOS leg is not needed, so a docs-only PR is not blocked forever.
-  smoke-macos-skipped:
-    name: smoke + lint (macos-latest)
-    timeout-minutes: 5
-    needs: changes
-    # always(): when `changes` itself fails, this job still runs and fails, so a
-    # broken file listing blocks the merge instead of reading as a skipped pass.
-    if: always() && needs.changes.outputs.mac != 'true'
-    runs-on: ubuntu-22.04
-    steps:
-      - run: |
-          if [ "${{ needs.changes.result }}" != success ]; then
-            echo "changes job did not succeed (${{ needs.changes.result }}); cannot decide whether macOS smoke is needed."
-            exit 1
-          fi
-          echo "No script changed in this PR; macOS smoke not needed."
-
   smoke:
-    name: smoke + lint
+    # Same name the matrix leg had, so the required check keeps reporting.
+    name: smoke + lint (ubuntu-22.04)
     timeout-minutes: 20
-    needs: changes
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: ${{ fromJSON(needs.changes.outputs.os) }}
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -110,28 +55,6 @@ jobs:
       - name: make lint
         run: make lint
 
-      # The shell behaviour tests are what the macOS leg exists for: they run
-      # the shipped bin/ scripts under BSD userland and bash 3.2. Linux runs
-      # them in the `core tests` job; here only macOS, so they run once each.
-      # 3.11 is the floor the shipped scripts check (`tomllib`) and INSTALL.md
-      # states; this leg is what keeps that floor tested (Linux runs 3.12).
-      - name: Set up Python for the shell tests
-        if: runner.os == 'macOS'
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Install reader dependency and git identity (macOS shell tests)
-        if: runner.os == 'macOS'
-        run: |
-          python3 -m pip install markdown
-          git config --global user.email "ci@arsenal.example"
-          git config --global user.name "Arsenal CI"
-
-      - name: make test (macOS)
-        if: runner.os == 'macOS'
-        run: make test
-
       - name: make audit-rule-drift
         run: make audit-rule-drift
 
@@ -149,6 +72,59 @@ jobs:
       # this check existed but ran nowhere.
       - name: make sync-dupes
         run: make sync-dupes
+
+  # The macOS leg exists to catch BSD-userland / bash 3.2 breakage in the shell
+  # scripts the bundle ships, and macOS runners queue far longer than Linux
+  # ones, so it runs on main (and manual runs on main) only. On a PR the job is
+  # skipped — a skipped job satisfies a required check, a missing one would
+  # block the PR forever, which is why this is a job-level `if:` and not a
+  # matrix entry or a path filter.
+  smoke-macos:
+    name: smoke + lint (macos-latest)
+    timeout-minutes: 20
+    if: github.ref == 'refs/heads/main'
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: uv sync
+        run: uv sync
+
+      - name: make smoke
+        run: make smoke
+
+      - name: make lint
+        run: make lint
+
+      # The shell behaviour tests run the shipped bin/ scripts under BSD
+      # userland and bash 3.2; Linux runs them in the `core tests` job. On
+      # 3.11, the floor the shipped scripts check (`tomllib`) and INSTALL.md
+      # states, so this leg is what keeps that floor tested.
+      - name: Set up Python for the shell tests
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install reader dependency and git identity
+        run: |
+          python3 -m pip install markdown
+          git config --global user.email "ci@arsenal.example"
+          git config --global user.name "Arsenal CI"
+
+      - name: make test
+        run: make test
 
   test:
     name: core tests
@@ -209,23 +185,35 @@ jobs:
     name: version bump
     timeout-minutes: 5
     runs-on: ubuntu-22.04
-    if: github.event_name == 'pull_request'
+    # A dispatch run on a PR branch stands in for the push runs a PR no longer
+    # gets, so it checks the bump too; against main there is nothing to compare.
+    if: github.event_name == 'pull_request' || github.ref != 'refs/heads/main'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
+      - name: Resolve the base commit
+        id: base
+        run: |
+          if [ -n "${{ github.event.pull_request.base.sha }}" ]; then
+            echo "sha=${{ github.event.pull_request.base.sha }}" >> "$GITHUB_OUTPUT"
+          else
+            git fetch --no-tags origin main
+            echo "sha=$(git merge-base origin/main HEAD)" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Require a .bundle-version bump and CHANGELOG entry when shipped files change
         env:
-          BASE: ${{ github.event.pull_request.base.sha }}
+          BASE: ${{ steps.base.outputs.sha }}
           VFILE: plugins/core/skills/init/assets/.bundle-version
           CHANGELOG: plugins/core/skills/init/assets/CHANGELOG.md
         run: |
           changed=$(git diff --name-only "${BASE}...HEAD")
           # "Shipped" = anything a consumer vendors: plugin skills + manifests.
           # Dev-only paths (tests, docs, CI, pyproject) may skip the bump.
-          if ! printf '%s\n' "${changed}" | grep -qE '^(plugins/[^/]+/skills/|plugins/[^/]+/\.claude-plugin/|\.claude-plugin/)'; then
+          if ! printf '%s\n' "${changed}" | grep -qE '^(plugins/[^/]+/(skills|hooks|agents)/|plugins/[^/]+/\.claude-plugin/|\.claude-plugin/)'; then
             echo "No shipped files changed — bump not required."
             exit 0
           fi
@@ -233,6 +221,10 @@ jobs:
           head_v=$(tr -d '[:space:]' < "${VFILE}")
           if [ "${base_v}" = "${head_v}" ]; then
             echo "::error::Shipped files changed but ${VFILE} was not bumped (still ${head_v}). Bump it per CLAUDE.md."
+            exit 1
+          fi
+          if [ "$(printf '%s\n%s\n' "${base_v}" "${head_v}" | sort -V | tail -1)" != "${head_v}" ]; then
+            echo "::error::${VFILE} went down (${base_v} -> ${head_v}); tag-release refuses a lower version."
             exit 1
           fi
           echo "version bump OK: ${base_v:-none} -> ${head_v}"
@@ -277,6 +269,6 @@ jobs:
         # On a pull request, a task this PR archives still has an open issue —
         # the protocol puts the archive and the close in one diff, so that state
         # is expected until it merges. On a push to main it is drift.
-        run: make queue-doctor QUEUE_DOCTOR_FLAGS=${{ github.event_name == 'pull_request' && '--pending-merge' || '' }}
+        run: make queue-doctor QUEUE_DOCTOR_FLAGS=${{ github.ref != 'refs/heads/main' && '--pending-merge' || '' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

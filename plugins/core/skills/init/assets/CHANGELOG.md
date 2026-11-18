@@ -18,7 +18,7 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
-## [5.31.1] - 2026-11-18
+## [5.31.2] - 2026-11-18
 
 Fixes to `bin/session_start.sh`, the one-command session start from 5.30.0:
 
@@ -38,6 +38,13 @@ Fixes to `bin/session_start.sh`, the one-command session start from 5.30.0:
 - Labels follow `task-label` / `import-label` from `arsenal/config.toml`.
 - Python floor: 3.11 (what the scripts check, and what the test suite passes on);
   `docs/INSTALL.md` said 3.12.
+
+## [5.31.1] - 2026-11-18
+
+- `gate_run.sh`: a `## ` comment line inside the fenced acceptance-gate block no longer ends the section (it used to print "prose-only" and run nothing).
+- `rebase_stack.sh` says why it stopped when the default-branch fetch fails, instead of exiting silently.
+- `statusline_capture.sh` anchors `arsenal/session/` at `$CLAUDE_PROJECT_DIR`, so a status line run from another directory no longer creates a stray tree.
+- `dep-upgrade` removes `uv.lock.bak` once the tests are green; `pypi-release` stops for the user's go-ahead before tagging and uploading.
 
 ## [5.31.0] - 2026-11-18
 
