@@ -18,7 +18,8 @@ cd "$repo" && git init -q . && ln -s "$ASSETS" claude-arsenal \
     && git -c user.email=t@t -c user.name=t commit -q --allow-empty -m init
 export ARSENAL_ISSUES_JSON="$tmp/t/arsenal-issues.json"
 I="$tmp/t/arsenal-issues.json"; U="$tmp/t/arsenal-unfiled.json"; M="$tmp/t/arsenal-import.json"
-BASEPATH="$(dirname "$(command -v git)"):$(dirname "$(command -v python3)"):$(dirname "$(command -v bash)"):/usr/bin:/bin"
+# python3's dir first: on CI git lives in /usr/bin beside an older system python3.
+BASEPATH="$(dirname "$(command -v python3)"):$(dirname "$(command -v git)"):$(dirname "$(command -v bash)"):/usr/bin:/bin"
 run() { out="$(cd "$repo/sub" && env -u GH_TOKEN -u GITHUB_TOKEN "$@" bash ../claude-arsenal/bin/session_start.sh ${args[@]+"${args[@]}"} 2>&1)"; rc=$?; }  # bash 3.2: empty array + set -u
 
 # --- none: no gh, no token. Stale files from a previous session are cleared. ---
@@ -62,6 +63,20 @@ rm "$M"
 args=(--board); run PATH="$BASEPATH"
 grep -q 'missing or empty' <<<"$out" || fail "missing issue file not reported"
 [[ $rc -eq 1 ]] || fail "missing issue file exited $rc, want 1"
+# A step that crashes is a failure, not a row to act on: no ACTION from its error text.
+# Simulated with a python3 too old for tomllib (what CI's system python once was).
+echo '[]' >"$M"; mkdir -p "$tmp/oldpy"
+cat >"$tmp/oldpy/python3" <<EOF
+#!/usr/bin/env bash
+case "\$1" in -c|-) exec "$(command -v python3)" "\$@" ;; esac
+exec "$(command -v python3)" -c 'import runpy, sys; sys.modules["tomllib"] = None; f = sys.argv[1]; sys.argv = sys.argv[1:]; runpy.run_path(f, run_name="__main__")' "\$@"
+EOF
+chmod +x "$tmp/oldpy/python3"
+args=(--board); run PATH="$tmp/oldpy:$BASEPATH"
+[[ $rc -eq 1 ]] || fail "crashed steps exited $rc, want 1: $out"
+grep -q 'handle_sync.py exited' <<<"$out" || fail "handle_sync failure not named: $out"
+grep -q 'issue_import.py exited' <<<"$out" || fail "issue_import failure not named: $out"
+grep -q '^ACTION' <<<"$out" && fail "a crashed step's error text became an ACTION: $out"
 args=(--bogus); run PATH="$BASEPATH"
 [[ $rc -eq 2 ]] || fail "unknown argument exited $rc, want 2"
 

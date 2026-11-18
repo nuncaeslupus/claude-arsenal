@@ -134,17 +134,21 @@ python3 "$B/scripts/query_status.py" --issues "$ISSUES" --open-issues "$UNFILED"
 both="$D/arsenal-handle-input.json"
 if python3 -c 'import json, sys; json.dump(json.load(open(sys.argv[1])) + json.load(open(sys.argv[2])), open(sys.argv[3], "w"))' \
     "$ISSUES" "$IMPORT" "$both"; then
-    handles="$(python3 "$B/scripts/handle_sync.py" --issues "$both" 2>&1)" || fail "handle_sync.py exited $?"
+    handles="$(python3 "$B/scripts/handle_sync.py" --issues "$both" 2>&1)"; hrc=$?
     echo "$handles"
-    if grep -qv '^handle_sync:' <<<"$handles"; then
+    if [[ $hrc -ne 0 ]]; then
+        fail "handle_sync.py exited $hrc"
+    elif grep -qv '^handle_sync:' <<<"$handles"; then
         echo "ACTION: create each issue above (every label listed, plus a visible \`arsenal-task: <id>\` body line; resolve any 'ambiguous' row first). See $B/references/queue-seeding.md"
     fi
 else
     fail "could not read the issue files as JSON arrays"
 fi
-imp="$(python3 "$B/scripts/issue_import.py" --issues "$IMPORT" --apply 2>&1)" || fail "issue_import.py exited $?"
+imp="$(python3 "$B/scripts/issue_import.py" --issues "$IMPORT" --apply 2>&1)"; irc=$?
 echo "$imp"
-if grep -qv '^issue_import:' <<<"$imp"; then
+if [[ $irc -ne 0 ]]; then
+    fail "issue_import.py exited $irc"
+elif grep -qv '^issue_import:' <<<"$imp"; then
     echo "ACTION: apply every change printed above and commit the new task files. See $B/references/queue-seeding.md"
 fi
 exit "$rc"
