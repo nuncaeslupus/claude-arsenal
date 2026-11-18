@@ -90,6 +90,25 @@ The repo was renamed `my-skills` → `claude-arsenal` at v0.1.0 via the
 GitHub Settings UI (preserves history and sets up redirects); no
 `git mv` was performed on the working tree.
 
+### CI triggers — a PR's later pushes do not run CI
+
+`ci.yml` runs on a PR only when it is **opened, reopened or marked ready for
+review**, plus `workflow_dispatch` and the push to `main` that `tag-release`
+depends on. The macOS leg (`smoke + lint (macos-latest)`) runs on `main` only;
+on a PR it reports as *skipped*, which satisfies the required check.
+
+So a fix pushed to an open PR is **not** checked by anything. Before merging,
+verify the final head by dispatching the workflow on the branch:
+
+```
+gh workflow run ci.yml --ref <branch>      # or the Actions UI / run_workflow
+```
+
+Checks attach to the commit, so a green dispatch run on the PR's head SHA
+satisfies the required checks for it. A dispatch on a non-`main` branch also
+runs `version bump` and `queue doctor` in their PR mode. Never merge a head
+whose latest push has no green run.
+
 ### Multi-PR autonomous work — stacking rule
 
 When a plan produces **N PRs that will be merged in sequence**, follow the stacking rule in the `github` skill's `references/stacking.md` (shipped to consumers). Key points: branches must stack from the start, and **only the last PR in the stack bumps `.bundle-version`** — intermediate PRs ship content at the current version. After each merge, rebase the next branch with `--onto` to skip the now-merged commits.

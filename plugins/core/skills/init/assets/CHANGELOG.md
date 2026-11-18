@@ -18,6 +18,13 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [5.31.1] - 2026-11-18
+
+- `gate_run.sh`: a `## ` comment line inside the fenced acceptance-gate block no longer ends the section (it used to print "prose-only" and run nothing).
+- `rebase_stack.sh` says why it stopped when the default-branch fetch fails, instead of exiting silently.
+- `statusline_capture.sh` anchors `arsenal/session/` at `$CLAUDE_PROJECT_DIR`, so a status line run from another directory no longer creates a stray tree.
+- `dep-upgrade` removes `uv.lock.bak` once the tests are green; `pypi-release` stops for the user's go-ahead before tagging and uploading.
+
 ## [5.31.0] - 2026-11-18
 
 - **`/arsenal-init`** is the installer under a name Claude Code's built-in `/init`
