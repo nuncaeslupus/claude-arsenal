@@ -126,7 +126,11 @@ python3 "${CLAUDE_SKILL_DIR}/scripts/init.py" --repo-path . --silent         # s
 python3 "${CLAUDE_SKILL_DIR}/scripts/init.py" --repo-path . --list-sections  # capability map, read-only
 python3 "${CLAUDE_SKILL_DIR}/scripts/init.py" --repo-path . --section python  # one section's skills
 python3 "${CLAUDE_SKILL_DIR}/scripts/init.py" --workspace BACKEND --root ./backend/
+python3 "${CLAUDE_SKILL_DIR}/scripts/init.py" --repo-path . --uninstall      # dry run; --apply removes
 ```
+
+`--uninstall` removes only what is still exactly as init wrote it and never
+`arsenal/`; show the user its list before running it with `--apply`.
 
 `--silent` is what the session-start protocol runs; it refreshes stale bundle
 files and prints an upgrade banner when the plugin is newer. `--workspace NAME`

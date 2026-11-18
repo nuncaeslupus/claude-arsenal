@@ -197,6 +197,17 @@ JSON shape if you have not edited that file before.
 
 ## 6. Uninstall
 
+Removing the plugins does not remove what `/arsenal-init` put in a project — every
+session there keeps running the protocol until that is gone too. Do the project
+first (`docs/UPDATE.md` § *Uninstalling from a project*):
+
+```bash
+python3 .claude/skills/init/scripts/init.py --repo-path . --uninstall          # dry run: lists everything
+python3 .claude/skills/init/scripts/init.py --repo-path . --uninstall --apply  # then remove it
+```
+
+Then the plugins:
+
 ```text
 /plugin uninstall core@claude-arsenal
 /plugin uninstall skill-workshop@claude-arsenal

@@ -323,3 +323,36 @@ order:
    the cache holds (`git -C ~/.claude/plugins/cache/claude-arsenal rev-parse
    HEAD`) and the version you were on before. A bad release is worth a fix
    forward, which every install gets on its normal update route.
+
+---
+
+## Uninstalling from a project
+
+`init.py --uninstall` removes what `/arsenal-init` wrote into a repository. It is
+a dry run unless `--apply` is given, and it prints every item it would remove and
+every one it would leave, with the reason:
+
+```bash
+python3 .claude/skills/init/scripts/init.py --repo-path . --uninstall          # look first
+python3 .claude/skills/init/scripts/init.py --repo-path . --uninstall --apply  # then remove
+git add -A && git commit -m "chore: remove claude-arsenal"
+```
+
+It removes a path only while it is still exactly what init wrote, compared with
+that init's own copy; anything edited is listed as `keep` for you to decide:
+
+| What | Removed when |
+|---|---|
+| `claude-arsenal/` | each file whose content matches the bundle; files you edited or added stay |
+| `.claude/skills/<name>/` with `.arsenal-vendored` | the tree matches the shipped skill (run from the vendored copy, when git shows no uncommitted change) |
+| `.claude/settings.json` | only the arsenal hooks, the arsenal `statusLine` and the `autoCompactWindow` taken from `context-window`; your own entries stay |
+| `CLAUDE.md` protocol block, README badge | the block between the markers is unedited; the rest of the file stays |
+| `.github/workflows/arsenal-queue.yml` | it is a version init shipped |
+
+Never removed: `arsenal/` (your tasks, config and handover), the `.gitignore`
+lines init added, and anything on GitHub. The command lists those as manual
+steps: branch protection on the default branch if init applied it, the
+`arsenal:*` labels and `arsenal/claims/*` branches, and the CLI plugins
+(`docs/INSTALL.md` § 6). Run it from the same version as the installed bundle:
+a different version's files differ from the ones it compares against, so they
+are kept rather than deleted, and the command says so.

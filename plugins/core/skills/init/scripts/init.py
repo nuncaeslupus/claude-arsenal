@@ -20,6 +20,7 @@ except ModuleNotFoundError:  # Python < 3.11: say so instead of a bare traceback
     sys.exit(
         f"{sys.argv[0]}: needs Python >= 3.11, found {sys.version.split()[0]}; use a newer python3"
     )
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -690,6 +691,8 @@ _UPSTREAM_CACHE_TTL = 6 * 3600  # one `git ls-remote` per six hours, not per ses
 # A failed lookup is cached too, for less time: offline or behind a proxy that
 # drops github.com, retrying on every session start would pay the timeout each time.
 _UPSTREAM_FAIL_TTL = 3600
+
+
 def _update_commands(latest: str) -> str:
     """How to move the CLI plugin to release `latest` — by its tag, not the tip of main.
 
@@ -1461,6 +1464,20 @@ def _vendor_skills(
         print(f"  skills: pruned {name} (not shipped, or its section is off)")
 
 
+# Every hook init writes into .claude/settings.json: (event, matcher, script).
+# One list, read by the registration below and by --uninstall, so the two cannot
+# disagree about what init owns there.
+_SETTINGS_HOOKS: list[tuple[str, str | None, str]] = [
+    ("PreToolUse", "Edit|Write|MultiEdit|Bash", _GATE_HOOK),
+    ("PostToolUse", "Skill", _MARK_HOOK),
+    ("PostToolUse", "Write|Edit|MultiEdit", _READER_HOOK),
+    ("UserPromptSubmit", None, _MARK_PROMPT_HOOK),
+    ("SessionStart", "compact", _COMPACT_HOOK),
+    ("PostToolUse", "Write|Edit|MultiEdit", f"{_COMPACT_HOOK} record"),
+    ("PreCompact", None, f"{_COMPACT_HOOK} instruct"),
+]
+
+
 def _register_gate_hook(repo_path: Path) -> None:
     """Wire the skill-edit gate into .claude/settings.json.
 
@@ -1480,17 +1497,8 @@ def _register_gate_hook(repo_path: Path) -> None:
         print("  settings.json: unexpected 'hooks' value — skipping gate-hook registration")
         return
 
-    wanted = [
-        ("PreToolUse", "Edit|Write|MultiEdit|Bash", _GATE_HOOK),
-        ("PostToolUse", "Skill", _MARK_HOOK),
-        ("PostToolUse", "Write|Edit|MultiEdit", _READER_HOOK),
-        ("UserPromptSubmit", None, _MARK_PROMPT_HOOK),
-        ("SessionStart", "compact", _COMPACT_HOOK),
-        ("PostToolUse", "Write|Edit|MultiEdit", f"{_COMPACT_HOOK} record"),
-        ("PreCompact", None, f"{_COMPACT_HOOK} instruct"),
-    ]
     changed = False
-    for event, matcher, command in wanted:
+    for event, matcher, command in _SETTINGS_HOOKS:
         entries = hooks.setdefault(event, [])
         if not isinstance(entries, list):
             continue
@@ -2474,6 +2482,207 @@ def init_base(
     return True
 
 
+def _strip_settings(settings: dict, repo_path: Path) -> list[str]:
+    """Remove what init wrote into `settings` in place; return what was removed.
+
+    Only entries init's own spelling of a command matches: a hook a host added
+    beside ours, or a statusLine it replaced ours with, is not ours to delete.
+    """
+    removed: list[str] = []
+    ours: set[str] = set()
+    for _event, _matcher, script in _SETTINGS_HOOKS:
+        ours |= {_hook_command(script), _legacy_hook_command(script)}
+    hooks = settings.get("hooks")
+    if isinstance(hooks, dict):
+        for event in list(hooks):
+            entries = hooks[event]
+            if not isinstance(entries, list):
+                continue
+            kept_entries = []
+            for entry in entries:
+                inner = entry.get("hooks") if isinstance(entry, dict) else None
+                if not isinstance(inner, list):
+                    kept_entries.append(entry)
+                    continue
+                kept = [h for h in inner if not (isinstance(h, dict) and h.get("command") in ours)]
+                removed += [f"hook {event}: {h['command']}" for h in inner if h not in kept]
+                if kept:
+                    kept_entries.append({**entry, "hooks": kept})
+            if kept_entries:
+                hooks[event] = kept_entries
+            else:
+                del hooks[event]
+        if not hooks:
+            del settings["hooks"]
+    status = settings.get("statusLine")
+    if isinstance(status, dict) and status.get("command") in {
+        _hook_command(_STATUSLINE_SCRIPT),
+        _legacy_hook_command(_STATUSLINE_SCRIPT),
+    }:
+        del settings["statusLine"]
+        removed.append("statusLine")
+    window = _read_context_window(_home(repo_path) / "config.toml")
+    if window and settings.get("autoCompactWindow") == window:
+        del settings["autoCompactWindow"]
+        removed.append("autoCompactWindow")
+    return removed
+
+
+def uninstall(repo_path: Path, bundle_override: Path | None = None, apply: bool = False) -> int:
+    """Remove what init wrote, and only what is still exactly what it wrote (#600).
+
+    A dry run by default: it prints every path it would remove and every path it
+    would leave, with the reason, and touches nothing. `apply` performs the same
+    plan. "Exactly what init wrote" is checked against this init's own bundle and
+    skills — a file whose content differs (edited, or from another version) is
+    listed and kept, never deleted. `arsenal/` is the host's data and is never
+    removed; neither is anything on GitHub, which is listed as manual steps.
+    """
+    bundle = _bundle_dir(bundle_override)
+    arsenal = repo_path / "claude-arsenal"
+    remove: list[tuple[str, Callable[[], None]]] = []
+    keep: list[str] = []
+
+    def rel(path: Path) -> str:
+        return path.relative_to(repo_path).as_posix()
+
+    # 1. The bundle tree, file by file, against this init's own copy.
+    if arsenal.is_dir():
+        ours = (bundle / ".bundle-version").read_text(encoding="utf-8").strip()
+        theirs_path = arsenal / ".bundle-version"
+        theirs = theirs_path.read_text(encoding="utf-8").strip() if theirs_path.is_file() else ""
+        if theirs and theirs != ours:
+            keep.append(
+                f"note: claude-arsenal/ is {theirs} and this init is {ours} — files that "
+                f"differ between the two are kept; run {theirs}'s init.py to remove them too"
+            )
+        owned = _read_manifest(arsenal) or set(_bundle_files(bundle))
+        for path in sorted(p for p in arsenal.rglob("*") if p.is_file()):
+            name = path.relative_to(arsenal).as_posix()
+            src = bundle / name
+            if name == _MANIFEST:
+                remove.append((rel(path), path.unlink))
+            elif name in owned and src.is_file() and _content_sha(src) == _content_sha(path):
+                remove.append((rel(path), path.unlink))
+            elif name in owned:
+                keep.append(f"{rel(path)} (differs from what init wrote)")
+            elif "__pycache__" not in path.parts:
+                keep.append(f"{rel(path)} (not written by init)")
+
+    # 2. Vendored skills: a marker folder whose tree is still the shipped one.
+    source, dest = _source_skills_dir(), repo_path / ".claude" / "skills"
+    self_vendored = dest.is_dir() and source.resolve() == dest.resolve()
+    if self_vendored:
+        keep.append(
+            "note: running from the vendored copy, so skills are checked against git "
+            "(uncommitted changes are kept), not against a bundle"
+        )
+    for d in sorted(dest.iterdir()) if dest.is_dir() else []:
+        if not (d / _VENDOR_MARKER).is_file():
+            continue
+        if self_vendored:
+            same = not _locally_modified(d)
+        else:
+            same = (source / d.name).is_dir() and _same_tree(source / d.name, d)
+        if same:
+            remove.append((rel(d) + "/", lambda d=d: shutil.rmtree(d)))
+        else:
+            keep.append(f"{rel(d)}/ (differs from what init wrote; delete it by hand)")
+
+    # 3. Settings: our hooks, statusLine and autoCompactWindow, nothing else.
+    settings_path = repo_path / ".claude" / "settings.json"
+    settings = _read_settings(settings_path) if settings_path.is_file() else None
+    if settings_path.is_file() and settings is None:
+        keep.append(f"{rel(settings_path)} (unparseable — remove the arsenal hooks by hand)")
+    elif settings:
+        stripped = _strip_settings(settings, repo_path)
+        if stripped:
+
+            def write_settings(s: dict = settings, p: Path = settings_path) -> None:
+                if s:
+                    p.write_text(json.dumps(s, indent=2) + "\n", encoding="utf-8")
+                else:
+                    p.unlink()
+
+            what = "the whole file" if not settings else ", ".join(stripped)
+            remove.append((f"{rel(settings_path)}: {what}", write_settings))
+
+    # 4. The managed CLAUDE.md block and the README badge, if untouched.
+    claude_md = repo_path / "CLAUDE.md"
+    for path, block, opener in (
+        (claude_md, _claude_md_block(repo_path), CLAUDE_MD_MARKER),
+        (repo_path / "README.md", ATTRIBUTION_BLOCK, ATTRIBUTION_OPEN),
+    ):
+        text = path.read_text(encoding="utf-8") if path.is_file() else ""
+        if opener not in text:
+            continue
+        if block not in text:
+            keep.append(f"{rel(path)}: the arsenal block (edited since init wrote it)")
+            continue
+        rest = re.sub(r"\n{3,}", "\n\n", text.replace(block, "", 1)).strip("\n")
+
+        def write_text(p: Path = path, r: str = rest) -> None:
+            if r.strip():
+                p.write_text(r + "\n", encoding="utf-8")
+            else:
+                p.unlink()
+
+        what = "the whole file" if not rest.strip() else "the arsenal block"
+        remove.append((f"{rel(path)}: {what}", write_text))
+
+    # 5. The queue workflow, if it is a version init shipped.
+    workflow = repo_path / ".github" / "workflows" / _QUEUE_WORKFLOW
+    if workflow.is_file():
+        shipped = bundle / "workflows" / _QUEUE_WORKFLOW
+        shas = _shipped_shas(shipped) | ({_content_sha(shipped)} if shipped.is_file() else set())
+        if _content_sha(workflow) in shas:
+            remove.append((rel(workflow), workflow.unlink))
+        else:
+            keep.append(f"{rel(workflow)} (differs from what init wrote)")
+
+    home = _home(repo_path)
+    if home.is_dir():
+        keep.append(
+            f"{rel(home)}/ (yours: tasks, config, handover — delete it by hand if you want them gone)"
+        )
+    keep.append(".gitignore entries init added (harmless; remove by hand if you like)")
+    manual = [
+        "branch protection on the default branch, if init applied it "
+        "(GitHub → Settings → Branches)",
+        "the arsenal:* issue labels and any arsenal/claims/* branches on GitHub",
+        "the CLI plugins: claude plugin uninstall core@claude-arsenal "
+        "(and skill-workshop@claude-arsenal), claude plugin marketplace remove claude-arsenal",
+    ]
+
+    mode = "removing" if apply else "DRY RUN — nothing removed; would remove"
+    print(f"init --uninstall: {mode} {len(remove)} item(s):")
+    for what, _ in remove:
+        print(f"  remove: {what}")
+    for what in keep:
+        print(f"  keep:   {what}")
+    for what in manual:
+        print(f"  manual: {what}")
+    if not apply:
+        print("init --uninstall: re-run with --uninstall --apply to remove the items above.")
+        return 0
+    for _, action in remove:
+        action()
+    # Directories the removal emptied, deepest first; a non-empty one stays.
+    # Bytecode caches are the interpreter's output from running the bundle, not
+    # anyone's work, so they go with it rather than keeping their folders alive.
+    for root in (arsenal, dest):
+        if root.is_dir():
+            for cache in [p for p in root.rglob("__pycache__") if p.is_dir()]:
+                shutil.rmtree(cache, ignore_errors=True)
+            for d in sorted((p for p in root.rglob("*") if p.is_dir()), reverse=True):
+                with contextlib.suppress(OSError):
+                    d.rmdir()
+            with contextlib.suppress(OSError):
+                root.rmdir()
+    print("init --uninstall: done. Commit the removal: git add -A && git commit")
+    return 0
+
+
 def _stage_command(repo_path: Path) -> str:
     """The `git add` for every path init may have written that exists here."""
     paths = [
@@ -2931,9 +3140,25 @@ def main() -> None:
         help="Print the known trigger for each bot in review-bots, as a --bot-triggers value. "
         "Writes nothing.",
     )
+    p.add_argument(
+        "--uninstall",
+        action="store_true",
+        help="List everything init wrote that is still exactly as written, and what it "
+        "would leave; a dry run unless --apply is given. arsenal/ is never removed.",
+    )
+    p.add_argument(
+        "--apply",
+        action="store_true",
+        help="With --uninstall: remove what the dry run lists.",
+    )
     args = p.parse_args()
 
     repo_path = Path(args.repo_path).resolve()
+    if args.apply and not args.uninstall:
+        sys.exit("init: --apply only goes with --uninstall")
+    if args.uninstall:
+        bundle_dir = Path(args.bundle_dir) if args.bundle_dir else None
+        raise SystemExit(uninstall(repo_path, bundle_dir, apply=args.apply))
     if args.suggest_bot_triggers:
         raise SystemExit(suggest_bot_triggers(repo_path))
     # Validated before the install runs, so a bad answer writes nothing at all.
