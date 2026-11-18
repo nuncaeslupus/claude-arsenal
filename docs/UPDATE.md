@@ -98,7 +98,7 @@ added again, and it still cannot merge anything without a subtree.
 | `~/.claude/settings.json` | consumer | Yes. |
 | `~/.claude/keybindings.json` | consumer | Yes. |
 | `<project>/CLAUDE.md` | consumer | Yes. |
-| `<project>/.claude/skills/**` | consumer | Yes. |
+| `<project>/.claude/skills/**` | consumer for your own skills; `/init` for folders it vendored (marked `.arsenal-vendored`) | Your own: yes. Vendored folders are replaced on the next `/init` refresh. |
 | `<project>/.claude/settings.json` | consumer | Yes. |
 | `<project>/.claude/settings.local.json` | consumer (gitignored) | Yes. |
 | `<project>/<skill>/findings.md` | consumer (gitignored) | Yes. |

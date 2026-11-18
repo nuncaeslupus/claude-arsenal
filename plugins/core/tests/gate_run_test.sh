@@ -9,7 +9,7 @@ GATE_RUN="${SCRIPT_DIR}/../skills/init/assets/bin/gate_run.sh"
 
 if [[ ! -f "${GATE_RUN}" ]]; then
     echo "FAIL: gate_run.sh not found at ${GATE_RUN}" >&2
-    exit 0
+    exit 1
 fi
 
 tmpdir=$(mktemp -d)
@@ -581,6 +581,23 @@ if [[ "${out}" != *"gate: unmeasured"* ]]; then
     echo "FAIL: the 'gate: unmeasured' verdict never reached stdout, got '${out}'" >&2; exit 1
 fi
 echo "PASS: an unmeasured evidence gate reports 'gate: unmeasured' and exits 3"
+
+# A '## ' bash comment inside the fenced gate must not end the section.
+cat > "${tmpdir}/arsenal/tasks/lo-hash.md" <<'EOF'
+# T9: comment in gate
+
+## Acceptance gate
+```bash
+## setup
+echo hash-gate-ran > "$PWD/hash-ran"
+```
+
+## Tests
+Manual.
+EOF
+run_gate "lo-hash" >/dev/null
+[[ -f "${tmpdir}/hash-ran" ]] || { echo "FAIL: a '## ' line inside the gate fence truncated the section" >&2; exit 1; }
+echo "PASS: a '## ' comment inside the gate fence does not truncate the gate"
 
 echo "PASS: gate_run_test — all gates passed"
 exit 0

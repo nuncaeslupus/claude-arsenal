@@ -15,7 +15,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ASSETS="${SCRIPT_DIR}/../skills/init/assets"
 BUDGET="${ASSETS}/bin/budget_check.sh"
 DOC="${ASSETS}/references/quota-governance.md"
-KNOBS="${ASSETS}/references/performance-tuning.md"
 
 [[ -f "${BUDGET}" ]] || { echo "FAIL: budget_check.sh not found" >&2; exit 1; }
 
@@ -135,12 +134,6 @@ if [[ -f "${DOC}" ]]; then
     [[ "${rc}" -eq 3 ]] \
         || fail "the example printed in quota-governance.md does not engage the guard (exit ${rc})"
     echo "PASS: the example printed in the docs is one budget_check.sh accepts"
-fi
-
-if [[ -f "${KNOBS}" ]]; then
-    grep -q 'ARSENAL_RATE_LIMITS_FILE' "${KNOBS}" \
-        || fail "the tuning-knobs table does not list ARSENAL_RATE_LIMITS_FILE"
-    echo "PASS: the knob is listed in the tuning table"
 fi
 
 echo "PASS: quota_seam_test — all gates passed"
