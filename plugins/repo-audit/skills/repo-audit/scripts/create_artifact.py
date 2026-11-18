@@ -35,12 +35,16 @@ Input JSON shape:
   ],
   "ledger": [
     {"finding": "...", "where": "path/or/component",
-     "status": "fixed" | "queued" | "issue" | "flagged"}
+     "status": "fixed" | "queued" | "issue" | "flagged",
+     "severity": "high" | "medium" | "low",      (optional)
+     "confidence": "high" | "medium" | "low"}    (optional)
   ]
 }
 
 `ledger` is optional and typically only present in a repo-audit report;
-explain-repo's narrative documents usually omit it.
+explain-repo's narrative documents usually omit it. Rows are shown with
+their severity and confidence and sorted by them (severity first, then
+confidence, high first; rows without a rating last, input order kept).
 
 Exit codes:
   0 — written
@@ -62,6 +66,7 @@ STATUS_LABEL = {
     "issue": "issue filed",
     "flagged": "flagged — your call",
 }
+LEVEL_RANK = {"high": 0, "medium": 1, "low": 2}
 REQUIRED_SECTION_KEYS = {"id", "tag", "heading"}
 
 CSS = """
@@ -202,14 +207,24 @@ def render_ledger(ledger: list[dict]) -> str:
         return (
             f"<tr><td>{esc(row['finding'])}</td>"
             f"<td><code>{esc(row['where'])}</code></td>"
+            f"<td>{esc(row.get('severity', '—'))}</td>"
+            f"<td>{esc(row.get('confidence', '—'))}</td>"
             f'<td><span class="pill {esc(status)}">{label}</span></td></tr>'
         )
 
-    rows = "".join(_row(row) for row in ledger)
+    def _rank(row: dict) -> tuple[int, int]:
+        # Unrated (or unknown) levels sort last; sorted() is stable.
+        return (
+            LEVEL_RANK.get(str(row.get("severity")), len(LEVEL_RANK)),
+            LEVEL_RANK.get(str(row.get("confidence")), len(LEVEL_RANK)),
+        )
+
+    rows = "".join(_row(row) for row in sorted(ledger, key=_rank))
     return (
         '<section class="block" id="ledger"><span class="tag">ledger</span> '
         '<h2 class="h">Findings</h2>'
-        f'<div class="twrap"><table><thead><tr><th>Finding</th><th>Where</th><th></th></tr></thead>'
+        '<div class="twrap"><table><thead><tr><th>Finding</th><th>Where</th>'
+        "<th>Severity</th><th>Confidence</th><th>Status</th></tr></thead>"
         f"<tbody>{rows}</tbody></table></div></section>"
     )
 

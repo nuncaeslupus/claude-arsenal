@@ -251,6 +251,10 @@ form:
 
 - Skill: `claude-arsenal:<plugin>:<skill>` (e.g. `claude-arsenal:core:specify`).
 - Reference: `claude-arsenal:<plugin>:<skill> § references/<file>.md`.
+- Bundle reference (what `init` vendors into `claude-arsenal/references/`):
+  cite `claude-arsenal/references/<file>.md`. `init` has no `references/`
+  folder of its own, so `claude-arsenal:core:init § references/…` resolves to
+  nothing; `bundle_refs_test.sh` fails on it.
 - Rubric row: cite the rule ID (e.g. `R-FM-3`) and let the validator's
   `findings.md` carry the file:line back-reference.
 

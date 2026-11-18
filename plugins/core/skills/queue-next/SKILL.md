@@ -1,6 +1,6 @@
 ---
 name: queue-next
-description: Claims the next unblocked queue task and runs the worker loop, optionally scoped by tag, workspace or title. Use when the user wants to resume work. Not for adding tasks.
+description: Claims the next unblocked queue task and runs the worker loop, optionally scoped by tag, workspace or title. Use when the user asks for the next queue task. Not for adding tasks, or a plain "continue".
 user-invocable: true
 argument-hint: "[CAPABILITY | TAG … | WORKSPACE | search-text]"
 metadata:
@@ -17,9 +17,11 @@ CANARY: queue-next-loaded-2026-06-13-fb78d23e-b2c3d4e5f6a7b8c9
 
 ## When to load
 
-- The user types `/queue-next`, "continue", "resume", "run the workers", or
-  `WORKSPACE: Continue` (equivalent to `/queue-next WORKSPACE`).
-- A session needs to pick up where a previous one left off.
+- The user types `/queue-next`, asks for "the next queue task" or to "run the workers", or
+  writes `WORKSPACE: Continue` (equivalent to `/queue-next WORKSPACE`).
+- A bare "continue" or "resume" is not a trigger: in an ordinary conversation it
+  means carry on with the work in hand, and claiming a task is a remote write.
+  Load only when the session has no work in flight and the user means the queue.
 
 ## The loop
 

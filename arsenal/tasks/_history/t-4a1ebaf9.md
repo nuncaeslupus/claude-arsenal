@@ -3,6 +3,7 @@ id: t-4a1ebaf9
 title: "review: python-bootstrap hands off to a private `model-gen` / `model-val` toolkit"
 priority: 5
 requires: [human:gate]
+status: merged
 ---
 
 Imported from issue #603

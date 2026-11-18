@@ -22,7 +22,7 @@
         },
         {
           "name": "queue-next",
-          "description": "Claims the next unblocked queue task and runs the worker loop, optionally scoped by tag, workspace or title. Use when the user wants to resume work. Not for adding tasks."
+          "description": "Claims the next unblocked queue task and runs the worker loop, optionally scoped by tag, workspace or title. Use when the user asks for the next queue task. Not for adding tasks, or a plain \"continue\"."
         },
         {
           "name": "queue-status",
@@ -110,7 +110,7 @@
         },
         {
           "name": "gate-check",
-          "description": "Reports PASS/FAIL with measured numbers on a plan task's acceptance gate, or audits all gates. Use when the user asks whether a gate passed. Not for writing code."
+          "description": "Reports PASS/FAIL with measured numbers on a plan task's acceptance gate, or audits all gates. Use when the user asks whether a gate passed. Not for writing code or queue task gates."
         },
         {
           "name": "review",

@@ -41,7 +41,7 @@ Without Claude Code on the machine (CI, a fresh container), run the same install
 from a clone pinned to a release tag:
 
 ```bash
-git clone --depth 1 --branch v5.10.1 https://github.com/nuncaeslupus/claude-arsenal.git /tmp/arsenal
+git clone --depth 1 --branch v5.29.0 https://github.com/nuncaeslupus/claude-arsenal.git /tmp/arsenal
 python3 /tmp/arsenal/plugins/core/skills/init/scripts/init.py --repo-path . --profile general
 ```
 
@@ -114,9 +114,10 @@ skills, a vendored `AGENTS.md`, and scripts with line-oriented or JSON output.
 | Git / session | `github` (Conventional Commits, PR review loop) · `session-end` (handoff, retrospective, PR audit) |
 | Python | `python-bootstrap` · `pypi-release` · `dep-upgrade` · `coverage-gaps` · `mutmut-report` · `pin-check` |
 | Extract | `har` (HAR / network-capture analysis) |
+| Android | `bugreport` (Android bugreport analysis) |
 | Meta | `skill-workshop` |
 
-`/init` installs skills by section (`core`, `workflow`, `python`, `extract`), chosen
+`/init` installs skills by section (`core`, `workflow`, `python`, `extract`, `android`), chosen
 with `--profile minimal|general|python|all` or `--sections`, and records the choice
 in `arsenal/config.toml`. `init.py --list-sections` shows what is installed.
 
