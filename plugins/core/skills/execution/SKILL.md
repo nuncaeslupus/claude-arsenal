@@ -87,7 +87,9 @@ of them is slow. When a task writes or changes a CI workflow, load
 **RECORD.** Add the gate evidence to the plan's **Evidence log**: measured value,
 exact command, commit SHA and environment provenance (`ci`, `local`, or a project
 tag). The `gate-check` skill's `run_gate.py --id <task> <measured>` reports PASS/FAIL. A task is done when its gate passes and the row is recorded; a
-plan with no Gate column predates the convention, so skip the record there.
+plan with no Gate column predates the convention, so skip the record there. A queue
+task's own gate (the fenced block in `arsenal/tasks/<id>.md`, run by `gate_run.sh`)
+is a separate mechanism and needs no Evidence-log row.
 
 ### Step 3: Check
 

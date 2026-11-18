@@ -3,6 +3,7 @@ id: t-159efbee
 title: "review: repo-audit / explain-repo read a target repo's CLAUDE.md with no untrusted-content rule"
 priority: 5
 requires: [human:gate]
+status: merged
 ---
 
 Imported from issue #618
