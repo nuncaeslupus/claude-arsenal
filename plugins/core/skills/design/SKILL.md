@@ -14,7 +14,8 @@ Owns sections 5–6 of `status/specification.md` (contracts, risks) and creates 
 
 **Before Step 1 — the spec must be approved.** The `specify` skill's validator
 answers it: `validate_spec.py --input status/specification.md --require-approved`
-(in that skill's `scripts/`).
+(in that skill's `scripts/`). In a workspace, point `--input` at
+`arsenal/project/<WORKSPACE>/spec.md` (see Workspace-aware paths below).
 
 Anything but exit 0 means stop and hand the spec back for approval, because a plan
 written before approval is built on a draft.
