@@ -20,6 +20,8 @@ if python3 -c "import markdown" 2>/dev/null; then
 elif command -v uv >/dev/null 2>&1; then
     PY=(uv run --quiet --with markdown python3)
 else
+    # CI sets CI=true and installs markdown: a skip there is a reader nobody tested.
+    [[ -n "${CI:-}" ]] && { echo "FAIL: no markdown in CI; the reader would go untested" >&2; exit 1; }
     echo "SKIP: no python3 with markdown, and no uv to supply it" >&2; exit 0
 fi
 

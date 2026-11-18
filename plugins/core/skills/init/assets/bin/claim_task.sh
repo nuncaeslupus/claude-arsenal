@@ -59,8 +59,13 @@ REMOTE="${ARSENAL_QUEUE_REMOTE:-origin}"
 # string it was supposed to control. queue_hooks.py, which prunes these refs,
 # resolves it the same way — the two must agree or a claim outlives its task.
 PREFIX="${ARSENAL_CLAIM_PREFIX:-}"
-if [[ -z "${PREFIX}" ]]; then
-    PREFIX="$(python3 "${SCRIPT_DIR}/../scripts/arsenal_config.py" --get claim-prefix 2>/dev/null || true)"
+if [[ -z "${PREFIX}" && -f "${SCRIPT_DIR}/../scripts/arsenal_config.py" ]]; then
+    # A failed read must not fall back to the default: two machines would then
+    # claim under different refs. Say why (e.g. Python < 3.11) and stop.
+    if ! PREFIX="$(python3 "${SCRIPT_DIR}/../scripts/arsenal_config.py" --get claim-prefix 2>&1)"; then
+        echo "error: cannot read claim-prefix: ${PREFIX}" >&2
+        exit 2
+    fi
 fi
 PREFIX="${PREFIX:-arsenal/claims}"
 

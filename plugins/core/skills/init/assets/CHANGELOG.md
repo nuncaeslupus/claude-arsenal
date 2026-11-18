@@ -18,6 +18,30 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [5.29.0] - 2026-11-18
+
+- **Python >= 3.11 is checked, not assumed.** `init.py`, `arsenal_config.py`,
+  `pr_audit.py`, `repo_health.py`, `analyze_project.py` and `compare_lockfile.py`
+  now stop with `needs Python >= 3.11, found X; use a newer python3` instead of an
+  ImportError traceback on an older `python3` (stock macOS ships 3.9).
+  `claim_task.sh` no longer swallows a failed `claim-prefix` read and falls back to
+  the default: two machines would have claimed under different refs. It exits 2
+  and prints why. `detect_surface.sh` no longer hides the error when its capability
+  probes cannot be read.
+- **`check_update.sh` completes a subtree update.** It ran the old vendored
+  `init.py` (which re-vendors nothing) and looked for a `vendor-skills.sh` that
+  does not ship. After the merge it now runs the freshly merged
+  `<prefix>/plugins/core/skills/init/scripts/init.py`, which refreshes the
+  vendored skills and the bundle; the half-upgrade message names that command.
+- **Changed output, `create_reader.py`:** since 5.x the reader is written as
+  `<repo>-<doc>-v<N>-<YYYY-MM-DD-HHMM>-reader.html` (plus `-annotated.md`, and
+  from 5.28.0 a `-reader.md` copy), and each section is
+  `<article class="sec l2" ...>`, not `<article class="sec">`. Code that guessed
+  the old `<stem>-reader.html` name or counted the old marker broke on re-vendor
+  with nothing in the refresh pointing at it. New `--json` prints the written
+  paths (`html`, `annotated`, `markdown`) as one JSON object on stdout, so a
+  wrapper never has to guess; `--output FILE` still pins an exact name.
+
 ## [5.28.0] - 2026-11-17
 
 - `create_reader.py` now writes a GitHub-readable Markdown copy beside every

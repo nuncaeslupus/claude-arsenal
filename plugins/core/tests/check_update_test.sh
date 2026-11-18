@@ -515,5 +515,55 @@ else
     echo "SKIP: git subtree add did not produce a subtree here"
 fi
 
+
+# --- 11: end to end — a full-repo tag really upgrades a vendored bundle -------
+#     Tags are full-repo commits, so a subtree merge puts the NEW init.py under
+#     <prefix>/plugins/. The update used to run the OLD vendored init.py, whose
+#     source and destination are the same directory, and looked for a
+#     vendor-skills.sh that does not exist; it ended "bundle was NOT upgraded".
+#     The marketplace here is a real copy of this repo's plugins/ at two versions.
+e2e_root="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
+e2e_market="${tmp}/e2e-market"
+mkdir -p "${e2e_market}"
+cp -R "${e2e_root}/plugins" "${e2e_market}/plugins"
+find "${e2e_market}" -name __pycache__ -prune -exec rm -rf {} +
+git -C "${e2e_market}" init -q -b main
+git -C "${e2e_market}" config user.email t@e.x; git -C "${e2e_market}" config user.name T
+git -C "${e2e_market}" config commit.gpgsign false
+e2e_vfile="${e2e_market}/${UPSTREAM_VERSION_PATH}"
+e2e_old="$(tr -d '[:space:]' < "${e2e_vfile}")"
+git -C "${e2e_market}" add -A && git -C "${e2e_market}" commit -q -m "release ${e2e_old}"
+git -C "${e2e_market}" tag -a "v${e2e_old}" -m "v${e2e_old}"
+e2e_new="${e2e_old%.*}.$(( ${e2e_old##*.} + 1 ))"
+printf '%s\n' "${e2e_new}" > "${e2e_vfile}"
+printf '## [%s] - 2000-01-01\n\n- e2e marker\n\n' "${e2e_new}" | cat - "${e2e_market}/plugins/core/skills/init/assets/CHANGELOG.md" > "${tmp}/cl" \
+    && cp "${tmp}/cl" "${e2e_market}/plugins/core/skills/init/assets/CHANGELOG.md"
+git -C "${e2e_market}" commit -q -am "release ${e2e_new}"
+git -C "${e2e_market}" tag -a "v${e2e_new}" -m "v${e2e_new}"
+
+e2e="${tmp}/e2e-consumer"
+mkdir -p "${e2e}"
+git init -q -b main "${e2e}"
+git -C "${e2e}" config user.email t@e.x; git -C "${e2e}" config user.name T
+git -C "${e2e}" config commit.gpgsign false
+git -C "${e2e}" commit -q --allow-empty -m init
+git -C "${e2e}" remote add arsenal "${e2e_market}"
+git -C "${e2e}" fetch -q arsenal --tags
+git -C "${e2e}" subtree add -q --prefix=claude-arsenal "v${e2e_old}^{commit}" --squash >/dev/null 2>&1 \
+    || fail "could not build the full-repo subtree fixture"
+(cd "${e2e}" && python3 claude-arsenal/plugins/core/skills/init/scripts/init.py --repo-path . --silent >/dev/null 2>&1) \
+    || fail "could not install the old bundle for the e2e fixture"
+git -C "${e2e}" add -A && git -C "${e2e}" commit -q -m "install ${e2e_old}"
+[[ "$(tr -d '[:space:]' < "${e2e}/claude-arsenal/.bundle-version")" == "${e2e_old}" ]] \
+    || fail "e2e fixture: the old bundle did not install at ${e2e_old}"
+
+out=$( (cd "${e2e}" && bash claude-arsenal/bin/check_update.sh 2>&1) ) || true
+grep -q "updated to v${e2e_new}" <<<"${out}" || fail "e2e: the update did not complete: ${out}"
+[[ "$(tr -d '[:space:]' < "${e2e}/claude-arsenal/.bundle-version")" == "${e2e_new}" ]] \
+    || fail "e2e: the bundle still reads the old version after 'updated': ${out}"
+[[ "$(tr -d '[:space:]' < "${e2e}/.claude/skills/init/assets/.bundle-version")" == "${e2e_new}" ]] \
+    || fail "e2e: the vendored init skill was not refreshed to ${e2e_new}"
+echo "PASS: a full-repo tag upgrades the bundle and the vendored skills end to end"
+
 echo "PASS: check_update_test — all gates passed"
 exit 0

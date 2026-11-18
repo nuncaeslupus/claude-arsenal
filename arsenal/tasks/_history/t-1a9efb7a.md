@@ -3,6 +3,7 @@ id: t-1a9efb7a
 title: "review: bundle refresh silently changes create_reader.py's output name and markup"
 priority: 5
 requires: [human:gate]
+status: merged
 ---
 
 Imported from issue #623

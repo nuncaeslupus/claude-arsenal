@@ -15,7 +15,13 @@ import argparse
 import json
 import re
 import sys
-import tomllib
+
+try:
+    import tomllib
+except ModuleNotFoundError:  # Python < 3.11: say so instead of a bare traceback
+    sys.exit(
+        f"{sys.argv[0]}: needs Python >= 3.11, found {sys.version.split()[0]}; use a newer python3"
+    )
 from pathlib import Path
 
 REQUIRED_RUFF_SELECT = ["E", "W", "F", "I", "UP", "RUF", "B", "SIM", "PTH"]
