@@ -16,7 +16,7 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BIN="${SCRIPT_DIR}/../skills/init/assets/bin"
 HELPER="${BIN}/open_task_pr.sh"
-[[ -f "${HELPER}" ]] || { echo "SKIP: open_task_pr.sh not found" >&2; exit 0; }
+[[ -f "${HELPER}" ]] || { echo "FAIL: open_task_pr.sh not found" >&2; exit 1; }
 
 tmp=$(mktemp -d)
 trap 'rm -rf "${tmp}"' EXIT

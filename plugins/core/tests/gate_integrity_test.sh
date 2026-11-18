@@ -20,7 +20,7 @@ MIGRATE="${ASSETS}/scripts/arsenal_migrate.py"
 INIT="${SCRIPT_DIR}/../skills/init/scripts/init.py"
 
 for f in "${EVIDENCE}" "${GATE_RUN}" "${MIGRATE}"; do
-    [[ -f "$f" ]] || { echo "SKIP: $f not found" >&2; exit 0; }
+    [[ -f "$f" ]] || { echo "FAIL: $f not found" >&2; exit 1; }
 done
 
 fail() { echo "FAIL: $*" >&2; exit 1; }
@@ -103,7 +103,7 @@ if [[ -n "${marker}" ]]; then
 fi
 
 # --- arsenal_migrate: a payload that cannot be read is not an empty gate ------
-[[ -f "${INIT}" ]] || { echo "SKIP: init.py not found for the migrate case" >&2; exit 0; }
+[[ -f "${INIT}" ]] || { echo "FAIL: init.py not found for the migrate case" >&2; exit 1; }
 mrepo="${tmp}/mrepo"
 mkdir -p "${mrepo}/claude-arsenal/queue" "${mrepo}/claude-arsenal/scripts" \
          "${mrepo}/.claude/skills/init/scripts"

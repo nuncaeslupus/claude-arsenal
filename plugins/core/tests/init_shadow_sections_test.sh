@@ -13,7 +13,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INIT="${SCRIPT_DIR}/../skills/init/scripts/init.py"
 MANIFEST="${SCRIPT_DIR}/../skills/init/assets/sections.json"
 
-[[ -f "${INIT}" ]] || { echo "SKIP: init.py not found" >&2; exit 0; }
+[[ -f "${INIT}" ]] || { echo "FAIL: init.py not found" >&2; exit 1; }
 
 fail() { echo "FAIL: $*" >&2; exit 1; }
 
@@ -91,7 +91,7 @@ echo "PASS: the host handover is never overwritten"
 # holds only what is installed — so a section whose skills are all un-vendored
 # was invisible: unrequestable because uninstalled, uninstalled because
 # unrequestable. sections.json ships beside the script and knows the full set.
-[[ -f "${MANIFEST}" ]] || { echo "SKIP: sections.json not found" >&2; exit 0; }
+[[ -f "${MANIFEST}" ]] || { echo "FAIL: sections.json not found" >&2; exit 1; }
 
 vend="${tmp}/vendored/.claude/skills"
 mkdir -p "${vend}/init/scripts" "${vend}/init/assets" "${tmp}/vendored/arsenal"

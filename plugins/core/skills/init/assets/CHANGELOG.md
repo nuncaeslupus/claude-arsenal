@@ -18,6 +18,17 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [5.30.0] - 2026-11-18
+
+- **Session start is one command.** `bash claude-arsenal/bin/session_start.sh` now does
+  what AGENTS.md's steps 0-4b did by hand: bundle refresh, capability map, channel
+  detection, the issue fetches (on `gh`, without `body`), the board, missing handles and
+  the filed-issue import. It prints a short report; only `ACTION:` lines need the
+  session's own GitHub tools. The resident `AGENTS.md` shrinks by about 370 tokens on every
+  turn. Run `/init` to pick up the new script and AGENTS.md text.
+- `execution`'s test-cost reference gains a "Prune now and then" pass (slowest tests,
+  `pin-check` on the suspects, never delete the only test of a behaviour).
+
 ## [5.29.0] - 2026-11-18
 
 - **Python >= 3.11 is checked, not assumed.** `init.py`, `arsenal_config.py`,

@@ -11,7 +11,7 @@ GE="${SCRIPT_DIR}/../skills/init/assets/scripts/gate_evidence.py"
 GR="${SCRIPT_DIR}/../skills/init/assets/bin/gate_run.sh"
 
 if [[ ! -f "${GE}" ]]; then
-    echo "SKIP: gate_evidence.py not found at ${GE}" >&2; exit 0
+    echo "FAIL: gate_evidence.py not found at ${GE}" >&2; exit 1
 fi
 
 tmp=$(mktemp -d)

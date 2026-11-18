@@ -15,7 +15,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 HELPER="${SCRIPT_DIR}/../skills/init/assets/bin/open_task_pr.sh"
 
 if [[ ! -f "${HELPER}" ]]; then
-    echo "SKIP: open_task_pr.sh not found at ${HELPER}" >&2; exit 0
+    echo "FAIL: open_task_pr.sh not found at ${HELPER}" >&2; exit 1
 fi
 
 fail() { echo "FAIL: $*" >&2; exit 1; }

@@ -20,7 +20,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CFG="${SCRIPT_DIR}/../skills/init/assets/scripts/arsenal_config.py"
 INIT="${SCRIPT_DIR}/../skills/init/scripts/init.py"
 
-[[ -f "${CFG}" ]] || { echo "SKIP: arsenal_config.py not found at ${CFG}" >&2; exit 0; }
+[[ -f "${CFG}" ]] || { echo "FAIL: arsenal_config.py not found at ${CFG}" >&2; exit 1; }
 
 tmp=$(mktemp -d)
 trap 'rm -rf "${tmp}"' EXIT

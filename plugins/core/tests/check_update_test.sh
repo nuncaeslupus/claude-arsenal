@@ -24,7 +24,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CHECK="${SCRIPT_DIR}/../skills/init/assets/bin/check_update.sh"
 
-[[ -f "${CHECK}" ]] || { echo "SKIP: check_update.sh not found at ${CHECK}" >&2; exit 0; }
+[[ -f "${CHECK}" ]] || { echo "FAIL: check_update.sh not found at ${CHECK}" >&2; exit 1; }
 
 fail() { echo "FAIL: $1" >&2; exit 1; }
 

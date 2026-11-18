@@ -6,7 +6,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ADD_PY="${SCRIPT_DIR}/../skills/queue-add/scripts/create_task.py"
-[[ -f "${ADD_PY}" ]] || { echo "SKIP: ${ADD_PY} not found" >&2; exit 0; }
+[[ -f "${ADD_PY}" ]] || { echo "FAIL: ${ADD_PY} not found" >&2; exit 1; }
 
 tmpdir=$(mktemp -d)
 cleanup() { rm -rf "${tmpdir}"; }

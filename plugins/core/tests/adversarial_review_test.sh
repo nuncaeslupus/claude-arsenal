@@ -25,7 +25,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BIN="${SCRIPT_DIR}/../skills/init/assets/bin"
 REVIEW="${BIN}/adversarial_review.sh"
 HELPER="${BIN}/open_task_pr.sh"
-[[ -f "${REVIEW}" ]] || { echo "SKIP: adversarial_review.sh not found" >&2; exit 0; }
+[[ -f "${REVIEW}" ]] || { echo "FAIL: adversarial_review.sh not found" >&2; exit 1; }
 
 fail() { echo "FAIL: $1" >&2; exit 1; }
 

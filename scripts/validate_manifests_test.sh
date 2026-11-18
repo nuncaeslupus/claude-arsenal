@@ -11,7 +11,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VALIDATE="${SCRIPT_DIR}/validate_manifests.py"
 
 if [[ ! -f "${VALIDATE}" ]]; then
-    echo "SKIP: validate_manifests.py not found at ${VALIDATE}" >&2; exit 0
+    echo "FAIL: validate_manifests.py not found at ${VALIDATE}" >&2; exit 1
 fi
 
 tmp=$(mktemp -d)

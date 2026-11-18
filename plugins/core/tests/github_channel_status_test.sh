@@ -18,7 +18,7 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CHANNEL="${SCRIPT_DIR}/../skills/init/assets/bin/github_channel.sh"
 
-[[ -f "${CHANNEL}" ]] || { echo "SKIP: github_channel.sh not found" >&2; exit 0; }
+[[ -f "${CHANNEL}" ]] || { echo "FAIL: github_channel.sh not found" >&2; exit 1; }
 
 fail() { echo "FAIL: $*" >&2; exit 1; }
 

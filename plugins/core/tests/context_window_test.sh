@@ -23,7 +23,7 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INIT="${SCRIPT_DIR}/../skills/init/scripts/init.py"
 
-[[ -f "${INIT}" ]] || { echo "SKIP: init.py not found at ${INIT}" >&2; exit 0; }
+[[ -f "${INIT}" ]] || { echo "FAIL: init.py not found at ${INIT}" >&2; exit 1; }
 
 tmp=$(mktemp -d)
 trap 'rm -rf "${tmp}"' EXIT

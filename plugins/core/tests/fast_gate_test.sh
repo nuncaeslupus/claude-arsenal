@@ -15,7 +15,7 @@ set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FAST="${SCRIPT_DIR}/../skills/init/assets/bin/fast_gate.sh"
-[[ -f "${FAST}" ]] || { echo "SKIP: fast_gate.sh not found" >&2; exit 0; }
+[[ -f "${FAST}" ]] || { echo "FAIL: fast_gate.sh not found" >&2; exit 1; }
 
 fail() { echo "FAIL: $1" >&2; exit 1; }
 

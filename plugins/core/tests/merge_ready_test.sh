@@ -19,7 +19,7 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ASSETS="${SCRIPT_DIR}/../skills/init/assets"
 SRC="${ASSETS}/bin/merge_ready.sh"
-[[ -f "${SRC}" ]] || { echo "SKIP: merge_ready.sh not found at ${SRC}" >&2; exit 0; }
+[[ -f "${SRC}" ]] || { echo "FAIL: merge_ready.sh not found at ${SRC}" >&2; exit 1; }
 
 tmp=$(mktemp -d)
 trap 'rm -rf "${tmp}"' EXIT
