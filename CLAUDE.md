@@ -107,7 +107,8 @@ gh workflow run ci.yml --ref <branch>      # or the Actions UI / run_workflow
 Checks attach to the commit, so a green dispatch run on the PR's head SHA
 satisfies the required checks for it. A dispatch on a non-`main` branch also
 runs `version bump` and `queue doctor` in their PR mode. Never merge a head
-whose latest push has no green run.
+whose latest push has no green run. Closing and reopening a PR to get a
+`pull_request` run is not a way to kick CI and is not allowed.
 
 ### Multi-PR autonomous work — stacking rule
 
