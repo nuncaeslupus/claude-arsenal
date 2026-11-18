@@ -18,6 +18,24 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [5.28.1] - 2026-11-18
+
+- Skills now cite the bundle's references by the path a session can open,
+  `claude-arsenal/references/<file>.md`; the old `claude-arsenal:core:init §
+  references/…` form pointed at a folder `init` does not have.
+- The resident `AGENTS.md` no longer assumes every install has the `workflow`
+  skills or the drawspec tool: spec/plan routing applies when those skills are
+  installed, diagrams are "a fenced spec where the host has a renderer"
+  (drawspec stays the supported renderer, described in `references/diagrams.md`,
+  which no longer sends agents to a remote file), and the handover line says
+  `/session-end` writes the handover only when the `handoff` marker is `yes`.
+- `python-bootstrap` no longer hands off to a `model-gen` / `model-val` toolkit;
+  `analyze_project.py` drops its `model_gen` field.
+- `docs/INSTALL.md` states the real prerequisites (Python 3.12 as `python3`, a
+  GitHub channel, `uv` for the reader, diagrams and `har`), lists all three
+  plugins and the `all` profile, and gives per-profile skill counts; the
+  README's no-plugin install pin now follows `.bundle-version`.
+
 ## [5.28.0] - 2026-11-17
 
 - `create_reader.py` now writes a GitHub-readable Markdown copy beside every

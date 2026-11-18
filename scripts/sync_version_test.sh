@@ -68,13 +68,15 @@ ARSENAL_REF     ?= v0.11.0   # pin to a tag
 git commit -m "chore: vendor claude-arsenal skills @ v0.11.0"
 MD
 
+printf 'git clone --depth 1 --branch v0.11.0 https://example.com/x.git\n' > "${tmp}/README.md"
+
 fail() { echo "FAIL: $1" >&2; exit 1; }
 
 # --- Gate 1: --check reports drift on every target and exits 1. ---
 out="$(python3 "${SYNC}" --repo-root "${tmp}" --check 2>&1)"; rc=$?
 [[ "${rc}" -eq 1 ]] || fail "drifted tree should --check exit 1, got ${rc}: ${out}"
 for label in "core/plugin.json" "skill-workshop/plugin.json" "repo-audit/plugin.json" \
-             "AGENTS.md header" "INSTALL.md ARSENAL_REF pin"; do
+             "AGENTS.md header" "INSTALL.md ARSENAL_REF pin" "README.md --branch pin"; do
     printf '%s' "${out}" | grep -F >/dev/null "${label}" || fail "--check did not name '${label}': ${out}"
 done
 echo "PASS: --check names every drifted target and exits 1"
@@ -94,6 +96,7 @@ grep -q "<!-- claude-arsenal v0.15.0 " "${tmp}/plugins/core/skills/init/assets/A
     || fail "INSTALL.md should have 2 pins synced to v0.15.0"
 grep -q "v0.11.0" "${tmp}/docs/INSTALL.md" \
     && fail "INSTALL.md still has a stale v0.11.0 pin (count=1 regression?)"
+grep -q -- "--branch v0.15.0" "${tmp}/README.md" || fail "README.md --branch pin not synced to v0.15.0"
 echo "PASS: apply rewrites every target to the canonical version"
 
 # --- Gate 3: formatting around the version token is preserved. ---

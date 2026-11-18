@@ -47,21 +47,44 @@ for section, profile in (("workflow", "general"), ("python", "python")):
         if blurb and skill not in blurb.group(1):
             problems.append(f"init.py's `{section}` listing omits {skill}")
 
-# 2. The verify step's folder count is what `--profile python` actually installs.
-expected = len(set(sections["core"]) | set(sections["workflow"]) | set(sections["python"]))
-stated = re.search(r"\| `ls \.claude/skills` \| (\d+) skill folders", install)
-if not stated:
+# 2. The verify step's folder counts are what each profile actually installs.
+core = set(sections["core"])
+counts = {
+    "general": len(core | set(sections["workflow"])),
+    "python": len(core | set(sections["workflow"]) | set(sections["python"])),
+    "all": len({s for names in sections.values() for s in names}),
+}
+verify = re.search(r"\| `ls \.claude/skills` \|([^|]*)\|", install)
+if not verify:
     problems.append("docs/INSTALL.md's verify step no longer states a folder count")
-elif int(stated.group(1)) != expected:
-    problems.append(
-        f"docs/INSTALL.md says `--profile python` yields {stated.group(1)} skill folders; "
-        f"sections.json says {expected}"
-    )
+else:
+    for profile, n in counts.items():
+        if f"{n} for `{profile}`" not in verify.group(1):
+            problems.append(f"docs/INSTALL.md's verify step should say {n} for `{profile}`")
+
+# 3. Plugin count and sections named in the prose match the repo.
+plugins = sorted(p.name for p in (root / "plugins").iterdir() if (p / ".claude-plugin").is_dir())
+words = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five"}
+if f"project {words[len(plugins)]} plugins" not in install:
+    problems.append(f"docs/INSTALL.md should say {words[len(plugins)]} plugins ({', '.join(plugins)})")
+for plugin in plugins:
+    if f"**`{plugin}`**" not in install:
+        problems.append(f"docs/INSTALL.md does not describe the `{plugin}` plugin")
+readme = (root / "README.md").read_text(encoding="utf-8")
+for name in sections:
+    if f"`{name}`" not in readme:
+        problems.append(f"README.md does not name the `{name}` section")
+    if name != "core" and f"`{name}`" not in install:
+        problems.append(f"docs/INSTALL.md does not name the `{name}` section")
+version = (root / "plugins/core/skills/init/assets/.bundle-version").read_text().strip()
+for pin in re.findall(r"--branch v(\d+\.\d+\.\d+)", readme):
+    if pin != version:
+        problems.append(f"README.md pins --branch v{pin}; .bundle-version is {version}")
 
 if problems:
     print("FAIL: the docs and sections.json disagree about what installs:", file=sys.stderr)
     for problem in problems:
         print(f"  {problem}", file=sys.stderr)
     sys.exit(1)
-print(f"PASS: both listings name every shipped skill; --profile python is {expected} folders")
+print(f"PASS: both listings name every shipped skill; profile folder counts {counts}")
 PY
