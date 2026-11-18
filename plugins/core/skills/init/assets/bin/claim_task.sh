@@ -62,10 +62,13 @@ PREFIX="${ARSENAL_CLAIM_PREFIX:-}"
 if [[ -z "${PREFIX}" && -f "${SCRIPT_DIR}/../scripts/arsenal_config.py" ]]; then
     # A failed read must not fall back to the default: two machines would then
     # claim under different refs. Say why (e.g. Python < 3.11) and stop.
-    if ! PREFIX="$(python3 "${SCRIPT_DIR}/../scripts/arsenal_config.py" --get claim-prefix 2>&1)"; then
-        echo "error: cannot read claim-prefix: ${PREFIX}" >&2
+    _cfg_err="$(mktemp)"
+    if ! PREFIX="$(python3 "${SCRIPT_DIR}/../scripts/arsenal_config.py" --get claim-prefix 2>"${_cfg_err}")"; then
+        echo "error: cannot read claim-prefix: $(cat "${_cfg_err}")" >&2
+        rm -f "${_cfg_err}"
         exit 2
     fi
+    rm -f "${_cfg_err}"
 fi
 PREFIX="${PREFIX:-arsenal/claims}"
 
