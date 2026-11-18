@@ -34,13 +34,13 @@ hook fires.
 |---|---|---|
 | Claude Code v2.x+ | Marketplace + plugin loader | `claude --version` |
 | `git` | Marketplace install fetches via git | `git --version` |
-| Python 3.12+ on `PATH` as `python3` | The vendored session protocol runs `init.py`, `query_status.py`, `task_select.py` and other shipped scripts every session | `python3 --version` |
+| Python 3.11+ on `PATH` as `python3` (`tomllib`; older versions stop with a clear message) | The vendored session protocol runs `init.py`, `query_status.py`, `task_select.py` and other shipped scripts every session | `python3 --version` |
 | `gh` (authenticated), or GitHub tools in the session | The queue reads and writes issues, claims and PRs; `claude-arsenal/bin/github_channel.sh --detect` reports which channel a session has | `gh auth status` |
 | `uv` | Runs the annotatable reader (`uv run --with markdown`, needs PyPI access), `drawspec` diagrams and `har` capture; also `make smoke` / `make audit` on a local checkout | `uv --version` |
 
 A repo that only wants the skills, and never runs the queue, reader or diagrams,
 can get by with Claude Code and git. The queue workflow needs Python and a GitHub
-channel (on Python 3.11 or without one, its session-start steps fail); `uv` is
+channel (on Python 3.10 or older, or without a channel, its session-start steps fail); `uv` is
 needed only for the reader, diagrams and `har`.
 
 ## 2. Set up a project

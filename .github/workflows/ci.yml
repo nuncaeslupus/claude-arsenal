@@ -113,11 +113,13 @@ jobs:
       # The shell behaviour tests are what the macOS leg exists for: they run
       # the shipped bin/ scripts under BSD userland and bash 3.2. Linux runs
       # them in the `core tests` job; here only macOS, so they run once each.
+      # 3.11 is the floor the shipped scripts check (`tomllib`) and INSTALL.md
+      # states; this leg is what keeps that floor tested (Linux runs 3.12).
       - name: Set up Python for the shell tests
         if: runner.os == 'macOS'
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.11"
 
       - name: Install reader dependency and git identity (macOS shell tests)
         if: runner.os == 'macOS'
