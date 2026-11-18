@@ -54,7 +54,7 @@ if the night ends right after it.
 
 When the host has the review digest, add the ledger as a card above the night's PRs:
 
-`digest.py render --audit <ledger.json>` (`claude-arsenal:core:init § references/digest.md`).
+`digest.py render --audit <ledger.json>` (`claude-arsenal/references/digest.md`).
 
 The card shows findings by severity × confidence, the top high-severity ones, how
 many were queued, and what was not covered. Without the digest, put the same

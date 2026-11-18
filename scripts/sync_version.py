@@ -4,7 +4,7 @@
 ``.bundle-version`` (read by ``tag-release.yml`` and ``check_update.sh``) is the
 single source of truth for the marketplace version. Every plugin manifest, the
 vendored ``AGENTS.md`` header, and the consumer ``ARSENAL_REF`` pin examples in
-``docs/INSTALL.md`` carry their own copy that used to drift (issue #80).
+``docs/INSTALL.md`` and ``README.md`` carry their own copy that used to drift (issue #80).
 
 This script keeps them in lockstep:
 
@@ -72,6 +72,7 @@ def build_targets(root: Path) -> tuple[Target, ...]:
             "AGENTS.md header",
         ),
         Target(root / "docs/INSTALL.md", _TAG_PIN, "INSTALL.md ARSENAL_REF pin"),
+        Target(root / "README.md", _TAG_PIN, "README.md --branch pin"),
     )
 
 
