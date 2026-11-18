@@ -67,7 +67,7 @@ STATUS_LABEL = {
     "flagged": "flagged — your call",
 }
 LEVEL_RANK = {"high": 0, "medium": 1, "low": 2}
-REQUIRED_SECTION_KEYS ={"id", "tag", "heading"}
+REQUIRED_SECTION_KEYS = {"id", "tag", "heading"}
 
 CSS = """
 :root{
@@ -215,8 +215,8 @@ def render_ledger(ledger: list[dict]) -> str:
     def _rank(row: dict) -> tuple[int, int]:
         # Unrated (or unknown) levels sort last; sorted() is stable.
         return (
-            LEVEL_RANK.get(row.get("severity"), len(LEVEL_RANK)),
-            LEVEL_RANK.get(row.get("confidence"), len(LEVEL_RANK)),
+            LEVEL_RANK.get(str(row.get("severity")), len(LEVEL_RANK)),
+            LEVEL_RANK.get(str(row.get("confidence")), len(LEVEL_RANK)),
         )
 
     rows = "".join(_row(row) for row in sorted(ledger, key=_rank))

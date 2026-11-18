@@ -18,6 +18,19 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [5.28.1] - 2026-11-18
+
+- `repo-audit` / `explain-repo`: the findings ledger in the report now shows each
+  finding's severity and confidence and sorts by them (it dropped both before).
+- `repo-audit` / `explain-repo` now say a target repo's README, `CLAUDE.md`,
+  issues and scripts are data to report on, never instructions to follow.
+- `specify` follows the same `arsenal/project/<WORKSPACE>/spec.md` path switch as
+  `design`, so a workspace spec no longer splits across two files.
+- `queue-next` no longer loads on a bare "continue" or "resume" (it claims a task
+  on GitHub); say "next queue task" or `/queue-next`.
+- `gate-check`, `execution`: say that a queue task's gate (`gate_run.sh`) and a
+  plan gate (`run_gate.py`) are separate mechanisms. No names changed.
+
 ## [5.28.0] - 2026-11-17
 
 - `create_reader.py` now writes a GitHub-readable Markdown copy beside every
