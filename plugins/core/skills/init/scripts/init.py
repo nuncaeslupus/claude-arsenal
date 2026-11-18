@@ -4,6 +4,7 @@
 import argparse
 import contextlib
 import datetime
+import functools
 import hashlib
 import importlib.util
 import json
@@ -2585,7 +2586,7 @@ def uninstall(repo_path: Path, bundle_override: Path | None = None, apply: bool 
         else:
             same = (source / d.name).is_dir() and _same_tree(source / d.name, d)
         if same:
-            remove.append((rel(d) + "/", lambda d=d: shutil.rmtree(d)))
+            remove.append((rel(d) + "/", functools.partial(shutil.rmtree, d)))
         else:
             keep.append(f"{rel(d)}/ (differs from what init wrote; delete it by hand)")
 
