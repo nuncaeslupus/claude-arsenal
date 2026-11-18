@@ -1,6 +1,8 @@
 # Updating claude-arsenal
 
-`/plugin update claude-arsenal` rewrites the marketplace cache. This
+Updating the CLI plugin rewrites the marketplace cache — by re-adding the
+marketplace at the new release tag (`docs/INSTALL.md`), or with `/plugin update
+claude-arsenal` for a marketplace added without a ref. This
 page tells you which files survive that rewrite, which get
 overwritten, and how to customise a vendored skill without losing your
 edits on the next update.
@@ -66,7 +68,7 @@ history; what separates them is whether the machine has the marketplace plugin.
 |---|---|---|---|
 | How it got here | `/init`, from the marketplace plugin | `init.py` run from a clone of upstream (`docs/INSTALL.md`) — the cloud-only, CI and fresh-container route | `git subtree add --prefix=claude-arsenal` |
 | Tell-tale | no `arsenal` remote, no subtree merge, and `/plugin` lists `claude-arsenal` | the same git state, but no plugin installed | a subtree merge in the history |
-| How you update | `/plugin update claude-arsenal`, then `/init` | re-clone upstream at the newer tag and run its `init.py --repo-path .` | `check_update.sh`, then a subtree merge |
+| How you update | re-add the marketplace at the newer `#v…` tag (or `/plugin update claude-arsenal` if it was added without a ref), then `/arsenal-init` | re-clone upstream at the newer tag and run its `init.py --repo-path .` | `check_update.sh`, then a subtree merge |
 | `check_update.sh --check-only` | **INERT — and that is correct.** It reports drift for subtree installs only. Nothing to act on. | **INERT — and that is correct.** Same reason. | reports drift against the newest tag |
 
 The two non-subtree rows are what trips people up. `check_update.sh` runs on
@@ -169,10 +171,10 @@ A breach prints `OVER cap by N chars` and a hint to `/plugin disable
 
 ## Upgrading
 
-Re-run `/init` and commit. One command refreshes everything upstream owns:
+Re-run `/arsenal-init` and commit. One command refreshes everything upstream owns:
 
 ```bash
-/init                      # or: python3 <clone>/plugins/core/skills/init/scripts/init.py --repo-path .
+/arsenal-init              # or: python3 <clone>/plugins/core/skills/init/scripts/init.py --repo-path .
 git add .claude claude-arsenal .github && git commit -m "chore: update claude-arsenal"
 ```
 
@@ -246,8 +248,8 @@ committed to the consumer's own tree.
 ## Rolling back
 
 Whether you can roll back at all depends on which install you have — the table
-under *Which install do you have?* splits them. **Two of the three pin a ref and
-roll back cleanly. The plugin install does not.**
+under *Which install do you have?* splits them. **All three can pin a ref; the plugin
+install does only when its marketplace was added with a `#v…` tag.**
 
 **Clone-based install.** Re-clone upstream at the older tag and re-run its
 installer against your project — the same command as a forward update, with
@@ -287,13 +289,19 @@ Reverting the merge commit works too, but `check_update.sh` merges with
 correct — it compares against the newest tag, not against what you chose — and
 it is your cue to pin deliberately rather than merge on sight.
 
-**Plugin install — there is no self-service rollback.** `/plugin update` fetches
-the tip of `main`, and so does removing and re-adding the marketplace: both
-rebuild the cache from the same commit, so the remove/add pair this page used to
-recommend restored nothing at all. Nothing in the marketplace manifest takes a
-version, so there is no older release to ask for.
+**Plugin install, pinned to a tag.** Re-add the marketplace at the older tag
+and re-vendor:
 
-What you can actually do, in order:
+```bash
+claude plugin marketplace remove claude-arsenal
+claude plugin marketplace add https://github.com/nuncaeslupus/claude-arsenal.git#v4.12.0
+claude plugin install core@claude-arsenal   # then /arsenal-init in the project
+```
+
+**Plugin install added without a ref.** `/plugin update` fetches the tip of
+`main`, and so does re-adding the marketplace without a ref: both rebuild the
+cache from the same commit. Re-add it with a `#v…` tag as above. Otherwise, in
+order:
 
 1. **Check the cache for the tag.** The cache is a git clone, so if the tag is
    there you can sit on the old bundle until the next update:
@@ -315,3 +323,36 @@ What you can actually do, in order:
    the cache holds (`git -C ~/.claude/plugins/cache/claude-arsenal rev-parse
    HEAD`) and the version you were on before. A bad release is worth a fix
    forward, which every install gets on its normal update route.
+
+---
+
+## Uninstalling from a project
+
+`init.py --uninstall` removes what `/arsenal-init` wrote into a repository. It is
+a dry run unless `--apply` is given, and it prints every item it would remove and
+every one it would leave, with the reason:
+
+```bash
+python3 .claude/skills/init/scripts/init.py --repo-path . --uninstall          # look first
+python3 .claude/skills/init/scripts/init.py --repo-path . --uninstall --apply  # then remove
+git add -A && git commit -m "chore: remove claude-arsenal"
+```
+
+It removes a path only while it is still exactly what init wrote, compared with
+that init's own copy; anything edited is listed as `keep` for you to decide:
+
+| What | Removed when |
+|---|---|
+| `claude-arsenal/` | each file whose content matches the bundle; files you edited or added stay |
+| `.claude/skills/<name>/` with `.arsenal-vendored` | the tree matches the shipped skill (run from the vendored copy, when git shows no uncommitted change) |
+| `.claude/settings.json` | only the arsenal hooks, the arsenal `statusLine` and the `autoCompactWindow` taken from `context-window`; your own entries stay |
+| `CLAUDE.md` protocol block, README badge | the block between the markers is unedited; the rest of the file stays |
+| `.github/workflows/arsenal-queue.yml` | it is a version init shipped |
+
+Never removed: `arsenal/` (your tasks, config and handover), the `.gitignore`
+lines init added, and anything on GitHub. The command lists those as manual
+steps: branch protection on the default branch if init applied it, the
+`arsenal:*` labels and `arsenal/claims/*` branches, and the CLI plugins
+(`docs/INSTALL.md` § 6). Run it from the same version as the installed bundle:
+a different version's files differ from the ones it compares against, so they
+are kept rather than deleted, and the command says so.

@@ -29,6 +29,17 @@ python3 "$init_py" --repo-path "$repo" >/dev/null 2>&1 || fail "init exited non-
 [ ! -f "$repo/.claude/skills/mine/.arsenal-vendored" ] || fail "marked a skill we do not own"
 echo "PASS: skills vendored, consumer's own skill untouched"
 
+# #589: Claude Code's built-in /init shadows the installer, so the same skill ships
+# under a name nothing else uses — vendored with core, and out of the model's
+# listing (disable-model-invocation) so it adds nothing to every session's context.
+alias_md="$repo/.claude/skills/arsenal-init/SKILL.md"
+[ -f "$alias_md" ] || fail "#589: /arsenal-init was not vendored"
+grep -qx 'name: arsenal-init' "$alias_md" || fail "#589: arsenal-init has the wrong name"
+grep -qx 'disable-model-invocation: true' "$alias_md" || fail "#589: arsenal-init is in the model's listing"
+grep -q '`init` skill' "$alias_md" || fail "#589: arsenal-init does not hand over to the init skill"
+grep -q '^section:\|^  section:' "$alias_md" && fail "#589: arsenal-init must be core, installed by every profile"
+echo "PASS: /arsenal-init is vendored as a non-colliding, listing-free name for init"
+
 python3 - "$repo/.claude/settings.json" <<'PY' || fail "settings.json is wrong after init"
 import json, sys
 s = json.load(open(sys.argv[1]))
@@ -45,10 +56,33 @@ echo "PASS: plugin declaration retired, gate hook registered"
 [ -f "$repo/claude-arsenal/bin/gate_target.py" ] || fail "gate_target.py not installed"
 export CLAUDE_PLUGIN_DATA="$tmp/markers"
 payload='{"session_id":"s1","tool_name":"Bash","tool_input":{"command":"sed -i s/a/b/ .claude/skills/specify/SKILL.md"}}'
-if printf '%s' "$payload" | (cd "$repo" && bash claude-arsenal/bin/check_skill_workshop_loaded.sh) >/dev/null 2>&1; then
+# A HOME of our own: whether the gate blocks depends on whether skill-workshop is
+# reachable, and the machine running this test may have it in its plugin cache.
+mkdir -p "$tmp/home"
+gate() { (cd "$repo" && HOME="$tmp/home" CLAUDE_PROJECT_DIR="$repo" bash claude-arsenal/bin/check_skill_workshop_loaded.sh); }
+
+# #586: init vendors core only, so with no skill-workshop anywhere the gate's key
+# does not exist. It must not block behind a skill the session cannot load.
+printf '%s' "$payload" | gate >/dev/null 2>&1 \
+    || fail "#586: the vendored gate blocked a skill edit although no skill-workshop is reachable"
+echo "PASS: the vendored gate is advisory where skill-workshop cannot be loaded"
+
+mkdir -p "$repo/.claude/skills/skill-workshop" && echo x > "$repo/.claude/skills/skill-workshop/SKILL.md"
+if printf '%s' "$payload" | gate >/dev/null 2>&1; then
     fail "the vendored gate allowed a skill edit with no marker"
 fi
-echo "PASS: the vendored gate blocks a Bash skill edit — plugin hooks never travelled"
+rm -rf "$repo/.claude/skills/skill-workshop"
+# A marketplace cache holds every plugin it ships, installed or not: not enough.
+mkdir -p "$tmp/home/.claude/plugins/cache/m/plugins/skill-workshop/skills/skill-workshop"
+touch "$tmp/home/.claude/plugins/cache/m/plugins/skill-workshop/skills/skill-workshop/SKILL.md"
+printf '%s' "$payload" | gate >/dev/null 2>&1 \
+    || fail "#586: the gate blocked behind a skill-workshop that is only cached, not installed"
+echo '{"plugins": {"skill-workshop@m": [{}]}}' > "$tmp/home/.claude/plugins/installed_plugins.json"
+if printf '%s' "$payload" | gate >/dev/null 2>&1; then
+    fail "the vendored gate allowed a skill edit while the skill-workshop plugin is installed"
+fi
+rm -rf "$tmp/home/.claude"
+echo "PASS: the vendored gate blocks a Bash skill edit once skill-workshop is reachable"
 
 # #468: the registered command, run as settings.json runs it, must still work
 # once the session's cwd has moved into a subdirectory.

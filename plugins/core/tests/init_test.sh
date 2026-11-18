@@ -120,6 +120,20 @@ fi
 mv "${tmpdir}/arsenal/config.toml.bak" "${tmpdir}/arsenal/config.toml"
 echo "PASS: config-acknowledged is seeded, and --silent announces only unacknowledged keys"
 
+# #597: a fresh install must not let an agent merge its own PRs before anyone has
+# chosen otherwise — the template seeds `never`. An existing host keeps its value
+# across a re-run, and a file that predates the key still reads as `after-ci`.
+CFG_GET=(python3 "${BUNDLE_DIR}/scripts/arsenal_config.py" --repo-root "${tmpdir}" --get merge-policy)
+[[ "$("${CFG_GET[@]}")" == "never" ]] || { echo "FAIL: #597: a fresh config.toml must seed merge-policy = never" >&2; exit 1; }
+mv "${tmpdir}/arsenal/config.toml" "${tmpdir}/arsenal/config.toml.bak"
+printf 'merge-policy = "after-ci"\n' > "${tmpdir}/arsenal/config.toml"
+python3 "${INIT_PY}" --repo-path "${tmpdir}" --bundle-dir "${BUNDLE_DIR}" --silent >/dev/null 2>&1
+[[ "$("${CFG_GET[@]}")" == "after-ci" ]] || { echo "FAIL: #597: a re-run rewrote an existing merge-policy" >&2; exit 1; }
+printf 'host-gate = "none"\n' > "${tmpdir}/arsenal/config.toml"
+[[ "$("${CFG_GET[@]}")" == "after-ci" ]] || { echo "FAIL: #597: a config with no merge-policy changed meaning" >&2; exit 1; }
+mv "${tmpdir}/arsenal/config.toml.bak" "${tmpdir}/arsenal/config.toml"
+echo "PASS: fresh installs start at merge-policy = never; existing configs keep theirs"
+
 # Gate 6: .gitignore has surface_profile.json entry
 if ! grep -q "arsenal/session/surface_profile.json" "${tmpdir}/.gitignore" 2>/dev/null; then
     echo "FAIL: .gitignore missing surface_profile.json entry" >&2; exit 1

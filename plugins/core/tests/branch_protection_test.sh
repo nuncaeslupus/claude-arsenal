@@ -183,7 +183,7 @@ grep -q '^branch-protection = "applied"' "${repo}/arsenal/config.toml" || fail "
 [[ "${out}" == *"private repo"*'`always`'*'pre-pr-review = "required"'* ]] \
     || fail "private repo did not get the local-gates merge-policy advice: ${out}"
 [[ "${out}" == *"PREFLIGHT-GATE UNSET"*'`make lint`'* ]] || fail "no preflight-gate prompt: ${out}"
-grep -q '^merge-policy = "after-ci"' "${repo}/arsenal/config.toml" \
+grep -q '^merge-policy = "never"' "${repo}/arsenal/config.toml" \
     || fail "the advice must not rewrite merge-policy"
 : > "${FAKE_LOG}"
 python3 "${INIT_PY}" --repo-path "${repo}" --bundle-dir "${BUNDLE_DIR}" >/dev/null 2>&1

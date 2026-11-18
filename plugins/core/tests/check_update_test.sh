@@ -387,7 +387,7 @@ out="$(cd "${consumer}" && bash "${CHECK}" --check-only 2>/dev/null)"
 grep -q "UPDATE AVAILABLE" <<<"${out}" || fail "expected an available update, got: ${out}"
 grep -q "git subtree merge" <<<"${out}" \
     && fail "a non-subtree install was told to run a subtree merge that cannot work: ${out}"
-grep -q "plugin update claude-arsenal" <<<"${out}" \
+grep -q "marketplace add <url>.git#v" <<<"${out}" \
     || fail "a non-subtree install was not given a route that works: ${out}"
 
 git -C "${subtree_consumer}" remote add arsenal "${market}"

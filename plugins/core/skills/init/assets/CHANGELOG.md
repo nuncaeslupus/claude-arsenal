@@ -18,6 +18,30 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [5.31.0] - 2026-11-18
+
+- **`/arsenal-init`** is the installer under a name Claude Code's built-in `/init`
+  (which writes a CLAUDE.md) does not share. Type it instead of `/init`; `/init` and
+  `/core:init` still work. It is hidden from the model's skill listing, so it adds
+  nothing to a session's context.
+- **`init.py --uninstall`** lists everything `/init` wrote and removes it with
+  `--apply`: only files still identical to what init wrote, only arsenal's own
+  entries in `.claude/settings.json`, and the CLAUDE.md block and README badge if
+  unedited. `arsenal/` and anything on GitHub are never touched; they are listed
+  as manual steps. See `docs/UPDATE.md` § *Uninstalling from a project*.
+- **Fresh installs start at `merge-policy = "never"`**: a human merges until someone
+  picks a policy, and the setup interview now always asks. Existing
+  `arsenal/config.toml` files keep their value; nothing changes on upgrade.
+- **The skill-edit gate no longer blocks where skill-workshop cannot be loaded.**
+  It blocks only when skill-workshop (or skill-creator) is reachable: the plugin, the
+  repo, `~/.claude/skills` or the plugin cache. Cloud sessions of a consumer repo
+  can edit their own skills again.
+- **The documented plugin install pins a release tag**
+  (`/plugin marketplace add https://github.com/nuncaeslupus/claude-arsenal.git#vX.Y.Z`), so
+  it only receives tagged, green releases. `ARSENAL OUTDATED` and `check_update.sh`
+  print the tag-pinned update route; a marketplace added without a ref keeps
+  updating as before.
+
 ## [5.30.0] - 2026-11-18
 
 - **Session start is one command.** `bash claude-arsenal/bin/session_start.sh` now does

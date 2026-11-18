@@ -20,6 +20,10 @@ out=$(python3 "$init_py" --repo-path "$repo" --silent 2>&1)
 case "$out" in *"ARSENAL OUTDATED"*"999.0.0"*) ;; *) fail "no OUTDATED banner: $out" ;; esac
 [ ! -d "$repo/claude-arsenal" ] || fail "a stale first install wrote the bundle anyway"
 echo "PASS: a stale first install is refused with the update commands"
+# #613: the update route pins the marketplace to the release tag, not main's tip.
+case "$out" in *"marketplace add $ARSENAL_UPSTREAM_URL#v999.0.0"*) ;; *) fail "#613: update commands do not pin the release tag: $out" ;; esac
+case "$out" in *"/arsenal-init"*) ;; *) fail "#589: update commands name the colliding /init: $out" ;; esac
+echo "PASS: the update commands pin the marketplace to the newest release tag"
 
 python3 "$init_py" --repo-path "$repo" --silent --allow-stale >/dev/null 2>&1 || fail "--allow-stale exited non-zero"
 [ -f "$repo/claude-arsenal/.bundle-version" ] || fail "--allow-stale did not install"

@@ -3,6 +3,7 @@ id: t-df0ae47a
 title: "review: Onboarding command /init collides with Claude Code's built-in /init"
 priority: 5
 requires: [human:gate]
+status: merged
 ---
 
 Imported from issue #589
