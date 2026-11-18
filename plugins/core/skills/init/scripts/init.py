@@ -2560,9 +2560,9 @@ def uninstall(repo_path: Path, bundle_override: Path | None = None, apply: bool 
         for path in sorted(p for p in arsenal.rglob("*") if p.is_file()):
             name = path.relative_to(arsenal).as_posix()
             src = bundle / name
-            if name == _MANIFEST:
-                remove.append((rel(path), path.unlink))
-            elif name in owned and src.is_file() and _content_sha(src) == _content_sha(path):
+            if name == _MANIFEST or (
+                name in owned and src.is_file() and _content_sha(src) == _content_sha(path)
+            ):
                 remove.append((rel(path), path.unlink))
             elif name in owned:
                 keep.append(f"{rel(path)} (differs from what init wrote)")
@@ -2643,7 +2643,7 @@ def uninstall(repo_path: Path, bundle_override: Path | None = None, apply: bool 
     home = _home(repo_path)
     if home.is_dir():
         keep.append(
-            f"{rel(home)}/ (yours: tasks, config, handover — delete it by hand if you want them gone)"
+            f"{rel(home)}/ (yours: tasks, config, handover — delete it by hand to drop them)"
         )
     keep.append(".gitignore entries init added (harmless; remove by hand if you like)")
     manual = [
