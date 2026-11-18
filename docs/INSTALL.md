@@ -1,7 +1,7 @@
 # Installing claude-arsenal
 
 `claude-arsenal` is a Claude Code marketplace. Installing it gives any
-project two plugins:
+project three plugins:
 
 - **`skill-workshop`** — the meta-skill that gates every authoring or
   editing change to a skill, plus the validator/auditor/scaffolder
@@ -18,7 +18,11 @@ project two plugins:
   from workspace plans and auto-starts workers every session without any
   commands. Works on CC Web (no hooks needed).
 
-Both plugins are pure-data (markdown + Python helpers + shell hooks).
+- **`repo-audit`** — `repo-audit` finds and verifies problems in any repo and
+  queues them as gated tasks; `explain-repo` turns the results into a pitch,
+  deep-dive, onboarding guide or status brief.
+
+All three plugins are pure-data (markdown + Python helpers + shell hooks).
 No background daemons; nothing runs unless Claude loads a skill or a
 hook fires.
 
@@ -30,11 +34,14 @@ hook fires.
 |---|---|---|
 | Claude Code v2.x+ | Marketplace + plugin loader | `claude --version` |
 | `git` | Marketplace install fetches via git | `git --version` |
-| Python 3.12+ | Scripts shipped under `skill-workshop/scripts/` | `python3 --version` |
-| `uv` (optional) | Required only if you want to run `make smoke` / `make audit` on a local checkout | `uv --version` |
+| Python 3.12+ on `PATH` as `python3` | The vendored session protocol runs `init.py`, `query_status.py`, `task_select.py` and other shipped scripts every session | `python3 --version` |
+| `gh` (authenticated), or GitHub tools in the session | The queue reads and writes issues, claims and PRs; `claude-arsenal/bin/github_channel.sh --detect` reports which channel a session has | `gh auth status` |
+| `uv` | Runs the annotatable reader (`uv run --with markdown`, needs PyPI access), `drawspec` diagrams and `har` capture; also `make smoke` / `make audit` on a local checkout | `uv --version` |
 
-Consumers who never run the scripts directly only need Claude Code and
-git — the meta-skill's hooks are plain shell.
+A repo that only wants the skills, and never runs the queue, reader or diagrams,
+can get by with Claude Code and git. The queue workflow needs Python and a GitHub
+channel (on Python 3.11 or without one, its session-start steps fail); `uv` is
+needed only for the reader, diagrams and `har`.
 
 ## 2. Set up a project
 
@@ -95,9 +102,11 @@ session from then on — whether or not it ever triggers.
 | `minimal` | `core` — `init`, `queue-next`, `queue-add`, `queue-status`, `github`, `session-end` |
 | `general` | `core` + `workflow` (`explore-idea`, `specify`, `design`, `execution`, `review`, `ship`, `gate-check`) |
 | `python` | `core` + `workflow` + `python` (`python-bootstrap`, `pypi-release`, `coverage-gaps`, `dep-upgrade`, `mutmut-report`, `pin-check`) |
+| `all` | every section, adding `extract` (`har`) and `android` (`bugreport`) |
 
-`core` is always installed: the vendored session protocol names those skills
-directly. To skip the question, pass it up front:
+`core` is always installed: it holds the installer and the queue the vendored
+session protocol drives. A `minimal` install has no `workflow` skills, so the
+protocol's spec and plan routing applies only once that section is installed. To skip the question, pass it up front:
 
 ```bash
 python3 .../init.py --repo-path . --profile python
@@ -121,7 +130,7 @@ existed changes nothing: the sections already in use are detected and recorded.
 No plugin needed — the same script runs straight from a clone:
 
 ```bash
-git clone --depth 1 --branch v5.28.1 https://github.com/nuncaeslupus/claude-arsenal.git /tmp/arsenal
+git clone --depth 1 --branch v5.28.2 https://github.com/nuncaeslupus/claude-arsenal.git /tmp/arsenal
 python3 /tmp/arsenal/plugins/core/skills/init/scripts/init.py --repo-path .
 git add -A .claude claude-arsenal arsenal .github CLAUDE.md .gitignore README.md && git commit -m "chore: add claude-arsenal"
 ```
@@ -156,7 +165,7 @@ updating one does not update the other.
 |---|---|
 | Type `Investigate why login is slow` | `specify` loads. |
 | Type `Set up the task queue in this repo` | `init` loads. |
-| `ls .claude/skills` | 19 skill folders, each with a `.arsenal-vendored` marker |
+| `ls .claude/skills` | one folder per installed skill (13 for `general`, 19 for `python`, 21 for `all`), each with a `.arsenal-vendored` marker |
 | Ask Claude to edit any `SKILL.md` without loading the meta-skill | **blocked** by the gate |
 | (local checkout) `make audit` | Per-plugin listing-budget breakdown; `PASS — under cap.` |
 
@@ -243,7 +252,7 @@ make smoke
 
 `make smoke` runs the validator on every shipped skill, audits the
 listing budget, and walks `tests/skills_smoke.sh`. A clean run exits
-0 with `19 clean skills` and a budget summary.
+0 with `=== skills_smoke: clean ===` and a budget summary.
 
 ### Audit your installed cache
 

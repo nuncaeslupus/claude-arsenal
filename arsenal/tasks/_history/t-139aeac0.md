@@ -3,6 +3,7 @@ id: t-139aeac0
 title: "review: INSTALL understates prerequisites: python3, gh/GitHub access and uv are needed in practice"
 priority: 5
 requires: [human:gate]
+status: merged
 ---
 
 Imported from issue #602

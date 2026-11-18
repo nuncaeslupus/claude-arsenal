@@ -1,6 +1,6 @@
 # Claude Arsenal
 
-<!-- claude-arsenal v5.28.1 — imported via @claude-arsenal/AGENTS.md -->
+<!-- claude-arsenal v5.28.2 — imported via @claude-arsenal/AGENTS.md -->
 
 This file is in context on every turn, so it holds only what a session needs before it
 knows what kind of session it is. The rest lives in `claude-arsenal/references/`: plain
@@ -92,8 +92,9 @@ At the start of every session (fresh start, context compaction, or cold restart)
    once. → `claude-arsenal/references/worker-loop.md` § Credit guards
 
 7. **Before ending a session with open work** — audit every claimed task and open PR (CI,
-   reviews, mergeability), print the table, then write `arsenal/session/handover.md`.
-   `/session-end` does this in full. → `claude-arsenal/references/github-automation.md`
+   reviews, mergeability), print the table, then write `arsenal/session/handover.md`
+   (`/session-end`, where installed, writes it only if `handoff` is `yes`).
+   → `claude-arsenal/references/github-automation.md`
 
 ---
 
@@ -150,11 +151,11 @@ the user a question the host already answered.
 
 ## Specs and plans
 
-Idea work goes through `explore-idea`, spec work through `specify`, plan work through
-`design`; another plugin's brainstorming or planning skill does not replace them, and no
-plan is written before the annotated spec is approved. Hand every spec or plan to the user
-as the HTML from `create_reader.py`. A diagram is a ```drawspec fence, not hand-drawn SVG
-or ASCII art → `claude-arsenal/references/diagrams.md`.
+With the `workflow` skills installed, idea work goes through `explore-idea`, spec work
+through `specify`, plan work through `design`, not another plugin's brainstorming or
+planning skill. No plan precedes the approved annotated spec. Hand every spec or plan to
+the user as the HTML from `create_reader.py`. Draw a diagram as a fenced spec where the host
+renders one, never hand-drawn SVG or ASCII art → `claude-arsenal/references/diagrams.md`.
 
 ---
 

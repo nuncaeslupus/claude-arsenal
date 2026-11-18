@@ -1082,7 +1082,7 @@ def _check_ref_conditions(body: str, skill_md: Path, result: Result) -> None:
     cross = [(m.start(1), m.end(1)) for m in CROSS_SKILL_REF_CITE_REGEX.finditer(masked)]
     bounds = [(m.start(), m.end()) for m in SENTENCE_BOUNDARY_REGEX.finditer(masked)]
     reported: set[tuple[str, int]] = set()
-    for m in REFERENCE_MENTION_REGEX.finditer(masked):
+    for m in LOCAL_REFERENCE_MENTION_REGEX.finditer(masked):
         if any(s <= m.start() and m.end() <= e for s, e in cross):
             continue
         line_idx = masked.count("\n", 0, m.start())
@@ -1224,6 +1224,9 @@ def _check_skill_dir_var(skill_dir: Path, body: str, result: Result) -> None:
 
 
 REFERENCE_MENTION_REGEX = re.compile(r"references/([\w./-]+\.md)")
+# `claude-arsenal/references/<f>.md` is the vendored bundle's reference folder,
+# not this skill's own, so it can never dangle against `<skill>/references/`.
+LOCAL_REFERENCE_MENTION_REGEX = re.compile(r"(?<!claude-arsenal/)references/([\w./-]+\.md)")
 CROSS_SKILL_REF_CITE_REGEX = re.compile(r"`[^`\n]*§\s*(references/[\w./-]+\.md)[^`\n]*`")
 
 
@@ -1237,7 +1240,7 @@ def check_references(skill_dir: Path, body: str, result: Result) -> None:
     refs_dir = skill_dir / "references"
     cross_skill_ranges = [(m.start(1), m.end(1)) for m in CROSS_SKILL_REF_CITE_REGEX.finditer(body)]
     reported: set[str] = set()
-    for match in REFERENCE_MENTION_REGEX.finditer(body):
+    for match in LOCAL_REFERENCE_MENTION_REGEX.finditer(body):
         if any(
             cs_start <= match.start() and match.end() <= cs_end
             for cs_start, cs_end in cross_skill_ranges

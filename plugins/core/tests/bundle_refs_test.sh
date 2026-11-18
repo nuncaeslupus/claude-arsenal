@@ -50,6 +50,9 @@ sources=()
 while IFS= read -r line; do sources+=("${line}"); done < <(
     find "${ASSETS}" "${INIT_SKILL}/scripts" "${INIT_SKILL}/SKILL.md" \
         -type f \( -name '*.md' -o -name '*.py' -o -name '*.sh' -o -name '*.json' \) 2>/dev/null
+    # Every other skill cites the vendored `claude-arsenal/references/<f>.md` too.
+    find "${SCRIPT_DIR}/../../.." -path '*/skills/*' -type f -name '*.md' \
+        -not -path '*/init/*' -not -path '*/.git/*' -not -path '*/node_modules/*' 2>/dev/null
 )
 
 # Not `declare -A`/`mapfile`: macOS ships bash 3.2, which has neither.
@@ -99,7 +102,10 @@ while read -r hit; do
     skill="$(sed -E 's/^[^:]*:[^:]*:([A-Za-z0-9_-]+).*/\1/' <<<"${cite}")"
     relref="$(sed -E 's/.*§[[:space:]]*(references\/[A-Za-z0-9_.\/-]+\.md).*/\1/' <<<"${cite}")"
     base="${SCRIPT_DIR}/../skills/${skill}"
-    if [[ ! -f "${base}/${relref}" && ! -f "${base}/assets/${relref}" ]]; then
+    # No `assets/` fallback: a consumer resolves the cite from the skill's own
+    # folder, and init's references live in the bundle (`claude-arsenal/references/`),
+    # so cite that path instead (#599).
+    if [[ ! -f "${base}/${relref}" ]]; then
         note "${src#"${SCRIPT_DIR}/../"} cites ${cite}, which resolves to no file under skills/${skill}/"
     fi
 done < <(grep -rHo '`claude-arsenal:[a-z-]*:[A-Za-z0-9_-]*[[:space:]]*§[[:space:]]*references/[A-Za-z0-9_./-]*\.md`' \

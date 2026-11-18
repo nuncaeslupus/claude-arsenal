@@ -94,7 +94,7 @@ Init runs non-interactively, so it prints what is undecided and the session asks
   For a private repo or one with no CI, init recommends `always` with a real
   `host-gate` and `pre-pr-review = "required"`; say the trade-off (nothing
   independent re-runs the local gates) and change only what the user confirms.
-  Load `claude-arsenal:core:init § references/ci-minutes.md` when the user asks
+  Load `claude-arsenal/references/ci-minutes.md` when the user asks
   about CI cost or the per-PR trigger block.
 - **Branch protection** — a deliberate run protects the default branch once and
   records the outcome as `branch-protection`. When it cannot, it prints the reason
@@ -106,7 +106,7 @@ Init runs non-interactively, so it prints what is undecided and the session asks
   scanning, a release for the newest tag, a PyPI page that links back), each with
   its fix command. Show the list and run only the fixes the user confirms; a
   `NOTE` line is a decision for them, not a fix. `repo_health.py` re-runs it.
-  Load `claude-arsenal:core:init § references/repo-housekeeping.md` when a gap is
+  Load `claude-arsenal/references/repo-housekeeping.md` when a gap is
   a missing license (the user chooses it; the reference has the questions to ask)
   or names a package index, and before a package's first publish.
 - **A skill folder "is not arsenal-vendored — left alone"** — init replaces and

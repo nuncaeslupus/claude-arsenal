@@ -108,7 +108,7 @@ Then self-review the spec before the reader is generated, and fix what fails:
 - **Scope fits one plan** — independent subsystems become separate specs.
 - **Nothing dropped** — every decision and constraint from the source conversation, the decisions log included, is still in the spec; diff a rewrite against the conversation, not the previous draft.
 
-Draw any picture as a fenced `drawspec` block: `claude-arsenal:core:init § references/diagrams.md`.
+Draw any picture as a fenced diagram spec rather than hand-drawn SVG or ASCII art; load `claude-arsenal/references/diagrams.md` before the first one.
 
 ## Annotatable reader — before the spec is merged or built on
 
@@ -122,7 +122,7 @@ create_reader.py   # in claude-arsenal/scripts/; run via `uv run --with markdown
 
 It finds the spec (`arsenal/project/*/spec.md` or `status/specification.md`), writes
 `<repo>-spec-v<N>-<date>-reader.html` and `…-annotated.md` beside it, and prints both paths; commit
-them. Load `claude-arsenal:core:init § references/annotatable-reader.md` when a
+them. Load `claude-arsenal/references/annotatable-reader.md` when a
 returned notes export arrives, when recording approval, or when another document
 needs a reader.
 
