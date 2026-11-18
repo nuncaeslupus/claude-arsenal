@@ -1,6 +1,6 @@
 # Claude Arsenal
 
-<!-- claude-arsenal v5.31.1 — imported via @claude-arsenal/AGENTS.md -->
+<!-- claude-arsenal v5.31.2 — imported via @claude-arsenal/AGENTS.md -->
 
 This file is in context on every turn, so it holds only what a session needs before it
 knows what kind of session it is. The rest lives in `claude-arsenal/references/`: plain
@@ -37,7 +37,7 @@ At the start of every session (fresh start, context compaction, or cold restart)
    (`check_update.sh --check-only`, `init.py --silent`), prints the capability map, detects the
    GitHub channel, fetches the task issues itself on `gh` (no `body`: the `arsenal-id:<id>`
    label pairs issue to task), and prints the board from `query_status.py`. Report everything
-   it flags; a failed fetch makes the counts unverified.
+   it flags. Exit 1 means a fetch or step failed: say so and treat the counts as unverified.
    - `UNTAGGED UPSTREAM RELEASE` is fixed upstream (`make tag`), not here. `INERT` on a
      non-subtree install is the expected answer: say so once and open no work on it.
    - Each `NEW SETTING` line: report once (`config-acknowledged` in `arsenal/config.toml`

@@ -109,11 +109,13 @@ jobs:
         run: make lint
 
       # The shell behaviour tests run the shipped bin/ scripts under BSD
-      # userland and bash 3.2; Linux runs them in the `core tests` job.
+      # userland and bash 3.2; Linux runs them in the `core tests` job. On
+      # 3.11, the floor the shipped scripts check (`tomllib`) and INSTALL.md
+      # states, so this leg is what keeps that floor tested.
       - name: Set up Python for the shell tests
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.11"
 
       - name: Install reader dependency and git identity
         run: |

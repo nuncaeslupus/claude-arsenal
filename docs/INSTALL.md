@@ -34,13 +34,13 @@ hook fires.
 |---|---|---|
 | Claude Code v2.x+ | Marketplace + plugin loader | `claude --version` |
 | `git` | Marketplace install fetches via git | `git --version` |
-| Python 3.12+ on `PATH` as `python3` | The vendored session protocol runs `init.py`, `query_status.py`, `task_select.py` and other shipped scripts every session | `python3 --version` |
+| Python 3.11+ on `PATH` as `python3` (`tomllib`; older versions stop with a clear message) | The vendored session protocol runs `init.py`, `query_status.py`, `task_select.py` and other shipped scripts every session | `python3 --version` |
 | `gh` (authenticated), or GitHub tools in the session | The queue reads and writes issues, claims and PRs; `claude-arsenal/bin/github_channel.sh --detect` reports which channel a session has | `gh auth status` |
 | `uv` | Runs the annotatable reader (`uv run --with markdown`, needs PyPI access), `drawspec` diagrams and `har` capture; also `make smoke` / `make audit` on a local checkout | `uv --version` |
 
 A repo that only wants the skills, and never runs the queue, reader or diagrams,
 can get by with Claude Code and git. The queue workflow needs Python and a GitHub
-channel (on Python 3.11 or without one, its session-start steps fail); `uv` is
+channel (on Python 3.10 or older, or without a channel, its session-start steps fail); `uv` is
 needed only for the reader, diagrams and `har`.
 
 ## 2. Set up a project
@@ -59,7 +59,7 @@ wires the skill-edit gate into `.claude/settings.json`, and creates the
 ### If you have Claude Code on your machine
 
 ```text
-/plugin marketplace add https://github.com/nuncaeslupus/claude-arsenal.git#v5.31.1
+/plugin marketplace add https://github.com/nuncaeslupus/claude-arsenal.git#v5.31.2
 /plugin install core@claude-arsenal
 ```
 
@@ -145,7 +145,7 @@ existed changes nothing: the sections already in use are detected and recorded.
 No plugin needed — the same script runs straight from a clone:
 
 ```bash
-git clone --depth 1 --branch v5.31.1 https://github.com/nuncaeslupus/claude-arsenal.git /tmp/arsenal
+git clone --depth 1 --branch v5.31.2 https://github.com/nuncaeslupus/claude-arsenal.git /tmp/arsenal
 python3 /tmp/arsenal/plugins/core/skills/init/scripts/init.py --repo-path .
 git add -A .claude claude-arsenal arsenal .github CLAUDE.md .gitignore README.md && git commit -m "chore: add claude-arsenal"
 ```

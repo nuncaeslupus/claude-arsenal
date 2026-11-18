@@ -25,8 +25,8 @@ CANARY: queue-next-loaded-2026-06-13-fb78d23e-b2c3d4e5f6a7b8c9
 
 ## The loop
 
-**1. Fetch the task issues** as `claude-arsenal/AGENTS.md` session-start steps 1–2 say
-(no `body`). Add `state_reason` where the surface returns it: without it, a closed issue
+**1. Fetch the task issues** as `claude-arsenal/bin/session_start.sh` does, into the
+same `ARSENAL_ISSUES_JSON` file (no `body`). Add `state_reason` where the surface returns it: without it, a closed issue
 reads as done unless it carries `arsenal:cancelled`.
 
 **2. Ask for the next task.** One call, one line of output:

@@ -18,6 +18,27 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [5.31.2] - 2026-11-18
+
+Fixes to `bin/session_start.sh`, the one-command session start from 5.30.0:
+
+- **Writes the board where the rest of the bundle reads it.** It used `$TMPDIR`,
+  which macOS always sets, while `open_task_pr.sh` and the worker loop read
+  `ARSENAL_ISSUES_JSON` (default `/tmp/arsenal-issues.json`). It now uses that path.
+- **Works from a subdirectory.** It used to skip the update check, refresh and
+  capability map silently when not started at the repo root.
+- **Failures are loud.** A failed `gh` fetch, a missing issue file or a crashed step
+  exits 1 and names the failure; a failed fetch no longer leaves the previous
+  session's file to be read as this one's. On `rest`/`none` it clears last
+  session's files before asking for new ones. An unknown argument exits 2.
+- **Safe to run twice.** A second run before the import relabels were applied no
+  longer proposes a duplicate handle issue for the imported task.
+- A subtree install with only its remote missing is no longer shortened to
+  "INERT, nothing to do": the add-the-remote fix is printed.
+- Labels follow `task-label` / `import-label` from `arsenal/config.toml`.
+- Python floor: 3.11 (what the scripts check, and what the test suite passes on);
+  `docs/INSTALL.md` said 3.12.
+
 ## [5.31.1] - 2026-11-18
 
 - `gate_run.sh`: a `## ` comment line inside the fenced acceptance-gate block no longer ends the section (it used to print "prose-only" and run nothing).
