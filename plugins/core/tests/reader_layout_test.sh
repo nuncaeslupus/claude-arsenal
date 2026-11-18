@@ -14,7 +14,7 @@ set -uo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 READER="${here}/../skills/init/assets/scripts/create_reader.py"
 PLAN_V="${here}/../skills/design/scripts/validate_plan.py"
-[[ -f "${READER}" ]] || { echo "SKIP: create_reader.py not found" >&2; exit 0; }
+[[ -f "${READER}" ]] || { echo "FAIL: create_reader.py not found" >&2; exit 1; }
 if python3 -c "import markdown" 2>/dev/null; then
     PY=(python3)
 elif command -v uv >/dev/null 2>&1; then

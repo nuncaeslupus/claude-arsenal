@@ -13,7 +13,7 @@ set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SRC="${SCRIPT_DIR}/../skills/init/assets/bin"
-[[ -f "${SRC}/github_channel.sh" ]] || { echo "SKIP: github_channel.sh not found" >&2; exit 0; }
+[[ -f "${SRC}/github_channel.sh" ]] || { echo "FAIL: github_channel.sh not found" >&2; exit 1; }
 
 tmp=$(mktemp -d)
 trap 'rm -rf "${tmp}"' EXIT

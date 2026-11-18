@@ -12,7 +12,7 @@ set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SEL="${SCRIPT_DIR}/../skills/init/assets/bin/select_tests.py"
-[[ -f "${SEL}" ]] || { echo "SKIP: ${SEL} not found" >&2; exit 0; }
+[[ -f "${SEL}" ]] || { echo "FAIL: ${SEL} not found" >&2; exit 1; }
 
 tmp=$(mktemp -d)
 trap 'rm -rf "${tmp}"' EXIT

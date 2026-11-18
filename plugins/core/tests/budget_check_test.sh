@@ -10,7 +10,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUDGET="${SCRIPT_DIR}/../skills/init/assets/bin/budget_check.sh"
 
 if [[ ! -f "${BUDGET}" ]]; then
-    echo "SKIP: budget_check.sh not found at ${BUDGET}" >&2; exit 0
+    echo "FAIL: budget_check.sh not found at ${BUDGET}" >&2; exit 1
 fi
 
 tmpdir=$(mktemp -d)

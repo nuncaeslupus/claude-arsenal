@@ -12,7 +12,7 @@ SELECT_PY="${SCRIPT_DIR}/../skills/init/assets/scripts/task_select.py"
 
 for f in "${INIT_PY}" "${ADD_PY}" "${LIST_SH}" "${SELECT_PY}"; do
     if [[ ! -f "${f}" ]]; then
-        echo "SKIP: ${f} not found" >&2; exit 0
+        echo "FAIL: ${f} not found" >&2; exit 1
     fi
 done
 

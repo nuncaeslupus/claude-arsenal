@@ -28,7 +28,7 @@ _seed_gates() {  # $1 = repo root
 }
 
 if [[ ! -f "${HELPER}" ]]; then
-    echo "SKIP: open_task_pr.sh not found at ${HELPER}" >&2; exit 0
+    echo "FAIL: open_task_pr.sh not found at ${HELPER}" >&2; exit 1
 fi
 
 # A real `gh` in PATH would try to hit GitHub; this test exercises the

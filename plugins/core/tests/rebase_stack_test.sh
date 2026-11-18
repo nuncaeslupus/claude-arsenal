@@ -6,7 +6,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REBASE_SH="${SCRIPT_DIR}/../skills/init/assets/bin/rebase_stack.sh"
-[[ -f "${REBASE_SH}" ]] || { echo "SKIP: ${REBASE_SH} not found" >&2; exit 0; }
+[[ -f "${REBASE_SH}" ]] || { echo "FAIL: ${REBASE_SH} not found" >&2; exit 1; }
 
 tmpdir=$(mktemp -d)
 cleanup() { rm -rf "${tmpdir}"; }

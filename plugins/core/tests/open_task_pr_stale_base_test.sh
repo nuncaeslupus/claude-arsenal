@@ -32,8 +32,8 @@ _seed_gates() {  # $1 = repo root
     done
 }
 
-[[ -f "${HELPER}" ]] || { echo "SKIP: open_task_pr.sh not found at ${HELPER}" >&2; exit 0; }
-[[ -f "${BIN}/rescue_snapshot.sh" ]] || { echo "SKIP: rescue_snapshot.sh not found" >&2; exit 0; }
+[[ -f "${HELPER}" ]] || { echo "FAIL: open_task_pr.sh not found at ${HELPER}" >&2; exit 1; }
+[[ -f "${BIN}/rescue_snapshot.sh" ]] || { echo "FAIL: rescue_snapshot.sh not found" >&2; exit 1; }
 git worktree list >/dev/null 2>&1 || { echo "SKIP: git worktree unavailable" >&2; exit 0; }
 if command -v gh >/dev/null 2>&1; then
     echo "SKIP: gh present — this test exercises the no-PR-backend path" >&2; exit 0

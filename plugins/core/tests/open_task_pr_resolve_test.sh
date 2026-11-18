@@ -6,7 +6,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ASSETS="${SCRIPT_DIR}/../skills/init/assets"
-[[ -f "${ASSETS}/bin/open_task_pr.sh" ]] || { echo "SKIP: open_task_pr.sh not found" >&2; exit 0; }
+[[ -f "${ASSETS}/bin/open_task_pr.sh" ]] || { echo "FAIL: open_task_pr.sh not found" >&2; exit 1; }
 fail() { echo "FAIL: $1" >&2; exit 1; }
 
 tmp=$(cd "$(mktemp -d)" && pwd -P)

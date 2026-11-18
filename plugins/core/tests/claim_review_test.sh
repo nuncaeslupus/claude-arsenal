@@ -16,7 +16,7 @@ set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SRC="${SCRIPT_DIR}/../skills/init/assets/bin/claim_review.sh"
-[[ -f "${SRC}" ]] || { echo "SKIP: claim_review.sh not found at ${SRC}" >&2; exit 0; }
+[[ -f "${SRC}" ]] || { echo "FAIL: claim_review.sh not found at ${SRC}" >&2; exit 1; }
 
 tmp=$(mktemp -d)
 trap 'rm -rf "${tmp}"' EXIT

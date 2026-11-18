@@ -12,7 +12,7 @@ set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 READER="${SCRIPT_DIR}/../skills/init/assets/scripts/create_reader.py"
-[[ -f "${READER}" ]] || { echo "SKIP: create_reader.py not found" >&2; exit 0; }
+[[ -f "${READER}" ]] || { echo "FAIL: create_reader.py not found" >&2; exit 1; }
 # The skill documents `uv run --with markdown python3` for exactly this reason:
 # `markdown` is not a project dependency. Falling straight to SKIP would leave a
 # test that never runs anywhere, which is the inert-gate failure this repo keeps

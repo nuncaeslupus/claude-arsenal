@@ -17,7 +17,7 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BIN="${SCRIPT_DIR}/../skills/init/assets/bin"
 POSTCHECK="${BIN}/worker_postcheck.sh"
-[[ -f "${POSTCHECK}" ]] || { echo "SKIP: ${POSTCHECK} not found" >&2; exit 0; }
+[[ -f "${POSTCHECK}" ]] || { echo "FAIL: ${POSTCHECK} not found" >&2; exit 1; }
 
 tmp=$(mktemp -d)
 trap 'rm -rf "${tmp}"' EXIT

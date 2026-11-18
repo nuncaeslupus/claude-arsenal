@@ -14,7 +14,7 @@ set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCANNER="${SCRIPT_DIR}/../skills/session-end/scripts/query_session_history.py"
-[[ -f "${SCANNER}" ]] || { echo "SKIP: ${SCANNER} not found" >&2; exit 0; }
+[[ -f "${SCANNER}" ]] || { echo "FAIL: ${SCANNER} not found" >&2; exit 1; }
 
 tmpdir=$(mktemp -d)
 trap 'rm -rf "${tmpdir}"' EXIT
