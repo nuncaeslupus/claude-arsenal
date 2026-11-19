@@ -45,7 +45,7 @@ def validate(obj: Any) -> dict[str, Any]:
     """Return obj when it is a valid v1 object; raise NotesError naming the first fault."""
     if not isinstance(obj, dict):
         raise NotesError("review-notes must be a JSON object")
-    if obj.get("v") != VERSION:
+    if type(obj.get("v")) is not int or obj["v"] != VERSION:
         raise NotesError(f"review-notes version {obj.get('v')!r} is not {VERSION}")
     items = obj.get("items")
     if not isinstance(items, dict):
@@ -102,4 +102,7 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
+    for _stream in (sys.stdout, sys.stderr):
+        if hasattr(_stream, "reconfigure"):
+            _stream.reconfigure(encoding="utf-8", errors="replace")
     sys.exit(main())

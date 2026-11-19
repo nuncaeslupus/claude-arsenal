@@ -52,6 +52,7 @@ def test_missing_block_raises() -> None:
     ("mutate", "message"),
     [
         (lambda o: o.__setitem__("v", 2), "version"),
+        (lambda o: o.__setitem__("v", True), "version"),
         (lambda o: o["items"]["intro"].__setitem__("verdict", "maybe"), "verdict"),
         (lambda o: o["items"]["intro"].__setitem__("blocks", ["x"]), "blocks"),
         (lambda o: o.__setitem__("items", []), "items"),
