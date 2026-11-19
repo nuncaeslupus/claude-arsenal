@@ -13,7 +13,7 @@ repeatable and checkable.
 | Piece | What it is | Where it lives |
 |---|---|---|
 | **Helmwork** | This file: how to work with AI on any project. Text only. | `claude-arsenal/references/helmwork.md`, summarised in `AGENTS.md`. |
-| **Review pages** | One self-contained HTML page per review: the person comments in place, compares side by side, gives verdicts, and exports the notes back. Deliberately light. | The annotatable reader today (`claude-arsenal/references/annotatable-reader.md`), growing into the `proofsheet` skill. |
+| **Review pages** | One self-contained HTML page per review: the person comments in place, compares side by side, gives verdicts, and exports the notes back. Deliberately light. | The annotatable reader today (`claude-arsenal/references/annotatable-reader.md`), growing into a planned `proofsheet` skill (not shipped yet). |
 | **Rich review tool** | Region drawing, pixel-level marking, audio spans, an issue system: what a page should not attempt. | Its own project, outside this bundle. |
 | **Domain kits** | Skills, checks and small viewers for one domain. | Optional bundle sections, switched on only where needed; heavy code stays in its own repository and the section drives it. |
 
