@@ -18,6 +18,14 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [5.32.0] - 2026-11-19
+
+- **New reference: `references/helmwork.md`** — the working method behind the bundle:
+  the work cycle with a mandatory evidence-review step, rules for the person and the AI
+  (decide reversible defaults, decision log, learn from every correction), and rules for
+  software built for an AI to use. `AGENTS.md` gains a three-line summary and a row in the
+  references table; the file itself is read on demand.
+
 ## [5.31.2] - 2026-11-18
 
 Fixes to `bin/session_start.sh`, the one-command session start from 5.30.0:
