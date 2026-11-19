@@ -4,7 +4,8 @@
 Items a person still has to judge (a question, or a doubtful result with its
 evidence) are appended to `<ARSENAL_HOME>/evidence/open.jsonl`, one JSON object
 per line, so they merge with the PR that raised them and are not lost when a
-conversation ends. Answering one moves it to `decisions.jsonl` beside it and
+conversation ends. Answering one appends it to `decisions.jsonl` beside it (both files
+are append-only; "open" means open.jsonl minus decided ids) and
 regenerates `decisions.md`, a short readable log.
 
     open_items.py add --what TEXT --where PLACE [--kind question|evidence]
@@ -28,6 +29,7 @@ import datetime as dt
 import json
 import os
 import secrets
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -36,7 +38,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from review_notes import VERDICTS, NotesError, parse_block
 
 KINDS = ("question", "evidence")
-UNION_LINES = ("open.jsonl merge=union", "decisions.jsonl merge=union")
+UNION_FILES = ("open.jsonl", "decisions.jsonl", "decisions.md")
 
 
 class ItemError(Exception):
@@ -64,22 +66,53 @@ def read_jsonl(path: Path) -> list[dict[str, Any]]:
     return rows
 
 
-def write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    text = "".join(json.dumps(r, ensure_ascii=False, sort_keys=True) + "\n" for r in rows)
-    path.write_text(text, encoding="utf-8")
+def _repo_root() -> Path:
+    try:
+        out = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True, check=True
+        )
+        return Path(out.stdout.strip())
+    except (OSError, subprocess.CalledProcessError):
+        return Path.cwd()
 
 
 def ensure_union_merge(store: Path) -> None:
-    """Add `merge=union` for both stores to the repo's .gitattributes, once."""
-    attrs = Path(".gitattributes")
-    prefix = store.as_posix().rstrip("/") + "/"
-    wanted = [prefix + line for line in UNION_LINES]
+    """Add `merge=union` for the store's files to the repo root's .gitattributes, once."""
+    root = _repo_root().resolve()
+    try:
+        rel = store.resolve().relative_to(root).as_posix()
+    except ValueError:
+        print(
+            f"open_items: warning: {store} is outside the repository; no merge rule",
+            file=sys.stderr,
+        )
+        return
+    attrs = root / ".gitattributes"
+    wanted = [f"{rel}/{name} merge=union" for name in UNION_FILES]
     have = attrs.read_text(encoding="utf-8").splitlines() if attrs.exists() else []
     missing = [w for w in wanted if w not in have]
     if missing:
-        body = "\n".join(have + missing) + "\n"
-        attrs.write_text(body.lstrip("\n"), encoding="utf-8")
+        attrs.write_text("\n".join(have + missing) + "\n", encoding="utf-8")
+
+
+def _decided_ids(store: Path) -> set[str]:
+    return {str(r.get("id")) for r in read_jsonl(store / "decisions.jsonl")}
+
+
+def open_rows(store: Path) -> list[dict[str, Any]]:
+    """open.jsonl minus every id already decided, first line per id.
+
+    Both files are append-only: an answer never rewrites open.jsonl, so a union merge
+    of a branch that answered an item with one that appended next to it cannot bring
+    the answered item back.
+    """
+    decided, seen, rows = _decided_ids(store), set(), []
+    for r in read_jsonl(store / "open.jsonl"):
+        rid = r.get("id")
+        if rid not in decided and rid not in seen:
+            seen.add(rid)
+            rows.append(r)
+    return rows
 
 
 def add(args: argparse.Namespace) -> str:
@@ -112,14 +145,9 @@ def render_decisions_md(rows: list[dict[str, Any]]) -> str:
     ]
     for r in sorted(rows, key=lambda r: (r.get("answered", ""), r.get("id", "")), reverse=True):
         head = f"- **{r.get('answered', '?')}** · `{r.get('id')}` · **{r.get('verdict')}**"
-        out.append(f"{head} — {r.get('what', '')}")
-        detail = [f"where: {r['where']}"] if r.get("where") else []
-        if r.get("note"):
-            detail.append(f"note: {r['note']}")
-        if r.get("by"):
-            detail.append(f"by: {r['by']}")
-        if detail:
-            out.append("  " + " · ".join(detail))
+        extra = [f"{k}: {r[k]}" for k in ("where", "note", "by") if r.get(k)]
+        # One line per decision, so a union merge of two regenerations stays valid.
+        out.append(" · ".join([f"{head} — {r.get('what', '')}", *extra]))
     return "\n".join(out) + "\n"
 
 
@@ -127,16 +155,15 @@ def answer(item_id: str, verdict: str, note: str = "", by: str = "") -> dict[str
     if verdict not in VERDICTS:
         raise ItemError(f"verdict {verdict!r} is not one of {', '.join(VERDICTS)}")
     store = evidence_dir()
-    open_rows = read_jsonl(store / "open.jsonl")
-    match = [r for r in open_rows if r.get("id") == item_id]
+    match = [r for r in open_rows(store) if r.get("id") == item_id]
     if not match:
         raise ItemError(f"no open item {item_id!r} in {store / 'open.jsonl'}")
     decided = dict(match[0], verdict=verdict, note=note, answered=_today())
     if by:
         decided["by"] = by
-    decisions = [*read_jsonl(store / "decisions.jsonl"), decided]
-    write_jsonl(store / "decisions.jsonl", decisions)
-    write_jsonl(store / "open.jsonl", [r for r in open_rows if r.get("id") != item_id])
+    with (store / "decisions.jsonl").open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(decided, ensure_ascii=False, sort_keys=True) + "\n")
+    decisions = read_jsonl(store / "decisions.jsonl")
     (store / "decisions.md").write_text(render_decisions_md(decisions), encoding="utf-8")
     ensure_union_merge(store)
     return decided
@@ -153,7 +180,7 @@ def apply_export(path: Path, by: str) -> list[dict[str, Any]]:
         notes = parse_block(path.read_text(encoding="utf-8"))
     except (OSError, NotesError) as exc:
         raise ItemError(str(exc)) from exc
-    open_ids = {r.get("id") for r in read_jsonl(evidence_dir() / "open.jsonl")}
+    open_ids = {r.get("id") for r in open_rows(evidence_dir())}
     done = []
     for item_id, entry in notes["items"].items():
         if entry.get("verdict") and item_id in open_ids:
@@ -188,9 +215,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.cmd == "add":
             print(add(args))
         elif args.cmd == "list":
-            rows = sorted(
-                read_jsonl(evidence_dir() / "open.jsonl"), key=lambda r: r.get("opened", "")
-            )
+            rows = sorted(open_rows(evidence_dir()), key=lambda r: r.get("opened", ""))
             if args.json:
                 print(json.dumps(rows, ensure_ascii=False, indent=2))
             else:

@@ -44,7 +44,7 @@ def test_answer_moves_item_to_decisions(repo: Path) -> None:
     b = _add("keep me")
     oi.answer(a, "fix", "yes, 1.3x", "reviewer")
     store = repo / "arsenal/evidence"
-    assert [r["id"] for r in oi.read_jsonl(store / "open.jsonl")] == [b]
+    assert [r["id"] for r in oi.open_rows(store)] == [b]
     decided = oi.read_jsonl(store / "decisions.jsonl")
     assert (
         decided[0]["id"] == a and decided[0]["verdict"] == "fix" and decided[0]["by"] == "reviewer"
@@ -73,7 +73,7 @@ def test_apply_closes_only_decided_open_items(repo: Path, tmp_path: Path) -> Non
     export.write_text("# notes\n" + review_notes.render_block(notes), encoding="utf-8")
     done = oi.apply_export(export, "reviewer")
     assert {d["id"] for d in done} == {a, b}
-    assert [r["id"] for r in oi.read_jsonl(repo / "arsenal/evidence/open.jsonl")] == [c]
+    assert [r["id"] for r in oi.open_rows(repo / "arsenal/evidence")] == [c]
 
 
 def test_two_branches_append_merge_clean(repo: Path) -> None:
@@ -95,6 +95,42 @@ def test_two_branches_append_merge_clean(repo: Path) -> None:
     git("merge", "-q", "--no-edit", "one")
     whats = [r["what"] for r in oi.read_jsonl(repo / "arsenal/evidence/open.jsonl")]
     assert sorted(whats) == ["base item", "from branch one", "from main"]
+
+
+def test_answer_racing_append_merges_without_resurrecting(repo: Path) -> None:
+    def git(*args: str) -> None:
+        subprocess.run(["git", *args], check=True, capture_output=True, text=True)
+
+    git("init", "-q", "-b", "main")
+    git("config", "user.email", "t@example.com")
+    git("config", "user.name", "t")
+    _add("one")
+    two = _add("two")
+    git("add", "-A")
+    git("commit", "-qm", "base")
+    git("checkout", "-qb", "answer")
+    oi.answer(two, "fine")
+    git("add", "-A")
+    git("commit", "-qm", "answer two")
+    git("checkout", "-q", "main")
+    _add("three")
+    git("commit", "-qam", "append three")
+    git("merge", "-q", "--no-edit", "answer")
+    store = repo / "arsenal/evidence"
+    assert [r["what"] for r in oi.open_rows(store)] == ["one", "three"]
+    assert [r["id"] for r in oi.read_jsonl(store / "decisions.jsonl")] == [two]
+
+
+def test_gitattributes_at_repo_root_from_subdir(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    subprocess.run(["git", "init", "-q"], check=True)
+    (repo / "sub").mkdir()
+    monkeypatch.chdir(repo / "sub")
+    monkeypatch.setenv("ARSENAL_HOME", str(repo / "arsenal"))
+    _add("from a subdirectory")
+    assert not (repo / "sub/.gitattributes").exists()
+    assert "arsenal/evidence/open.jsonl merge=union" in (repo / ".gitattributes").read_text()
 
 
 def test_cli_answer_fix_prints_task_line(repo: Path, capsys: pytest.CaptureFixture[str]) -> None:
