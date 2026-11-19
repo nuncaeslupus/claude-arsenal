@@ -14,5 +14,5 @@ Plan row T4 in `arsenal/project/proofsheet/plan.md` (spec: `arsenal/project/proo
 
 ```bash
 set -e
-python3 -m pytest -q plugins/core/tests/proofsheet_test.py -k build
+python3 -m pytest -q plugins/core/tests/proofsheet_test.py -k 'build or compare or media_over_limit'
 ```
