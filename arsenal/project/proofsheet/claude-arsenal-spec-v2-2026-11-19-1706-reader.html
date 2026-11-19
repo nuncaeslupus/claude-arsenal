@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="color-scheme" content="light">
-<meta name="arsenal-source-sha256" content="6fc5e797aa4025f98e33f6a91ec6b1a6aa23242f756cde5053ad4af88ed34210">
+<meta name="arsenal-source-sha256" content="ee962aa2823061544f1c4e74dde513119349bd4361d6a0456d0fcdc0a1475a20">
 <title>proofsheet — Specification (annotatable)</title>
 <style>
 :root{
@@ -240,10 +240,11 @@ body.baked .bn-btn,body.baked #warnbar{display:none!important}
 <div class="sec-body"><p><strong>Date</strong>: 2026-11-19<br />
 <strong>Ticket / PR</strong>: none yet (follows <code>references/helmwork.md</code>, PR #642)<br />
 <strong>Author</strong>: Claude<br />
-<strong>Revision</strong>: 1<br />
-<strong>Status</strong>: draft<br />
+<strong>Revision</strong>: 2<br />
+<strong>Status</strong>: approved (2026-11-19, revision 2) — without annotations (answers given in chat, recorded in r2 and D-6 to D-8)<br />
 <strong>Revision log</strong>:
-- r1 — first draft</p>
+- r1 — first draft
+- r2 — applied the reviewer's chat answers: Option B; <code>workflow</code> section; linked media past 20 MB and an optional repository copy; decision log also rendered as Markdown</p>
 <blockquote>
 <p>Review record. Each round of reviewer notes makes a new revision: bump
 <strong>Revision</strong>, add a log line naming the export it applied, and commit that
@@ -529,8 +530,13 @@ inside the same size budget.</p>
 more versions, a compare view: two versions side by side, any pair chosen from a menu;
 images also get an A/B flip in place. Text items keep paragraph comments.</p>
 <p><strong>Media</strong>: embedded as data URIs by default, so the page is one file. Past 20 MB of media
-in total, <code>build</code> stops and asks for <code>--link-media</code>, which references files beside the page
-instead and says so in the page header.</p>
+in total, <code>build</code> switches to linked media: files are referenced beside the page, and the
+page header says so (<code>--embed-media</code> / <code>--link-media</code> force either way).</p>
+<p><strong>Repository copy is optional.</strong> Like the reader's GitHub copy, <code>build --repo-copy</code> writes
+a Markdown version with its media for committing. Media can make a repository grow fast,
+so a host chooses with <code>proofsheet-repo-media</code> in <code>arsenal/config.toml</code>: <code>auto</code> (default:
+commit media up to 5 MB per page, otherwise the Markdown copy keeps only notes, verdicts
+and file names), <code>always</code> or <code>never</code>.</p>
 <p><strong>Export</strong>: the same Markdown notes file the reader writes today, plus one embedded block:</p>
 <pre><code class="language-text">&lt;!-- review-notes {&quot;v&quot;:1,&quot;page&quot;:&quot;tavern-round-2&quot;,&quot;built&quot;:&quot;2026-11-19T17:30Z&quot;,
   &quot;items&quot;:{&quot;tavern&quot;:{&quot;verdict&quot;:&quot;fix&quot;,&quot;note&quot;:&quot;door too small&quot;,&quot;compare&quot;:[&quot;v1&quot;,&quot;v2&quot;],
@@ -571,7 +577,9 @@ becomes a speech-bubble SVG labelled "Comment on this".</p></div>
   same count.</li>
 <li><strong>Answering</strong>: the milestone page (or a single answer in chat, applied with
   <code>open_items.py answer ID --verdict … --note …</code>) moves the item to
-  <code>arsenal/evidence/decisions.jsonl</code> with the verdict, the date and who answered. A <code>fix</code>
+  <code>arsenal/evidence/decisions.jsonl</code> with the verdict, the date and who answered, and
+  regenerates <code>arsenal/evidence/decisions.md</code>, a short readable log for people browsing
+  the repository. A <code>fix</code>
   verdict also prints a ready-to-queue task line; a <code>not-a-bug</code> verdict is the input that
   tunes the check that raised it.</li>
 <li><strong>Relation to the digest</strong>: a digest question is about one PR and dies with it; an open
@@ -580,13 +588,7 @@ becomes a speech-bubble SVG labelled "Comment on this".</p></div>
 </ul>
 <p><strong>Immediate next action</strong>: on approval, <code>design</code> writes the plan; its first task is the
 review-notes v1 format and the shared page core, adopted by the reader.</p>
-<p><strong>Open questions</strong>:
-- [ ] Does <code>proofsheet</code> ship in the default-on <code>workflow</code> section (recommended: yes; its
-      listing costs about 40 tokens and nothing resident), or in its own default-off one?
-- [ ] Is 20 MB the right point to switch to linked media, given pages are often opened on a
-      phone?
-- [ ] Should the decision log stay JSONL only, or also render a short Markdown summary for
-      people browsing the repository?</p>
+<p><strong>Open questions</strong>: none. The r1 questions are decided as D-6 to D-8.</p>
 <p><strong>Decisions log</strong>:</p>
 <table>
 <thead>
@@ -628,6 +630,24 @@ review-notes v1 format and the shared page core, adopted by the reader.</p>
 <td>agreed</td>
 <td>2026-11-19</td>
 </tr>
+<tr>
+<td>D-6</td>
+<td>Option B; <code>proofsheet</code> ships in the default-on <code>workflow</code> section</td>
+<td>agreed</td>
+<td>2026-11-19</td>
+</tr>
+<tr>
+<td>D-7</td>
+<td>Linked media past 20 MB; the repository copy of media is optional (<code>proofsheet-repo-media</code>)</td>
+<td>agreed</td>
+<td>2026-11-19</td>
+</tr>
+<tr>
+<td>D-8</td>
+<td>The decision log is JSONL plus a generated Markdown summary</td>
+<td>agreed</td>
+<td>2026-11-19</td>
+</tr>
 </tbody>
 </table>
 <blockquote>
@@ -656,7 +676,7 @@ review-notes v1 format and the shared page core, adopted by the reader.</p>
 <script>var SPEC_SEED_NOTES={};</script>
 <script>
 (function(){
-  var NS = 'proofsheet-proofsheet-spec-v1:';
+  var NS = 'proofsheet-proofsheet-spec-v2:';
   // A reviewed copy (--bake) shows only the notes it was built with: nothing from
   // this browser's storage, nothing editable.
   var BAKED = false;
@@ -838,7 +858,7 @@ review-notes v1 format and the shared page core, adopted by the reader.</p>
   function today(){var d=new Date();return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());}
   function stamp(){var d=new Date();return today()+'-'+pad(d.getHours())+pad(d.getMinutes());}
   // Named like the reader, <repo>-<doc>-v<N>-<YYYY-MM-DD-HHMM>-notes.md, stamped at export.
-  function exportName(){return 'claude-arsenal-spec-v1-'+stamp()+'-notes.md';}
+  function exportName(){return 'claude-arsenal-spec-v2-'+stamp()+'-notes.md';}
 
   function buildExport(){
     var byPart={},order=[],data={},n=0;
@@ -864,7 +884,7 @@ review-notes v1 format and the shared page core, adopted by the reader.</p>
       });
     });
     // Which page wrote this, so an import into a different page can say so.
-    lines.push('<!-- SPEC-NOTES-DOC claude-arsenal-spec-v1 -->');
+    lines.push('<!-- SPEC-NOTES-DOC claude-arsenal-spec-v2 -->');
     lines.push('<!-- SPEC-NOTES-DATA');
     lines.push(JSON.stringify(data));
     lines.push('-->');
@@ -964,8 +984,8 @@ review-notes v1 format and the shared page core, adopted by the reader.</p>
       }catch(err){obj=null;}
       if(!obj){toast('Could not read notes from that file');return;}
       var dm=/^<!-- SPEC-NOTES-DOC (\S+) -->/m.exec(txt);
-      if(dm&&dm[1]!=='claude-arsenal-spec-v1'&&
-         !confirm('That file holds notes for '+dm[1]+', not for this page (claude-arsenal-spec-v1). Import anyway?'))return;
+      if(dm&&dm[1]!=='claude-arsenal-spec-v2'&&
+         !confirm('That file holds notes for '+dm[1]+', not for this page (claude-arsenal-spec-v2). Import anyway?'))return;
       var r=applyData(obj);
       toast('Imported '+r.applied+' note'+(r.applied===1?'':'s')+
             (r.skipped?' ('+r.skipped+' skipped — not text)':''));

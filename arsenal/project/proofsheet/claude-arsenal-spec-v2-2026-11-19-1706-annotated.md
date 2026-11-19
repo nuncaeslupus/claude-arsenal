@@ -1,21 +1,31 @@
-# proofsheet — Specification
+# proofsheet — Specification (annotated edition)
 
-> Readable copy of the specification: the document and its pictures. Generated 2026-11-19. The annotatable version is [`claude-arsenal-spec-v1-2026-11-19-1659-reader.html`](claude-arsenal-spec-v1-2026-11-19-1659-reader.html).
+> Generated 2026-11-19. This is the document with a **note slot** after every section that has text of its own. Read it in any Markdown app. To annotate, replace the `_(your notes…)_` placeholder under any section. When done, send the file back — notes are acted on.
+
+---
+
+# Spec
 
 ## Preamble & scope
 
 **Date**: 2026-11-19
 **Ticket / PR**: none yet (follows `references/helmwork.md`, PR #642)
 **Author**: Claude
-**Revision**: 1
-**Status**: draft
+**Revision**: 2
+**Status**: approved (2026-11-19, revision 2) — without annotations (answers given in chat, recorded in r2 and D-6 to D-8)
 **Revision log**:
 - r1 — first draft
+- r2 — applied the reviewer's chat answers: Option B; `workflow` section; linked media past 20 MB and an optional repository copy; decision log also rendered as Markdown
 
 > Review record. Each round of reviewer notes makes a new revision: bump
 > **Revision**, add a log line naming the export it applied, and commit that
 > export beside this file in the same commit. On approval set **Status** to
 > `approved (YYYY-MM-DD, revision N)`.
+
+<!-- -->
+
+> **✎ Notes** · `SPEC · intro`
+> _(your notes here — replace this line)_
 
 ## §1 Problem statement
 
@@ -67,6 +77,11 @@ tool outside this bundle.
 - [ ] A milestone evidence page is built from the open-items store in one command, and
       importing its export closes the items it decided.
 
+<!-- -->
+
+> **✎ Notes** · `SPEC §1`
+> _(your notes here — replace this line)_
+
 ## §2 Systems & Impact
 
 | System | Type | Role | Needs changes? | Impact | Severity |
@@ -87,6 +102,11 @@ page changes look slightly), Performance (page size grows with embedded media; s
 Risk of inaction (review of non-text output stays prose-from-memory; open questions keep
 getting lost between PRs).
 
+<!-- -->
+
+> **✎ Notes** · `SPEC §2`
+> _(your notes here — replace this line)_
+
 ## §3 Options
 
 ### Option A: Extend the reader in place (Conservative)
@@ -98,6 +118,11 @@ getting lost between PRs).
 - **Tradeoffs**: Quickest, but a 2,000-line script built around parsing Markdown sections
   takes on a second, unrelated input model. The stylesheet split with the digest stays.
 - **Compatibility**: Full.
+
+<!-- -->
+
+> **✎ Notes** · `SPEC › Option A: Extend the reader in place (Conservative)`
+> _(your notes here — replace this line)_
 
 ### Option B: Shared page core, two front ends (Recommended)
 
@@ -114,6 +139,11 @@ getting lost between PRs).
 - **Compatibility**: Old readers and their exports keep working; the new export carries the
   old Markdown plus an embedded JSON block.
 
+<!-- -->
+
+> **✎ Notes** · `SPEC › Option B: Shared page core, two front ends (Recommended)`
+> _(your notes here — replace this line)_
+
 ### Option C: A standalone review app (Rejected by decision)
 
 - **Description**: A served web app with regions, pixel marking, an issue list.
@@ -122,6 +152,11 @@ getting lost between PRs).
 - **Tradeoffs**: This is the rich review tool Helmwork places outside the bundle. Listed
   only to fix the boundary.
 - **Compatibility**: n/a
+
+<!-- -->
+
+> **✎ Notes** · `SPEC › Option C: A standalone review app (Rejected by decision)`
+> _(your notes here — replace this line)_
 
 ### Comparison
 
@@ -133,10 +168,20 @@ getting lost between PRs).
 | Compatibility | Full | Full | n/a |
 | Maintenance | Worsens with each media kind | One core, thin front ends | A second product |
 
+<!-- -->
+
+> **✎ Notes** · `SPEC › Comparison`
+> _(your notes here — replace this line)_
+
 ## §4 Recommendation
 
 **Recommended option**: Option B — the same small cost now buys one look and one notes
 format for every page, which is what makes reviews feel like one tool.
+
+<!-- -->
+
+> **✎ Notes** · `SPEC §4`
+> _(your notes here — replace this line)_
 
 ### What proofsheet is
 
@@ -174,8 +219,14 @@ more versions, a compare view: two versions side by side, any pair chosen from a
 images also get an A/B flip in place. Text items keep paragraph comments.
 
 **Media**: embedded as data URIs by default, so the page is one file. Past 20 MB of media
-in total, `build` stops and asks for `--link-media`, which references files beside the page
-instead and says so in the page header.
+in total, `build` switches to linked media: files are referenced beside the page, and the
+page header says so (`--embed-media` / `--link-media` force either way).
+
+**Repository copy is optional.** Like the reader's GitHub copy, `build --repo-copy` writes
+a Markdown version with its media for committing. Media can make a repository grow fast,
+so a host chooses with `proofsheet-repo-media` in `arsenal/config.toml`: `auto` (default:
+commit media up to 5 MB per page, otherwise the Markdown copy keeps only notes, verdicts
+and file names), `always` or `never`.
 
 **Export**: the same Markdown notes file the reader writes today, plus one embedded block:
 
@@ -191,11 +242,21 @@ reader, by section key), each with `verdict` (or null), `note`, and `blocks` (pa
 comments: `quote` + `note`). The reader writes it with `verdict: null`; the digest maps
 approve / deny / question to `fine` / `fix` / a note with `verdict: null`.
 
+<!-- -->
+
+> **✎ Notes** · `SPEC › What proofsheet is`
+> _(your notes here — replace this line)_
+
 ### What proofsheet does not do
 
 No regions or drawing, no pixel-level marking, no audio or video editing, no issue list
 inside the page, no server, no accounts. A feature that needs one of these, or breaks the
 size budget, belongs to the rich review tool.
+
+<!-- -->
+
+> **✎ Notes** · `SPEC › What proofsheet does not do`
+> _(your notes here — replace this line)_
 
 ### One look
 
@@ -204,6 +265,11 @@ controls, save/export/import and the speech-bubble comment icon. Every generator
 them at build time, so pages stay single files. Light theme first, dark through the same
 tokens. Fixes on the way: note fields take the UI font on every page; the ✎ pencil
 becomes a speech-bubble SVG labelled "Comment on this".
+
+<!-- -->
+
+> **✎ Notes** · `SPEC › One look`
+> _(your notes here — replace this line)_
 
 ### Open items between PRs
 
@@ -216,7 +282,9 @@ becomes a speech-bubble SVG labelled "Comment on this".
   same count.
 - **Answering**: the milestone page (or a single answer in chat, applied with
   `open_items.py answer ID --verdict … --note …`) moves the item to
-  `arsenal/evidence/decisions.jsonl` with the verdict, the date and who answered. A `fix`
+  `arsenal/evidence/decisions.jsonl` with the verdict, the date and who answered, and
+  regenerates `arsenal/evidence/decisions.md`, a short readable log for people browsing
+  the repository. A `fix`
   verdict also prints a ready-to-queue task line; a `not-a-bug` verdict is the input that
   tunes the check that raised it.
 - **Relation to the digest**: a digest question is about one PR and dies with it; an open
@@ -226,13 +294,7 @@ becomes a speech-bubble SVG labelled "Comment on this".
 **Immediate next action**: on approval, `design` writes the plan; its first task is the
 review-notes v1 format and the shared page core, adopted by the reader.
 
-**Open questions**:
-- [ ] Does `proofsheet` ship in the default-on `workflow` section (recommended: yes; its
-      listing costs about 40 tokens and nothing resident), or in its own default-off one?
-- [ ] Is 20 MB the right point to switch to linked media, given pages are often opened on a
-      phone?
-- [ ] Should the decision log stay JSONL only, or also render a short Markdown summary for
-      people browsing the repository?
+**Open questions**: none. The r1 questions are decided as D-6 to D-8.
 
 **Decisions log**:
 
@@ -243,6 +305,15 @@ review-notes v1 format and the shared page core, adopted by the reader.
 | D-3 | Only Helmwork and proofsheet are named; domain kits are sections named for their domain | agreed | 2026-11-19 |
 | D-4 | Open items wait in a repository file each PR appends to, shown on the board; answers move to a decision log | agreed | 2026-11-19 |
 | D-5 | One stylesheet for all bundle HTML; speech-bubble icon replaces the pencil | agreed | 2026-11-19 |
+| D-6 | Option B; `proofsheet` ships in the default-on `workflow` section | agreed | 2026-11-19 |
+| D-7 | Linked media past 20 MB; the repository copy of media is optional (`proofsheet-repo-media`) | agreed | 2026-11-19 |
+| D-8 | The decision log is JSONL plus a generated Markdown summary | agreed | 2026-11-19 |
 
 
 > Sections 5–6 (contracts, risks) are appended by `design`.
+
+<!-- -->
+
+> **✎ Notes** · `SPEC › Open items between PRs`
+> _(your notes here — replace this line)_
+
