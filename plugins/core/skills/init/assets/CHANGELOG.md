@@ -18,6 +18,18 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [5.33.0] - 2026-11-19
+
+- **New script `scripts/open_items.py`** — open review items (questions, doubtful results
+  with evidence) now wait in the repository instead of in a conversation:
+  `arsenal/evidence/open.jsonl`, one line per item, appended by the PR that raises it.
+  `answer ID --verdict fine|fix|not-a-bug` records an item in `decisions.jsonl` (both files are
+  append-only, so an answer and a new item from parallel PRs never collide) and
+  regenerates `decisions.md`; a `fix` prints a ready-to-run `create_task.py` line.
+  `apply EXPORT` answers every item a review page's export decided. The first write adds
+  `merge=union` for the store to the repository root's `.gitattributes`.
+  `ARSENAL_HOME` relocates the store.
+
 ## [5.32.1] - 2026-11-19
 
 - **New script `scripts/review_notes.py`** — the review-notes v1 format that review pages

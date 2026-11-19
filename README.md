@@ -22,7 +22,7 @@ so every session, local or cloud, loads the same skills.
 Inside a Claude Code session:
 
 ```text
-/plugin marketplace add https://github.com/nuncaeslupus/claude-arsenal.git#v5.32.1
+/plugin marketplace add https://github.com/nuncaeslupus/claude-arsenal.git#v5.33.0
 /plugin install core@claude-arsenal
 ```
 
@@ -47,7 +47,7 @@ Without Claude Code on the machine (CI, a fresh container), run the same install
 from a clone pinned to a release tag:
 
 ```bash
-git clone --depth 1 --branch v5.32.1 https://github.com/nuncaeslupus/claude-arsenal.git /tmp/arsenal
+git clone --depth 1 --branch v5.33.0 https://github.com/nuncaeslupus/claude-arsenal.git /tmp/arsenal
 python3 /tmp/arsenal/plugins/core/skills/init/scripts/init.py --repo-path . --profile general
 ```
 
