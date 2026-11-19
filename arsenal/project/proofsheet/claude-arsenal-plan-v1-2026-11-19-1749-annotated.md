@@ -12,7 +12,7 @@
 **Specification**: `arsenal/project/proofsheet/spec.md`
 **Author**: Claude
 **Revision**: 1
-**Status**: draft
+**Status**: approved (2026-11-19, revision 1) — without annotations
 **Revision log**:
 - r1 — first draft
 

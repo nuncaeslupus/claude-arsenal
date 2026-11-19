@@ -1,6 +1,6 @@
 # proofsheet — Plan
 
-> Readable copy of the plan: the document and its pictures. Generated 2026-11-19. The annotatable version is [`claude-arsenal-plan-v1-2026-11-19-1707-reader.html`](claude-arsenal-plan-v1-2026-11-19-1707-reader.html).
+> Readable copy of the plan: the document and its pictures. Generated 2026-11-19. The annotatable version is [`claude-arsenal-plan-v1-2026-11-19-1749-reader.html`](claude-arsenal-plan-v1-2026-11-19-1749-reader.html).
 
 ## Preamble & scope
 
@@ -8,7 +8,7 @@
 **Specification**: `arsenal/project/proofsheet/spec.md`
 **Author**: Claude
 **Revision**: 1
-**Status**: draft
+**Status**: approved (2026-11-19, revision 1) — without annotations
 **Revision log**:
 - r1 — first draft
 
@@ -82,7 +82,7 @@ separate `open_items.py` owns the open-items store; `proofsheet.py milestone` re
 
 ### Dependency graph
 
-![diagram](claude-arsenal-plan-v1-2026-11-19-1707-img/01-dependency-graph-diagram.svg)
+![diagram](claude-arsenal-plan-v1-2026-11-19-1749-img/01-dependency-graph-diagram.svg)
 
 ## Evidence log
 
