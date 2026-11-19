@@ -5,6 +5,7 @@ label: "proofsheet: notes format"
 priority: 10
 tags: [proofsheet]
 workspace: proofsheet
+status: merged
 ---
 
 Plan row T1 in `arsenal/project/proofsheet/plan.md` (spec: `arsenal/project/proofsheet/spec.md`). Tests named in that row are written failing first.

@@ -18,6 +18,14 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [5.32.1] - 2026-11-19
+
+- **New script `scripts/review_notes.py`** — the review-notes v1 format that review pages
+  will share: notes and per-item verdicts (`fine` / `fix` / `not-a-bug`) embedded in an
+  exported notes file as one `<!-- review-notes {...} -->` block.
+  `review_notes.py parse EXPORT` prints it as JSON. First step of the proofsheet plan;
+  nothing uses it yet.
+
 ## [5.32.0] - 2026-11-19
 
 - **New reference: `references/helmwork.md`** — the working method behind the bundle:
