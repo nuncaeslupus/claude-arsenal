@@ -1,10 +1,6 @@
-# proofsheet — Specification (annotated edition)
+# proofsheet — Specification
 
-> Generated 2026-11-19. This is the document with a **note slot** after every section that has text of its own. Read it in any Markdown app. To annotate, replace the `_(your notes…)_` placeholder under any section. When done, send the file back — notes are acted on.
-
----
-
-# Spec
+> Readable copy of the specification: the document and its pictures. Generated 2026-11-19. The annotatable version is [`claude-arsenal-spec-v2-2026-11-19-1707-reader.html`](claude-arsenal-spec-v2-2026-11-19-1707-reader.html).
 
 ## Preamble & scope
 
@@ -21,11 +17,6 @@
 > **Revision**, add a log line naming the export it applied, and commit that
 > export beside this file in the same commit. On approval set **Status** to
 > `approved (YYYY-MM-DD, revision N)`.
-
-<!-- -->
-
-> **✎ Notes** · `SPEC · intro`
-> _(your notes here — replace this line)_
 
 ## §1 Problem statement
 
@@ -77,11 +68,6 @@ tool outside this bundle.
 - [ ] A milestone evidence page is built from the open-items store in one command, and
       importing its export closes the items it decided.
 
-<!-- -->
-
-> **✎ Notes** · `SPEC §1`
-> _(your notes here — replace this line)_
-
 ## §2 Systems & Impact
 
 | System | Type | Role | Needs changes? | Impact | Severity |
@@ -102,11 +88,6 @@ page changes look slightly), Performance (page size grows with embedded media; s
 Risk of inaction (review of non-text output stays prose-from-memory; open questions keep
 getting lost between PRs).
 
-<!-- -->
-
-> **✎ Notes** · `SPEC §2`
-> _(your notes here — replace this line)_
-
 ## §3 Options
 
 ### Option A: Extend the reader in place (Conservative)
@@ -118,11 +99,6 @@ getting lost between PRs).
 - **Tradeoffs**: Quickest, but a 2,000-line script built around parsing Markdown sections
   takes on a second, unrelated input model. The stylesheet split with the digest stays.
 - **Compatibility**: Full.
-
-<!-- -->
-
-> **✎ Notes** · `SPEC › Option A: Extend the reader in place (Conservative)`
-> _(your notes here — replace this line)_
 
 ### Option B: Shared page core, two front ends (Recommended)
 
@@ -139,11 +115,6 @@ getting lost between PRs).
 - **Compatibility**: Old readers and their exports keep working; the new export carries the
   old Markdown plus an embedded JSON block.
 
-<!-- -->
-
-> **✎ Notes** · `SPEC › Option B: Shared page core, two front ends (Recommended)`
-> _(your notes here — replace this line)_
-
 ### Option C: A standalone review app (Rejected by decision)
 
 - **Description**: A served web app with regions, pixel marking, an issue list.
@@ -152,11 +123,6 @@ getting lost between PRs).
 - **Tradeoffs**: This is the rich review tool Helmwork places outside the bundle. Listed
   only to fix the boundary.
 - **Compatibility**: n/a
-
-<!-- -->
-
-> **✎ Notes** · `SPEC › Option C: A standalone review app (Rejected by decision)`
-> _(your notes here — replace this line)_
 
 ### Comparison
 
@@ -168,20 +134,10 @@ getting lost between PRs).
 | Compatibility | Full | Full | n/a |
 | Maintenance | Worsens with each media kind | One core, thin front ends | A second product |
 
-<!-- -->
-
-> **✎ Notes** · `SPEC › Comparison`
-> _(your notes here — replace this line)_
-
 ## §4 Recommendation
 
 **Recommended option**: Option B — the same small cost now buys one look and one notes
 format for every page, which is what makes reviews feel like one tool.
-
-<!-- -->
-
-> **✎ Notes** · `SPEC §4`
-> _(your notes here — replace this line)_
 
 ### What proofsheet is
 
@@ -242,21 +198,11 @@ reader, by section key), each with `verdict` (or null), `note`, and `blocks` (pa
 comments: `quote` + `note`). The reader writes it with `verdict: null`; the digest maps
 approve / deny / question to `fine` / `fix` / a note with `verdict: null`.
 
-<!-- -->
-
-> **✎ Notes** · `SPEC › What proofsheet is`
-> _(your notes here — replace this line)_
-
 ### What proofsheet does not do
 
 No regions or drawing, no pixel-level marking, no audio or video editing, no issue list
 inside the page, no server, no accounts. A feature that needs one of these, or breaks the
 size budget, belongs to the rich review tool.
-
-<!-- -->
-
-> **✎ Notes** · `SPEC › What proofsheet does not do`
-> _(your notes here — replace this line)_
 
 ### One look
 
@@ -265,11 +211,6 @@ controls, save/export/import and the speech-bubble comment icon. Every generator
 them at build time, so pages stay single files. Light theme first, dark through the same
 tokens. Fixes on the way: note fields take the UI font on every page; the ✎ pencil
 becomes a speech-bubble SVG labelled "Comment on this".
-
-<!-- -->
-
-> **✎ Notes** · `SPEC › One look`
-> _(your notes here — replace this line)_
 
 ### Open items between PRs
 
@@ -309,11 +250,75 @@ review-notes v1 format and the shared page core, adopted by the reader.
 | D-7 | Linked media past 20 MB; the repository copy of media is optional (`proofsheet-repo-media`) | agreed | 2026-11-19 |
 | D-8 | The decision log is JSONL plus a generated Markdown summary | agreed | 2026-11-19 |
 
+## §5 Contracts
 
-> Sections 5–6 (contracts, risks) are appended by `design`.
+### Command-line contracts
 
-<!-- -->
+All commands are non-interactive, print a one-line result (or `--json`), and exit 0 on
+success, 1 on a check that failed, 2 on a usage error.
 
-> **✎ Notes** · `SPEC › Open items between PRs`
-> _(your notes here — replace this line)_
+| Command | Input | Output |
+|---------|-------|--------|
+| `proofsheet.py build MANIFEST [--out FILE] [--embed-media \| --link-media] [--repo-copy]` | manifest (§4) | one HTML page; with `--repo-copy` a Markdown copy plus media per `proofsheet-repo-media` |
+| `proofsheet.py import EXPORT [--json]` | an exported notes file | the review-notes v1 object |
+| `proofsheet.py milestone [--out FILE]` | `arsenal/evidence/open.jsonl` | one HTML page, one item per open item |
+| `open_items.py add --what … --where … [--kind question\|evidence] [--evidence PATH…] [--severity …] [--confidence …] [--fix …] [--pr N]` | — | appends one line; prints the new id |
+| `open_items.py list [--json]` | the store | open items, oldest first |
+| `open_items.py answer ID --verdict fine\|fix\|not-a-bug [--note …] [--by …]` | the store | moves the item to the decision log, regenerates `decisions.md`; for `fix`, prints a task line |
+| `open_items.py apply EXPORT` | a milestone page export | `answer` for every item with a verdict |
 
+### Data formats
+
+**review-notes v1** — the block every page exports, embedded in its Markdown notes file:
+
+```json
+{"v": 1, "page": "slug", "built": "ISO-8601", "source": "sha256 of the input",
+ "items": {"<item id or section key>": {
+     "verdict": "fine | fix | not-a-bug | null",
+     "note": "text", "compare": ["v1", "v2"],
+     "blocks": [{"quote": "first 120 chars of the paragraph", "note": "text"}]}}}
+```
+
+Unknown keys are kept on import; a reader built before v1 still imports through its
+existing Markdown parser.
+
+**Open item** (one line of `arsenal/evidence/open.jsonl`):
+
+```json
+{"id": "oi-1a2b3c4d", "opened": "2026-11-19", "pr": 42, "kind": "evidence",
+ "what": "door reads smaller than the character", "where": "scenes/tavern.png",
+ "evidence": ["arsenal/evidence/files/oi-1a2b3c4d/tavern.png"],
+ "severity": "medium", "confidence": "high", "fix": "scale the door to 1.3x"}
+```
+
+**Decision** (one line of `arsenal/evidence/decisions.jsonl`): the open item plus
+`{"verdict", "note", "answered", "by"}`. `decisions.md` is generated from it, newest first.
+
+### Configuration (arsenal/config.toml)
+
+```toml
+proofsheet-repo-media = "auto"   # auto | always | never — media in the committed Markdown copy
+proofsheet-link-mb = 20          # switch to linked media past this total; starting value
+```
+
+### Files shipped
+
+| Path | Change |
+|------|--------|
+| `assets/page-core.css`, `assets/page-core.js` | new; inlined by every generator |
+| `scripts/page_core.py`, `scripts/review_notes.py` | new; shared helpers |
+| `scripts/proofsheet.py`, `scripts/open_items.py` | new |
+| `scripts/create_reader.py`, `scripts/digest.py`, `scripts/query_status.py` | adopt the above |
+| `skills/proofsheet/SKILL.md` | new, `section: workflow` |
+
+## §6 Risks & Validation
+
+| Risk | Likelihood | Impact | Mitigation | Validation |
+|------|-----------|--------|------------|------------|
+| Moving the reader's CSS/JS breaks existing reader behaviour (autosave, block notes, bake) | Med | High | Move without changing behaviour first; the reader's existing tests must pass unchanged before any restyle | unit + the existing headless reader tests |
+| Old exports stop importing | Low | High | Keep the Markdown parser; v1 block is additive | round-trip test over a pre-v1 fixture |
+| Pages with embedded media get too heavy for a phone | Med | Med | Linked media past `proofsheet-link-mb`; header says so | test that 21 MB of fixtures switches mode |
+| Committed media grows host repositories | Med | Med | `proofsheet-repo-media = auto` caps it at 5 MB per page | unit test on the three settings |
+| Proofsheet creeps towards a web app | Med | Med | Size budget as a CI check; the out-of-scope list in §4 | `make proofsheet-budget` in CI |
+| `open.jsonl` merge conflicts when two PRs append | Med | Low | One item per line, append-only; `.gitattributes` `merge=union` for both JSONL files | test that two appended branches merge cleanly |
+| Resident context grows | Low | Med | Skill in `workflow` section; nothing added to `AGENTS.md` beyond one table row | `make context-budget` |

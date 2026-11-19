@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="color-scheme" content="light">
-<meta name="arsenal-source-sha256" content="ee962aa2823061544f1c4e74dde513119349bd4361d6a0456d0fcdc0a1475a20">
+<meta name="arsenal-source-sha256" content="afe4454423e1f72a5568d58606202f86edb0cefa8376a90d36dc7c1810926457">
 <title>proofsheet — Specification (annotatable)</title>
 <style>
 :root{
@@ -199,7 +199,7 @@ body.baked .bn-btn,body.baked #warnbar{display:none!important}
     <button class="btn primary" id="btn-export">Save / Export</button>
   </div>
 </div>
-<div class="statusbar"><div class="wrap"><span class="count" id="count">0 / 12 notes</span><span class="hint"> · notes save automatically; <strong>Save / Export</strong> keeps a file you can send back</span></div></div>
+<div class="statusbar"><div class="wrap"><span class="count" id="count">0 / 17 notes</span><span class="hint"> · notes save automatically; <strong>Save / Export</strong> keeps a file you can send back</span></div></div>
 <div id="warnbar"><div class="wrap"><strong>Heads up —</strong> this browser isn't storing your notes automatically (private/incognito mode or restricted file view). Tap <strong>Save / Export</strong> regularly.</div></div>
 
 <div class="wrap">
@@ -232,6 +232,12 @@ body.baked .bn-btn,body.baked #warnbar{display:none!important}
 <li class="sub"><a href="#s-spec-what-proofsheet-does-not-do">What proofsheet does not do</a></li>
 <li class="sub"><a href="#s-spec-one-look">One look</a></li>
 <li class="sub"><a href="#s-spec-open-items-between-prs">Open items between PRs</a></li>
+<li><a href="#s-spec-5">§5 Contracts</a></li>
+<li class="sub"><a href="#s-spec-command-line-contracts">Command-line contracts</a></li>
+<li class="sub"><a href="#s-spec-data-formats">Data formats</a></li>
+<li class="sub"><a href="#s-spec-configuration-arsenal-config-tom">Configuration (arsenal/config.toml)</a></li>
+<li class="sub"><a href="#s-spec-files-shipped">Files shipped</a></li>
+<li><a href="#s-spec-6">§6 Risks &amp; Validation</a></li>
 </ul>
 </details>
   <section class="part">
@@ -649,11 +655,191 @@ review-notes v1 format and the shared page core, adopted by the reader.</p>
 <td>2026-11-19</td>
 </tr>
 </tbody>
-</table>
-<blockquote>
-<p>Sections 5–6 (contracts, risks) are appended by <code>design</code>.</p>
-</blockquote></div>
+</table></div>
 <div class="note" data-for="s-spec-open-items-between-prs"><label class="note-head" for="n-s-spec-open-items-between-prs"><span class="note-ico" aria-hidden="true">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC › Open items between PRs</span></label><textarea class="note-ta" data-key="s-spec-open-items-between-prs" id="n-s-spec-open-items-between-prs" data-label="Open items between PRs" data-part="Spec" rows="1" placeholder="Add a note on this section…"></textarea></div>
+</article>
+<article class="sec l2 bare" id="s-spec-5" data-ref="SPEC §5" data-label="§5 Contracts" data-part="Spec">
+<h3 class="sec-h"><span class="chip">§5</span><span class="sec-title">Contracts</span></h3>
+</article>
+<article class="sec l3" id="s-spec-command-line-contracts" data-ref="SPEC › Command-line contracts" data-label="Command-line contracts" data-part="Spec">
+<h4 class="sec-h"><span class="chip">▸</span><span class="sec-title">Command-line contracts</span></h4>
+<div class="sec-body"><p>All commands are non-interactive, print a one-line result (or <code>--json</code>), and exit 0 on
+success, 1 on a check that failed, 2 on a usage error.</p>
+<table>
+<thead>
+<tr>
+<th>Command</th>
+<th>Input</th>
+<th>Output</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>proofsheet.py build MANIFEST [--out FILE] [--embed-media \| --link-media] [--repo-copy]</code></td>
+<td>manifest (§4)</td>
+<td>one HTML page; with <code>--repo-copy</code> a Markdown copy plus media per <code>proofsheet-repo-media</code></td>
+</tr>
+<tr>
+<td><code>proofsheet.py import EXPORT [--json]</code></td>
+<td>an exported notes file</td>
+<td>the review-notes v1 object</td>
+</tr>
+<tr>
+<td><code>proofsheet.py milestone [--out FILE]</code></td>
+<td><code>arsenal/evidence/open.jsonl</code></td>
+<td>one HTML page, one item per open item</td>
+</tr>
+<tr>
+<td><code>open_items.py add --what … --where … [--kind question\|evidence] [--evidence PATH…] [--severity …] [--confidence …] [--fix …] [--pr N]</code></td>
+<td>—</td>
+<td>appends one line; prints the new id</td>
+</tr>
+<tr>
+<td><code>open_items.py list [--json]</code></td>
+<td>the store</td>
+<td>open items, oldest first</td>
+</tr>
+<tr>
+<td><code>open_items.py answer ID --verdict fine\|fix\|not-a-bug [--note …] [--by …]</code></td>
+<td>the store</td>
+<td>moves the item to the decision log, regenerates <code>decisions.md</code>; for <code>fix</code>, prints a task line</td>
+</tr>
+<tr>
+<td><code>open_items.py apply EXPORT</code></td>
+<td>a milestone page export</td>
+<td><code>answer</code> for every item with a verdict</td>
+</tr>
+</tbody>
+</table></div>
+<div class="note" data-for="s-spec-command-line-contracts"><label class="note-head" for="n-s-spec-command-line-contracts"><span class="note-ico" aria-hidden="true">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC › Command-line contracts</span></label><textarea class="note-ta" data-key="s-spec-command-line-contracts" id="n-s-spec-command-line-contracts" data-label="Command-line contracts" data-part="Spec" rows="1" placeholder="Add a note on this section…"></textarea></div>
+</article>
+<article class="sec l3" id="s-spec-data-formats" data-ref="SPEC › Data formats" data-label="Data formats" data-part="Spec">
+<h4 class="sec-h"><span class="chip">▸</span><span class="sec-title">Data formats</span></h4>
+<div class="sec-body"><p><strong>review-notes v1</strong> — the block every page exports, embedded in its Markdown notes file:</p>
+<pre><code class="language-json">{&quot;v&quot;: 1, &quot;page&quot;: &quot;slug&quot;, &quot;built&quot;: &quot;ISO-8601&quot;, &quot;source&quot;: &quot;sha256 of the input&quot;,
+ &quot;items&quot;: {&quot;&lt;item id or section key&gt;&quot;: {
+     &quot;verdict&quot;: &quot;fine | fix | not-a-bug | null&quot;,
+     &quot;note&quot;: &quot;text&quot;, &quot;compare&quot;: [&quot;v1&quot;, &quot;v2&quot;],
+     &quot;blocks&quot;: [{&quot;quote&quot;: &quot;first 120 chars of the paragraph&quot;, &quot;note&quot;: &quot;text&quot;}]}}}
+</code></pre>
+<p>Unknown keys are kept on import; a reader built before v1 still imports through its
+existing Markdown parser.</p>
+<p><strong>Open item</strong> (one line of <code>arsenal/evidence/open.jsonl</code>):</p>
+<pre><code class="language-json">{&quot;id&quot;: &quot;oi-1a2b3c4d&quot;, &quot;opened&quot;: &quot;2026-11-19&quot;, &quot;pr&quot;: 42, &quot;kind&quot;: &quot;evidence&quot;,
+ &quot;what&quot;: &quot;door reads smaller than the character&quot;, &quot;where&quot;: &quot;scenes/tavern.png&quot;,
+ &quot;evidence&quot;: [&quot;arsenal/evidence/files/oi-1a2b3c4d/tavern.png&quot;],
+ &quot;severity&quot;: &quot;medium&quot;, &quot;confidence&quot;: &quot;high&quot;, &quot;fix&quot;: &quot;scale the door to 1.3x&quot;}
+</code></pre>
+<p><strong>Decision</strong> (one line of <code>arsenal/evidence/decisions.jsonl</code>): the open item plus
+<code>{"verdict", "note", "answered", "by"}</code>. <code>decisions.md</code> is generated from it, newest first.</p></div>
+<div class="note" data-for="s-spec-data-formats"><label class="note-head" for="n-s-spec-data-formats"><span class="note-ico" aria-hidden="true">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC › Data formats</span></label><textarea class="note-ta" data-key="s-spec-data-formats" id="n-s-spec-data-formats" data-label="Data formats" data-part="Spec" rows="1" placeholder="Add a note on this section…"></textarea></div>
+</article>
+<article class="sec l3" id="s-spec-configuration-arsenal-config-tom" data-ref="SPEC › Configuration (arsenal/config.toml)" data-label="Configuration (arsenal/config.toml)" data-part="Spec">
+<h4 class="sec-h"><span class="chip">▸</span><span class="sec-title">Configuration (<code>arsenal/config.toml</code>)</span></h4>
+<div class="sec-body"><pre><code class="language-toml">proofsheet-repo-media = &quot;auto&quot;   # auto | always | never — media in the committed Markdown copy
+proofsheet-link-mb = 20          # switch to linked media past this total; starting value
+</code></pre></div>
+<div class="note" data-for="s-spec-configuration-arsenal-config-tom"><label class="note-head" for="n-s-spec-configuration-arsenal-config-tom"><span class="note-ico" aria-hidden="true">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC › Configuration (arsenal/config.toml)</span></label><textarea class="note-ta" data-key="s-spec-configuration-arsenal-config-tom" id="n-s-spec-configuration-arsenal-config-tom" data-label="Configuration (arsenal/config.toml)" data-part="Spec" rows="1" placeholder="Add a note on this section…"></textarea></div>
+</article>
+<article class="sec l3" id="s-spec-files-shipped" data-ref="SPEC › Files shipped" data-label="Files shipped" data-part="Spec">
+<h4 class="sec-h"><span class="chip">▸</span><span class="sec-title">Files shipped</span></h4>
+<div class="sec-body"><table>
+<thead>
+<tr>
+<th>Path</th>
+<th>Change</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>assets/page-core.css</code>, <code>assets/page-core.js</code></td>
+<td>new; inlined by every generator</td>
+</tr>
+<tr>
+<td><code>scripts/page_core.py</code>, <code>scripts/review_notes.py</code></td>
+<td>new; shared helpers</td>
+</tr>
+<tr>
+<td><code>scripts/proofsheet.py</code>, <code>scripts/open_items.py</code></td>
+<td>new</td>
+</tr>
+<tr>
+<td><code>scripts/create_reader.py</code>, <code>scripts/digest.py</code>, <code>scripts/query_status.py</code></td>
+<td>adopt the above</td>
+</tr>
+<tr>
+<td><code>skills/proofsheet/SKILL.md</code></td>
+<td>new, <code>section: workflow</code></td>
+</tr>
+</tbody>
+</table></div>
+<div class="note" data-for="s-spec-files-shipped"><label class="note-head" for="n-s-spec-files-shipped"><span class="note-ico" aria-hidden="true">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC › Files shipped</span></label><textarea class="note-ta" data-key="s-spec-files-shipped" id="n-s-spec-files-shipped" data-label="Files shipped" data-part="Spec" rows="1" placeholder="Add a note on this section…"></textarea></div>
+</article>
+<article class="sec l2" id="s-spec-6" data-ref="SPEC §6" data-label="§6 Risks &amp; Validation" data-part="Spec">
+<h3 class="sec-h"><span class="chip">§6</span><span class="sec-title">Risks &amp; Validation</span></h3>
+<div class="sec-body"><table>
+<thead>
+<tr>
+<th>Risk</th>
+<th>Likelihood</th>
+<th>Impact</th>
+<th>Mitigation</th>
+<th>Validation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Moving the reader's CSS/JS breaks existing reader behaviour (autosave, block notes, bake)</td>
+<td>Med</td>
+<td>High</td>
+<td>Move without changing behaviour first; the reader's existing tests must pass unchanged before any restyle</td>
+<td>unit + the existing headless reader tests</td>
+</tr>
+<tr>
+<td>Old exports stop importing</td>
+<td>Low</td>
+<td>High</td>
+<td>Keep the Markdown parser; v1 block is additive</td>
+<td>round-trip test over a pre-v1 fixture</td>
+</tr>
+<tr>
+<td>Pages with embedded media get too heavy for a phone</td>
+<td>Med</td>
+<td>Med</td>
+<td>Linked media past <code>proofsheet-link-mb</code>; header says so</td>
+<td>test that 21 MB of fixtures switches mode</td>
+</tr>
+<tr>
+<td>Committed media grows host repositories</td>
+<td>Med</td>
+<td>Med</td>
+<td><code>proofsheet-repo-media = auto</code> caps it at 5 MB per page</td>
+<td>unit test on the three settings</td>
+</tr>
+<tr>
+<td>Proofsheet creeps towards a web app</td>
+<td>Med</td>
+<td>Med</td>
+<td>Size budget as a CI check; the out-of-scope list in §4</td>
+<td><code>make proofsheet-budget</code> in CI</td>
+</tr>
+<tr>
+<td><code>open.jsonl</code> merge conflicts when two PRs append</td>
+<td>Med</td>
+<td>Low</td>
+<td>One item per line, append-only; <code>.gitattributes</code> <code>merge=union</code> for both JSONL files</td>
+<td>test that two appended branches merge cleanly</td>
+</tr>
+<tr>
+<td>Resident context grows</td>
+<td>Low</td>
+<td>Med</td>
+<td>Skill in <code>workflow</code> section; nothing added to <code>AGENTS.md</code> beyond one table row</td>
+<td><code>make context-budget</code></td>
+</tr>
+</tbody>
+</table></div>
+<div class="note" data-for="s-spec-6"><label class="note-head" for="n-s-spec-6"><span class="note-ico" aria-hidden="true">✎</span><span class="note-label">Your note</span><span class="note-ref">SPEC §6</span></label><textarea class="note-ta" data-key="s-spec-6" id="n-s-spec-6" data-label="§6 Risks &amp; Validation" data-part="Spec" rows="1" placeholder="Add a note on this section…"></textarea></div>
 </article>
 </section>
 </div>

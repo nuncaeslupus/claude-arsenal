@@ -250,4 +250,76 @@ review-notes v1 format and the shared page core, adopted by the reader.
 
 ---
 
-> Sections 5–6 (contracts, risks) are appended by `design`.
+## 5. Contracts
+
+### Command-line contracts
+
+All commands are non-interactive, print a one-line result (or `--json`), and exit 0 on
+success, 1 on a check that failed, 2 on a usage error.
+
+| Command | Input | Output |
+|---------|-------|--------|
+| `proofsheet.py build MANIFEST [--out FILE] [--embed-media \| --link-media] [--repo-copy]` | manifest (§4) | one HTML page; with `--repo-copy` a Markdown copy plus media per `proofsheet-repo-media` |
+| `proofsheet.py import EXPORT [--json]` | an exported notes file | the review-notes v1 object |
+| `proofsheet.py milestone [--out FILE]` | `arsenal/evidence/open.jsonl` | one HTML page, one item per open item |
+| `open_items.py add --what … --where … [--kind question\|evidence] [--evidence PATH…] [--severity …] [--confidence …] [--fix …] [--pr N]` | — | appends one line; prints the new id |
+| `open_items.py list [--json]` | the store | open items, oldest first |
+| `open_items.py answer ID --verdict fine\|fix\|not-a-bug [--note …] [--by …]` | the store | moves the item to the decision log, regenerates `decisions.md`; for `fix`, prints a task line |
+| `open_items.py apply EXPORT` | a milestone page export | `answer` for every item with a verdict |
+
+### Data formats
+
+**review-notes v1** — the block every page exports, embedded in its Markdown notes file:
+
+```json
+{"v": 1, "page": "slug", "built": "ISO-8601", "source": "sha256 of the input",
+ "items": {"<item id or section key>": {
+     "verdict": "fine | fix | not-a-bug | null",
+     "note": "text", "compare": ["v1", "v2"],
+     "blocks": [{"quote": "first 120 chars of the paragraph", "note": "text"}]}}}
+```
+
+Unknown keys are kept on import; a reader built before v1 still imports through its
+existing Markdown parser.
+
+**Open item** (one line of `arsenal/evidence/open.jsonl`):
+
+```json
+{"id": "oi-1a2b3c4d", "opened": "2026-11-19", "pr": 42, "kind": "evidence",
+ "what": "door reads smaller than the character", "where": "scenes/tavern.png",
+ "evidence": ["arsenal/evidence/files/oi-1a2b3c4d/tavern.png"],
+ "severity": "medium", "confidence": "high", "fix": "scale the door to 1.3x"}
+```
+
+**Decision** (one line of `arsenal/evidence/decisions.jsonl`): the open item plus
+`{"verdict", "note", "answered", "by"}`. `decisions.md` is generated from it, newest first.
+
+### Configuration (`arsenal/config.toml`)
+
+```toml
+proofsheet-repo-media = "auto"   # auto | always | never — media in the committed Markdown copy
+proofsheet-link-mb = 20          # switch to linked media past this total; starting value
+```
+
+### Files shipped
+
+| Path | Change |
+|------|--------|
+| `assets/page-core.css`, `assets/page-core.js` | new; inlined by every generator |
+| `scripts/page_core.py`, `scripts/review_notes.py` | new; shared helpers |
+| `scripts/proofsheet.py`, `scripts/open_items.py` | new |
+| `scripts/create_reader.py`, `scripts/digest.py`, `scripts/query_status.py` | adopt the above |
+| `skills/proofsheet/SKILL.md` | new, `section: workflow` |
+
+## 6. Risks & Validation
+
+| Risk | Likelihood | Impact | Mitigation | Validation |
+|------|-----------|--------|------------|------------|
+| Moving the reader's CSS/JS breaks existing reader behaviour (autosave, block notes, bake) | Med | High | Move without changing behaviour first; the reader's existing tests must pass unchanged before any restyle | unit + the existing headless reader tests |
+| Old exports stop importing | Low | High | Keep the Markdown parser; v1 block is additive | round-trip test over a pre-v1 fixture |
+| Pages with embedded media get too heavy for a phone | Med | Med | Linked media past `proofsheet-link-mb`; header says so | test that 21 MB of fixtures switches mode |
+| Committed media grows host repositories | Med | Med | `proofsheet-repo-media = auto` caps it at 5 MB per page | unit test on the three settings |
+| Proofsheet creeps towards a web app | Med | Med | Size budget as a CI check; the out-of-scope list in §4 | `make proofsheet-budget` in CI |
+| `open.jsonl` merge conflicts when two PRs append | Med | Low | One item per line, append-only; `.gitattributes` `merge=union` for both JSONL files | test that two appended branches merge cleanly |
+| Resident context grows | Low | Med | Skill in `workflow` section; nothing added to `AGENTS.md` beyond one table row | `make context-budget` |
+
