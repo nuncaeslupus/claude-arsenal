@@ -22,7 +22,8 @@ Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
 - **Pictures in reader notes.** In an annotatable reader, paste a screenshot (Ctrl+V / ⌘V)
   into a note field or drop a picture file on it: it shows as a thumbnail under the note
-  (tap to enlarge, × to remove) and stays across reloads. Large pictures are downscaled to
+  (tap to enlarge, × to remove) and stays across reloads. A paste that also carries text
+  (spreadsheet cells, a word-processor passage) pastes the text only. Large pictures are downscaled to
   1600 px on the long edge. They are kept in the browser's IndexedDB, not localStorage, so
   they do not crowd out note text; if the browser refuses to store one, the note says so and
   the picture still goes out with the next export.

@@ -1606,7 +1606,9 @@ JS = r"""
   }
   function storePics(t){
     var k=t.dataset.key,v=(PICS[k]||[]).slice();
-    var p;try{p=picTx('readwrite',function(st){st.put(v,NS+k);});}catch(e){p=Promise.reject(e);}
+    // A note left with no pictures loses its entry rather than keeping an empty one.
+    var p;try{p=picTx('readwrite',function(st){if(v.length){st.put(v,NS+k);}else{st.delete(NS+k);}});}
+    catch(e){p=Promise.reject(e);}
     return p.then(function(){picSaved(t,true);},function(){picSaved(t,false);});
   }
   function renderPics(t){
@@ -1625,6 +1627,10 @@ JS = r"""
         view.setAttribute('aria-expanded',on?'true':'false');
         view.setAttribute('aria-label','Picture '+(i+1)+' of this note — '+(on?'shrink':'enlarge'));});
       fig.appendChild(view);
+      // A mouse press would focus the button, and focus inside the note grows its
+      // field, moving the button before the release: no click. Keyboard focus is
+      // unaffected.
+      wrap.onmousedown=function(e){if(e.target.closest('button'))e.preventDefault();};
       if(!BAKED){
         var del=document.createElement('button');del.type='button';del.className='npic-del';
         del.textContent='×';del.setAttribute('aria-label','Remove picture '+(i+1));
@@ -1659,10 +1665,12 @@ JS = r"""
     var box=t.closest('.note');
     t.addEventListener('paste',function(e){
       var fs=picFiles(e.clipboardData);if(!fs.length)return;
-      // A copy that is also text (a picture copied from a page with its caption)
-      // pastes the text as usual and attaches the picture as well.
+      // A copy that is also text (cells from a spreadsheet, a passage from a
+      // word processor, which put a rendering of it on the clipboard too) is a
+      // text paste: it pastes as usual and attaches nothing.
       var txt='';try{txt=e.clipboardData.getData('text/plain');}catch(_){}
-      if(!txt)e.preventDefault();
+      if(txt)return;
+      e.preventDefault();
       addPics(t,fs).then(function(){toast(fs.length===1?'Picture attached':fs.length+' pictures attached');});
     });
     if(!box)return;
@@ -1788,9 +1796,14 @@ JS = r"""
   if(!BAKED){
     try{
       picsReady=openPicDB().then(function(db){return new Promise(function(res,rej){
-        var tx=db.transaction('pics','readonly'),cur=tx.objectStore('pics').openCursor(),out={};
+        // Only this document's keys (one store serves every reader on this
+        // origin), and an entry that holds no picture is removed as it is met.
+        var tx=db.transaction('pics','readwrite'),out={};
+        var cur=tx.objectStore('pics').openCursor(IDBKeyRange.bound(NS,NS+'￿'));
         cur.onsuccess=function(){var c=cur.result;if(!c)return;var k=String(c.key);
-          if(k.indexOf(NS)===0&&Array.isArray(c.value))out[k.slice(NS.length)]=c.value;c.continue();};
+          var v=Array.isArray(c.value)?c.value.filter(function(s){return typeof s==='string';}):[];
+          if(v.length){out[k.slice(NS.length)]=v;}else{c.delete();}
+          c.continue();};
         tx.oncomplete=function(){res(out);};tx.onerror=function(){rej(tx.error);};});})
       .then(function(saved){
         Object.keys(saved).forEach(function(k){
@@ -2018,9 +2031,10 @@ JS = r"""
     });
     updateCount();return{applied:applied,skipped:skipped,unplaced:unplaced,pics:np};
   }
-  var MIME={png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',gif:'image/gif',webp:'image/webp',svg:'image/svg+xml'};
-  function bytesURL(name,bytes){var ext=(/\.([a-z0-9]+)$/i.exec(name)||[])[1]||'png';
-    return asDataURL(new Blob([bytes],{type:MIME[ext.toLowerCase()]||'image/png'}));}
+  var MIME={png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',gif:'image/gif',webp:'image/webp'};
+  function pictureMime(name){var ext=(/\.([a-z0-9]+)$/i.exec(name)||[])[1]||'';
+    return Object.prototype.hasOwnProperty.call(MIME,ext.toLowerCase())?MIME[ext.toLowerCase()]:null;}
+  function bytesURL(name,bytes){return asDataURL(new Blob([bytes],{type:pictureMime(name)}));}
   function readAs(f,how){return new Promise(function(res,rej){var r=new FileReader();
     r.onload=function(){res(r.result);};r.onerror=function(){rej(r.error);};r[how](f);});}
   function baseName(p){return String(p).split(/[\\/]/).pop();}
@@ -2045,11 +2059,11 @@ JS = r"""
     });
   }
   function picturesFrom(txt,bin){
-    var mk=/^[ \t]*<!--[ \t]*SPEC-NOTES-PICTURES[ \t]*$/m.exec(txt),map=null,out={},missing=0,jobs=[];
-    if(!mk)return Promise.resolve({pics:out,missing:0});
+    var mk=/^[ \t]*<!--[ \t]*SPEC-NOTES-PICTURES[ \t]*$/m.exec(txt),map=null,out={},missing=0,rejected=0,jobs=[];
+    if(!mk)return Promise.resolve({pics:out,missing:0,rejected:0});
     var after=txt.slice(mk.index+mk[0].length),end=after.indexOf('-->');
     try{map=JSON.parse(after.slice(0,end<0?undefined:end));}catch(e){map=null;}
-    if(!map||typeof map!=='object')return Promise.resolve({pics:out,missing:0});
+    if(!map||typeof map!=='object')return Promise.resolve({pics:out,missing:0,rejected:0});
     var byBase={};Object.keys(bin).forEach(function(n){byBase[baseName(n)]=n;});
     Object.keys(map).forEach(function(k){
       if(!Array.isArray(map[k]))return;
@@ -2057,12 +2071,14 @@ JS = r"""
       map[k].forEach(function(p,i){
         var n=bin[p]?p:byBase[baseName(p)];
         if(!n){missing++;return;}
+        // Raster pictures only: anything else named in the file is not attached.
+        if(!pictureMime(n)){rejected++;return;}
         jobs.push(bytesURL(n,bin[n]).then(function(u){out[k][i]=u;}));
       });
     });
     return Promise.all(jobs).then(function(){
       Object.keys(out).forEach(function(k){out[k]=out[k].filter(Boolean);});
-      return{pics:out,missing:missing};});
+      return{pics:out,missing:missing,rejected:rejected};});
   }
   document.getElementById('file-import').addEventListener('change',function(e){
     var files=Array.prototype.slice.call(e.target.files||[]);e.target.value='';
@@ -2090,8 +2106,9 @@ JS = r"""
           (r.pics?', '+r.pics+' picture'+(r.pics===1?'':'s'):'')+
           (r.skipped?' ('+r.skipped+' skipped — not text)':'')+
           (pf.missing?' — '+pf.missing+' picture'+(pf.missing===1?'':'s')+' not found: choose the .zip, or the pictures with the .md':'')+
+          (pf.rejected?' — '+pf.rejected+' file'+(pf.rejected===1?'':'s')+' skipped: not a PNG, JPEG, GIF or WebP picture':'')+
           (r.unplaced?' — '+r.unplaced+' under “Unplaced notes”: their section is gone':'');
-        setState(msg,(pf.missing||r.skipped)?'warn':'ok');toast(msg);
+        setState(msg,(pf.missing||pf.rejected||r.skipped)?'warn':'ok');toast(msg);
       });
     }).catch(function(){toast('Could not read notes from that file');});
   });

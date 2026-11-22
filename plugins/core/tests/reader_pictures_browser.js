@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // reader_pictures_browser.js — pictures in reader notes, in a real browser.
 //
-// Not part of `make test`: CI has no Node or Playwright, so this runs where they
-// are (`node plugins/core/tests/reader_pictures_browser.js`). The Python side —
+// `make test` runs it through reader_pictures_browser_test.sh, which SKIPs loudly
+// where Playwright or Chromium is missing (CI has neither). The Python side —
 // seeding from a .zip export, the reviewed copy's picture files, the 5.33.1
 // export — is in reader_pictures_test.sh, which CI runs.
 //
@@ -59,11 +59,29 @@ async function makePicture(page, w, h, noisy) {
     c.toBlob(b => { window.__pic = new File([b], 'shot.png', {type: 'image/png'}); res(b.size); }, 'image/png');
   }), [w, h, noisy]);
 }
-async function pasteInto(page, sel) {
-  await page.evaluate(sel => {
+async function pasteInto(page, sel, text) {
+  await page.evaluate(([sel, text]) => {
     const dt = new DataTransfer(); dt.items.add(window.__pic);
+    if (text) dt.setData('text/plain', text);
     document.querySelector(sel).dispatchEvent(new ClipboardEvent('paste', {clipboardData: dt, bubbles: true, cancelable: true}));
-  }, sel);
+  }, [sel, text || '']);
+}
+// The picture store's keys, read straight from IndexedDB.
+async function storedKeys(page) {
+  return page.evaluate(() => new Promise(res => {
+    const r = indexedDB.open('arsenal-reader-pictures', 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('pics');
+    r.onsuccess = () => { const q = r.result.transaction('pics').objectStore('pics').getAllKeys();
+      q.onsuccess = () => { r.result.close(); res(q.result.map(String)); }; };
+  }));
+}
+async function storePut(page, key, val) {
+  await page.evaluate(([key, val]) => new Promise(res => {
+    const r = indexedDB.open('arsenal-reader-pictures', 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('pics');
+    r.onsuccess = () => { const tx = r.result.transaction('pics', 'readwrite'); tx.objectStore('pics').put(val, key);
+      tx.oncomplete = () => { r.result.close(); res(); }; };
+  }), [key, val]);
 }
 async function dropOn(page, sel) {
   await page.evaluate(sel => {
@@ -185,6 +203,56 @@ async function importFiles(page, files) {
     const zmd = zb[Object.keys(zb).find(x => x.endsWith('.md'))] || '';
     check('a block note blurred before its picture lands keeps it in the export',
       zmd.includes('"' + bkey + '":["'), zmd.slice(-300));
+
+    // a paste that is also text pastes the text and attaches nothing
+    const before = await page.$$eval('.note[data-for="s-spec-2"] .npic img', ims => ims.length);
+    await makePicture(page, 120, 80, false);
+    await pasteInto(page, '#n-s-spec-2', 'a cell copied from a spreadsheet');
+    await page.waitForTimeout(500);
+    const afterTxt = await page.$$eval('.note[data-for="s-spec-2"] .npic img', ims => ims.length);
+    check('a paste carrying text attaches no picture', afterTxt === before, before + ' -> ' + afterTxt);
+
+    // the store: a note left without pictures loses its entry; an empty entry of
+    // this document is removed on load; another document's entry is not touched
+    const NS = await page.evaluate(() => { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); const m = /^(.*-v\d+:)s-spec-/.exec(k); if (m) return m[1]; } return ''; });
+    // A real mouse click: pressing the button must not shift it before the release.
+    await page.click('.note[data-for="s-spec-2"] .npic-view');
+    const expanded = await page.$eval('.note[data-for="s-spec-2"] .npic-view', b => b.getAttribute('aria-expanded'));
+    check('a mouse click on a thumbnail enlarges it', expanded === 'true', String(expanded));
+    await page.click('.note[data-for="s-spec-2"] .npic-del');
+    await page.waitForTimeout(500);
+    let keys = await storedKeys(page);
+    const left = await page.$$eval('.note[data-for="s-spec-2"] .npic img', ims => ims.length);
+    check('removing a note\'s last picture removes its stored entry', NS && left === 0 && !keys.includes(NS + 's-spec-2'), left + ' ' + JSON.stringify(keys));
+    await storePut(page, NS + 's-gone', []);
+    await storePut(page, 'otherdoc-spec-v1:s-spec-1', ['data:image/png;base64,AA==']);
+    await storePut(page, 'otherdoc-spec-v1:s-spec-2', []);
+    await page.reload();
+    await page.waitForSelector('.note[data-for="s-spec-1"] .npic img', {timeout: 5000}).catch(() => {});
+    await page.waitForTimeout(300);
+    keys = await storedKeys(page);
+    const stray = await page.$$eval('#bn-unplaced .npic', x => x.length);
+    check('an empty entry is cleaned on load, another document\'s are left alone and not shown',
+      !keys.includes(NS + 's-gone') && keys.includes('otherdoc-spec-v1:s-spec-1') &&
+      keys.includes('otherdoc-spec-v1:s-spec-2') && stray === 0, stray + ' ' + JSON.stringify(keys));
+
+    // import takes raster pictures only
+    const svgZip = path.join(base, 'svg-notes.zip');
+    execFileSync('python3', ['-c', `
+import json, sys, zipfile
+p = {"s-spec-1": ["x-img/01.svg"]}
+md = "\\n".join(["<!-- SPEC-NOTES-PICTURES", json.dumps(p), "-->", "<!-- SPEC-NOTES-DATA", json.dumps({"s-spec-1": "svg note"}), "-->"])
+with zipfile.ZipFile(sys.argv[1], "w") as z:
+    z.writestr("x.md", md)
+    z.writestr("x-img/01.svg", '<svg xmlns="http://www.w3.org/2000/svg" width="4" height="4"/>')
+`, svgZip]);
+    const ctx2 = await browser.newContext(); const p2 = await ctx2.newPage();
+    p2.on('dialog', d => d.accept());
+    await p2.goto(url1);
+    const st3 = await importFiles(p2, svgZip);
+    const svgShown = await p2.$$eval('.npic img', ims => ims.length);
+    check('import skips a picture that is not PNG, JPEG, GIF or WebP', svgShown === 0 && /1 file skipped/.test(st3), st3 + ' / ' + svgShown);
+    await ctx2.close();
     await ctx.close();
 
     // ---- a 5.33.1 export into a later revision whose section 3 is gone
@@ -208,7 +276,9 @@ async function importFiles(page, files) {
     await ctx.close();
 
     // ---- the picture store refuses (quota): said out loud, nothing dropped
-    ctx = await browser.newContext({acceptDownloads: true});
+    // Clipboard allowed, so the export's copy succeeds and clears `dirty`: the
+    // unload warning below then rests on the unstored picture alone.
+    ctx = await browser.newContext({acceptDownloads: true, permissions: ['clipboard-read', 'clipboard-write']});
     await ctx.addInitScript(() => {
       IDBObjectStore.prototype.put = function () { throw new DOMException('full', 'QuotaExceededError'); };
     });
