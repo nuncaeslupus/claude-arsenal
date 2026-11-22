@@ -69,7 +69,16 @@ it is their call to make, not an assumption to act on while waiting.
 The export is named like the reader, `<repo>-<doc>-v<N>-<YYYY-MM-DD-HHMM>-notes.md`, N
 being the document's `**Revision**` header line and the stamp the export's. When one
 arrives — a path in `~/Downloads`, an upload, a paste — move it into the
-document's directory beside the reader. Before touching the document, bake the
+document's directory beside the reader.
+
+**An export with pictures is a `.zip`** (`…-notes.zip`): the reviewer pasted or
+dropped screenshots into notes. Unzip it there — it holds `…-notes.md` and
+`…-notes-img/NN.png|jpg` — and commit both; `--notes` also takes the `.zip`
+itself. Each picture is linked under its note as `![picture N](…-notes-img/NN.jpg)`.
+Read the `.md` first and open a picture with the Read tool only when its note
+needs it to be understood; the notes never inline them.
+
+Before touching the document, bake the
 notes into a reviewed copy, so they stay in the repo beside the text they were
 written on, read-only and full length, not only in a Markdown file:
 
@@ -100,7 +109,9 @@ are in history, and on a public repo published. Redact names of real people,
 email addresses, phone numbers, account handles and home paths (`/home/<user>`);
 when a note loses its meaning without one, ask the reviewer. `--bake` warns on
 emails and home paths it finds in the notes. It cannot see names, so the read is
-still yours. Left in Downloads it is gone by
+still yours. **Pictures too: open every one in `…-notes-img/` before committing it**,
+including those no note needed, since a screenshot can show any of the above; redact
+or crop it, or ask the reviewer when that would lose what the note points at. Left in Downloads it is gone by
 the next session; `query_status.py` names any export of this project's still
 sitting in a Downloads folder (`~/Downloads`, `~/Descargas`, the XDG download
 dir, …) that the repo does not track.
@@ -118,6 +129,14 @@ file>`; the export carries its own note data, so hand back the file the reviewer
 sent, unrenamed. It also names the document it came from: `--notes` refuses an
 export of another document (exit 2), and the page's **Import** button, which
 restores an export into the reader after storage was lost, asks before loading one.
+
+Notes written in an earlier reader do not follow a regeneration on their own: a
+new revision is a new storage namespace, and whether a browser shares storage
+between two `file://` pages is its own choice. So when the reviewer has notes in
+an old reader, they **Save / Export** there *before* it is regenerated (a rebuild
+removes the earlier reader from its folder), then open the new reader and
+**Import** that file (any bundle version's export reads). Notes land under their sections;
+one whose section is gone goes to *Unplaced notes*, and the import says how many.
 
 A note under `> ¶ “…”` was taken on that exact paragraph, list item or table
 (the ✎ beside it), not on the section as a whole: act on the quoted text. One

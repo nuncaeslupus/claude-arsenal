@@ -70,6 +70,7 @@ import shlex
 import shutil
 import subprocess
 import sys
+import zipfile
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -682,9 +683,84 @@ PERSONAL_RE = re.compile(
 )
 
 
+# An export with pictures is a .zip of `<base>.md` + `<base>-img/NN.ext`; the
+# Markdown maps note keys to those paths in this block, beside SPEC-NOTES-DATA.
+PICTURES_RE = re.compile(r"^[ \t]*<!--[ \t]*SPEC-NOTES-PICTURES\s*", re.MULTILINE)
+PICTURE_MIME = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+}
+NOTES_EXTS = (".md", ".markdown", ".json")
+
+
+def notes_text(path: Path) -> str:
+    """The export's Markdown (or JSON): the file itself, or the notes file inside a .zip."""
+    if path.suffix.lower() != ".zip":
+        return path.read_text(encoding="utf-8")
+    try:
+        with zipfile.ZipFile(path) as z:
+            names = [n for n in z.namelist() if n.lower().endswith(NOTES_EXTS)]
+            if not names:
+                raise ValueError("the .zip holds no notes file (.md)")
+            return z.read(names[0]).decode("utf-8")
+    except zipfile.BadZipFile as exc:
+        raise ValueError(f"not a readable .zip — {exc}") from None
+
+
+def read_note_pictures(path: Path) -> tuple[dict[str, list[str]], list[str]]:
+    """({note key: [data URL, …]}, [missing paths]) from an export's SPEC-NOTES-PICTURES block.
+
+    A .zip export resolves each path inside the archive; an unzipped `.md`
+    resolves it beside itself, never outside that folder.
+    """
+    text = notes_text(path)
+    matches = list(PICTURES_RE.finditer(text))
+    if not matches:
+        return {}, []
+    try:
+        loaded, _ = json.JSONDecoder().raw_decode(text, matches[-1].end())
+    except ValueError:
+        return {}, ["(the SPEC-NOTES-PICTURES block is not valid JSON)"]
+    if not isinstance(loaded, dict):
+        return {}, []
+    zf = zipfile.ZipFile(path) if path.suffix.lower() == ".zip" else None
+    base = path.parent.resolve()
+
+    def fetch(rel: str) -> bytes | None:
+        if zf is not None:
+            names = zf.namelist()
+            leaf = "/" + rel.rsplit("/", 1)[-1]
+            hit = rel if rel in names else next((n for n in names if n.endswith(leaf)), None)
+            return zf.read(hit) if hit else None
+        f = (base / rel).resolve()
+        return f.read_bytes() if f.is_file() and f.is_relative_to(base) else None
+
+    out: dict[str, list[str]] = {}
+    missing: list[str] = []
+    try:
+        for key, rels in loaded.items():
+            if not isinstance(rels, list):
+                continue
+            for rel in rels:
+                data = fetch(rel) if isinstance(rel, str) else None
+                mime = PICTURE_MIME.get(Path(str(rel)).suffix.lower())
+                if data is None or mime is None:
+                    missing.append(str(rel))
+                    continue
+                url = f"data:{mime};base64,{base64.b64encode(data).decode()}"
+                out.setdefault(key, []).append(url)
+    finally:
+        if zf is not None:
+            zf.close()
+    return out, missing
+
+
 def read_notes(path: Path) -> dict:
     """Notes from an exported reader file: raw JSON, or the block the export embeds."""
-    text = path.read_text(encoding="utf-8")
+    text = notes_text(path)
     try:
         loaded = json.loads(text)
     except ValueError:
@@ -748,6 +824,7 @@ def build_html(
     ns_key: str | None = None,
     export_stem: str | None = None,
     baked: bool = False,
+    seed_pictures: dict[str, list[str]] | None = None,
 ) -> str:
     """The self-contained HTML reader.
 
@@ -873,6 +950,10 @@ def build_html(
         "__SEED_NOTES__",
         json.dumps(seed_notes, ensure_ascii=False).replace("<", "\\u003c"),
     )
+    # Pictures returned with the notes, as data URLs: a rebuilt reader shows
+    # them, and a reviewed copy keeps them beside the note they belong to.
+    pictures_js = json.dumps(seed_pictures or {}).replace("<", "\\u003c")
+    page = page.replace("__SEED_PICTURES__", pictures_js)
     return page
 
 
@@ -956,7 +1037,9 @@ def build_markdown(
     return "\n".join(out)
 
 
-def block_notes(notes: dict, domid: str) -> list[tuple[str, str, str]]:
+def block_notes(
+    notes: dict, domid: str, pictures: dict[str, list[str]] | None = None
+) -> list[tuple[str, str, str]]:
     """(key, quoted anchor, note) for the block notes of one section, in key order.
 
     A block note's key is `<domid>~<hash of the block's text>`; its anchor text
@@ -965,7 +1048,9 @@ def block_notes(notes: dict, domid: str) -> list[tuple[str, str, str]]:
     """
     rows = []
     for key, note in notes.items():
-        if not key.startswith(domid + "~") or key.endswith("~q") or not note.strip():
+        if not key.startswith(domid + "~") or key.endswith("~q"):
+            continue
+        if not note.strip() and not (pictures and pictures.get(key)):
             continue
         rows.append((key, notes.get(key + "~q", "").strip(), note.strip()))
     return sorted(rows)
@@ -1011,6 +1096,18 @@ class Pictures:
     def svg(self, svg: str, label: str) -> str:
         out = self._name(label, ".svg")
         out.write_text(svg if svg.endswith("\n") else svg + "\n", encoding="utf-8")
+        return self.rel(out)
+
+    def data(self, url: str, label: str) -> str | None:
+        """A note's picture (a data URL, already downscaled by the reader) as a file."""
+        m = re.match(r"data:image/([a-z0-9.+-]+);base64,(.*)$", url, re.I | re.S)
+        if not m:
+            return None
+        ext = "." + m.group(1).lower().replace("jpeg", "jpg")
+        if ext not in PICTURE_MIME:
+            return None
+        out = self._name(label, ext)
+        out.write_bytes(base64.b64decode(m.group(2)))
         return self.rel(out)
 
     def file(self, src: Path, label: str) -> str:
@@ -1076,7 +1173,7 @@ def github_body(it: dict, pics: Pictures) -> str:
     return text
 
 
-def note_alert(label: str, quote: str | None, text: str) -> str:
+def note_alert(label: str, quote: str | None, text: str, pictures: list[str] | None = None) -> str:
     """One note as a GitHub alert; an anchored note says which passage it is on."""
     if quote is None:
         head = f"**Review note** · {label}"
@@ -1084,16 +1181,26 @@ def note_alert(label: str, quote: str | None, text: str) -> str:
         head = f"**Review note** on _“{' '.join(quote.split())}”_"
     else:
         head = f"**Review note** · {label} _(its passage changed since)_"
-    lines = ["[!NOTE]", head, ""] + [ln.rstrip() for ln in text.strip().split("\n")]
+    lines = ["[!NOTE]", head, ""]
+    if text.strip():
+        lines += [ln.rstrip() for ln in text.strip().split("\n")]
+    for i, rel in enumerate(pictures or [], 1):
+        lines += ([""] if len(lines) > 3 else []) + [f"![note picture {i}]({rel})"]
     return "\n".join(("> " + ln).rstrip() for ln in lines)
 
 
-def section_notes(notes: dict, domid: str) -> list[tuple[str | None, str]]:
-    """(quote or None for the section note, text), the section note first."""
-    rows: list[tuple[str | None, str]] = []
-    if notes.get(domid, "").strip():
-        rows.append((None, notes[domid]))
-    rows += [(quote, note) for _key, quote, note in block_notes(notes, domid)]
+def section_notes(
+    notes: dict, domid: str, pictures: dict[str, list[str]] | None = None
+) -> list[tuple[str, str | None, str]]:
+    """(key, quote or None for the section note, text), the section note first.
+
+    A note holding only pictures counts, so its pictures are not dropped.
+    """
+    pictures = pictures or {}
+    rows: list[tuple[str, str | None, str]] = []
+    if notes.get(domid, "").strip() or pictures.get(domid):
+        rows.append((domid, None, notes.get(domid, "")))
+    rows += [(key, quote, note) for key, quote, note in block_notes(notes, domid, pictures)]
     return rows
 
 
@@ -1106,10 +1213,17 @@ def build_github_markdown(
     html_name: str,
     pics: Pictures,
     reviewed: bool,
+    note_pictures: dict[str, list[str]] | None = None,
 ) -> tuple[str, int]:
     """The Markdown copy GitHub renders; returns (text, notes placed)."""
+    note_pictures = note_pictures or {}
     known = {it["domid"] for _, p in parts for it in p["items"]}
-    placed = sum(len(section_notes(notes, d)) for d in known)
+    placed = sum(len(section_notes(notes, d, note_pictures)) for d in known)
+
+    def alert(label: str, key: str, quote: str | None, text: str) -> str:
+        files = [pics.data(src, f"{label} note") for src in note_pictures.get(key, [])]
+        return note_alert(label, quote, text, [f for f in files if f])
+
     if reviewed:
         lead = (
             f"> Reviewed copy of the {single_label.lower()}: the document as reviewed, with {placed} "
@@ -1138,13 +1252,13 @@ def build_github_markdown(
             body = github_body(it, pics).strip()
             if body:
                 out += [body, ""]
-            for quote, text in section_notes(notes, it["domid"]):
-                out += [note_alert(it["label"], quote, text), ""]
+            for key, quote, text in section_notes(notes, it["domid"], note_pictures):
+                out += [alert(it["label"], key, quote, text), ""]
     lost = sorted({k.split("~")[0] for k in notes if not k.endswith("~q")} - known)
-    rows = [(d, q, t) for d in lost for q, t in section_notes(notes, d)]
+    rows = [(d, *row) for d in lost for row in section_notes(notes, d, note_pictures)]
     if rows:
         out += ["## Unplaced notes — their section changed", ""]
-        out += [note_alert(d, q, t) + "\n" for d, q, t in rows]
+        out += [alert(d, k, q, t) + "\n" for d, k, q, t in rows]
     return "\n".join(out).rstrip() + "\n", placed
 
 
@@ -1279,6 +1393,19 @@ h4 .chip{font-size:11px;color:var(--muted)}
   resize:none;outline:none;line-height:1.55;padding:2px 0;overflow:hidden;min-height:1.6em}
 .note:focus-within .note-ta{min-height:4.8em}
 .note-ta::placeholder{color:var(--muted);opacity:1;font-style:italic}
+/* Pictures attached to a note: thumbnails under its field; tap one to see it at column width. */
+.npics{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+.npic{position:relative;margin:0}
+.npic-view{display:block;padding:0;border:1px solid var(--line);border-radius:6px;background:#fff;cursor:zoom-in;line-height:0}
+.npic-view img{display:block;max-width:160px;max-height:110px;object-fit:contain;border-radius:5px}
+.npic.big{flex-basis:100%}
+.npic.big .npic-view{cursor:zoom-out}
+.npic.big .npic-view img{max-width:100%;max-height:none}
+.npic-del{position:absolute;top:-8px;right:-8px;width:24px;height:24px;border-radius:50%;border:1px solid var(--line);
+  background:var(--card);color:var(--fg);font-size:15px;line-height:1;cursor:pointer;padding:0}
+.npic-view:focus-visible,.npic-del:focus-visible{outline:2px solid var(--link);outline-offset:2px}
+.npic-warn{margin:6px 0 0;font-size:13px;color:#7c2d12}
+.note.dropping{outline:2px dashed var(--note-line);outline-offset:2px}
 .modal{position:fixed;inset:0;z-index:60;background:#0008;display:none;align-items:center;justify-content:center;padding:16px}
 .modal.open{display:flex}
 .modal-card{background:var(--card);border:1px solid var(--line);border-radius:14px;max-width:680px;width:100%;
@@ -1341,11 +1468,21 @@ JS = r"""
   // this browser's storage, nothing editable.
   var BAKED = __BAKED__;
   var tas = Array.prototype.slice.call(document.querySelectorAll('.note-ta'));
+  // Pictures pasted or dropped onto a note, per note key, as data URLs. Kept in
+  // IndexedDB rather than localStorage: a few screenshots fill localStorage's
+  // ~5 MB, which would then refuse the note text as well.
+  var PICS={},picPending={};
+  // Settles once this browser's stored pictures are read (or cannot be): every
+  // change to a note's pictures waits on it.
+  var picsReady=Promise.resolve();
+  var SEED_PICS=(typeof SPEC_SEED_PICTURES!=='undefined')?SPEC_SEED_PICTURES:{};
+  function hasPics(t){var p=PICS[t.dataset.key];return !!(p&&p.length);}
+  function hasNote(t){return t.value.trim()!==''||hasPics(t);}
 
   function autoGrow(t){t.style.height='auto';t.style.height=(t.scrollHeight)+'px';}
-  function setFilled(t){var box=t.closest('.note');if(box){box.classList.toggle('filled',t.value.trim()!=='');}}
+  function setFilled(t){var box=t.closest('.note');if(box){box.classList.toggle('filled',hasNote(t));}}
   function updateCount(){
-    var n=0;tas.forEach(function(t){if(t.value.trim()!=='')n++;});
+    var n=0;tas.forEach(function(t){if(hasNote(t))n++;});
     var el=document.getElementById('count');if(el){el.textContent=n+' / '+tas.length+' notes';}
     return n;
   }
@@ -1358,7 +1495,11 @@ JS = r"""
   // the page right after typing (no blur) no longer loses it (#541).
   function flushSaves(){Object.keys(pending).forEach(function(k){clearTimeout(saveTimers[k]);save(pending[k]);});pending={};}
   window.addEventListener('pagehide',flushSaves);
-  window.addEventListener('beforeunload',function(e){flushSaves();if(!lsOK&&dirty){e.preventDefault();e.returnValue='';}});
+  // A picture this browser refused to store exists only in the page: leaving
+  // warns, whatever a text-only copy to the clipboard did to `dirty`.
+  var unstored={};
+  window.addEventListener('beforeunload',function(e){flushSaves();
+    if((!lsOK&&dirty)||Object.keys(unstored).length){e.preventDefault();e.returnValue='';}});
 
   var saveTimers={},pending={};
   function save(t){
@@ -1383,7 +1524,11 @@ JS = r"""
     if(Object.prototype.hasOwnProperty.call(SEED,t.dataset.key)){
       var sv=SEED[t.dataset.key];if(typeof sv==='string'){t.value=sv;}}
     if(!BAKED){try{var v=localStorage.getItem(NS+t.dataset.key);if(v!=null){t.value=v;}}catch(e){}}
+    var sp=SEED_PICS[t.dataset.key];
+    if(Array.isArray(sp)&&!PICS[t.dataset.key]){PICS[t.dataset.key]=sp.filter(function(s){return typeof s==='string';});}
+    renderPics(t);
     autoGrow(t);setFilled(t);
+    if(!BAKED){wirePictureInput(t);}
     t.addEventListener('input',function(){
       autoGrow(t);setFilled(t);updateCount();dirty=true;
       var k=t.dataset.key;pending[k]=t;
@@ -1394,7 +1539,149 @@ JS = r"""
       save(t);
       // An emptied block note folds away again; its ✎ stays to reopen it.
       var box=t.closest('.bnote');
-      if(box&&t.value.trim()===''){closeBlock(box);}
+      if(box&&!hasNote(t)&&!picPending[t.dataset.key]){closeBlock(box);}
+    });
+  }
+
+  // ---- Pictures in notes. Ctrl+V of a screenshot, or a picture file dropped on
+  // the field, attaches it to that note: a thumbnail under the field (tap to
+  // enlarge, × to remove), kept in IndexedDB, carried by Save / Export.
+  var PIC_EDGE=1600,PIC_KEEP=300*1024;
+  function picFiles(dt){
+    var out=[];if(!dt)return out;
+    if(dt.items&&dt.items.length){Array.prototype.forEach.call(dt.items,function(it){
+      if(it.kind==='file'&&/^image\//.test(it.type)){var f=it.getAsFile();if(f)out.push(f);}});}
+    else if(dt.files){Array.prototype.forEach.call(dt.files,function(f){if(/^image\//.test(f.type))out.push(f);});}
+    return out;
+  }
+  function hasFiles(dt){return !!dt&&Array.prototype.indexOf.call(dt.types||[],'Files')>=0;}
+  function asDataURL(blob){return new Promise(function(res,rej){var r=new FileReader();
+    r.onload=function(){res(String(r.result));};r.onerror=function(){rej(r.error);};r.readAsDataURL(blob);});}
+  // A full-screen screenshot stays legible at 1600 px on its long edge; a small
+  // picture is kept as it came, and a re-encode stays PNG when that is small
+  // (text and UI compress well in it), JPEG otherwise.
+  function shrink(file){
+    return new Promise(function(res,rej){
+      var u=URL.createObjectURL(file),im=new Image();
+      im.onload=function(){
+        URL.revokeObjectURL(u);
+        var w=im.naturalWidth,h=im.naturalHeight,s=Math.min(1,PIC_EDGE/Math.max(w,h,1));
+        if(s===1&&file.size<=PIC_KEEP&&/^image\/(png|jpeg|gif|webp)$/.test(file.type)){asDataURL(file).then(res,rej);return;}
+        var c=document.createElement('canvas');c.width=Math.max(1,Math.round(w*s));c.height=Math.max(1,Math.round(h*s));
+        var g=c.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,c.width,c.height);g.drawImage(im,0,0,c.width,c.height);
+        var png=c.toDataURL('image/png');
+        res(png.length<=PIC_KEEP*4/3?png:c.toDataURL('image/jpeg',0.85));
+      };
+      im.onerror=function(){URL.revokeObjectURL(u);rej(new Error('unreadable picture'));};
+      im.src=u;
+    });
+  }
+  var picDB=null;
+  function openPicDB(){
+    if(picDB)return picDB;
+    picDB=new Promise(function(res,rej){
+      try{var r=indexedDB.open('arsenal-reader-pictures',1);
+        r.onupgradeneeded=function(){r.result.createObjectStore('pics');};
+        r.onsuccess=function(){res(r.result);};r.onerror=function(){rej(r.error);};}
+      catch(e){rej(e);}
+    });
+    return picDB;
+  }
+  function picTx(mode,fn){return openPicDB().then(function(db){return new Promise(function(res,rej){
+    var tx=db.transaction('pics',mode),out=fn(tx.objectStore('pics'));
+    tx.oncomplete=function(){res(out&&'result' in out?out.result:undefined);};
+    tx.onerror=tx.onabort=function(){rej(tx.error||new Error('picture store failed'));};});});}
+  // A picture that could not be stored stays on the page and in the export; the
+  // reviewer is told, in the note and in the bar, so it is never lost silently.
+  function picSaved(t,ok){
+    var box=t.closest('.note'),w=box&&box.querySelector('.npic-warn');
+    if(ok){delete unstored[t.dataset.key];}else{unstored[t.dataset.key]=1;}
+    if(!box)return;
+    if(ok){if(w)w.remove();return;}
+    dirty=true;
+    if(!w){w=document.createElement('p');w.className='npic-warn';w.setAttribute('role','alert');
+      w.textContent='⚠ This browser could not store the picture. It stays until you close the page — use Save / Export to keep it.';
+      box.appendChild(w);}
+    setState('⚠ Picture not stored — tap Save / Export','warn');
+  }
+  function storePics(t){
+    var k=t.dataset.key,v=(PICS[k]||[]).slice();
+    // A note left with no pictures loses its entry rather than keeping an empty one.
+    var p;try{p=picTx('readwrite',function(st){if(v.length){st.put(v,NS+k);}else{st.delete(NS+k);}});}
+    catch(e){p=Promise.reject(e);}
+    return p.then(function(){picSaved(t,true);},function(){picSaved(t,false);});
+  }
+  function renderPics(t){
+    var box=t.closest('.note');if(!box)return;
+    var list=PICS[t.dataset.key]||[],wrap=box.querySelector('.npics');
+    if(!list.length){if(wrap)wrap.remove();return;}
+    if(!wrap){wrap=document.createElement('div');wrap.className='npics';t.parentNode.insertBefore(wrap,t.nextSibling);}
+    wrap.textContent='';
+    list.forEach(function(src,i){
+      var fig=document.createElement('figure');fig.className='npic';
+      var view=document.createElement('button');view.type='button';view.className='npic-view';
+      view.setAttribute('aria-expanded','false');view.setAttribute('aria-label','Picture '+(i+1)+' of this note — enlarge');
+      var img=document.createElement('img');img.src=src;img.alt='Picture '+(i+1)+' attached to this note';
+      view.appendChild(img);
+      view.addEventListener('click',function(){var on=fig.classList.toggle('big');
+        view.setAttribute('aria-expanded',on?'true':'false');
+        view.setAttribute('aria-label','Picture '+(i+1)+' of this note — '+(on?'shrink':'enlarge'));});
+      fig.appendChild(view);
+      // A mouse press would focus the button, and focus inside the note grows its
+      // field, moving the button before the release: no click. Keyboard focus is
+      // unaffected.
+      wrap.onmousedown=function(e){if(e.target.closest('button'))e.preventDefault();};
+      if(!BAKED){
+        var del=document.createElement('button');del.type='button';del.className='npic-del';
+        del.textContent='×';del.setAttribute('aria-label','Remove picture '+(i+1));
+        del.addEventListener('click',function(){
+          picsReady.then(function(){
+            PICS[t.dataset.key].splice(i,1);renderPics(t);setFilled(t);updateCount();storePics(t);
+            t.focus();toast('Picture removed');});});
+        fig.appendChild(del);
+      }
+      wrap.appendChild(fig);
+    });
+  }
+  function addPics(t,files){
+    var k=t.dataset.key;
+    // Pending, so a blur before the picture lands does not fold an empty block
+    // note away (and out of the export); after the stored pictures are read, so
+    // a new one is added to them rather than replacing them.
+    picPending[k]=(picPending[k]||0)+1;
+    return files.reduce(function(chain,f){return chain.then(function(){
+      return shrink(f).then(function(src){(PICS[k]=PICS[k]||[]).push(src);},
+                            function(){toast('That picture could not be read');});});},picsReady)
+      .then(function(){
+        picPending[k]--;
+        var box=t.closest('.bnote');
+        if(box&&!hasNote(t)&&document.activeElement!==t){closeBlock(box);return;}
+        renderPics(t);setFilled(t);updateCount();dirty=true;
+        // Text and quote too: a block note holding only a picture still says what it is on.
+        save(t);return storePics(t);
+      });
+  }
+  function wirePictureInput(t){
+    var box=t.closest('.note');
+    t.addEventListener('paste',function(e){
+      var fs=picFiles(e.clipboardData);if(!fs.length)return;
+      // A copy that is also text (cells from a spreadsheet, a passage from a
+      // word processor, which put a rendering of it on the clipboard too) is a
+      // text paste: it pastes as usual and attaches nothing.
+      var txt='';try{txt=e.clipboardData.getData('text/plain');}catch(_){}
+      if(txt)return;
+      e.preventDefault();
+      addPics(t,fs).then(function(){toast(fs.length===1?'Picture attached':fs.length+' pictures attached');});
+    });
+    if(!box)return;
+    box.addEventListener('dragover',function(e){if(hasFiles(e.dataTransfer)){e.preventDefault();box.classList.add('dropping');}});
+    box.addEventListener('dragleave',function(){box.classList.remove('dropping');});
+    box.addEventListener('drop',function(e){
+      box.classList.remove('dropping');
+      if(!hasFiles(e.dataTransfer))return;e.preventDefault();
+      var fs=picFiles(e.dataTransfer);
+      if(!fs.length){toast('Only pictures can be attached to a note');return;}
+      addPics(t,fs).then(function(){toast(fs.length===1?'Picture attached':fs.length+' pictures attached');});
     });
   }
   tas.forEach(wire);
@@ -1486,6 +1773,7 @@ JS = r"""
   (function(){
     var keys={};
     Object.keys(SEED).forEach(function(k){keys[k]=1;});
+    Object.keys(SEED_PICS).forEach(function(k){keys[k]=1;});
     if(!BAKED){try{for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);
       if(k&&k.indexOf(NS)===0)keys[k.slice(NS.length)]=1;}}catch(e){}}
     Object.keys(keys).sort().forEach(function(k){
@@ -1493,17 +1781,47 @@ JS = r"""
       var v=null;
       if(!BAKED){try{v=localStorage.getItem(NS+k);}catch(e){}}
       if(v==null&&typeof SEED[k]==='string')v=SEED[k];
-      var q=null;try{q=localStorage.getItem(NS+k+'~q');}catch(e){}
-      if(q==null&&typeof SEED[k+'~q']==='string')q=SEED[k+'~q'];
-      if(v&&v.trim()!=='')openBlock(k,false,q||'');
+      var q=quoteFor(k);
+      var sp=SEED_PICS[k];
+      if((v&&v.trim()!=='')||(Array.isArray(sp)&&sp.length))openBlock(k,false,q||'');
     });
   })();
+  function quoteFor(k){
+    var q=null;if(!BAKED){try{q=localStorage.getItem(NS+k+'~q');}catch(e){}}
+    if(q==null&&typeof SEED[k+'~q']==='string')q=SEED[k+'~q'];
+    return q;
+  }
+  // Pictures this browser stored override the seed, as note text does. The read
+  // is asynchronous; picture changes wait on `picsReady`, so none is overwritten.
+  if(!BAKED){
+    try{
+      picsReady=openPicDB().then(function(db){return new Promise(function(res,rej){
+        // Only this document's keys (one store serves every reader on this
+        // origin), and an entry that holds no picture is removed as it is met.
+        var tx=db.transaction('pics','readwrite'),out={};
+        var cur=tx.objectStore('pics').openCursor(IDBKeyRange.bound(NS,NS+'￿'));
+        cur.onsuccess=function(){var c=cur.result;if(!c)return;var k=String(c.key);
+          var v=Array.isArray(c.value)?c.value.filter(function(s){return typeof s==='string';}):[];
+          if(v.length){out[k.slice(NS.length)]=v;}else{c.delete();}
+          c.continue();};
+        tx.oncomplete=function(){res(out);};tx.onerror=function(){rej(tx.error);};});})
+      .then(function(saved){
+        Object.keys(saved).forEach(function(k){
+          var t=null;tas.forEach(function(x){if(x.dataset.key===k)t=x;});
+          if(!t){if(!saved[k].length)return;t=openBlock(k,false,quoteFor(k)||'');}
+          PICS[k]=saved[k].filter(function(s){return typeof s==='string';});
+          renderPics(t);setFilled(t);
+        });
+        updateCount();
+      }).then(null,function(){});
+    }catch(e){picsReady=Promise.resolve();}
+  }
   // Reviewed copy: each note becomes its text at full length, and an empty field goes.
   if(BAKED){
     document.body.classList.add('baked');
     tas.forEach(function(t){
       var box=t.closest('.note');
-      if(t.value.trim()===''){box.remove();return;}
+      if(!hasNote(t)){box.remove();return;}
       var d=document.createElement('div');d.className='note-text';d.textContent=t.value;
       t.replaceWith(d);box.classList.add('filled');
       var lab=box.querySelector('.note-label');if(lab)lab.textContent='Review note';
@@ -1518,19 +1836,26 @@ JS = r"""
   function today(){var d=new Date();return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());}
   function stamp(){var d=new Date();return today()+'-'+pad(d.getHours())+pad(d.getMinutes());}
   // Named like the reader, <repo>-<doc>-v<N>-<YYYY-MM-DD-HHMM>-notes.md, stamped at export.
-  function exportName(){return '__EXPORT_STEM__-'+stamp()+'-notes.md';}
+  function exportBase(){return '__EXPORT_STEM__-'+stamp()+'-notes';}
 
-  function buildExport(){
-    var byPart={},order=[],data={},n=0;
+  // With pictures the export is a .zip holding `<base>.md` and `<base>-img/NN.ext`,
+  // the Markdown linking each picture by that path: a session reads the notes and
+  // opens a picture only when a note needs it, instead of paying for it inline.
+  function buildExport(base){
+    var byPart={},order=[],data={},n=0,files=[],picmap={};
     // Document order, so a block note sits beside its section's own note.
     tas.slice().sort(function(a,b){return a.compareDocumentPosition(b)&4?-1:1;}).forEach(function(t){
-      var v=t.value.trim();if(v==='')return;n++;
-      data[t.dataset.key]=t.value;
+      if(!hasNote(t))return;n++;
+      data[t.dataset.key]=t.value.trim()===''?'':t.value;
       if(t.closest('.bnote')){data[t.dataset.key+'~q']=t.dataset.quote||'';}
+      var refs=(PICS[t.dataset.key]||[]).map(function(src){
+        var m=/^data:image\/([a-z0-9.+-]+)/i.exec(src),ext=m?m[1].toLowerCase().replace('jpeg','jpg').replace('svg+xml','svg'):'png';
+        var name=base+'-img/'+pad2(files.length+1)+'.'+ext;files.push({name:name,src:src});return name;});
+      if(refs.length)picmap[t.dataset.key]=refs;
       var part=t.dataset.part||'Other';
       if(!byPart[part]){byPart[part]=[];order.push(part);}
       byPart[part].push({label:t.dataset.label,ref:t.dataset.ref||keyFromDom(t.dataset.key,t),
-                         quote:t.closest('.bnote')?(t.dataset.quote||''):null,note:t.value});
+                         quote:t.closest('.bnote')?(t.dataset.quote||''):null,note:t.value,pics:refs});
     });
     var lines=['# __DOC_LABEL__ notes','','_Exported '+today()+' · '+n+' note'+(n===1?'':'s')+'._','',
       '> Send this file back to continue the review. Notes are embedded as data at the bottom','> so importing this file restores them in the reader.',''];
@@ -1539,21 +1864,82 @@ JS = r"""
       byPart[part].forEach(function(it){
         lines.push('**'+it.label+'**  `'+it.ref+'`');
         if(it.quote!==null){lines.push(it.quote?'> ¶ _“'+it.quote+'”_':'> ¶ _(text changed since this note)_','>');}
-        it.note.split('\n').forEach(function(ln){lines.push('> '+ln);});
+        if(it.note.trim()!==''){it.note.split('\n').forEach(function(ln){lines.push('> '+ln);});}
+        it.pics.forEach(function(p,i){
+          if(i||it.note.trim()!=='')lines.push('>');
+          lines.push('> ![picture '+(i+1)+'](<'+p+'>)');});
         lines.push('');
       });
     });
     // Which page wrote this, so an import into a different page can say so.
     lines.push('<!-- SPEC-NOTES-DOC __EXPORT_STEM__ -->');
+    // Which picture files belong to which note. Its own block, so a reader or
+    // seeder from before pictures reads the notes and ignores it.
+    if(files.length){lines.push('<!-- SPEC-NOTES-PICTURES');lines.push(JSON.stringify(picmap));lines.push('-->');}
     lines.push('<!-- SPEC-NOTES-DATA');
     lines.push(JSON.stringify(data));
     lines.push('-->');
-    return{text:lines.join('\n'),n:n};
+    return{text:lines.join('\n'),n:n,files:files};
+  }
+  function pad2(n){return n<10?'0'+n:''+n;}
+  function dataBytes(src){var i=src.indexOf(','),b=atob(src.slice(i+1)),u=new Uint8Array(b.length);
+    for(var j=0;j<b.length;j++)u[j]=b.charCodeAt(j);return u;}
+  // A stored (uncompressed) zip: pictures are already compressed, and a writer
+  // this small needs no library in an offline page.
+  var CRC=null;
+  function crc32(b){
+    if(!CRC){CRC=[];for(var n=0;n<256;n++){var c=n;for(var k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;CRC[n]=c>>>0;}}
+    var x=-1;for(var i=0;i<b.length;i++)x=CRC[(x^b[i])&255]^(x>>>8);return (x^-1)>>>0;
+  }
+  function zipBlob(entries){
+    var out=[],cd=[],off=0,enc=new TextEncoder(),cdLen=0;
+    entries.forEach(function(e){
+      var nm=enc.encode(e.name),crc=crc32(e.bytes),sz=e.bytes.length;
+      var h=new DataView(new ArrayBuffer(30));
+      h.setUint32(0,0x04034b50,true);h.setUint16(4,20,true);h.setUint16(6,0x0800,true);
+      h.setUint16(12,0x21,true);h.setUint32(14,crc,true);h.setUint32(18,sz,true);h.setUint32(22,sz,true);
+      h.setUint16(26,nm.length,true);
+      out.push(new Uint8Array(h.buffer),nm,e.bytes);
+      var c=new DataView(new ArrayBuffer(46));
+      c.setUint32(0,0x02014b50,true);c.setUint16(4,20,true);c.setUint16(6,20,true);c.setUint16(8,0x0800,true);
+      c.setUint16(14,0x21,true);c.setUint32(16,crc,true);c.setUint32(20,sz,true);c.setUint32(24,sz,true);
+      c.setUint16(28,nm.length,true);c.setUint32(42,off,true);
+      cd.push(new Uint8Array(c.buffer),nm);cdLen+=46+nm.length;
+      off+=30+nm.length+sz;
+    });
+    var end=new DataView(new ArrayBuffer(22));
+    end.setUint32(0,0x06054b50,true);end.setUint16(8,entries.length,true);end.setUint16(10,entries.length,true);
+    end.setUint32(12,cdLen,true);end.setUint32(16,off,true);
+    return new Blob(out.concat(cd,[new Uint8Array(end.buffer)]),{type:'application/zip'});
+  }
+  // Read a zip: stored entries, and deflated ones where the browser can inflate.
+  function unzip(buf){
+    var v=new DataView(buf),u8=new Uint8Array(buf),dec=new TextDecoder(),i=buf.byteLength-22;
+    while(i>=0&&v.getUint32(i,true)!==0x06054b50)i--;
+    if(i<0)return Promise.reject(new Error('not a zip'));
+    var n=v.getUint16(i+10,true),p=v.getUint32(i+16,true),jobs=[];
+    for(var e=0;e<n;e++){
+      if(v.getUint32(p,true)!==0x02014b50)break;
+      var method=v.getUint16(p+10,true),csz=v.getUint32(p+20,true),nl=v.getUint16(p+28,true),
+          xl=v.getUint16(p+30,true),cl=v.getUint16(p+32,true),lo=v.getUint32(p+42,true);
+      var name=dec.decode(u8.subarray(p+46,p+46+nl));
+      var start=lo+30+v.getUint16(lo+26,true)+v.getUint16(lo+28,true),raw=u8.slice(start,start+csz);
+      p+=46+nl+xl+cl;
+      if(/\/$/.test(name))continue;
+      jobs.push((function(name,method,raw){
+        if(method===0)return Promise.resolve([name,raw]);
+        if(method===8&&typeof DecompressionStream!=='undefined'){
+          return new Response(new Blob([raw]).stream().pipeThrough(new DecompressionStream('deflate-raw')))
+            .arrayBuffer().then(function(b){return[name,new Uint8Array(b)];});}
+        return Promise.resolve([name,null]);
+      })(name,method,raw));
+    }
+    return Promise.all(jobs);
   }
   function keyFromDom(domkey,t){var box=t.closest('.note');var r=box?box.querySelector('.note-ref'):null;return r?r.textContent:domkey;}
 
   function download(name,text){
-    try{var blob=new Blob([text],{type:'text/markdown'});var url=URL.createObjectURL(blob);
+    try{var blob=text instanceof Blob?text:new Blob([text],{type:'text/markdown'});var url=URL.createObjectURL(blob);
         var a=document.createElement('a');a.href=url;a.download=name;
         document.body.appendChild(a);a.click();
         setTimeout(function(){URL.revokeObjectURL(url);a.remove();},1500);return true;}catch(e){return false;}
@@ -1571,10 +1957,23 @@ JS = r"""
     modal.classList.remove('open');setInert(false);
     if(modalReturn&&modalReturn.focus)modalReturn.focus();modalReturn=null;}
 
+  var lastExport=null;
+  function exportFile(r,base){
+    if(!r.files.length)return{name:base+'.md',body:r.text};
+    var enc=new TextEncoder(),entries=[{name:base+'.md',bytes:enc.encode(r.text)}];
+    r.files.forEach(function(f){entries.push({name:f.name,bytes:dataBytes(f.src)});});
+    return{name:base+'.zip',body:zipBlob(entries)};
+  }
   document.getElementById('btn-export').addEventListener('click',function(){
-    var r=buildExport();
+    var base=exportBase(),r=buildExport(base);
     if(r.n===0){toast('No notes yet — add some first.');return;}
-    var saved=download(exportName(),r.text);openModal(r.text);
+    lastExport=exportFile(r,base);
+    var mp=document.getElementById('modal-p');
+    if(mp){mp.textContent=r.files.length?
+      'Downloaded as a .zip: the Markdown file and its '+r.files.length+' picture'+(r.files.length===1?'':'s')+
+      '. Send the whole .zip back. Copying the text below keeps the notes but not the pictures.':
+      'Downloaded as a Markdown file. You can also copy the text below and paste it back.';}
+    var saved=download(lastExport.name,lastExport.body);openModal(r.text);
     // download() returning only means the download was REQUESTED; a browser can
     // still block or drop it. So `dirty` — what arms the unload warning — is
     // cleared only on a confirmed copy: the clipboard promise fulfilling.
@@ -1600,7 +1999,8 @@ JS = r"""
     if(p&&typeof p.then==='function'){p.then(function(){report(true);},function(){report(false);});}
     else{report(false);}
   });
-  document.getElementById('modal-dl').addEventListener('click',function(){download(exportName(),modalTa.value);toast('Download requested');});
+  document.getElementById('modal-dl').addEventListener('click',function(){
+    if(lastExport)download(lastExport.name,lastExport.body);toast('Download requested');});
   document.getElementById('modal-close').addEventListener('click',closeModal);
   modal.addEventListener('click',function(e){if(e.target===modal)closeModal();});
   modal.addEventListener('keydown',function(e){if(e.key==='Escape')closeModal();});
@@ -1611,27 +2011,81 @@ JS = r"""
   // The realistic trigger is a hand-edited or truncated export, not an attack;
   // it just fails in the least useful way, silently and destructively. Skip
   // anything that is not a string and say how many were skipped.
-  function applyData(obj){
-    var applied=0,skipped=0;
+  function applyData(obj,pics){
+    var applied=0,skipped=0,unplaced=0,np=0;pics=pics||{};
     // Every note gets a textarea first — including a section note whose section
     // is gone, which lands under "Unplaced notes" instead of being dropped (#541).
     Object.keys(obj).forEach(function(k){
-      if(!/~q$/.test(k)&&typeof obj[k]==='string'&&obj[k].trim()!==''){
+      if(!/~q$/.test(k)&&typeof obj[k]==='string'&&(obj[k].trim()!==''||(pics[k]&&pics[k].length))){
         openBlock(k,false,typeof obj[k+'~q']==='string'?obj[k+'~q']:'');}
     });
     tas.forEach(function(t){
-      if(!Object.prototype.hasOwnProperty.call(obj,t.dataset.key))return;
-      var v=obj[t.dataset.key];
+      var k=t.dataset.key;
+      if(!Object.prototype.hasOwnProperty.call(obj,k))return;
+      var v=obj[k];
       if(typeof v!=='string'){skipped++;return;}
-      t.value=v;save(t);autoGrow(t);setFilled(t);applied++;
+      t.value=v;save(t);
+      if(pics[k]&&pics[k].length){PICS[k]=pics[k].slice();np+=pics[k].length;renderPics(t);storePics(t);}
+      autoGrow(t);setFilled(t);
+      if(hasNote(t)){applied++;if(t.closest('#bn-unplaced'))unplaced++;}
     });
-    updateCount();return{applied:applied,skipped:skipped};
+    updateCount();return{applied:applied,skipped:skipped,unplaced:unplaced,pics:np};
+  }
+  var MIME={png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',gif:'image/gif',webp:'image/webp'};
+  function pictureMime(name){var ext=(/\.([a-z0-9]+)$/i.exec(name)||[])[1]||'';
+    return Object.prototype.hasOwnProperty.call(MIME,ext.toLowerCase())?MIME[ext.toLowerCase()]:null;}
+  function bytesURL(name,bytes){return asDataURL(new Blob([bytes],{type:pictureMime(name)}));}
+  function readAs(f,how){return new Promise(function(res,rej){var r=new FileReader();
+    r.onload=function(){res(r.result);};r.onerror=function(){rej(r.error);};r[how](f);});}
+  function baseName(p){return String(p).split(/[\\/]/).pop();}
+  // An import is a notes .md, a .zip export, or a .md chosen together with the
+  // picture files it names (an unzipped export). Pictures resolve by path in the
+  // zip, else by file name among the files chosen.
+  function gatherImport(files){
+    var zips=files.filter(function(f){return /\.zip$/i.test(f.name);});
+    var bin={};
+    function isPic(f){return /^image\//.test(f.type||'')||/\.(png|jpe?g|gif|webp)$/i.test(f.name||'');}
+    var loose=files.filter(isPic);
+    var texts=files.filter(function(f){return !isPic(f)&&!/\.zip$/i.test(f.name||'');});
+    var looseJobs=loose.map(function(f){return readAs(f,'readAsArrayBuffer').then(function(b){bin[f.name]=new Uint8Array(b);});});
+    var zipJobs=zips.map(function(z){return readAs(z,'readAsArrayBuffer').then(unzip).then(function(es){
+      es.forEach(function(e){if(!e[1])return;
+        if(/\.(md|markdown|json)$/i.test(e[0]))texts.push({zipText:new TextDecoder().decode(e[1]),name:e[0]});
+        else bin[e[0]]=e[1];});});});
+    return Promise.all(looseJobs.concat(zipJobs)).then(function(){
+      var t=texts[0];if(!t)return null;
+      return (t.zipText!=null?Promise.resolve(t.zipText):readAs(t,'readAsText')).then(function(txt){
+        return{text:String(txt||''),bin:bin};});
+    });
+  }
+  function picturesFrom(txt,bin){
+    var mk=/^[ \t]*<!--[ \t]*SPEC-NOTES-PICTURES[ \t]*$/m.exec(txt),map=null,out={},missing=0,rejected=0,jobs=[];
+    if(!mk)return Promise.resolve({pics:out,missing:0,rejected:0});
+    var after=txt.slice(mk.index+mk[0].length),end=after.indexOf('-->');
+    try{map=JSON.parse(after.slice(0,end<0?undefined:end));}catch(e){map=null;}
+    if(!map||typeof map!=='object')return Promise.resolve({pics:out,missing:0,rejected:0});
+    var byBase={};Object.keys(bin).forEach(function(n){byBase[baseName(n)]=n;});
+    Object.keys(map).forEach(function(k){
+      if(!Array.isArray(map[k]))return;
+      out[k]=[];
+      map[k].forEach(function(p,i){
+        var n=bin[p]?p:byBase[baseName(p)];
+        if(!n){missing++;return;}
+        // Raster pictures only: anything else named in the file is not attached.
+        if(!pictureMime(n)){rejected++;return;}
+        jobs.push(bytesURL(n,bin[n]).then(function(u){out[k][i]=u;}));
+      });
+    });
+    return Promise.all(jobs).then(function(){
+      Object.keys(out).forEach(function(k){out[k]=out[k].filter(Boolean);});
+      return{pics:out,missing:missing,rejected:rejected};});
   }
   document.getElementById('file-import').addEventListener('change',function(e){
-    var f=e.target.files[0];if(!f)return;
-    var rd=new FileReader();
-    rd.onload=function(){
-      var txt=String(rd.result||'');var obj=null;
+    var files=Array.prototype.slice.call(e.target.files||[]);e.target.value='';
+    if(!files.length)return;
+    gatherImport(files).then(function(got){
+      if(!got){toast('Choose the notes file (.md or .zip) to import');return;}
+      var txt=got.text;var obj=null;
       // Last LINE-ANCHORED marker. A plain lastIndexOf lands inside the JSON
       // string of a note that mentions the marker, and the import then reads as
       // a corrupt file — the same defect the Python seeder had (#239).
@@ -1646,11 +2100,17 @@ JS = r"""
       var dm=/^<!-- SPEC-NOTES-DOC (\S+) -->/m.exec(txt);
       if(dm&&dm[1]!=='__EXPORT_STEM__'&&
          !confirm('That file holds notes for '+dm[1]+', not for this page (__EXPORT_STEM__). Import anyway?'))return;
-      var r=applyData(obj);
-      toast('Imported '+r.applied+' note'+(r.applied===1?'':'s')+
-            (r.skipped?' ('+r.skipped+' skipped — not text)':''));
-    };
-    rd.readAsText(f);e.target.value='';
+      return Promise.all([picturesFrom(txt,got.bin),picsReady]).then(function(all){var pf=all[0];
+        var r=applyData(obj,pf.pics);
+        var msg='Imported '+r.applied+' note'+(r.applied===1?'':'s')+
+          (r.pics?', '+r.pics+' picture'+(r.pics===1?'':'s'):'')+
+          (r.skipped?' ('+r.skipped+' skipped — not text)':'')+
+          (pf.missing?' — '+pf.missing+' picture'+(pf.missing===1?'':'s')+' not found: choose the .zip, or the pictures with the .md':'')+
+          (pf.rejected?' — '+pf.rejected+' file'+(pf.rejected===1?'':'s')+' skipped: not a PNG, JPEG, GIF or WebP picture':'')+
+          (r.unplaced?' — '+r.unplaced+' under “Unplaced notes”: their section is gone':'');
+        setState(msg,(pf.missing||pf.rejected||r.skipped)?'warn':'ok');toast(msg);
+      });
+    }).catch(function(){toast('Could not read notes from that file');});
   });
   document.getElementById('btn-import').addEventListener('click',function(){document.getElementById('file-import').click();});
 })();
@@ -1752,19 +2212,20 @@ HTML_TEMPLATE = r"""<!doctype html>
       <li>Tap <strong>✎</strong> at the right of any paragraph, list item or table to note on that exact spot — the box opens right below it, with the text still in view.</li>
       <li><strong>Notes save automatically</strong> in this browser as you type.</li>
       <li><strong>Save / Export</strong> downloads a Markdown file of your notes — the copy to send back. Tap whenever you pause, especially on a phone.</li>
-      <li><strong>Import</strong> reloads notes from a file you exported earlier (after clearing the browser or switching devices).</li>
+      <li>To add a picture to a note, paste it into the field (Ctrl+V or ⌘V) or drop a picture file on it. It shows under the field: tap it to enlarge, × to remove. With pictures, <strong>Save / Export</strong> downloads a .zip.</li>
+      <li><strong>Import</strong> reloads notes from a file you exported earlier (after clearing the browser, switching devices, or opening a newer copy of this document) — the .md, or the .zip when it has pictures.</li>
     </ul>
   </details>
   __TOC__
   __BODY__
 </div>
 
-<input type="file" id="file-import" class="hidden-input" accept=".md,.markdown,.json,text/markdown,application/json">
+<input type="file" id="file-import" class="hidden-input" accept=".md,.markdown,.json,.zip,text/markdown,application/json,application/zip,image/*" multiple>
 
 <div class="modal" id="modal">
   <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title">
     <h3 id="modal-title">Your notes</h3>
-    <p>Downloaded as a Markdown file. You can also copy the text below and paste it back.</p>
+    <p id="modal-p">Downloaded as a Markdown file. You can also copy the text below and paste it back.</p>
     <textarea id="modal-ta" readonly></textarea>
     <div class="modal-actions">
       <button class="btn primary" id="modal-copy">Copy</button>
@@ -1774,7 +2235,7 @@ HTML_TEMPLATE = r"""<!doctype html>
   </div>
 </div>
 <div class="toast" id="toast"></div>
-<script>var SPEC_SEED_NOTES=__SEED_NOTES__;</script>
+<script>var SPEC_SEED_NOTES=__SEED_NOTES__;var SPEC_SEED_PICTURES=__SEED_PICTURES__;</script>
 <script>__JS__</script>
 </body>
 </html>
@@ -1921,6 +2382,7 @@ def _main() -> int:
 
     notes_path = Path(args.notes) if args.notes else out_dir / "notes.json"
     seed_notes: dict = {}
+    seed_pictures: dict[str, list[str]] = {}
 
     if notes_path.exists():
         try:
@@ -1942,17 +2404,26 @@ def _main() -> int:
                 return 2
         else:
             seed_notes = loaded
+            seed_pictures, missing = read_note_pictures(notes_path)
+            for rel in missing:
+                print(f"⚠  picture {rel} named by {notes_path} was not found", file=sys.stderr)
             # An export names the page that wrote it. Another document's notes would
             # land under whatever headings share their ids; a revision apart is the
             # normal re-seed, so only the repo and document are compared.
-            m = DOC_LINE_RE.search(notes_path.read_text(encoding="utf-8"))
+            m = DOC_LINE_RE.search(notes_text(notes_path))
             if m and VERSION_RE.sub("", m.group(1)) != VERSION_RE.sub("", export_stem):
                 print(
                     f"✗ {notes_path} holds notes for {m.group(1)}, not {export_stem}",
                     file=sys.stderr,
                 )
                 return 2
-            print(f"ℹ  seeding from {notes_path} ({len(seed_notes)} notes)", file=sys.stderr)
+            n_pics = sum(len(v) for v in seed_pictures.values())
+            print(
+                f"ℹ  seeding from {notes_path} ({len(seed_notes)} notes"
+                + (f", {n_pics} picture(s)" if n_pics else "")
+                + ")",
+                file=sys.stderr,
+            )
     elif args.notes:
         print(f"✗ {notes_path} does not exist", file=sys.stderr)
         return 2
@@ -1974,6 +2445,7 @@ def _main() -> int:
                 ns_key=ns_key or out_base or None,
                 export_stem=export_stem,
                 baked=True,
+                seed_pictures=seed_pictures,
             ),
             encoding="utf-8",
         )
@@ -1983,7 +2455,10 @@ def _main() -> int:
         )
         print(f"  {html_file}", file=sys.stderr)
         if not args.no_markdown:
-            write_copy(parts, title, gen_date, seed_notes, single_label, html_file, args, True)
+            pics = seed_pictures
+            write_copy(
+                parts, title, gen_date, seed_notes, single_label, html_file, args, True, pics
+            )
         _print_paths(args, html_file, None)
         return 0
 
@@ -1996,6 +2471,7 @@ def _main() -> int:
         doc_slug,
         ns_key=ns_key or out_base or None,
         export_stem=export_stem,
+        seed_pictures=seed_pictures,
     )
     md_out = build_markdown(parts, title, gen_date, seed_notes, single_label)
 
@@ -2012,7 +2488,9 @@ def _main() -> int:
     print(f"  {html_file}", file=sys.stderr)
     print(f"  {md_file}", file=sys.stderr)
     if not args.no_markdown:
-        write_copy(parts, title, gen_date, seed_notes, single_label, html_file, args, False)
+        write_copy(
+            parts, title, gen_date, seed_notes, single_label, html_file, args, False, seed_pictures
+        )
     _print_paths(args, html_file, md_file)
     return 0
 
@@ -2034,13 +2512,14 @@ def write_copy(
     html_file: Path,
     args: argparse.Namespace,
     reviewed: bool,
+    note_pictures: dict[str, list[str]] | None = None,
 ) -> None:
     """`<html stem>.md` + `<stem>-img/` beside the HTML: the copy a link should point at."""
     md_file = html_file.with_suffix(".md")
     stem = re.sub(r"-(?:reader|reviewed)$", "", html_file.stem)
     pics = Pictures(html_file.parent / f"{stem}-img", args.picture_width, args.picture_quality)
     text, placed = build_github_markdown(
-        parts, title, gen_date, notes, single_label, html_file.name, pics, reviewed
+        parts, title, gen_date, notes, single_label, html_file.name, pics, reviewed, note_pictures
     )
     md_file.write_text(text, encoding="utf-8")
     where = f" in {pics.dir.name}/" if pics.count else ""

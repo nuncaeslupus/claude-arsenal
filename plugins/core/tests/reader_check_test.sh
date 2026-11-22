@@ -83,7 +83,7 @@ if [ ${#PY[@]} -gt 0 ]; then
     gate >/dev/null 2>&1 || fail "gate refused the dated reader create_reader just built"
     plan_html="$repo/status/yourproject-plan-v1-${stamp}-reader.html"
     [ -f "$plan_html" ] || fail "#505: the plan reader is not named <repo>-plan-v<N>-<date>: $(ls "$repo/status")"
-    grep -q "'yourproject-plan-v1-'+stamp()+'-notes.md'" "$plan_html" \
+    grep -q "'yourproject-plan-v1-'+stamp()+'-notes'" "$plan_html" \
         || fail "#468/#505: the export name does not carry the plan's revision"
     echo "PASS: create_reader's dated reader satisfies the gate and names its export v<N>"
 
@@ -184,6 +184,19 @@ out="$(cd "$repo" && HOME="$fake_home" XDG_DOWNLOAD_DIR= python3 "$CHECK" downlo
 case "$out" in *"yourproject-plan-v2-2026-01-06-notes.md"*) ;; *) fail "downloads missed a dated export: $out" ;; esac
 case "$out" in *"yourproject-spec-v3-2026-01-07-1735-notes.md"*) ;; *) fail "downloads missed an HHMM-stamped export: $out" ;; esac
 case "$out" in *otherproject*) fail "downloads reported another project's dated export: $out" ;; esac
+# An export with pictures is a .zip; once its unzipped .md is committed it is done with.
+echo n > "$fake_home/Descargas/yourproject-spec-v4-2026-01-08-0900-notes.zip"
+echo n > "$fake_home/Descargas/yourproject-spec-v4-2026-01-09-0900-notes.zip"
+mkdir -p "$repo/status" && echo n > "$repo/status/yourproject-spec-v4-2026-01-09-0900-notes.md"
+git -C "$repo" add status/yourproject-spec-v4-2026-01-09-0900-notes.md
+out="$(cd "$repo" && HOME="$fake_home" XDG_DOWNLOAD_DIR= python3 "$CHECK" downloads)"
+case "$out" in *"2026-01-08-0900-notes.zip"*) ;; *) fail "downloads missed a .zip export: $out" ;; esac
+case "$out" in *"2026-01-09-0900-notes.zip"*) fail "downloads reported a .zip whose .md is committed: $out" ;; esac
+echo n > "$fake_home/Descargas/yourproject-spec-v4-2026-01-10-0900-notes.zip"
+cp "$fake_home/Descargas/yourproject-spec-v4-2026-01-10-0900-notes.zip" "$repo/status/"
+git -C "$repo" add status/yourproject-spec-v4-2026-01-10-0900-notes.zip
+out="$(cd "$repo" && HOME="$fake_home" XDG_DOWNLOAD_DIR= python3 "$CHECK" downloads)"
+case "$out" in *"2026-01-10-0900-notes.zip"*) fail "downloads reported a .zip that is itself committed: $out" ;; esac
 echo "PASS: an uncommitted export left in a Downloads folder is named"
 
 # --- 5: init registers the hook and scaffolds no unused specs/ plans/ ---

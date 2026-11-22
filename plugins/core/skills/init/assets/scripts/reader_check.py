@@ -50,9 +50,10 @@ from pathlib import Path, PurePosixPath
 
 META_RE = re.compile(r'<meta name="arsenal-source-sha256" content="([0-9a-f ]*)">')
 # `<project>-<spec|plan>-notes-<date>-r<N>.md` (older readers), or the reader's own
-# naming, `<repo>-<doc>-v<N>-<YYYY-MM-DD[-HHMM]>-notes.md`.
+# naming, `<repo>-<doc>-v<N>-<YYYY-MM-DD[-HHMM]>-notes.md` — `.zip` when its notes
+# carry pictures.
 EXPORT_RE = re.compile(r"^(?P<prefix>.+)-(?:spec|plan)-notes-.+\.md$")
-DATED_EXPORT_RE = re.compile(r"^(?P<stem>.+)-v\d+-\d{4}-\d{2}-\d{2}(?:-\d{4})?-notes\.md$")
+DATED_EXPORT_RE = re.compile(r"^(?P<stem>.+)-v\d+-\d{4}-\d{2}-\d{2}(?:-\d{4})?-notes\.(?:md|zip)$")
 # Localized names a desktop gives the Downloads folder, beside whatever
 # `xdg-user-dir DOWNLOAD` and XDG_DOWNLOAD_DIR report.
 DOWNLOAD_NAMES = ("Downloads", "Download", "Descargas", "Téléchargements", "Scaricati")
@@ -290,16 +291,18 @@ def _project_prefixes(root: Path) -> set[str]:
 
 
 def stray_exports(root: Path, all_projects: bool = False) -> list[Path]:
+    # By stem: a .zip export is done with once its unzipped `.md` is committed.
     tracked = {
-        PurePosixPath(n).name
+        PurePosixPath(n).stem
         for n in (_git(root, "ls-files") or "").splitlines()
-        if "-notes-" in n or n.endswith("-notes.md")
+        if "-notes-" in n or n.endswith(("-notes.md", "-notes.zip"))
     }
     prefixes = _project_prefixes(root)
     found = []
     for d in download_dirs():
-        for f in sorted(set(d.glob("*-notes-*.md")) | set(d.glob("*-notes.md"))):
-            if f.name in tracked:
+        notes = set(d.glob("*-notes-*.md")) | set(d.glob("*-notes.md")) | set(d.glob("*-notes.zip"))
+        for f in sorted(notes):
+            if f.stem in tracked:
                 continue
             m = EXPORT_RE.match(f.name)
             dated = DATED_EXPORT_RE.match(f.name)
