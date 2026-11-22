@@ -18,6 +18,38 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [5.34.1] - 2026-11-22
+
+Fixes to pictures in reader notes (5.34.0), from a review of the vendored copy.
+
+- **Re-baking after a redaction no longer leaves the old screenshot behind.** `--bake` / the
+  Markdown copy now deletes the picture files it wrote earlier and no longer links, so a
+  removed private screenshot is not committed with the new copy.
+- **Picture edge cases.** The re-bake cleanup also covers `.bmp`/`.tif` files copied without
+  Pillow; an import never swaps a damaged picture for a same-named intact one from another
+  folder; Save / Export no longer waits forever when the browser's picture store aborts; and
+  `downloads` counts pictures as committed only beside their Markdown.
+- **The reviewed copy keeps its pictures in `<stem>-reviewed-img/`**, not the regular copy's
+  `<stem>-img/`: both numbered their files from 01, so one run could overwrite a picture the
+  other still linked. Commit the reviewed `.md` together with its own `-reviewed-img/`.
+- **Save / Export** waits for the stored pictures to load, so an export clicked just after a
+  reload no longer leaves them out. Closing the page while a picture is still being attached
+  or saved now warns.
+- **Removing a picture** acts on the picture you clicked, not its position, so it can no
+  longer delete a stored picture that was not on screen. Removing the *last* picture that a
+  rebuilt reader was seeded with now stays removed after a reload.
+- **Attaching**: an unreadable picture says so instead of "Picture attached", and an empty
+  block note no longer closes while a second picture is still being attached to it.
+- **Import**: with two `.zip` exports chosen together, each picture comes from the archive
+  that supplied the notes; a member that fails its length/CRC check is reported as damaged
+  and not imported. `create_reader.py --notes` names a damaged picture and still seeds the
+  notes and the other pictures, instead of stopping with a traceback.
+- **Rebuilding**: a note that quotes the reader's own `__SEED_PICTURES__` placeholder no
+  longer breaks the page, and a picture-only note stays at its section when that section
+  lost its body (instead of moving to *Unplaced notes*).
+- **`reader_check.py downloads`** still warns about a `.zip` export when only its Markdown
+  is tracked and its pictures are not.
+
 ## [5.34.0] - 2026-11-22
 
 - **Pictures in reader notes.** In an annotatable reader, paste a screenshot (Ctrl+V / ⌘V)

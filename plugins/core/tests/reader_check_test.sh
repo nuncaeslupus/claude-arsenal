@@ -197,6 +197,36 @@ cp "$fake_home/Descargas/yourproject-spec-v4-2026-01-10-0900-notes.zip" "$repo/s
 git -C "$repo" add status/yourproject-spec-v4-2026-01-10-0900-notes.zip
 out="$(cd "$repo" && HOME="$fake_home" XDG_DOWNLOAD_DIR= python3 "$CHECK" downloads)"
 case "$out" in *"2026-01-10-0900-notes.zip"*) fail "downloads reported a .zip that is itself committed: $out" ;; esac
+# A tracked Markdown with its pictures untracked is not done with: they would not be committed.
+python3 - "$fake_home/Descargas/yourproject-spec-v4-2026-01-11-0900-notes.zip" <<'PYEOF'
+import sys, zipfile
+b = "yourproject-spec-v4-2026-01-11-0900-notes"
+with zipfile.ZipFile(sys.argv[1], "w") as z:
+    z.writestr(f"{b}.md", "notes")
+    z.writestr(f"{b}-img/01.png", b"png")
+PYEOF
+echo n > "$repo/status/yourproject-spec-v4-2026-01-11-0900-notes.md"
+git -C "$repo" add status/yourproject-spec-v4-2026-01-11-0900-notes.md
+out="$(cd "$repo" && HOME="$fake_home" XDG_DOWNLOAD_DIR= python3 "$CHECK" downloads)"
+case "$out" in *"2026-01-11-0900-notes.zip"*) ;; *) fail "downloads hid a .zip whose pictures are not tracked: $out" ;; esac
+mkdir -p "$repo/status/yourproject-spec-v4-2026-01-11-0900-notes-img" && echo p > "$repo/status/yourproject-spec-v4-2026-01-11-0900-notes-img/01.png"
+git -C "$repo" add status/yourproject-spec-v4-2026-01-11-0900-notes-img
+out="$(cd "$repo" && HOME="$fake_home" XDG_DOWNLOAD_DIR= python3 "$CHECK" downloads)"
+case "$out" in *"2026-01-11-0900-notes.zip"*) fail "downloads reported a .zip whose .md and pictures are all committed: $out" ;; esac
+# The same pictures tracked in another folder do not resolve from the Markdown's link: still reported.
+python3 - "$fake_home/Descargas/yourproject-spec-v4-2026-01-12-0900-notes.zip" <<'PYEOF'
+import sys, zipfile
+b = "yourproject-spec-v4-2026-01-12-0900-notes"
+with zipfile.ZipFile(sys.argv[1], "w") as z:
+    z.writestr(f"{b}.md", "notes")
+    z.writestr(f"{b}-img/01.png", b"png")
+PYEOF
+b12=yourproject-spec-v4-2026-01-12-0900-notes
+echo n > "$repo/status/$b12.md"
+mkdir -p "$repo/elsewhere/$b12-img" && echo p > "$repo/elsewhere/$b12-img/01.png"
+git -C "$repo" add "status/$b12.md" "elsewhere/$b12-img"
+out="$(cd "$repo" && HOME="$fake_home" XDG_DOWNLOAD_DIR= python3 "$CHECK" downloads)"
+case "$out" in *"2026-01-12-0900-notes.zip"*) ;; *) fail "downloads accepted pictures tracked outside the Markdown's folder: $out" ;; esac
 echo "PASS: an uncommitted export left in a Downloads folder is named"
 
 # --- 5: init registers the hook and scaffolds no unused specs/ plans/ ---

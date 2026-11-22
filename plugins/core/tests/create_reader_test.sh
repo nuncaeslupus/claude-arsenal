@@ -579,14 +579,14 @@ const fails = [];
   await tick();  // an import reads its files asynchronously (a .zip, pictures)
   if (d.toasts[d.toasts.length - 1] !== 'Imported 1 note')
     fails.push('#541: an imported note for a removed section was dropped: ' + JSON.stringify(d.toasts));
-  d.byId['btn-export'].click();
+  d.byId['btn-export'].click(); await tick();  // export waits for the stored pictures to load
   if (!d.byId['modal-ta'].value.includes('"gone-section":"orphan note"'))
     fails.push('#541: an unplaced section note is missing from the next export');
 
   // #541.3 the notes modal takes focus, makes the page inert, and gives both back
   d = boot(memStorage(), null, false);
   d.t.value = 'a note'; d.document.activeElement = d.byId['btn-export'];
-  d.byId['btn-export'].click();
+  d.byId['btn-export'].click(); await tick();
   if (d.document.activeElement !== d.byId['modal-copy']) fails.push('#541: focus did not move into the modal');
   if (!d.document.body.children.every(c => c.inert === true)) fails.push('#541: the page behind the modal is not inert');
   d.byId['modal'].h.keydown({ key: 'Escape' });

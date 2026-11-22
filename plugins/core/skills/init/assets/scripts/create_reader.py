@@ -61,6 +61,7 @@ Usage (run from repo root):
 
 import argparse
 import base64
+import contextlib
 import hashlib
 import json
 import mimetypes
@@ -71,6 +72,7 @@ import shutil
 import subprocess
 import sys
 import zipfile
+import zlib
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -734,7 +736,14 @@ def read_note_pictures(path: Path) -> tuple[dict[str, list[str]], list[str]]:
             names = zf.namelist()
             leaf = "/" + rel.rsplit("/", 1)[-1]
             hit = rel if rel in names else next((n for n in names if n.endswith(leaf)), None)
-            return zf.read(hit) if hit else None
+            if not hit:
+                return None
+            try:
+                return zf.read(hit)
+            except (zipfile.BadZipFile, zlib.error, RuntimeError, NotImplementedError):
+                # A damaged member (failed CRC, bad deflate stream): this picture
+                # is reported, the notes and the other pictures still seed.
+                return None
         f = (base / rel).resolve()
         return f.read_bytes() if f.is_file() and f.is_relative_to(base) else None
 
@@ -798,16 +807,24 @@ def read_notes(path: Path) -> dict:
 # ---------------------------------------------------------------- HTML build
 
 
-def has_note_field(it: dict, seed_notes: dict) -> bool:
+def has_note_field(
+    it: dict, seed_notes: dict, seed_pictures: dict[str, list[str]] | None = None
+) -> bool:
     """One note field per section with something to comment on — never on a bare heading.
 
     Splitting on ## and ### gives each option its own slot, but a heading
     followed straight by a subheading has no body of its own: a field there sat
     under a title with nothing to annotate, and read as a field placed at
     random. A seeded note keeps its field, so a note written against an earlier
-    revision is never dropped by a rebuild.
+    revision is never dropped by a rebuild. A picture-only note counts too: its
+    text is empty, and without a field the picture would land under "Unplaced
+    notes" although its section still exists.
     """
-    return bool(it["body_html"].strip()) or bool(seed_notes.get(it["domid"], "").strip())
+    return (
+        bool(it["body_html"].strip())
+        or bool(seed_notes.get(it["domid"], "").strip())
+        or bool((seed_pictures or {}).get(it["domid"]))
+    )
 
 
 def esc(t: str) -> str:
@@ -835,7 +852,9 @@ def build_html(
     before the stamp; the Export button appends the export's own stamp and `-notes.md`.
     """
     seed_notes = seed_notes or {}
-    total_notes = sum(has_note_field(it, seed_notes) for _, p in parts for it in p["items"])
+    total_notes = sum(
+        has_note_field(it, seed_notes, seed_pictures) for _, p in parts for it in p["items"]
+    )
     # `ns_key` is the output stem when it is not the kind: two design docs in
     # one folder are two readers, and a namespace keyed on the kind alone let
     # one's notes surface under the other's headings.
@@ -882,7 +901,7 @@ def build_html(
             )
         for it in p["items"]:
             tag = "h3" if it["level"] == 2 else "h4"
-            noted = has_note_field(it, seed_notes)
+            noted = has_note_field(it, seed_notes, seed_pictures)
             cls = f"sec l{it['level']}" + ("" if noted else " bare")
             # Block notes (✎ beside each paragraph, list item or table) are
             # created in the browser; the article carries the label they take.
@@ -946,15 +965,16 @@ def build_html(
             "<p>Reviewed copy: the notes returned on this revision, in place beside what "
             "they are about. Read-only.</p>",
         )
-    page = page.replace(
-        "__SEED_NOTES__",
-        json.dumps(seed_notes, ensure_ascii=False).replace("<", "\\u003c"),
-    )
-    # Pictures returned with the notes, as data URLs: a rebuilt reader shows
+    # Pictures returned with the notes are data URLs: a rebuilt reader shows
     # them, and a reviewed copy keeps them beside the note they belong to.
-    pictures_js = json.dumps(seed_pictures or {}).replace("<", "\\u003c")
-    page = page.replace("__SEED_PICTURES__", pictures_js)
-    return page
+    # Both values go in one pass: replacing one and then the other would scan
+    # the first's text for the second's token, and a note that quotes the token
+    # would be rewritten (and, with pictures, break the script).
+    seeds = {
+        "__SEED_NOTES__": json.dumps(seed_notes, ensure_ascii=False).replace("<", "\\u003c"),
+        "__SEED_PICTURES__": json.dumps(seed_pictures or {}).replace("<", "\\u003c"),
+    }
+    return re.sub("__SEED_NOTES__|__SEED_PICTURES__", lambda m: seeds[m.group(0)], page)
 
 
 # ---------------------------------------------------------------- Markdown build
@@ -1070,6 +1090,9 @@ PICTURE_WIDTH = 1400
 PICTURE_QUALITY = 82
 
 
+GENERATED_PICTURE_RE = re.compile(r"^\d{2,}-.*\.(?:png|jpe?g|gif|webp|svg|bmp|tiff?)$", re.I)
+
+
 class Pictures:
     """Writes each picture once into `<stem>-img/` and hands back its relative path.
 
@@ -1080,6 +1103,7 @@ class Pictures:
 
     def __init__(self, img_dir: Path, width: int, quality: int) -> None:
         self.dir, self.width, self.quality = img_dir, width, quality
+        self.written: set[str] = set()
         self.done: dict[Path, str] = {}
         self.count = 0
         self.warned = False
@@ -1088,7 +1112,24 @@ class Pictures:
         self.count += 1
         base = f"{self.count:02d}-{slug(label)[:48].rstrip('-')}"
         self.dir.mkdir(parents=True, exist_ok=True)
+        self.written.add(f"{base}{ext}")
         return self.dir / f"{base}{ext}"
+
+    def prune(self) -> None:
+        """Delete files this copy generated earlier and no longer links.
+
+        A re-bake after a screenshot was redacted must not leave the old file
+        beside the new Markdown, where `git add` would commit it. Only names this
+        class generates (`NN-<label>.<picture ext>`) in this copy's own directory
+        are touched, and only those not written by this run.
+        """
+        if not self.dir.is_dir():
+            return
+        for f in self.dir.iterdir():
+            if f.is_file() and f.name not in self.written and GENERATED_PICTURE_RE.match(f.name):
+                f.unlink()
+        with contextlib.suppress(OSError):  # still holds something that is not ours
+            self.dir.rmdir()
 
     def rel(self, f: Path) -> str:
         return f"{self.dir.name}/{f.name}"
@@ -1497,9 +1538,12 @@ JS = r"""
   window.addEventListener('pagehide',flushSaves);
   // A picture this browser refused to store exists only in the page: leaving
   // warns, whatever a text-only copy to the clipboard did to `dirty`.
-  var unstored={};
+  var unstored={},storing={};
+  // A picture still being prepared (picPending) or written (storing) is not yet
+  // kept: closing the page then would drop it, whatever "Saved" says.
+  function picsBusy(){return Object.keys(storing).length>0||Object.keys(picPending).some(function(k){return picPending[k]>0;});}
   window.addEventListener('beforeunload',function(e){flushSaves();
-    if((!lsOK&&dirty)||Object.keys(unstored).length){e.preventDefault();e.returnValue='';}});
+    if((!lsOK&&dirty)||Object.keys(unstored).length||picsBusy()){e.preventDefault();e.returnValue='';}});
 
   var saveTimers={},pending={};
   function save(t){
@@ -1604,12 +1648,17 @@ JS = r"""
       box.appendChild(w);}
     setState('⚠ Picture not stored — tap Save / Export','warn');
   }
+  function seededPics(k){var s=SEED_PICS[k];return Array.isArray(s)&&s.length>0;}
   function storePics(t){
     var k=t.dataset.key,v=(PICS[k]||[]).slice();
-    // A note left with no pictures loses its entry rather than keeping an empty one.
-    var p;try{p=picTx('readwrite',function(st){if(v.length){st.put(v,NS+k);}else{st.delete(NS+k);}});}
+    // A note left with no pictures loses its entry rather than keeping an empty
+    // one — unless the page was built with pictures for it: then the empty list
+    // is the reviewer's choice, and it must outrank the seed on the next load.
+    var p;try{p=picTx('readwrite',function(st){if(v.length||seededPics(k)){st.put(v,NS+k);}else{st.delete(NS+k);}});}
     catch(e){p=Promise.reject(e);}
-    return p.then(function(){picSaved(t,true);},function(){picSaved(t,false);});
+    storing[k]=(storing[k]||0)+1;
+    function done(ok){if(--storing[k]<=0)delete storing[k];picSaved(t,ok);}
+    return p.then(function(){done(true);},function(){done(false);});
   }
   function renderPics(t){
     var box=t.closest('.note');if(!box)return;
@@ -1634,9 +1683,14 @@ JS = r"""
       if(!BAKED){
         var del=document.createElement('button');del.type='button';del.className='npic-del';
         del.textContent='×';del.setAttribute('aria-label','Remove picture '+(i+1));
+        // By the picture the reviewer clicked, not by its position: the stored
+        // pictures may replace the displayed list before this runs, and an index
+        // would then delete one that was never on screen. Gone from the list
+        // by then: nothing to remove.
         del.addEventListener('click',function(){
           picsReady.then(function(){
-            PICS[t.dataset.key].splice(i,1);renderPics(t);setFilled(t);updateCount();storePics(t);
+            var at=(PICS[t.dataset.key]||[]).indexOf(src);if(at<0)return;
+            PICS[t.dataset.key].splice(at,1);renderPics(t);setFilled(t);updateCount();storePics(t);
             t.focus();toast('Picture removed');});});
         fig.appendChild(del);
       }
@@ -1649,18 +1703,24 @@ JS = r"""
     // note away (and out of the export); after the stored pictures are read, so
     // a new one is added to them rather than replacing them.
     picPending[k]=(picPending[k]||0)+1;
+    var attached=0;
     return files.reduce(function(chain,f){return chain.then(function(){
-      return shrink(f).then(function(src){(PICS[k]=PICS[k]||[]).push(src);},
+      return shrink(f).then(function(src){(PICS[k]=PICS[k]||[]).push(src);attached++;},
                             function(){toast('That picture could not be read');});});},picsReady)
       .then(function(){
-        picPending[k]--;
+        picPending[k]--;if(picPending[k]<=0)delete picPending[k];
         var box=t.closest('.bnote');
-        if(box&&!hasNote(t)&&document.activeElement!==t){closeBlock(box);return;}
+        // Not while another attachment to this note is still being prepared: it
+        // would land on a note that is gone and miss the export.
+        if(box&&!hasNote(t)&&!picPending[k]&&document.activeElement!==t){closeBlock(box);return attached;}
         renderPics(t);setFilled(t);updateCount();dirty=true;
         // Text and quote too: a block note holding only a picture still says what it is on.
-        save(t);return storePics(t);
+        save(t);return storePics(t).then(function(){return attached;});
       });
   }
+  // Says how many pictures were attached, not how many were offered: a refused
+  // one has already said so, and that message must not be overwritten.
+  function attachedToast(n){if(n>0)toast(n===1?'Picture attached':n+' pictures attached');}
   function wirePictureInput(t){
     var box=t.closest('.note');
     t.addEventListener('paste',function(e){
@@ -1671,7 +1731,7 @@ JS = r"""
       var txt='';try{txt=e.clipboardData.getData('text/plain');}catch(_){}
       if(txt)return;
       e.preventDefault();
-      addPics(t,fs).then(function(){toast(fs.length===1?'Picture attached':fs.length+' pictures attached');});
+      addPics(t,fs).then(attachedToast);
     });
     if(!box)return;
     box.addEventListener('dragover',function(e){if(hasFiles(e.dataTransfer)){e.preventDefault();box.classList.add('dropping');}});
@@ -1681,7 +1741,7 @@ JS = r"""
       if(!hasFiles(e.dataTransfer))return;e.preventDefault();
       var fs=picFiles(e.dataTransfer);
       if(!fs.length){toast('Only pictures can be attached to a note');return;}
-      addPics(t,fs).then(function(){toast(fs.length===1?'Picture attached':fs.length+' pictures attached');});
+      addPics(t,fs).then(attachedToast);
     });
   }
   tas.forEach(wire);
@@ -1797,14 +1857,16 @@ JS = r"""
     try{
       picsReady=openPicDB().then(function(db){return new Promise(function(res,rej){
         // Only this document's keys (one store serves every reader on this
-        // origin), and an entry that holds no picture is removed as it is met.
+        // origin), and an entry that holds no picture is removed as it is met —
+        // except for a note the page was seeded with pictures for: there the
+        // empty entry records that the reviewer removed them.
         var tx=db.transaction('pics','readwrite'),out={};
         var cur=tx.objectStore('pics').openCursor(IDBKeyRange.bound(NS,NS+'￿'));
         cur.onsuccess=function(){var c=cur.result;if(!c)return;var k=String(c.key);
           var v=Array.isArray(c.value)?c.value.filter(function(s){return typeof s==='string';}):[];
-          if(v.length){out[k.slice(NS.length)]=v;}else{c.delete();}
+          if(v.length||seededPics(k.slice(NS.length))){out[k.slice(NS.length)]=v;}else{c.delete();}
           c.continue();};
-        tx.oncomplete=function(){res(out);};tx.onerror=function(){rej(tx.error);};});})
+        tx.oncomplete=function(){res(out);};tx.onerror=tx.onabort=function(){rej(tx.error);};});})
       .then(function(saved){
         Object.keys(saved).forEach(function(k){
           var t=null;tas.forEach(function(x){if(x.dataset.key===k)t=x;});
@@ -1920,19 +1982,24 @@ JS = r"""
     var n=v.getUint16(i+10,true),p=v.getUint32(i+16,true),jobs=[];
     for(var e=0;e<n;e++){
       if(v.getUint32(p,true)!==0x02014b50)break;
-      var method=v.getUint16(p+10,true),csz=v.getUint32(p+20,true),nl=v.getUint16(p+28,true),
+      var method=v.getUint16(p+10,true),crc=v.getUint32(p+16,true),csz=v.getUint32(p+20,true),usz=v.getUint32(p+24,true),
+          nl=v.getUint16(p+28,true),
           xl=v.getUint16(p+30,true),cl=v.getUint16(p+32,true),lo=v.getUint32(p+42,true);
       var name=dec.decode(u8.subarray(p+46,p+46+nl));
       var start=lo+30+v.getUint16(lo+26,true)+v.getUint16(lo+28,true),raw=u8.slice(start,start+csz);
       p+=46+nl+xl+cl;
       if(/\/$/.test(name))continue;
-      jobs.push((function(name,method,raw){
-        if(method===0)return Promise.resolve([name,raw]);
+      // [name, bytes, damaged]: bytes are null for a member this browser cannot
+      // read; `damaged` is set when they do not match the length and CRC the
+      // archive recorded, and such a member is never used.
+      jobs.push((function(name,method,raw,crc,usz){
+        function check(b){return b.length===usz&&crc32(b)===crc?[name,b,false]:[name,null,true];}
+        if(method===0)return Promise.resolve(check(raw));
         if(method===8&&typeof DecompressionStream!=='undefined'){
           return new Response(new Blob([raw]).stream().pipeThrough(new DecompressionStream('deflate-raw')))
-            .arrayBuffer().then(function(b){return[name,new Uint8Array(b)];});}
-        return Promise.resolve([name,null]);
-      })(name,method,raw));
+            .arrayBuffer().then(function(b){return check(new Uint8Array(b));},function(){return[name,null,true];});}
+        return Promise.resolve([name,null,false]);
+      })(name,method,raw,crc,usz));
     }
     return Promise.all(jobs);
   }
@@ -1964,7 +2031,11 @@ JS = r"""
     r.files.forEach(function(f){entries.push({name:f.name,bytes:dataBytes(f.src)});});
     return{name:base+'.zip',body:zipBlob(entries)};
   }
-  document.getElementById('btn-export').addEventListener('click',function(){
+  // After the stored pictures are read (or cannot be): on a reload the text is back
+  // at once and the pictures a moment later, and an export in between would
+  // leave them out. `picsReady` always settles, so a failed read never blocks it.
+  document.getElementById('btn-export').addEventListener('click',function(){picsReady.then(doExport);});
+  function doExport(){
     var base=exportBase(),r=buildExport(base);
     if(r.n===0){toast('No notes yet — add some first.');return;}
     lastExport=exportFile(r,base);
@@ -1984,7 +2055,7 @@ JS = r"""
                toast('Download blocked — copy the notes before leaving');return;}
     setState('Download requested '+nowStamp(),'ok');
     toast('Download requested — '+r.n+' note'+(r.n===1?'':'s'));
-  });
+  }
 
   document.getElementById('modal-copy').addEventListener('click',function(){
     // Success is reported only once a copy actually happened: the legacy
@@ -2048,29 +2119,51 @@ JS = r"""
     var loose=files.filter(isPic);
     var texts=files.filter(function(f){return !isPic(f)&&!/\.zip$/i.test(f.name||'');});
     var looseJobs=loose.map(function(f){return readAs(f,'readAsArrayBuffer').then(function(b){bin[f.name]=new Uint8Array(b);});});
-    var zipJobs=zips.map(function(z){return readAs(z,'readAsArrayBuffer').then(unzip).then(function(es){
-      es.forEach(function(e){if(!e[1])return;
-        if(/\.(md|markdown|json)$/i.test(e[0]))texts.push({zipText:new TextDecoder().decode(e[1]),name:e[0]});
-        else bin[e[0]]=e[1];});});});
+    // Each archive keeps its own members: two exports of one document in the same
+    // minute both hold `<base>-img/01.png`, and one shared map let the later
+    // archive's picture replace the one the notes were exported with.
+    var zipRes=[];
+    var zipJobs=zips.map(function(z,zi){return readAs(z,'readAsArrayBuffer').then(unzip).then(function(es){
+      zipRes[zi]=es;});});
     return Promise.all(looseJobs.concat(zipJobs)).then(function(){
+      var all={};
+      zipRes.forEach(function(es){
+        var zbin={},zbad={};
+        es.forEach(function(e){
+          if(/\.(md|markdown|json)$/i.test(e[0]))return;
+          if(e[2])zbad[e[0]]=1;else if(e[1])zbin[e[0]]=e[1];});
+        es.forEach(function(e){
+          if(!/\.(md|markdown|json)$/i.test(e[0]))return;
+          if(e[2])texts.push({zipDamaged:true,name:e[0]});
+          else if(e[1])texts.push({zipText:new TextDecoder().decode(e[1]),name:e[0],zbin:zbin,zbad:zbad});});
+        Object.keys(zbin).forEach(function(n){all[n]=zbin[n];});
+      });
       var t=texts[0];if(!t)return null;
+      if(t.zipDamaged)return{damaged:t.name};
+      // Notes from an archive resolve pictures in that archive (then the loose
+      // files chosen with it); notes from a loose file, in whatever was chosen.
+      var useBin=t.zipText!=null?Object.assign({},bin,t.zbin):Object.assign({},all,bin);
       return (t.zipText!=null?Promise.resolve(t.zipText):readAs(t,'readAsText')).then(function(txt){
-        return{text:String(txt||''),bin:bin};});
+        return{text:String(txt||''),bin:useBin,bad:t.zbad||{}};});
     });
   }
-  function picturesFrom(txt,bin){
-    var mk=/^[ \t]*<!--[ \t]*SPEC-NOTES-PICTURES[ \t]*$/m.exec(txt),map=null,out={},missing=0,rejected=0,jobs=[];
-    if(!mk)return Promise.resolve({pics:out,missing:0,rejected:0});
+  function picturesFrom(txt,bin,bad){
+    var mk=/^[ \t]*<!--[ \t]*SPEC-NOTES-PICTURES[ \t]*$/m.exec(txt),map=null,out={},missing=0,rejected=0,damaged=0,jobs=[];
+    bad=bad||{};
+    if(!mk)return Promise.resolve({pics:out,missing:0,rejected:0,damaged:0});
     var after=txt.slice(mk.index+mk[0].length),end=after.indexOf('-->');
     try{map=JSON.parse(after.slice(0,end<0?undefined:end));}catch(e){map=null;}
-    if(!map||typeof map!=='object')return Promise.resolve({pics:out,missing:0,rejected:0});
-    var byBase={};Object.keys(bin).forEach(function(n){byBase[baseName(n)]=n;});
+    if(!map||typeof map!=='object')return Promise.resolve({pics:out,missing:0,rejected:0,damaged:0});
+    var byBase={},badBase={};Object.keys(bin).forEach(function(n){byBase[baseName(n)]=n;});
+    Object.keys(bad).forEach(function(n){badBase[baseName(n)]=1;});
     Object.keys(map).forEach(function(k){
       if(!Array.isArray(map[k]))return;
       out[k]=[];
       map[k].forEach(function(p,i){
-        var n=bin[p]?p:byBase[baseName(p)];
-        if(!n){missing++;return;}
+        var n=bin[p]?p:(bad[p]?null:byBase[baseName(p)]);
+        // A member that failed its length or CRC check is not in `bin`: it is
+        // reported as damaged, never imported and never counted as restored.
+        if(!n){if(bad[p]||badBase[baseName(p)])damaged++;else missing++;return;}
         // Raster pictures only: anything else named in the file is not attached.
         if(!pictureMime(n)){rejected++;return;}
         jobs.push(bytesURL(n,bin[n]).then(function(u){out[k][i]=u;}));
@@ -2078,13 +2171,14 @@ JS = r"""
     });
     return Promise.all(jobs).then(function(){
       Object.keys(out).forEach(function(k){out[k]=out[k].filter(Boolean);});
-      return{pics:out,missing:missing,rejected:rejected};});
+      return{pics:out,missing:missing,rejected:rejected,damaged:damaged};});
   }
   document.getElementById('file-import').addEventListener('change',function(e){
     var files=Array.prototype.slice.call(e.target.files||[]);e.target.value='';
     if(!files.length)return;
     gatherImport(files).then(function(got){
       if(!got){toast('Choose the notes file (.md or .zip) to import');return;}
+      if(got.damaged){toast('The notes in that .zip are damaged — export them again');return;}
       var txt=got.text;var obj=null;
       // Last LINE-ANCHORED marker. A plain lastIndexOf lands inside the JSON
       // string of a note that mentions the marker, and the import then reads as
@@ -2100,12 +2194,13 @@ JS = r"""
       var dm=/^<!-- SPEC-NOTES-DOC (\S+) -->/m.exec(txt);
       if(dm&&dm[1]!=='__EXPORT_STEM__'&&
          !confirm('That file holds notes for '+dm[1]+', not for this page (__EXPORT_STEM__). Import anyway?'))return;
-      return Promise.all([picturesFrom(txt,got.bin),picsReady]).then(function(all){var pf=all[0];
+      return Promise.all([picturesFrom(txt,got.bin,got.bad),picsReady]).then(function(all){var pf=all[0];
         var r=applyData(obj,pf.pics);
         var msg='Imported '+r.applied+' note'+(r.applied===1?'':'s')+
           (r.pics?', '+r.pics+' picture'+(r.pics===1?'':'s'):'')+
           (r.skipped?' ('+r.skipped+' skipped — not text)':'')+
           (pf.missing?' — '+pf.missing+' picture'+(pf.missing===1?'':'s')+' not found: choose the .zip, or the pictures with the .md':'')+
+          (pf.damaged?' — '+pf.damaged+' picture'+(pf.damaged===1?'':'s')+' damaged in the .zip, not imported':'')+
           (pf.rejected?' — '+pf.rejected+' file'+(pf.rejected===1?'':'s')+' skipped: not a PNG, JPEG, GIF or WebP picture':'')+
           (r.unplaced?' — '+r.unplaced+' under “Unplaced notes”: their section is gone':'');
         setState(msg,(pf.missing||pf.rejected||r.skipped)?'warn':'ok');toast(msg);
@@ -2406,7 +2501,10 @@ def _main() -> int:
             seed_notes = loaded
             seed_pictures, missing = read_note_pictures(notes_path)
             for rel in missing:
-                print(f"⚠  picture {rel} named by {notes_path} was not found", file=sys.stderr)
+                print(
+                    f"⚠  picture {rel} named by {notes_path} was not found or could not be read",
+                    file=sys.stderr,
+                )
             # An export names the page that wrote it. Another document's notes would
             # land under whatever headings share their ids; a revision apart is the
             # normal re-seed, so only the repo and document are compared.
@@ -2483,7 +2581,9 @@ def _main() -> int:
 
     n_parts = len(parts)
     n_secs = sum(len(p["items"]) for _, p in parts)
-    n_notes = sum(has_note_field(it, seed_notes) for _, p in parts for it in p["items"])
+    n_notes = sum(
+        has_note_field(it, seed_notes, seed_pictures) for _, p in parts for it in p["items"]
+    )
     print(f"✓ {n_parts} part(s), {n_secs} section(s), {n_notes} note field(s)", file=sys.stderr)
     print(f"  {html_file}", file=sys.stderr)
     print(f"  {md_file}", file=sys.stderr)
@@ -2517,11 +2617,15 @@ def write_copy(
     """`<html stem>.md` + `<stem>-img/` beside the HTML: the copy a link should point at."""
     md_file = html_file.with_suffix(".md")
     stem = re.sub(r"-(?:reader|reviewed)$", "", html_file.stem)
-    pics = Pictures(html_file.parent / f"{stem}-img", args.picture_width, args.picture_quality)
+    # The reviewed copy has its own directory: both copies number their files from
+    # 01, so a shared one let the later run overwrite pictures the other links.
+    img_dir = html_file.parent / (f"{stem}-reviewed-img" if reviewed else f"{stem}-img")
+    pics = Pictures(img_dir, args.picture_width, args.picture_quality)
     text, placed = build_github_markdown(
         parts, title, gen_date, notes, single_label, html_file.name, pics, reviewed, note_pictures
     )
     md_file.write_text(text, encoding="utf-8")
+    pics.prune()
     where = f" in {pics.dir.name}/" if pics.count else ""
     print(f"✓ GitHub copy, {placed} note(s), {pics.count} picture(s){where}", file=sys.stderr)
     print(f"  {md_file}", file=sys.stderr)

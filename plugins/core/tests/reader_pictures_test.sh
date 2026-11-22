@@ -125,4 +125,101 @@ reader_md=$(ls "${base}"/old/*-reader.md)
 grep -A6 "Unplaced notes" "${reader_md}" | grep -q "Note on a section that will vanish" \
     || fail "the note on a removed section was dropped"
 
-echo "PASS: reader pictures — .zip and unzipped seeding, reviewed-copy files, path confinement, 5.33.1 export"
+# Helper for the cases below: a notes .zip whose Markdown names the given pictures.
+mkzip() {  # mkzip <out.zip> <notes json> <pictures json> <member=bytes-spec ...>
+    python3 - "$@" <<'PYEOF'
+import json, struct, sys, zipfile, zlib
+out, notes, pics, *members = sys.argv[1:]
+def png(rgb):
+    raw = b"".join(b"\x00" + bytes(rgb) * 4 for _ in range(4))
+    def chunk(t, d):
+        return struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d) & 0xFFFFFFFF)
+    return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", 4, 4, 8, 2, 0, 0, 0))
+            + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b""))
+md = "\n".join(["# notes", "<!-- SPEC-NOTES-PICTURES", pics, "-->", "<!-- SPEC-NOTES-DATA", notes, "-->"])
+with zipfile.ZipFile(out, "w") as z:
+    z.writestr("n.md", md)
+    for m in members:
+        name, _, kind = m.partition("=")
+        z.writestr(name, png((255, 0, 0)))
+if "damaged" in "".join(members):
+    data = bytearray(open(out, "rb").read())
+    i = data.index(b"IDAT") + 6  # inside the first picture's bytes, after its CRC was recorded
+    data[i] ^= 0xFF
+    open(out, "wb").write(data)
+PYEOF
+}
+
+# 6. A note that quotes the reader's own placeholder is data, not a placeholder: both
+#    seed values go in one pass, so the page's seed script still parses with pictures.
+mkzip "${base}/tok.zip" '{"s-spec-1": "quotes __SEED_PICTURES__ and __SEED_NOTES__"}' \
+    '{"s-spec-1": ["i/01.png"]}' "i/01.png=ok"
+out=$(run_reader --input status/specification.md --output-dir "${base}/tok" --notes "${base}/tok.zip" --no-markdown) \
+    || fail "a note quoting a placeholder broke the build: ${out}"
+python3 - "${base}"/tok/*-reader.html <<'PYEOF' || fail "the seed script no longer parses after a note quoted a placeholder"
+import json, re, sys
+page = open(sys.argv[1], encoding="utf-8").read()
+m = re.search(r"var SPEC_SEED_NOTES=(.*?);var SPEC_SEED_PICTURES=(.*?);</script>", page, re.S)
+notes, pics = json.loads(m.group(1)), json.loads(m.group(2))
+assert notes["s-spec-1"] == "quotes __SEED_PICTURES__ and __SEED_NOTES__", notes
+assert pics["s-spec-1"][0].startswith("data:image/png;base64,"), pics
+PYEOF
+
+# 7. The reviewed copy keeps its pictures in its own directory: both copies number
+#    their files from 01, so a shared one let one copy overwrite the other's.
+mkzip "${base}/two.zip" '{"s-spec-1": "see", "s-spec-2": "and"}' \
+    '{"s-spec-1": ["i/01.png"], "s-spec-2": ["i/02.png"]}' "i/01.png=ok" "i/02.png=ok"
+out=$(run_reader --input status/specification.md --output-dir "${base}/two" --notes "${base}/two.zip" --bake) \
+    || fail "--bake failed: ${out}"
+out=$(run_reader --input status/specification.md --output-dir "${base}/two" --notes "${base}/two.zip") \
+    || fail "regular run failed: ${out}"
+rev_md=$(ls "${base}"/two/*-reviewed.md)
+reg_md=$(ls "${base}"/two/*-reader.md)
+grep -q -- '-reviewed-img/' "${rev_md}" || fail "the reviewed copy does not link its own directory"
+grep -q -- '-reviewed-img/' "${reg_md}" && fail "the regular copy links the reviewed copy's directory"
+for md in "${rev_md}" "${reg_md}"; do
+    grep -o '!\[[^]]*\]([^)]*\.\(png\|jpg\))' "${md}" | sed 's/.*(\(.*\))/\1/' | while read -r f; do
+        [[ -s "${base}/two/${f}" ]] || { echo "FAIL: ${md} links a missing file ${f}" >&2; exit 1; }
+    done || exit 1
+done
+[[ $(ls "${base}"/two/*-reviewed-img | wc -l) -eq 2 ]] || fail "the reviewed directory does not hold its two pictures"
+
+# 8. A re-bake after a picture was redacted leaves no stale file behind (it would be
+#    committed with the new copy).
+mkdir -p "${base}/rb"
+out=$(run_reader --input status/specification.md --output "${base}/rb/x-reader.html" --notes "${base}/two.zip" --bake) \
+    || fail "first --bake failed: ${out}"
+[[ $(ls "${base}/rb/x-reviewed-img" | wc -l) -eq 2 ]] || fail "first bake did not write two pictures"
+# files a Pillow-less run copies unconverted are generated too
+touch "${base}/rb/x-reviewed-img/03-old.bmp" "${base}/rb/x-reviewed-img/04-old.tif" "${base}/rb/x-reviewed-img/05-old.tiff"
+mkzip "${base}/one.zip" '{"s-spec-1": "see", "s-spec-2": "and"}' '{"s-spec-1": ["i/01.png"]}' "i/01.png=ok"
+out=$(run_reader --input status/specification.md --output "${base}/rb/x-reader.html" --notes "${base}/one.zip" --bake) \
+    || fail "second --bake failed: ${out}"
+[[ $(ls "${base}/rb/x-reviewed-img" | wc -l) -eq 1 ]] || fail "a redacted picture's file survived the re-bake: $(ls "${base}/rb/x-reviewed-img")"
+mkzip "${base}/none.zip" '{"s-spec-1": "see"}' '{}'
+out=$(run_reader --input status/specification.md --output "${base}/rb/x-reader.html" --notes "${base}/none.zip" --bake) \
+    || fail "third --bake failed: ${out}"
+[[ ! -e "${base}/rb/x-reviewed-img" ]] || fail "the picture directory outlived the last picture"
+
+# 9. A damaged picture in the .zip is named; the notes and the other picture still seed.
+mkzip "${base}/dmg.zip" '{"s-spec-1": "see", "s-spec-2": "and"}' \
+    '{"s-spec-1": ["i/01.png"], "s-spec-2": ["i/02.png"]}' "i/01.png=damaged" "i/02.png=ok"
+out=$(run_reader --input status/specification.md --output-dir "${base}/dm" --notes "${base}/dmg.zip" --no-markdown) \
+    || fail "a damaged picture stopped the build: ${out}"
+grep -q "picture i/01.png .* could not be read" <<<"${out}" || fail "the damaged picture was not named: ${out}"
+grep -q "1 picture(s)" <<<"${out}" || fail "the intact picture should still seed: ${out}"
+grep -q "Traceback" <<<"${out}" && fail "a damaged picture produced a traceback"
+
+# 10. A picture-only note keeps its section's field when the section lost its body.
+repo2="${base}/yourproject2"
+mkdir -p "${repo2}/status"
+git init -q "${repo2}"
+printf '# Parent\n\n**Revision**: 1\n\n## 1. Parent\n\n### 1.1 Child\n\nText here.\n' > "${repo2}/status/specification.md"
+mkzip "${base}/po.zip" '{"s-spec-1": ""}' '{"s-spec-1": ["i/01.png"]}' "i/01.png=ok"
+out=$(cd "${repo2}" && "${PY[@]}" "${READER}" --input status/specification.md --output-dir status --notes "${base}/po.zip" --no-markdown 2>&1) \
+    || fail "picture-only seed failed: ${out}"
+grep -q 'data-key="s-spec-1"' "${repo2}"/status/*-reader.html \
+    || fail "a picture-only note lost its field on a section with no body"
+grep -q "3 note field(s)" <<<"${out}" || fail "the note-field count ignores the picture-only note: ${out}"
+
+echo "PASS: reader pictures — .zip and unzipped seeding, reviewed-copy files, path confinement, 5.33.1 export, placeholders, separate directories, re-bake, damaged picture, picture-only note"

@@ -108,6 +108,68 @@ async function importFiles(page, files) {
   return page.evaluate(() => document.getElementById('savestate').textContent);
 }
 
+
+// A notes .zip as the reader writes it, for the checks that need a seeded page or an import:
+// members are 'path=r,g,b' (a 4x4 PNG of that colour); `damage` names one whose bytes are altered
+// after the archive recorded its CRC.
+const PYZIP = `
+import json, os, struct, sys, zipfile, zlib
+out, notes, pics, *members = sys.argv[1:]
+def png(rgb):
+    raw = b"".join(b"\\x00" + bytes(rgb) * 4 for _ in range(4))
+    def chunk(t, d):
+        return struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d) & 0xFFFFFFFF)
+    return (b"\\x89PNG\\r\\n\\x1a\\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", 4, 4, 8, 2, 0, 0, 0))
+            + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b""))
+md = "\\n".join(["# notes", "<!-- SPEC-NOTES-PICTURES", pics, "-->", "<!-- SPEC-NOTES-DATA", notes, "-->"])
+blobs = {}
+with zipfile.ZipFile(out, "w") as z:
+    z.writestr("n.md", md)
+    for m in members:
+        name, _, rgb = m.partition("=")
+        blobs[name] = png([int(x) for x in rgb.split(",")])
+        z.writestr(name, blobs[name])
+bad = os.environ.get("DAMAGE")
+if bad:
+    data = bytearray(open(out, "rb").read())
+    i = data.index(blobs[bad]) + 40
+    data[i] ^= 0xFF
+    open(out, "wb").write(data)
+`;
+function seedZip(out, notes, pics, members, damage) {
+  execFileSync('python3', ['-c', PYZIP, out, JSON.stringify(notes), JSON.stringify(pics)].concat(members),
+    {env: Object.assign({}, process.env, damage ? {DAMAGE: damage} : {})});
+  return out;
+}
+function zipMember(zip, name) {
+  return execFileSync('python3', ['-c', 'import sys,zipfile,base64;print(base64.b64encode(zipfile.ZipFile(sys.argv[1]).read(sys.argv[2])).decode())', zip, name], {encoding: 'utf8'}).trim();
+}
+// The same page rebuilt with a notes .zip's pictures seeded into it.
+function seededReader(name, zip) {
+  const out = JSON.parse(py([READER, '--input', 'status/specification.md', '--output-dir', path.join('seeded', name), '--notes', zip, '--no-markdown', '--json']));
+  return 'file://' + path.resolve(repo, out.html);
+}
+// Opening the picture store takes `ms` longer: the window a slow disk opens.
+async function slowStore(ctx, ms) {
+  await ctx.addInitScript(ms => {
+    const open = IDBFactory.prototype.open;
+    IDBFactory.prototype.open = function (...a) {
+      const fake = {}, self = this;
+      setTimeout(() => {
+        const r = open.apply(self, a);
+        ['upgradeneeded', 'success', 'error'].forEach(ev => {
+          r['on' + ev] = () => { fake.result = r.result; fake.error = r.error; if (fake['on' + ev]) fake['on' + ev](); };
+        });
+      }, ms);
+      return fake;
+    };
+  }, ms);
+}
+async function exportText(page) {
+  const z = zipList(await exportFile(page));
+  return z[Object.keys(z).find(x => x.endsWith('.md'))] || '';
+}
+
 (async () => {
   const browser = await chromium.launch();
   try {
@@ -301,6 +363,151 @@ with zipfile.ZipFile(sys.argv[1], "w") as z:
     await page.close({runBeforeUnload: true});
     await new Promise(r => setTimeout(r, 500));
     check('leaving with an unstored picture warns', asked);
+    await ctx.close();
+
+    // ---- findings from review of the vendored 5.34.0 copy
+    const seedA = seedZip(path.join(base, 'seedA.zip'), {'s-spec-1': 'seeded note'}, {'s-spec-1': ['i/01.png']}, ['i/01.png=255,0,0']);
+    const urlSeed = seededReader('a', seedA);
+    const nsOf = page => page.evaluate(() => { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); const m = /^(.*-v\d+:)s-spec-/.exec(k); if (m) return m[1]; } return ''; });
+
+    // removing the last seeded picture sticks: the seed does not come back on reload
+    ctx = await browser.newContext(); page = await ctx.newPage();
+    await page.goto(urlSeed);
+    await page.waitForSelector('.note[data-for="s-spec-1"] .npic-del');
+    await page.click('.note[data-for="s-spec-1"] .npic-del');
+    await page.waitForTimeout(400);
+    await page.reload();
+    await page.waitForTimeout(600);
+    const back = await page.$$eval('.note[data-for="s-spec-1"] .npic img', x => x.length);
+    check('removing the last seeded picture is remembered across a reload', back === 0, String(back));
+    await ctx.close();
+
+    // a × clicked before the stored pictures load never deletes one that was not on screen
+    ctx = await browser.newContext(); await slowStore(ctx, 800); page = await ctx.newPage();
+    await page.goto(urlSeed);
+    await page.waitForTimeout(1200);
+    await page.fill('#n-s-spec-2', 'x'); await page.waitForTimeout(500);  // saving a note shows the page's storage namespace
+    const ns = await nsOf(page);
+    const storedB = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+    await storePut(page, ns + 's-spec-1', [storedB]);
+    await page.reload();
+    await page.click('.note[data-for="s-spec-1"] .npic-del');
+    await page.waitForTimeout(1800);
+    const keptKeys = await storedKeys(page);
+    const shown = await page.$$eval('.note[data-for="s-spec-1"] .npic img', x => x.length);
+    check('a × clicked before the stored pictures load does not delete a stored one',
+      ns && keptKeys.includes(ns + 's-spec-1') && shown === 1, JSON.stringify([ns, keptKeys, shown]));
+    await ctx.close();
+
+    // Save / Export clicked straight after a reload waits for the stored pictures
+    ctx = await browser.newContext({acceptDownloads: true}); await slowStore(ctx, 800); page = await ctx.newPage();
+    await page.goto(urlSeed);
+    await page.waitForTimeout(1200);
+    await makePicture(page, 120, 80, false);
+    await page.fill('#n-s-spec-2', 'with a picture');
+    await pasteInto(page, '#n-s-spec-2');
+    await page.waitForSelector('.note[data-for="s-spec-2"] .npic img');
+    await page.waitForTimeout(1500);
+    await page.reload();
+    const early = await exportText(page);   // clicked at once: the pictures are still being read
+    check('an export clicked straight after a reload still carries the stored picture',
+      /"s-spec-2":\["[^"]+\.png"\]/.test(early), early.slice(-300));
+    await ctx.close();
+
+    // the picture store's load transaction aborting (a failed commit: an `abort` with no `error` event) must not leave Export waiting
+    ctx = await browser.newContext({acceptDownloads: true});
+    await ctx.addInitScript(() => {
+      const tr = IDBDatabase.prototype.transaction; let done = false;
+      IDBDatabase.prototype.transaction = function (...a) {
+        const tx = tr.apply(this, a);
+        if (!done && a[1] === 'readwrite') { done = true; tx.addEventListener('error', e => e.stopPropagation(), true); Promise.resolve().then(() => tx.abort()); }
+        return tx;
+      };
+    });
+    page = await ctx.newPage();
+    await page.goto('file://' + html2);
+    await page.fill('#n-s-spec-1', 'a note');
+    await page.waitForTimeout(500);
+    const dlAbort = await Promise.all([page.waitForEvent('download', {timeout: 5000}).catch(() => null), page.click('#btn-export')]);
+    check('an export still completes when the picture store load transaction aborts', dlAbort[0] !== null, 'no download');
+    await ctx.close();
+
+    // leaving while a picture is still being prepared or written warns
+    ctx = await browser.newContext(); await slowStore(ctx, 800); page = await ctx.newPage();
+    await page.goto('file://' + html2);
+    await makePicture(page, 120, 80, false);
+    await pasteInto(page, '#n-s-spec-2');
+    let warnedBusy = false;
+    page.on('dialog', d => { if (d.type() === 'beforeunload') warnedBusy = true; d.dismiss().catch(() => {}); });
+    await page.click('h1');
+    await page.close({runBeforeUnload: true});
+    await new Promise(r => setTimeout(r, 500));
+    check('leaving while a picture write is pending warns', warnedBusy);
+    await ctx.close();
+
+    // a picture that cannot be read does not end in "Picture attached"
+    ctx = await browser.newContext(); page = await ctx.newPage();
+    await page.goto('file://' + html2);
+    await page.evaluate(() => { window.__pic = new File(['not a picture'], 'bad.png', {type: 'image/png'}); });
+    await pasteInto(page, '#n-s-spec-1');
+    await page.waitForTimeout(800);
+    const toastBad = await page.$eval('#toast', e => e.textContent);
+    check('an unreadable picture is not reported as attached', /could not be read/.test(toastBad), toastBad);
+    await ctx.close();
+
+    // two drops on an empty block note, the first unreadable: the note stays for the second
+    ctx = await browser.newContext({acceptDownloads: true}); page = await ctx.newPage();
+    await page.goto('file://' + html2);
+    const host2 = await page.$('.bn-host:has-text("Tuesdays")'); await host2.hover(); await (await host2.$('.bn-btn')).click();
+    const bk2 = await page.$eval('.bnote .note-ta', t => t.dataset.key);
+    await makePicture(page, 120, 80, false);
+    await page.evaluate(k => {
+      const ta = document.querySelector('.bnote .note-ta[data-key="' + k + '"]'), box = ta.closest('.note');
+      const drop = f => { const dt = new DataTransfer(); dt.items.add(f); box.dispatchEvent(new DragEvent('drop', {dataTransfer: dt, bubbles: true, cancelable: true})); };
+      drop(new File(['not a picture'], 'bad.png', {type: 'image/png'}));
+      drop(window.__pic);
+      ta.blur();
+    }, bk2);
+    await page.waitForSelector('.bnote .npic img', {timeout: 5000}).catch(() => {});
+    const bt = await exportText(page);
+    check('a block note stays open for a second attachment while the first one fails',
+      bt.includes('"' + bk2 + '":["'), bt.slice(-300));
+    await ctx.close();
+
+    // a damaged exact path never falls back to an intact member with the same basename elsewhere
+    const zE = seedZip(path.join(base, 'dmgbase.zip'), {'s-spec-1': 'note stays'}, {'s-spec-1': ['a/01.png']},
+      ['a/01.png=255,0,0', 'b/01.png=0,255,0'], 'a/01.png');
+    ctx = await browser.newContext(); page = await ctx.newPage();
+    await page.goto('file://' + html2);
+    const stE = await importFiles(page, zE);
+    const nE = await page.$$eval('.npic img', x => x.length);
+    check('a damaged picture is not replaced by a same-named intact one from another folder',
+      /1 picture damaged/.test(stE) && nE === 0, stE + ' / ' + nE);
+    await ctx.close();
+
+    // two .zip exports chosen together: pictures come from the archive that supplied the notes
+    const zA = seedZip(path.join(base, 'dupA.zip'), {'s-spec-1': 'from A'}, {'s-spec-1': ['x-img/01.png']}, ['x-img/01.png=255,0,0']);
+    const zB = seedZip(path.join(base, 'dupB.zip'), {'s-spec-1': 'from B'}, {'s-spec-1': ['x-img/01.png']}, ['x-img/01.png=0,0,255']);
+    for (const order of [[zA, zB], [zB, zA]]) {
+      ctx = await browser.newContext(); page = await ctx.newPage();
+      await page.goto('file://' + html2);
+      await importFiles(page, order);
+      const [txt, src] = await page.evaluate(() => [document.querySelector('#n-s-spec-1').value, (document.querySelector('.note[data-for="s-spec-1"] .npic img') || {}).src || '']);
+      check('two .zip exports chosen together keep each picture with its own archive (' + path.basename(order[0]) + ' first)',
+        src === 'data:image/png;base64,' + zipMember(order[0], 'x-img/01.png') && txt === (order[0] === zA ? 'from A' : 'from B'), txt + ' ' + src.slice(0, 60));
+      await ctx.close();
+    }
+
+    // an archive member that fails its CRC is reported and never imported
+    const zD = seedZip(path.join(base, 'dmg.zip'), {'s-spec-1': 'note stays', 's-spec-2': 'other'}, {'s-spec-1': ['d-img/01.png'], 's-spec-2': ['d-img/02.png']},
+      ['d-img/01.png=255,0,0', 'd-img/02.png=0,255,0'], 'd-img/01.png');
+    ctx = await browser.newContext(); page = await ctx.newPage();
+    await page.goto('file://' + html2);
+    const stD = await importFiles(page, zD);
+    const nD = await page.$$eval('.npic img', x => x.length);
+    const tD = await page.$eval('#n-s-spec-1', t => t.value);
+    check('a damaged picture in an imported .zip is reported, not restored; the notes and the other picture are',
+      /1 picture damaged/.test(stD) && nD === 1 && tD === 'note stays' && /, 1 picture —/.test(stD), stD + ' / ' + nD);
     await ctx.close();
   } finally {
     await browser.close();
