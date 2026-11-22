@@ -90,24 +90,19 @@ The repo was renamed `my-skills` → `claude-arsenal` at v0.1.0 via the
 GitHub Settings UI (preserves history and sets up redirects); no
 `git mv` was performed on the working tree.
 
-### CI triggers — a PR's later pushes do not run CI
+### CI triggers — every push to a PR runs CI
 
-`ci.yml` runs on a PR only when it is **opened, reopened or marked ready for
-review**, plus `workflow_dispatch` and the push to `main` that `tag-release`
-depends on. The macOS leg (`smoke + lint (macos-latest)`) runs on `main` only;
-on a PR it reports as *skipped*, which satisfies the required check.
+`ci.yml` runs on a PR when it is **opened, reopened, marked ready for review or
+pushed to** (`synchronize`), plus `workflow_dispatch` and the push to `main` that
+`tag-release` depends on. The macOS leg (`smoke + lint (macos-latest)`) runs on
+`main` only; on a PR it reports as *skipped*, which satisfies the required check.
 
-So a fix pushed to an open PR is **not** checked by anything. Before merging,
-verify the final head by dispatching the workflow on the branch:
-
-```
-gh workflow run ci.yml --ref <branch>      # or the Actions UI / run_workflow
-```
-
-Checks attach to the commit, so a green dispatch run on the PR's head SHA
-satisfies the required checks for it. A dispatch on a non-`main` branch also
-runs `version bump` and `queue doctor` in their PR mode. Never merge a head
-whose latest push has no green run.
+Merge on the green `pull_request` run for the final head. A `workflow_dispatch`
+run on the branch verifies code but **does not satisfy branch protection** (its
+check suite is not associated with the PR, so the six Actions-owned required
+checks stay "expected": *"6 of 8 required status checks are expected"*). Closing
+and reopening a PR, or toggling draft, to get a run is not allowed and is no
+longer needed.
 
 ### Multi-PR autonomous work — stacking rule
 

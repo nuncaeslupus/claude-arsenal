@@ -192,10 +192,10 @@ to consumers.
 ## Branch + commit policy
 
 - Feature work goes on short-lived `feat/*` branches off `main`. Open
-  a PR for review. CI runs only when the PR is opened, reopened or marked
-  ready for review, not on later pushes: before merging, dispatch it on the
-  branch (`gh workflow run ci.yml --ref <branch>`) and wait for green on the
-  final head (CLAUDE.md § CI triggers).
+  a PR for review. CI runs on the PR
+  when it is opened and on every push; merge on green for the final head
+  (CLAUDE.md § CI triggers). A manual dispatch does not satisfy the required
+  checks, and closing/reopening or draft-toggling a PR to get a run is not allowed.
 - Commit messages follow Conventional Commits. The `github` skill
   under `core` documents the format in detail; the gist:
   `<type>(<scope>): <subject>` with `feat | fix | docs | refactor |
