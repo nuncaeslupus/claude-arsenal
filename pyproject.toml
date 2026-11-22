@@ -21,6 +21,7 @@ dev = [
     "types-PyYAML>=6.0",
     "types-Markdown>=3.7",
     "termcolor>=2.4",
+    "shellcheck-py>=0.11.0.1",
 ]
 
 [build-system]

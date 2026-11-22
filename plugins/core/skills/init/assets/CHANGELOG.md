@@ -18,6 +18,16 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [5.33.1] - 2026-11-22
+
+- **`references/ci-minutes.md` no longer tells you a dispatch unblocks a merge.** A
+  `workflow_dispatch` run's checks are not attached to the pull request, so required checks
+  stay "expected" however green it is; only a pull-request-event run on the head satisfies
+  them. The page now says what a dispatch is good for and that closing/reopening a PR to
+  get a run is not a fix.
+- `statusline_capture.sh` exits quietly if `$CLAUDE_PROJECT_DIR` cannot be entered instead
+  of writing `arsenal/session/` under the wrong directory.
+
 ## [5.33.0] - 2026-11-19
 
 - **New script `scripts/open_items.py`** — open review items (questions, doubtful results
