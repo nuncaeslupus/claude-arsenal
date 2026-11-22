@@ -190,6 +190,8 @@ mkdir -p "${base}/rb"
 out=$(run_reader --input status/specification.md --output "${base}/rb/x-reader.html" --notes "${base}/two.zip" --bake) \
     || fail "first --bake failed: ${out}"
 [[ $(ls "${base}/rb/x-reviewed-img" | wc -l) -eq 2 ]] || fail "first bake did not write two pictures"
+# files a Pillow-less run copies unconverted are generated too
+touch "${base}/rb/x-reviewed-img/03-old.bmp" "${base}/rb/x-reviewed-img/04-old.tif" "${base}/rb/x-reviewed-img/05-old.tiff"
 mkzip "${base}/one.zip" '{"s-spec-1": "see", "s-spec-2": "and"}' '{"s-spec-1": ["i/01.png"]}' "i/01.png=ok"
 out=$(run_reader --input status/specification.md --output "${base}/rb/x-reader.html" --notes "${base}/one.zip" --bake) \
     || fail "second --bake failed: ${out}"

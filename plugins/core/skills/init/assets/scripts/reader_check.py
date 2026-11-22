@@ -295,8 +295,9 @@ def _pictures_untracked(archive: Path, files: set[str]) -> bool:
     """True when the export's pictures are not all tracked beside its Markdown.
 
     The pictures are the `.zip` members that are not the notes file; each is
-    tracked when some tracked path is that member's path (or ends with it, the
-    folder it was unzipped into being the committer's choice). An archive that
+    tracked when it sits beside a tracked file of the archive's stem (the Markdown
+    links `<stem>-img/NN.ext` relative to itself, so the same path elsewhere does
+    not resolve), wherever the committer put that pair. An archive that
     cannot be read is judged by its Markdown alone, as before.
     """
     try:
@@ -308,7 +309,10 @@ def _pictures_untracked(archive: Path, files: set[str]) -> bool:
             ]
     except (zipfile.BadZipFile, OSError):
         return False
-    return any(not any(t == m or t.endswith("/" + m) for t in files) for m in members)
+    homes = {PurePosixPath(t).parent for t in files if PurePosixPath(t).stem == archive.stem} or {
+        PurePosixPath(".")
+    }
+    return any(not any(str(h / m) in files for h in homes) for m in members)
 
 
 def stray_exports(root: Path, all_projects: bool = False) -> list[Path]:

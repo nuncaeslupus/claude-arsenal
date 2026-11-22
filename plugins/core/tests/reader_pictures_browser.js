@@ -414,6 +414,24 @@ with zipfile.ZipFile(sys.argv[1], "w") as z:
       /"s-spec-2":\["[^"]+\.png"\]/.test(early), early.slice(-300));
     await ctx.close();
 
+    // the picture store's load transaction aborting (a failed commit: an `abort` with no `error` event) must not leave Export waiting
+    ctx = await browser.newContext({acceptDownloads: true});
+    await ctx.addInitScript(() => {
+      const tr = IDBDatabase.prototype.transaction; let done = false;
+      IDBDatabase.prototype.transaction = function (...a) {
+        const tx = tr.apply(this, a);
+        if (!done && a[1] === 'readwrite') { done = true; tx.addEventListener('error', e => e.stopPropagation(), true); Promise.resolve().then(() => tx.abort()); }
+        return tx;
+      };
+    });
+    page = await ctx.newPage();
+    await page.goto('file://' + html2);
+    await page.fill('#n-s-spec-1', 'a note');
+    await page.waitForTimeout(500);
+    const dlAbort = await Promise.all([page.waitForEvent('download', {timeout: 5000}).catch(() => null), page.click('#btn-export')]);
+    check('an export still completes when the picture store load transaction aborts', dlAbort[0] !== null, 'no download');
+    await ctx.close();
+
     // leaving while a picture is still being prepared or written warns
     ctx = await browser.newContext(); await slowStore(ctx, 800); page = await ctx.newPage();
     await page.goto('file://' + html2);
@@ -454,6 +472,17 @@ with zipfile.ZipFile(sys.argv[1], "w") as z:
     const bt = await exportText(page);
     check('a block note stays open for a second attachment while the first one fails',
       bt.includes('"' + bk2 + '":["'), bt.slice(-300));
+    await ctx.close();
+
+    // a damaged exact path never falls back to an intact member with the same basename elsewhere
+    const zE = seedZip(path.join(base, 'dmgbase.zip'), {'s-spec-1': 'note stays'}, {'s-spec-1': ['a/01.png']},
+      ['a/01.png=255,0,0', 'b/01.png=0,255,0'], 'a/01.png');
+    ctx = await browser.newContext(); page = await ctx.newPage();
+    await page.goto('file://' + html2);
+    const stE = await importFiles(page, zE);
+    const nE = await page.$$eval('.npic img', x => x.length);
+    check('a damaged picture is not replaced by a same-named intact one from another folder',
+      /1 picture damaged/.test(stE) && nE === 0, stE + ' / ' + nE);
     await ctx.close();
 
     // two .zip exports chosen together: pictures come from the archive that supplied the notes

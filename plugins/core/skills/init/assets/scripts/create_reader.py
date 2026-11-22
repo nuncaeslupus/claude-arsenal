@@ -1090,7 +1090,7 @@ PICTURE_WIDTH = 1400
 PICTURE_QUALITY = 82
 
 
-GENERATED_PICTURE_RE = re.compile(r"^\d{2,}-.*\.(?:png|jpe?g|gif|webp|svg)$", re.I)
+GENERATED_PICTURE_RE = re.compile(r"^\d{2,}-.*\.(?:png|jpe?g|gif|webp|svg|bmp|tiff?)$", re.I)
 
 
 class Pictures:
@@ -1866,7 +1866,7 @@ JS = r"""
           var v=Array.isArray(c.value)?c.value.filter(function(s){return typeof s==='string';}):[];
           if(v.length||seededPics(k.slice(NS.length))){out[k.slice(NS.length)]=v;}else{c.delete();}
           c.continue();};
-        tx.oncomplete=function(){res(out);};tx.onerror=function(){rej(tx.error);};});})
+        tx.oncomplete=function(){res(out);};tx.onerror=tx.onabort=function(){rej(tx.error);};});})
       .then(function(saved){
         Object.keys(saved).forEach(function(k){
           var t=null;tas.forEach(function(x){if(x.dataset.key===k)t=x;});
@@ -2160,7 +2160,7 @@ JS = r"""
       if(!Array.isArray(map[k]))return;
       out[k]=[];
       map[k].forEach(function(p,i){
-        var n=bin[p]?p:byBase[baseName(p)];
+        var n=bin[p]?p:(bad[p]?null:byBase[baseName(p)]);
         // A member that failed its length or CRC check is not in `bin`: it is
         // reported as damaged, never imported and never counted as restored.
         if(!n){if(bad[p]||badBase[baseName(p)])damaged++;else missing++;return;}

@@ -25,6 +25,10 @@ Fixes to pictures in reader notes (5.34.0), from a review of the vendored copy.
 - **Re-baking after a redaction no longer leaves the old screenshot behind.** `--bake` / the
   Markdown copy now deletes the picture files it wrote earlier and no longer links, so a
   removed private screenshot is not committed with the new copy.
+- **Picture edge cases.** The re-bake cleanup also covers `.bmp`/`.tif` files copied without
+  Pillow; an import never swaps a damaged picture for a same-named intact one from another
+  folder; Save / Export no longer waits forever when the browser's picture store aborts; and
+  `downloads` counts pictures as committed only beside their Markdown.
 - **The reviewed copy keeps its pictures in `<stem>-reviewed-img/`**, not the regular copy's
   `<stem>-img/`: both numbered their files from 01, so one run could overwrite a picture the
   other still linked. Commit the reviewed `.md` together with its own `-reviewed-img/`.
