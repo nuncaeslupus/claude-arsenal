@@ -213,7 +213,9 @@ queue-doctor:  ## dogfood: audit this repo's own task files (arsenal/tasks) the 
 sync-dupes:  ## sync_duplicates.py --check across every declared duplicate group
 	uv run python $(SYNC_DUPES) --check
 
-lint:  ## ruff format --check + ruff check + mypy on plugins/*/scripts
+SHELLCHECK_SEVERITY ?= warning
+
+lint:  ## ruff format --check + ruff check + mypy + shellcheck on shipped shell
 ifeq ($(PLUGIN_DIRS),)
 	@echo "make lint: no plugins yet — skipping ruff/mypy on plugins/*/scripts." >&2
 	@exit 0
@@ -222,6 +224,10 @@ else
 	uv run ruff check plugins scripts
 	uv run mypy plugins scripts
 endif
+	@# shellcheck on shipped shell (not the *_test.sh harnesses). The severity floor
+	@# is `warning`: it passes today and keeps real bugs out; the style/info tier
+	@# (29 findings) and the tests are not enforced yet. Lower it to widen.
+	uv run shellcheck -S $(SHELLCHECK_SEVERITY) $$(git ls-files 'plugins/*.sh' scripts/tag_guard.sh | grep -v '/tests/')
 
 format:  ## ruff format + ruff check --fix
 	uv run ruff format .
