@@ -18,6 +18,26 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [5.34.0] - 2026-11-22
+
+- **Pictures in reader notes.** In an annotatable reader, paste a screenshot (Ctrl+V / ⌘V)
+  into a note field or drop a picture file on it: it shows as a thumbnail under the note
+  (tap to enlarge, × to remove) and stays across reloads. Large pictures are downscaled to
+  1600 px on the long edge. They are kept in the browser's IndexedDB, not localStorage, so
+  they do not crowd out note text; if the browser refuses to store one, the note says so and
+  the picture still goes out with the next export.
+- **An export with pictures is a `.zip`** — `…-notes.md` plus `…-notes-img/NN.png|jpg`,
+  each picture linked under its note. Unzip it beside the reader and commit both; the
+  session reads the Markdown and opens a picture only when a note needs it.
+  `create_reader.py --notes` accepts the `.zip` (or the unzipped `.md`), re-seeds a rebuilt
+  reader with the pictures, and `--bake` writes them into the reviewed copy's `-img/`.
+  A text-only export is unchanged: one `.md`.
+- **Import** takes the `.zip`, or a `.md` chosen together with its pictures, and reports how
+  many notes landed under *Unplaced notes* because their section is gone. To move notes
+  from an older reader into a regenerated one: Save / Export in the old one, Import in the
+  new one — exports from earlier versions import as before.
+- `reader_check.py downloads` also names a `…-notes.zip` left in Downloads.
+
 ## [5.33.1] - 2026-11-22
 
 - **`references/ci-minutes.md` no longer tells you a dispatch unblocks a merge.** A

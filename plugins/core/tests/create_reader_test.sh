@@ -64,7 +64,7 @@ run_reader --input status/specification.md --output-dir status --name "Widget Ov
     || fail "generating a reader failed"
 [[ -f "${SPEC_HTML}" && -f "${SPEC_MD}" ]] \
     || fail "outputs are not named <repo>-<doc>-v<N>-<YYYY-MM-DD-HHMM>: $(ls "${tmp}/status")"
-grep -q "'yourproject-spec-v1-'+stamp()+'-notes.md'" "${SPEC_HTML}" \
+grep -q "'yourproject-spec-v1-'+stamp()+'-notes'" "${SPEC_HTML}" \
     || fail "the export filename does not follow the reader's naming"
 [[ ! -e "${tmp}"/status/spec-reader.html ]] || fail "the undated reader it supersedes was left behind"
 [[ ! -e "${tmp}"/status/yourproject-spec-v1-2026-01-02-reader.html ]] \
@@ -252,7 +252,7 @@ out=$(run_reader --input status/specification.md --output-dir status --notes sta
 #     No `**Revision**` line (the spec above) keeps the old name; one adds -r<N>.
 run_reader --input status/specification.md --output-dir status --name "Widget Overhaul" >/dev/null \
     || fail "regenerating the reader failed"
-grep -q "'yourproject-spec-v1-'+stamp()+'-notes.md'" "${SPEC_HTML}" \
+grep -q "'yourproject-spec-v1-'+stamp()+'-notes'" "${SPEC_HTML}" \
     || fail "a spec with no Revision header should be named version 1"
 perl -0pi -e 's/^Intro prose\.$/**Revision**: 3\n\nIntro prose./m' "${tmp}/status/specification.md"
 run_reader --input status/specification.md --output-dir status --name "Widget Overhaul" >/dev/null \
@@ -262,7 +262,7 @@ V3_HTML="${tmp}/status/yourproject-spec-v3-${today}-reader.html"
 [[ ! -e "${SPEC_HTML}" ]] || fail "the v1 reader was left beside the v3 one"
 grep -q "var NS = '[^']*-spec-v3:'" "${V3_HTML}" \
     || fail "revision 3 reuses an earlier revision's note namespace — applied notes come back"
-grep -q "'yourproject-spec-v3-'+stamp()+'-notes.md'" "${V3_HTML}" \
+grep -q "'yourproject-spec-v3-'+stamp()+'-notes'" "${V3_HTML}" \
     || fail "the export filename does not carry the spec's revision"
 grep -q '<meta name="arsenal-source-sha256" content="[0-9a-f]\{64\}">' "${V3_HTML}" \
     || fail "the reader does not record the digest of the source it rendered"
@@ -576,6 +576,7 @@ const fails = [];
   // #541.2 an imported section note whose section is gone is kept, and exports again
   d = boot(memStorage(), null, false);
   d.byId['file-import'].h.change({ target: { files: [{ text: JSON.stringify({ 'gone-section': 'orphan note' }) }], value: '' } });
+  await tick();  // an import reads its files asynchronously (a .zip, pictures)
   if (d.toasts[d.toasts.length - 1] !== 'Imported 1 note')
     fails.push('#541: an imported note for a removed section was dropped: ' + JSON.stringify(d.toasts));
   d.byId['btn-export'].click();
