@@ -295,7 +295,7 @@ def stray_exports(root: Path, all_projects: bool = False) -> list[Path]:
     tracked = {
         PurePosixPath(n).stem
         for n in (_git(root, "ls-files") or "").splitlines()
-        if "-notes-" in n or n.endswith("-notes.md")
+        if "-notes-" in n or n.endswith(("-notes.md", "-notes.zip"))
     }
     prefixes = _project_prefixes(root)
     found = []

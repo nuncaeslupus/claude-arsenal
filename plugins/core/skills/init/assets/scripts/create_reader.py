@@ -1471,7 +1471,10 @@ JS = r"""
   // Pictures pasted or dropped onto a note, per note key, as data URLs. Kept in
   // IndexedDB rather than localStorage: a few screenshots fill localStorage's
   // ~5 MB, which would then refuse the note text as well.
-  var PICS={};
+  var PICS={},picPending={};
+  // Settles once this browser's stored pictures are read (or cannot be): every
+  // change to a note's pictures waits on it.
+  var picsReady=Promise.resolve();
   var SEED_PICS=(typeof SPEC_SEED_PICTURES!=='undefined')?SPEC_SEED_PICTURES:{};
   function hasPics(t){var p=PICS[t.dataset.key];return !!(p&&p.length);}
   function hasNote(t){return t.value.trim()!==''||hasPics(t);}
@@ -1492,7 +1495,11 @@ JS = r"""
   // the page right after typing (no blur) no longer loses it (#541).
   function flushSaves(){Object.keys(pending).forEach(function(k){clearTimeout(saveTimers[k]);save(pending[k]);});pending={};}
   window.addEventListener('pagehide',flushSaves);
-  window.addEventListener('beforeunload',function(e){flushSaves();if(!lsOK&&dirty){e.preventDefault();e.returnValue='';}});
+  // A picture this browser refused to store exists only in the page: leaving
+  // warns, whatever a text-only copy to the clipboard did to `dirty`.
+  var unstored={};
+  window.addEventListener('beforeunload',function(e){flushSaves();
+    if((!lsOK&&dirty)||Object.keys(unstored).length){e.preventDefault();e.returnValue='';}});
 
   var saveTimers={},pending={};
   function save(t){
@@ -1532,7 +1539,7 @@ JS = r"""
       save(t);
       // An emptied block note folds away again; its ✎ stays to reopen it.
       var box=t.closest('.bnote');
-      if(box&&!hasNote(t)){closeBlock(box);}
+      if(box&&!hasNote(t)&&!picPending[t.dataset.key]){closeBlock(box);}
     });
   }
 
@@ -1588,6 +1595,7 @@ JS = r"""
   // reviewer is told, in the note and in the bar, so it is never lost silently.
   function picSaved(t,ok){
     var box=t.closest('.note'),w=box&&box.querySelector('.npic-warn');
+    if(ok){delete unstored[t.dataset.key];}else{unstored[t.dataset.key]=1;}
     if(!box)return;
     if(ok){if(w)w.remove();return;}
     dirty=true;
@@ -1621,19 +1629,27 @@ JS = r"""
         var del=document.createElement('button');del.type='button';del.className='npic-del';
         del.textContent='×';del.setAttribute('aria-label','Remove picture '+(i+1));
         del.addEventListener('click',function(){
-          picTouched[t.dataset.key]=1;PICS[t.dataset.key].splice(i,1);renderPics(t);setFilled(t);updateCount();storePics(t);
-          t.focus();toast('Picture removed');});
+          picsReady.then(function(){
+            PICS[t.dataset.key].splice(i,1);renderPics(t);setFilled(t);updateCount();storePics(t);
+            t.focus();toast('Picture removed');});});
         fig.appendChild(del);
       }
       wrap.appendChild(fig);
     });
   }
   function addPics(t,files){
-    var k=t.dataset.key;picTouched[k]=1;
+    var k=t.dataset.key;
+    // Pending, so a blur before the picture lands does not fold an empty block
+    // note away (and out of the export); after the stored pictures are read, so
+    // a new one is added to them rather than replacing them.
+    picPending[k]=(picPending[k]||0)+1;
     return files.reduce(function(chain,f){return chain.then(function(){
       return shrink(f).then(function(src){(PICS[k]=PICS[k]||[]).push(src);},
-                            function(){toast('That picture could not be read');});});},Promise.resolve())
+                            function(){toast('That picture could not be read');});});},picsReady)
       .then(function(){
+        picPending[k]--;
+        var box=t.closest('.bnote');
+        if(box&&!hasNote(t)&&document.activeElement!==t){closeBlock(box);return;}
         renderPics(t);setFilled(t);updateCount();dirty=true;
         // Text and quote too: a block note holding only a picture still says what it is on.
         save(t);return storePics(t);
@@ -1768,26 +1784,24 @@ JS = r"""
     return q;
   }
   // Pictures this browser stored override the seed, as note text does. The read
-  // is asynchronous, so a note changed before it finishes keeps the change.
-  var picTouched={};
+  // is asynchronous; picture changes wait on `picsReady`, so none is overwritten.
   if(!BAKED){
     try{
-      openPicDB().then(function(db){return new Promise(function(res,rej){
+      picsReady=openPicDB().then(function(db){return new Promise(function(res,rej){
         var tx=db.transaction('pics','readonly'),cur=tx.objectStore('pics').openCursor(),out={};
         cur.onsuccess=function(){var c=cur.result;if(!c)return;var k=String(c.key);
           if(k.indexOf(NS)===0&&Array.isArray(c.value))out[k.slice(NS.length)]=c.value;c.continue();};
         tx.oncomplete=function(){res(out);};tx.onerror=function(){rej(tx.error);};});})
       .then(function(saved){
         Object.keys(saved).forEach(function(k){
-          if(picTouched[k])return;
           var t=null;tas.forEach(function(x){if(x.dataset.key===k)t=x;});
           if(!t){if(!saved[k].length)return;t=openBlock(k,false,quoteFor(k)||'');}
           PICS[k]=saved[k].filter(function(s){return typeof s==='string';});
           renderPics(t);setFilled(t);
         });
         updateCount();
-      },function(){});
-    }catch(e){}
+      }).then(null,function(){});
+    }catch(e){picsReady=Promise.resolve();}
   }
   // Reviewed copy: each note becomes its text at full length, and an empty field goes.
   if(BAKED){
@@ -1998,7 +2012,7 @@ JS = r"""
       var v=obj[k];
       if(typeof v!=='string'){skipped++;return;}
       t.value=v;save(t);
-      if(pics[k]&&pics[k].length){picTouched[k]=1;PICS[k]=pics[k].slice();np+=pics[k].length;renderPics(t);storePics(t);}
+      if(pics[k]&&pics[k].length){PICS[k]=pics[k].slice();np+=pics[k].length;renderPics(t);storePics(t);}
       autoGrow(t);setFilled(t);
       if(hasNote(t)){applied++;if(t.closest('#bn-unplaced'))unplaced++;}
     });
@@ -2070,7 +2084,7 @@ JS = r"""
       var dm=/^<!-- SPEC-NOTES-DOC (\S+) -->/m.exec(txt);
       if(dm&&dm[1]!=='__EXPORT_STEM__'&&
          !confirm('That file holds notes for '+dm[1]+', not for this page (__EXPORT_STEM__). Import anyway?'))return;
-      return picturesFrom(txt,got.bin).then(function(pf){
+      return Promise.all([picturesFrom(txt,got.bin),picsReady]).then(function(all){var pf=all[0];
         var r=applyData(obj,pf.pics);
         var msg='Imported '+r.applied+' note'+(r.applied===1?'':'s')+
           (r.pics?', '+r.pics+' picture'+(r.pics===1?'':'s'):'')+

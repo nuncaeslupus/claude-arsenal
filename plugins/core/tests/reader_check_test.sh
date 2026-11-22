@@ -192,6 +192,11 @@ git -C "$repo" add status/yourproject-spec-v4-2026-01-09-0900-notes.md
 out="$(cd "$repo" && HOME="$fake_home" XDG_DOWNLOAD_DIR= python3 "$CHECK" downloads)"
 case "$out" in *"2026-01-08-0900-notes.zip"*) ;; *) fail "downloads missed a .zip export: $out" ;; esac
 case "$out" in *"2026-01-09-0900-notes.zip"*) fail "downloads reported a .zip whose .md is committed: $out" ;; esac
+echo n > "$fake_home/Descargas/yourproject-spec-v4-2026-01-10-0900-notes.zip"
+cp "$fake_home/Descargas/yourproject-spec-v4-2026-01-10-0900-notes.zip" "$repo/status/"
+git -C "$repo" add status/yourproject-spec-v4-2026-01-10-0900-notes.zip
+out="$(cd "$repo" && HOME="$fake_home" XDG_DOWNLOAD_DIR= python3 "$CHECK" downloads)"
+case "$out" in *"2026-01-10-0900-notes.zip"*) fail "downloads reported a .zip that is itself committed: $out" ;; esac
 echo "PASS: an uncommitted export left in a Downloads folder is named"
 
 # --- 5: init registers the hook and scaffolds no unused specs/ plans/ ---

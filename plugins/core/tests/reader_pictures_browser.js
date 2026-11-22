@@ -138,11 +138,53 @@ async function importFiles(page, files) {
     await ctx.close();
 
     // ---- import the .zip into a clean browser
-    ctx = await browser.newContext(); page = await ctx.newPage();
+    ctx = await browser.newContext();
+    // Opening the picture store takes 800 ms here, so a paste can land before the
+    // stored pictures are read — the window a slow disk opens for real.
+    await ctx.addInitScript(() => {
+      const open = IDBFactory.prototype.open;
+      IDBFactory.prototype.open = function (...a) {
+        const fake = {}, self = this;
+        setTimeout(() => {
+          const r = open.apply(self, a);
+          ['upgradeneeded', 'success', 'error'].forEach(ev => {
+            r['on' + ev] = () => { fake.result = r.result; fake.error = r.error; if (fake['on' + ev]) fake['on' + ev](); };
+          });
+        }, 800);
+        return fake;
+      };
+    });
+    page = await ctx.newPage();
     await page.goto(url1);
     const st = await importFiles(page, zip);
     const n = await page.$$eval('.npic img', ims => ims.length);
     check('importing the .zip restores notes and pictures', n === 2 && /2 pictures/.test(st), st + ' / ' + n);
+    // a picture added right after load joins the stored ones; it does not replace them
+    await page.reload();
+    await makePicture(page, 120, 80, false);
+    await pasteInto(page, '#n-s-spec-1');
+    await page.waitForFunction(() => document.querySelectorAll('.note[data-for="s-spec-1"] .npic img').length >= 2, null, {timeout: 5000}).catch(() => {});
+    await page.waitForTimeout(300);
+    await page.reload();
+    await page.waitForSelector('.note[data-for="s-spec-1"] .npic img', {timeout: 5000}).catch(() => {});
+    await page.waitForTimeout(300);
+    const kept = await page.$$eval('.note[data-for="s-spec-1"] .npic img', ims => ims.length);
+    check('a picture pasted while stored ones load is added to them', kept === 2, String(kept));
+    // a block note blurred while its picture is still being prepared keeps it
+    const host = await page.$('.bn-host:has-text("Tuesdays")'); await host.hover(); await (await host.$('.bn-btn')).click();
+    const bkey = await page.$eval('.bnote .note-ta', t => t.dataset.key);
+    await makePicture(page, 3200, 1800, true);
+    await page.evaluate(k => {
+      const box = document.querySelector('.bnote .note-ta[data-key="' + k + '"]').closest('.note');
+      const dt = new DataTransfer(); dt.items.add(window.__pic);
+      box.dispatchEvent(new DragEvent('drop', {dataTransfer: dt, bubbles: true, cancelable: true}));
+      document.querySelector('.bnote .note-ta[data-key="' + k + '"]').blur();
+    }, bkey);
+    await page.waitForSelector('.bnote .npic img', {timeout: 5000}).catch(() => {});
+    const zb = zipList(await exportFile(page));
+    const zmd = zb[Object.keys(zb).find(x => x.endsWith('.md'))] || '';
+    check('a block note blurred before its picture lands keeps it in the export',
+      zmd.includes('"' + bkey + '":["'), zmd.slice(-300));
     await ctx.close();
 
     // ---- a 5.33.1 export into a later revision whose section 3 is gone
@@ -182,6 +224,13 @@ async function importFiles(page, files) {
     check('the note text still saves when the picture cannot', stored === 'text survives', String(stored));
     const zq = zipList(await exportFile(page));
     check('the unstored picture is still in the export', Object.keys(zq).some(n => /-img\/01\.png$/.test(n)), JSON.stringify(Object.keys(zq)));
+    // ...and leaving the page still warns, though the text was saved and exported
+    let asked = false;
+    page.on('dialog', d => { if (d.type() === 'beforeunload') asked = true; d.dismiss().catch(() => {}); });
+    await page.click('h1');  // a user gesture, which Chromium needs before it will ask
+    await page.close({runBeforeUnload: true});
+    await new Promise(r => setTimeout(r, 500));
+    check('leaving with an unstored picture warns', asked);
     await ctx.close();
   } finally {
     await browser.close();

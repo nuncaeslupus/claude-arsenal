@@ -34,8 +34,9 @@ Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
   A text-only export is unchanged: one `.md`.
 - **Import** takes the `.zip`, or a `.md` chosen together with its pictures, and reports how
   many notes landed under *Unplaced notes* because their section is gone. To move notes
-  from an older reader into a regenerated one: Save / Export in the old one, Import in the
-  new one — exports from earlier versions import as before.
+  from an older reader into a regenerated one: Save / Export in the old one *before*
+  regenerating (a rebuild removes it), then Import in the new one — exports from earlier
+  versions import as before.
 - `reader_check.py downloads` also names a `…-notes.zip` left in Downloads.
 
 ## [5.33.1] - 2026-11-22

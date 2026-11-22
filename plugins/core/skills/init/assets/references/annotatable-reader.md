@@ -109,7 +109,9 @@ are in history, and on a public repo published. Redact names of real people,
 email addresses, phone numbers, account handles and home paths (`/home/<user>`);
 when a note loses its meaning without one, ask the reviewer. `--bake` warns on
 emails and home paths it finds in the notes. It cannot see names, so the read is
-still yours. Left in Downloads it is gone by
+still yours. **Pictures too: open every one in `…-notes-img/` before committing it**,
+including those no note needed, since a screenshot can show any of the above; redact
+or crop it, or ask the reviewer when that would lose what the note points at. Left in Downloads it is gone by
 the next session; `query_status.py` names any export of this project's still
 sitting in a Downloads folder (`~/Downloads`, `~/Descargas`, the XDG download
 dir, …) that the repo does not track.
@@ -131,8 +133,9 @@ restores an export into the reader after storage was lost, asks before loading o
 Notes written in an earlier reader do not follow a regeneration on their own: a
 new revision is a new storage namespace, and whether a browser shares storage
 between two `file://` pages is its own choice. So when the reviewer has notes in
-an old reader, they **Save / Export** there, open the new reader, and **Import**
-that file (any bundle version's export reads). Notes land under their sections;
+an old reader, they **Save / Export** there *before* it is regenerated (a rebuild
+removes the earlier reader from its folder), then open the new reader and
+**Import** that file (any bundle version's export reads). Notes land under their sections;
 one whose section is gone goes to *Unplaced notes*, and the import says how many.
 
 A note under `> ¶ “…”` was taken on that exact paragraph, list item or table
