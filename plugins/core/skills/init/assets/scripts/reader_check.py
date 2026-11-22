@@ -46,6 +46,7 @@ import re
 import shutil
 import subprocess
 import sys
+import zipfile
 from pathlib import Path, PurePosixPath
 
 META_RE = re.compile(r'<meta name="arsenal-source-sha256" content="([0-9a-f ]*)">')
@@ -290,19 +291,44 @@ def _project_prefixes(root: Path) -> set[str]:
     return {re.sub(r"[^a-z0-9]+", "-", n.lower()).strip("-") for n in names} - {""}
 
 
+def _pictures_untracked(archive: Path, files: set[str]) -> bool:
+    """True when the export's pictures are not all tracked beside its Markdown.
+
+    The pictures are the `.zip` members that are not the notes file; each is
+    tracked when some tracked path is that member's path (or ends with it, the
+    folder it was unzipped into being the committer's choice). An archive that
+    cannot be read is judged by its Markdown alone, as before.
+    """
+    try:
+        with zipfile.ZipFile(archive) as z:
+            members = [
+                n
+                for n in z.namelist()
+                if not n.endswith("/") and not n.lower().endswith((".md", ".markdown", ".json"))
+            ]
+    except (zipfile.BadZipFile, OSError):
+        return False
+    return any(not any(t == m or t.endswith("/" + m) for t in files) for m in members)
+
+
 def stray_exports(root: Path, all_projects: bool = False) -> list[Path]:
-    # By stem: a .zip export is done with once its unzipped `.md` is committed.
+    # By stem: a .zip export is done with once its unzipped `.md` is committed —
+    # with its pictures: a tracked Markdown alone leaves them out of the commit.
+    files = {n for n in (_git(root, "ls-files") or "").splitlines()}
     tracked = {
         PurePosixPath(n).stem
-        for n in (_git(root, "ls-files") or "").splitlines()
+        for n in files
         if "-notes-" in n or n.endswith(("-notes.md", "-notes.zip"))
     }
+    tracked_zips = {PurePosixPath(n).stem for n in files if n.endswith(".zip")}
     prefixes = _project_prefixes(root)
     found = []
     for d in download_dirs():
         notes = set(d.glob("*-notes-*.md")) | set(d.glob("*-notes.md")) | set(d.glob("*-notes.zip"))
         for f in sorted(notes):
-            if f.stem in tracked:
+            if f.stem in tracked and not (
+                f.suffix == ".zip" and f.stem not in tracked_zips and _pictures_untracked(f, files)
+            ):
                 continue
             m = EXPORT_RE.match(f.name)
             dated = DATED_EXPORT_RE.match(f.name)

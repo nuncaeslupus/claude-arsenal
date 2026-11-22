@@ -90,12 +90,13 @@ That writes `<repo>-<doc>-v<N>-<stamp>-reviewed.html` and its GitHub copy
 `…-reviewed.md` (below), and nothing else; a rebuild does not remove them. Run it before the bump, while the text still matches the notes.
 Applying the export makes the next revision: bump `**Revision**`, add a
 `**Revision log**` line naming the export, regenerate the reader, and commit the
-export, the reviewed copy and its `.md` + `-img/` **in the same commit** as that
+export, the reviewed copy and its `.md` + `-reviewed-img/` **in the same commit** as that
 revision.
 
 **Link the `.md`, not the HTML.** GitHub shows an HTML file as source, with
 every picture base64 inside it. So every run also writes `<stem>-reader.md`
-(`-reviewed.md` with `--bake`) and the pictures as files in `<stem>-img/` —
+(`-reviewed.md` with `--bake`) and the pictures as files in `<stem>-img/`
+(`<stem>-reviewed-img/` for the reviewed copy; a re-run deletes the files it no longer links) —
 JPEG downscaled to `--picture-width` (1400 px) when Pillow is importable
 (`uv run --with markdown --with pillow …`), copied as-is otherwise; drawspec
 diagrams as SVG — with every note as a `> [!NOTE]` alert under its section,
