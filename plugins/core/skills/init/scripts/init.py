@@ -1905,9 +1905,12 @@ def _upsert_bare_key(config: Path, key: str, value: str) -> None:
     """Upsert `<key> = <value>` in arsenal/config.toml, above the first table."""
     if config.is_file():
         text = config.read_text(encoding="utf-8")
-        if re.search(rf"^\s*{re.escape(key)}\s*=", text, re.MULTILINE):
+        # A quoted key (`"key" = …`) is the same TOML key: match it too, or a second
+        # bare copy is added and the file no longer parses.
+        pat = rf"^\s*[\"']?{re.escape(key)}[\"']?\s*="
+        if re.search(pat, text, re.MULTILINE):
             text = re.sub(
-                rf"^\s*{re.escape(key)}\s*=.*$",
+                pat + ".*$",
                 lambda _: f"{key} = {value}",
                 text,
                 count=1,

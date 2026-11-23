@@ -2475,7 +2475,9 @@ def _main() -> int:
         base = html_file.name.removesuffix(".html").removesuffix("-reader")
         md_file = out_dir / f"{base}-annotated.md"
     else:
-        html_file = out_dir / f"{stem}-reader.html"
+        # Settled here, before the overwrite check below: a baked run writes
+        # `-reviewed.html`, so its GitHub copy is `-reviewed.md`, not `-reader.md`.
+        html_file = out_dir / f"{stem}-{'reviewed' if args.bake else 'reader'}.html"
         md_file = out_dir / f"{stem}-annotated.md"
 
     notes_path = Path(args.notes) if args.notes else out_dir / "notes.json"
@@ -2484,8 +2486,15 @@ def _main() -> int:
     if not args.no_markdown:
         copy_path = html_file.with_suffix(".md").resolve()
         taken = {notes_path.resolve()}
+        # Every source the run read, whichever mode found it.
         if args.input:
             taken.add(Path(args.input).resolve())
+        elif args.input_dir:
+            taken.update(p.resolve() for p in Path(args.input_dir).glob("*/spec.md"))
+        else:
+            taken.add((cwd / "status" / "specification.md").resolve())
+            for root in ("arsenal", "claude-arsenal"):
+                taken.update(p.resolve() for p in (cwd / root / "project").glob("*/spec.md"))
         if copy_path in taken:
             print(
                 f"✗ the GitHub copy {copy_path} is also an input or the notes file — "
@@ -2547,8 +2556,6 @@ def _main() -> int:
         for key, text in seed_notes.items():
             for hit in sorted(set(PERSONAL_RE.findall(text))):
                 print(f"⚠  note {key} holds {hit!r}: redact it before committing", file=sys.stderr)
-        if not args.output:
-            html_file = out_dir / f"{stem}-reviewed.html"
         html_file.write_text(
             build_html(
                 parts,

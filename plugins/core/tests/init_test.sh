@@ -304,6 +304,14 @@ echo 'attribution = false' > "${declined}/arsenal/config.toml"
 run_init "${declined}"
 ! grep -q 'claude-arsenal:attribution' "${declined}/README.md" \
     || { echo "FAIL: attribution = false still added the badge" >&2; exit 1; }
+# A quoted key is the same TOML key: --no-attribution must rewrite it, not add a twin.
+quoted="${tmpdir}/attribution-quoted"
+mkdir -p "${quoted}/arsenal"; printf '# Proj\n' > "${quoted}/README.md"
+echo '"attribution" = true' > "${quoted}/arsenal/config.toml"
+python3 "${INIT_PY}" --repo-path "${quoted}" --bundle-dir "${BUNDLE_DIR}" --silent --no-attribution >/dev/null
+python3 -c 'import sys,tomllib; d=tomllib.load(open(sys.argv[1],"rb")); assert d["attribution"] is False' \
+    "${quoted}/arsenal/config.toml" \
+    || { echo "FAIL: quoted attribution key left a duplicate or stale value" >&2; cat "${quoted}/arsenal/config.toml" >&2; exit 1; }
 echo "PASS: test_init_attribution_badge"
 
 # test_init_interview_answers_written
