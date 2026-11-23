@@ -388,6 +388,22 @@ assert norm(code) == code, norm(code)
 quoted = "> ```py\n> __all__ = []\n> ```\n\nafter \\_\\_x\\_\\_"
 assert norm(quoted) == quoted, norm(quoted)
 
+# A fence opening a list item is code too (#632): its content and closing fence.
+listed = "- ```py\n  __all__ = []\n  ```\n\nafter \\_\\_x\\_\\_"
+assert norm(listed) == listed, norm(listed)
+
+# A list item's fence closes at the item's content indent, even four or more spaces.
+listed10 = "10. ```py\n    __all__ = []\n    ```\n\nafter __x__"
+assert norm(listed10) == "10. ```py\n    __all__ = []\n    ```\n\nafter \\_\\_x\\_\\_", norm(listed10)
+
+# A list-marked fence line inside an open fence is content, not the closing fence.
+marked = "```\n- ```\n__all__\n```\n\nafter __x__"
+assert norm(marked) == "```\n- ```\n__all__\n```\n\nafter \\_\\_x\\_\\_", norm(marked)
+
+# Five or more spaces after a list marker is indented code, not a fence opener.
+deep = "-      ```\n\nafter __x__"
+assert norm(deep).endswith("after \\_\\_x\\_\\_"), norm(deep)
+
 # A backtick "fence" with a backtick in its info string opens nothing, so the
 # heading under it is still normalised.
 assert norm("```foo`bar\n### H\ntext") == "```foo`bar\n\n## H\n\ntext"

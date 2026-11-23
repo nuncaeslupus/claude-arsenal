@@ -57,6 +57,29 @@ EOF
 
 run_reader() { (cd "${tmp}" && "${PY[@]}" "${READER}" "$@" 2>&1); }
 
+# --- 0: the GitHub copy never overwrites an input (#632) ---
+mkdir -p "${tmp}/clash"
+printf '# Clash\n\n## 1. A\n\nbody\n' > "${tmp}/clash/x.md"
+out=$(run_reader --input clash/x.md --output clash/x.html 2>&1) && fail "--output x.html over input x.md was accepted"
+grep -q "refusing to overwrite" <<<"${out}" || fail "the collision was not explained: ${out}"
+grep -q '^# Clash' "${tmp}/clash/x.md" || fail "the input was overwritten"
+run_reader --input clash/x.md --output clash/x.html --no-markdown >/dev/null || fail "--no-markdown should avoid the collision"
+
+# --- 0b: the baked copy's own name and every discovered source are protected ---
+mkdir -p "${tmp}/bk/status"
+printf '# Bk\n\n## 1. A\n\nbody\n' > "${tmp}/bk/status/specification.md"
+out=$(cd "${tmp}/bk" && "${PY[@]}" "${READER}" --output status/specification.html 2>&1) \
+    && fail "auto-discovered source overwritten by the GitHub copy: ${out}"
+grep -q "refusing to overwrite" <<<"${out}" || fail "discovered-source collision unexplained: ${out}"
+grep -q '^# Bk' "${tmp}/bk/status/specification.md" || fail "the discovered source was overwritten"
+(cd "${tmp}/bk" && "${PY[@]}" "${READER}" --output-dir status --name Bk >/dev/null 2>&1) || fail "bk seed run failed"
+exp=$(ls "${tmp}"/bk/status/*-annotated.md | head -1)
+rev=$(ls "${tmp}"/bk/status/*-reader.html | head -1); rev="${rev%-reader.html}-reviewed.md"
+cp "${exp}" "${rev}"; echo sentinel >> "${rev}"
+out=$(cd "${tmp}/bk" && "${PY[@]}" "${READER}" --bake --notes "${rev#"${tmp}/bk/"}" --output-dir status --name Bk 2>&1) \
+    && fail "--bake overwrote the --notes file: ${out}"
+grep -q sentinel "${rev}" || fail "the notes file was overwritten by --bake"
+
 # --- 1: the reader and its export say what they are: repo, doc, version, date (#505) ---
 echo "an older reader" > "${tmp}"/status/spec-reader.html
 echo "a date-only reader" > "${tmp}"/status/yourproject-spec-v1-2026-01-02-reader.html

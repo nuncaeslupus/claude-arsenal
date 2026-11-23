@@ -1090,7 +1090,10 @@ PICTURE_WIDTH = 1400
 PICTURE_QUALITY = 82
 
 
-GENERATED_PICTURE_RE = re.compile(r"^\d{2,}-.*\.(?:png|jpe?g|gif|webp|svg|bmp|tiff?)$", re.I)
+# What `Pictures._name` can produce: `NN-<label><ext>`, whatever the source extension
+# was (a linked .avif is copied as it is). Matching the shape, not an extension list,
+# keeps a copy of any format prunable.
+GENERATED_PICTURE_RE = re.compile(r"^\d{2,}-.+\.[^./]+$")
 
 
 class Pictures:
@@ -1120,7 +1123,7 @@ class Pictures:
 
         A re-bake after a screenshot was redacted must not leave the old file
         beside the new Markdown, where `git add` would commit it. Only names this
-        class generates (`NN-<label>.<picture ext>`) in this copy's own directory
+        class generates (`NN-<label>.<ext>`) in this copy's own directory
         are touched, and only those not written by this run.
         """
         if not self.dir.is_dir():
@@ -2472,10 +2475,33 @@ def _main() -> int:
         base = html_file.name.removesuffix(".html").removesuffix("-reader")
         md_file = out_dir / f"{base}-annotated.md"
     else:
-        html_file = out_dir / f"{stem}-reader.html"
+        # Settled here, before the overwrite check below: a baked run writes
+        # `-reviewed.html`, so its GitHub copy is `-reviewed.md`, not `-reader.md`.
+        html_file = out_dir / f"{stem}-{'reviewed' if args.bake else 'reader'}.html"
         md_file = out_dir / f"{stem}-annotated.md"
 
     notes_path = Path(args.notes) if args.notes else out_dir / "notes.json"
+    # The GitHub copy is `<html stem>.md`. Resolve it before any write: it must
+    # not be the input document or the notes file (`--input x.md --output x.html`).
+    if not args.no_markdown:
+        copy_path = html_file.with_suffix(".md").resolve()
+        taken = {notes_path.resolve()}
+        # Every source the run read, whichever mode found it.
+        if args.input:
+            taken.add(Path(args.input).resolve())
+        elif args.input_dir:
+            taken.update(p.resolve() for p in Path(args.input_dir).glob("*/spec.md"))
+        else:
+            taken.add((cwd / "status" / "specification.md").resolve())
+            for root in ("arsenal", "claude-arsenal"):
+                taken.update(p.resolve() for p in (cwd / root / "project").glob("*/spec.md"))
+        if copy_path in taken:
+            print(
+                f"✗ the GitHub copy {copy_path} is also an input or the notes file — "
+                "refusing to overwrite it. Name the output differently or pass --no-markdown.",
+                file=sys.stderr,
+            )
+            return 2
     seed_notes: dict = {}
     seed_pictures: dict[str, list[str]] = {}
 
@@ -2530,8 +2556,6 @@ def _main() -> int:
         for key, text in seed_notes.items():
             for hit in sorted(set(PERSONAL_RE.findall(text))):
                 print(f"⚠  note {key} holds {hit!r}: redact it before committing", file=sys.stderr)
-        if not args.output:
-            html_file = out_dir / f"{stem}-reviewed.html"
         html_file.write_text(
             build_html(
                 parts,

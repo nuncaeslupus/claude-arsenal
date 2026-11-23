@@ -18,6 +18,22 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [5.34.2] - 2026-11-22
+
+- **Reader:** a linked picture of any format (`.avif`, `.heic`, `.ico`...) is now
+  pruned from `<stem>-img/` on a re-bake once its reference is gone; only files that
+  carry the generated `NN-` prefix are ever removed, as before. The GitHub copy
+  (`<name>.md`) now refuses to overwrite the input document or the notes file
+  (`--input x.md --output x.html`) instead of silently replacing it; this now covers
+  every discovered or `--input-dir` source and the `-reviewed.md` copy of a `--bake` run.
+- **Issue import:** a code fence opening a list item (`- ```python`) is recognised, so
+  its content is no longer escaped, including when the closing fence is indented at
+  the item's content indent (`10. ` then four spaces).
+- **init:** `--no-attribution` now overrides an earlier recorded `attribution = true`,
+  including with `--workspace` and a quoted `"attribution"` key; the printed `git add` line quotes its paths; and when
+  git history cannot be read, a missing queue workflow is not reinstalled (it may have
+  been deleted on purpose).
+
 ## [5.34.1] - 2026-11-22
 
 Fixes to pictures in reader notes (5.34.0), from a review of the vendored copy.
