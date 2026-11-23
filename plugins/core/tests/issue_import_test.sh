@@ -388,6 +388,10 @@ assert norm(code) == code, norm(code)
 quoted = "> ```py\n> __all__ = []\n> ```\n\nafter \\_\\_x\\_\\_"
 assert norm(quoted) == quoted, norm(quoted)
 
+# A fence opening a list item is code too (#632): its content and closing fence.
+listed = "- ```py\n  __all__ = []\n  ```\n\nafter \\_\\_x\\_\\_"
+assert norm(listed) == listed, norm(listed)
+
 # A backtick "fence" with a backtick in its info string opens nothing, so the
 # heading under it is still normalised.
 assert norm("```foo`bar\n### H\ntext") == "```foo`bar\n\n## H\n\ntext"

@@ -468,6 +468,9 @@ grep -q 'claude-arsenal:attribution' "${r}/README.md" || { echo "FAIL: setup did
 [[ "$(python3 "${CFG_PY}" --repo-root "${r}" --get attribution)" == "False" ]] \
     || { echo "FAIL: --no-attribution beside a badge not recorded" >&2; exit 1; }
 ! grep -q 'added the' <<<"${out}" || { echo "FAIL: announced adding a badge under --no-attribution" >&2; exit 1; }
+# A later --no-attribution overrides an earlier recorded `true` (#632).
+side_ok "${home_plain}" "${r}" --silent --no-statusline --no-branch-protection
+[[ "$(python3 "${CFG_PY}" --repo-root "${r}" --get attribution)" == "False" ]] || { echo "FAIL: --no-attribution did not override a recorded true" >&2; exit 1; }
 # #607: config says true, workflow never committed -> reinstalled, not "removed by you"
 r="${tmpdir}/se-wf"; mkdir -p "${r}"; git -C "${r}" init -q
 side "${home_plain}" "${r}" --silent >/dev/null

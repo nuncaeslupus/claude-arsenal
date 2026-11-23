@@ -114,7 +114,8 @@ false
 # without parsing the list, so it is left alone like code.
 # A fence may sit inside block quotes (`> ```), and a backtick fence whose info
 # string holds a backtick is not a fence at all — it is an inline code span.
-_FENCE_RE = re.compile(r"^(?: {0,3}>)* {0,3}(`{3,}(?!.*`)|~{3,})")
+# It may also open a list item (`- ```python`, `1. ~~~`): the marker is skipped.
+_FENCE_RE = re.compile(r"^(?: {0,3}>)* {0,3}(?:(?:[-*+]|\d{1,9}[.)])[ \t]+)?(`{3,}(?!.*`)|~{3,})")
 _HEADING_RE = re.compile(r"^( {0,3})(#{1,6})(?=[ \t]|$)")
 _INDENTED_RE = re.compile(r"^(?: {4}|\t)")
 _RULE_RE = re.compile(r"^ {0,3}(?:_[ \t]*){3,}$")

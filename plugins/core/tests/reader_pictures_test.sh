@@ -191,11 +191,14 @@ out=$(run_reader --input status/specification.md --output "${base}/rb/x-reader.h
     || fail "first --bake failed: ${out}"
 [[ $(ls "${base}/rb/x-reviewed-img" | wc -l) -eq 2 ]] || fail "first bake did not write two pictures"
 # files a Pillow-less run copies unconverted are generated too
-touch "${base}/rb/x-reviewed-img/03-old.bmp" "${base}/rb/x-reviewed-img/04-old.tif" "${base}/rb/x-reviewed-img/05-old.tiff"
+touch "${base}/rb/x-reviewed-img/06-old.avif" "${base}/rb/x-reviewed-img/keep-me.avif" "${base}/rb/x-reviewed-img/03-old.bmp" "${base}/rb/x-reviewed-img/04-old.tif" "${base}/rb/x-reviewed-img/05-old.tiff"
 mkzip "${base}/one.zip" '{"s-spec-1": "see", "s-spec-2": "and"}' '{"s-spec-1": ["i/01.png"]}' "i/01.png=ok"
 out=$(run_reader --input status/specification.md --output "${base}/rb/x-reader.html" --notes "${base}/one.zip" --bake) \
     || fail "second --bake failed: ${out}"
-[[ $(ls "${base}/rb/x-reviewed-img" | wc -l) -eq 1 ]] || fail "a redacted picture's file survived the re-bake: $(ls "${base}/rb/x-reviewed-img")"
+# 1 = the picture still linked, 1 = keep-me.avif, which this class never generated
+[[ $(ls "${base}/rb/x-reviewed-img" | wc -l) -eq 2 ]] || fail "a redacted picture's file survived the re-bake (or a foreign file went): $(ls "${base}/rb/x-reviewed-img")"
+[[ -e "${base}/rb/x-reviewed-img/keep-me.avif" ]] || fail "prune deleted a file it did not generate"
+rm "${base}/rb/x-reviewed-img/keep-me.avif"
 mkzip "${base}/none.zip" '{"s-spec-1": "see"}' '{}'
 out=$(run_reader --input status/specification.md --output "${base}/rb/x-reader.html" --notes "${base}/none.zip" --bake) \
     || fail "third --bake failed: ${out}"

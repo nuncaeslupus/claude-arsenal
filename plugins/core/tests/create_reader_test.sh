@@ -57,6 +57,14 @@ EOF
 
 run_reader() { (cd "${tmp}" && "${PY[@]}" "${READER}" "$@" 2>&1); }
 
+# --- 0: the GitHub copy never overwrites an input (#632) ---
+mkdir -p "${tmp}/clash"
+printf '# Clash\n\n## 1. A\n\nbody\n' > "${tmp}/clash/x.md"
+out=$(run_reader --input clash/x.md --output clash/x.html 2>&1) && fail "--output x.html over input x.md was accepted"
+grep -q "refusing to overwrite" <<<"${out}" || fail "the collision was not explained: ${out}"
+grep -q '^# Clash' "${tmp}/clash/x.md" || fail "the input was overwritten"
+run_reader --input clash/x.md --output clash/x.html --no-markdown >/dev/null || fail "--no-markdown should avoid the collision"
+
 # --- 1: the reader and its export say what they are: repo, doc, version, date (#505) ---
 echo "an older reader" > "${tmp}"/status/spec-reader.html
 echo "a date-only reader" > "${tmp}"/status/yourproject-spec-v1-2026-01-02-reader.html

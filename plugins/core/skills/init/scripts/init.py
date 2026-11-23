@@ -10,6 +10,7 @@ import importlib.util
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -1716,7 +1717,7 @@ def _add_attribution(repo_path: Path, silent: bool = False, enabled: bool = True
     """
     config = _home(repo_path) / "config.toml"
     setting = _config_value(config, "attribution")
-    if setting is None and not enabled:
+    if setting is not False and not enabled:  # also undoes an earlier `true` (#632)
         _upsert_bare_key(config, "attribution", "false")
         setting = False
     if setting is False:
@@ -1947,8 +1948,11 @@ def _shipped_shas(source: Path) -> set[str]:
     return {ln.strip() for ln in lines.splitlines() if ln.strip() and not ln.startswith("#")}
 
 
-def _workflow_was_committed(repo_path: Path, target: Path) -> bool:
-    """Whether git history shows `target` was committed at some point."""
+def _workflow_was_committed(repo_path: Path, target: Path) -> bool | None:
+    """Whether git history shows `target` was committed at some point.
+
+    `None` when git could not answer: the caller must not read that as "never".
+    """
     rel = target.relative_to(repo_path).as_posix()
     try:
         proc = subprocess.run(
@@ -1958,7 +1962,7 @@ def _workflow_was_committed(repo_path: Path, target: Path) -> bool:
             timeout=30,
         )
     except (OSError, subprocess.TimeoutExpired):
-        return False
+        return None
     return bool(proc.stdout.strip())
 
 
@@ -2024,7 +2028,16 @@ def _install_queue_workflow(repo_path: Path, arsenal: Path, silent: bool = False
             )
         return
 
-    if setting == "true" and _workflow_was_committed(repo_path, target):
+    committed = _workflow_was_committed(repo_path, target) if setting == "true" else False
+    if committed is None:
+        # Cannot tell a deliberate delete from a never-pushed install: do not
+        # reinstall a workflow the user may have removed; the next run retries.
+        print(
+            f"  .github/workflows/{_QUEUE_WORKFLOW}: missing, and git history could not be "
+            "read — not reinstalled this run."
+        )
+        return
+    if committed:
         # Committed before, gone now: the user removed it. Honour that. One only
         # ever written locally (a token without the `workflow` scope cannot push
         # it) was removed by nobody, so it falls through to a reinstall (#607).
@@ -2697,7 +2710,8 @@ def _stage_command(repo_path: Path) -> str:
     readme = repo_path / "README.md"
     if readme.is_file() and ATTRIBUTION_OPEN in readme.read_text(encoding="utf-8"):
         paths.append("README.md")
-    return "git add " + " ".join(dict.fromkeys(p for p in paths if (repo_path / p).exists()))
+    kept = list(dict.fromkeys(p for p in paths if (repo_path / p).exists()))
+    return "git add -- " + shlex.join(kept)
 
 
 def init_workspace(
@@ -2745,7 +2759,8 @@ def init_workspace(
     # finds out when a skill they asked for is not there. `init_base` is
     # idempotent by construction (the session-start protocol runs it every
     # session), so the extra call on an existing install is a refresh.
-    wants_sections = skills_profile is not None or sections is not None
+    # An opt-out (`--no-attribution`) is recorded by the same call, so it counts too.
+    wants_sections = skills_profile is not None or sections is not None or not attribution
     if (not (arsenal / "bin").is_dir() or wants_sections) and not init_base(
         repo_path,
         bundle_override,
