@@ -115,7 +115,9 @@ false
 # A fence may sit inside block quotes (`> ```), and a backtick fence whose info
 # string holds a backtick is not a fence at all — it is an inline code span.
 # It may also open a list item (`- ```python`, `1. ~~~`): the marker is skipped.
-_FENCE_RE = re.compile(r"^(?: {0,3}>)* {0,3}(?:(?:[-*+]|\d{1,9}[.)])[ \t]+)?(`{3,}(?!.*`)|~{3,})")
+_FENCE_RE = re.compile(r"^(?: {0,3}>)* {0,3}(?:(?:[-*+]|\d{1,9}[.)]) {1,4})?(`{3,}(?!.*`)|~{3,})")
+# A closing fence carries no list marker: "- ```" inside a fence is content.
+_CLOSE_RE = re.compile(r"^(?: {0,3}>)* {0,3}(`{3,}|~{3,})[ \t]*$")
 # A fence opened as a list item's content closes at the item's content indent,
 # which can be four or more spaces (`10. ```` closes at `    ````).
 _LIST_OPENER_RE = re.compile(r"^(?: {0,3}>)* {0,3}(?:[-*+]|\d{1,9}[.)])[ \t]")
@@ -179,12 +181,8 @@ def normalise_body(text: str) -> str:
                     fence = ""
                 continue
             # Closed only by the same character, at least as long, alone on its line.
-            if (
-                m
-                and m.group(1)[0] == fence[0]
-                and len(m.group(1)) >= len(fence)
-                and not line[m.end() :].strip()
-            ):
+            c = _CLOSE_RE.match(line)
+            if c and c.group(1)[0] == fence[0] and len(c.group(1)) >= len(fence):
                 fence = ""
         elif m:
             fence = m.group(1)
