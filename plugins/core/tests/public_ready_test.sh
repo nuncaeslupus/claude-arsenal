@@ -89,6 +89,8 @@ grep -q "github.com/o/r/security/advisories/new" "${clone}/.github/ISSUE_TEMPLAT
 grep -q "{{repo}}" -r "${clone}" && fail "placeholder left in output"
 
 # --- 6: no gh -----------------------------------------------------------------
-PATH=/usr/bin:/bin python3 "${PR}" audit --repo o/r 2>/dev/null; [[ $? == 2 ]] || fail "no gh should exit 2"
+# A PATH holding only python3: a runner's real /usr/bin/gh must not leak in.
+mkdir -p "${tmp}/nogh" && ln -s "$(command -v python3)" "${tmp}/nogh/python3"
+PATH="${tmp}/nogh" python3 "${PR}" audit --repo o/r 2>/dev/null; [[ $? == 2 ]] || fail "no gh should exit 2"
 
 echo "PASS: public_ready_test"
