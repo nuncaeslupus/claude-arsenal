@@ -18,6 +18,20 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [5.35.0] - 2026-11-26
+
+- **New skill `public-ready`** (new `publish` section, off by default — enable it in
+  `config.toml` `[skills]`). For a repo that is public, or about to be shared:
+  `audit_public_repo.py audit --repo OWNER/REPO` reports secret scanning, push
+  protection, Dependabot, private vulnerability reporting, the Actions token default,
+  fork-PR approval, force-push/delete protection on the default branch and `v*` tags,
+  workflows that check out a pull request's code with a write token, community files
+  and the social preview image. `fix` applies the settings (with `--dry-run`, and it
+  leaves the token default alone while a workflow declares no `permissions:`);
+  `scaffold` writes a missing `SECURITY.md`, `CONTRIBUTING.md` (issues-only or
+  pull-requests-welcome) and issue templates, never overwriting. Needs `gh` logged in
+  as the repo's owner or an admin.
+
 ## [5.34.2] - 2026-11-22
 
 - **Reader:** a linked picture of any format (`.avif`, `.heic`, `.ico`...) is now

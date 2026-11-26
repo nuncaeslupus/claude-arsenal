@@ -1,0 +1,18 @@
+{
+  "skill": "public-ready",
+  "canary": "public-ready-loaded-2026-11-26-fb78d23e-092c0fd2802d5512",
+  "negative_control": "the public-ready skill posts the repository to social media and link directories",
+  "load_prompts": [
+    "Make my repo safe to be public: nobody should run code with my secrets from a pull request",
+    "Add a SECURITY.md and CONTRIBUTING.md saying I only accept issues",
+    "Check whether my public repos have secret scanning, Dependabot and tag protection on",
+    "Is it safe that strangers can open pull requests on this repo?",
+    "/public-ready audit --repo yourname/yourproject"
+  ],
+  "no_load_prompts": [
+    "Add topics and a better description to my repo",
+    "Publish this package to PyPI",
+    "Review this pull request for bugs",
+    "Open a PR for my current branch"
+  ]
+}

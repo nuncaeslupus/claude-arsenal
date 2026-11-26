@@ -59,7 +59,7 @@ wires the skill-edit gate into `.claude/settings.json`, and creates the
 ### If you have Claude Code on your machine
 
 ```text
-/plugin marketplace add https://github.com/nuncaeslupus/claude-arsenal.git#v5.34.2
+/plugin marketplace add https://github.com/nuncaeslupus/claude-arsenal.git#v5.35.0
 /plugin install core@claude-arsenal
 ```
 
@@ -117,7 +117,7 @@ session from then on — whether or not it ever triggers.
 | `minimal` | `core` — `init`, `queue-next`, `queue-add`, `queue-status`, `github`, `session-end` |
 | `general` | `core` + `workflow` (`explore-idea`, `specify`, `design`, `execution`, `review`, `ship`, `gate-check`) |
 | `python` | `core` + `workflow` + `python` (`python-bootstrap`, `pypi-release`, `coverage-gaps`, `dep-upgrade`, `mutmut-report`, `pin-check`) |
-| `all` | every section, adding `extract` (`har`) and `android` (`bugreport`) |
+| `all` | every section, adding `extract` (`har`) `android` (`bugreport`) and `publish` (`public-ready`) |
 
 `core` is always installed: it holds the installer and the queue the vendored
 session protocol drives. A `minimal` install has no `workflow` skills, so the
@@ -145,7 +145,7 @@ existed changes nothing: the sections already in use are detected and recorded.
 No plugin needed — the same script runs straight from a clone:
 
 ```bash
-git clone --depth 1 --branch v5.34.2 https://github.com/nuncaeslupus/claude-arsenal.git /tmp/arsenal
+git clone --depth 1 --branch v5.35.0 https://github.com/nuncaeslupus/claude-arsenal.git /tmp/arsenal
 python3 /tmp/arsenal/plugins/core/skills/init/scripts/init.py --repo-path .
 git add -A .claude claude-arsenal arsenal .github CLAUDE.md .gitignore README.md && git commit -m "chore: add claude-arsenal"
 ```
@@ -180,7 +180,7 @@ updating one does not update the other.
 |---|---|
 | Type `Investigate why login is slow` | `specify` loads. |
 | Type `Set up the task queue in this repo` | `init` loads. |
-| `ls .claude/skills` | one folder per installed skill (14 for `general`, 20 for `python`, 22 for `all`), each with a `.arsenal-vendored` marker |
+| `ls .claude/skills` | one folder per installed skill (14 for `general`, 20 for `python`, 23 for `all`), each with a `.arsenal-vendored` marker |
 | Ask Claude to edit any `SKILL.md` without loading the meta-skill | **blocked** by the gate when `skill-workshop` is installed (plugin, `~/.claude/skills` or the repo); allowed where it is not, since the session could not load it |
 | (local checkout) `make audit` | Per-plugin listing-budget breakdown; `PASS — under cap.` |
 
