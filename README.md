@@ -22,7 +22,7 @@ so every session, local or cloud, loads the same skills.
 Inside a Claude Code session:
 
 ```text
-/plugin marketplace add https://github.com/nuncaeslupus/claude-arsenal.git#v5.34.2
+/plugin marketplace add https://github.com/nuncaeslupus/claude-arsenal.git#v5.35.0
 /plugin install core@claude-arsenal
 ```
 
@@ -47,7 +47,7 @@ Without Claude Code on the machine (CI, a fresh container), run the same install
 from a clone pinned to a release tag:
 
 ```bash
-git clone --depth 1 --branch v5.34.2 https://github.com/nuncaeslupus/claude-arsenal.git /tmp/arsenal
+git clone --depth 1 --branch v5.35.0 https://github.com/nuncaeslupus/claude-arsenal.git /tmp/arsenal
 python3 /tmp/arsenal/plugins/core/skills/init/scripts/init.py --repo-path . --profile general
 ```
 
@@ -123,7 +123,7 @@ skills, a vendored `AGENTS.md`, and scripts with line-oriented or JSON output.
 | Android | `bugreport` (Android bugreport analysis) |
 | Meta | `skill-workshop` |
 
-`/init` installs skills by section (`core`, `workflow`, `python`, `extract`, `android`), chosen
+`/init` installs skills by section (`core`, `workflow`, `python`, `extract`, `android`, `publish`), chosen
 with `--profile minimal|general|python|all` or `--sections`, and records the choice
 in `arsenal/config.toml`. `init.py --list-sections` shows what is installed.
 

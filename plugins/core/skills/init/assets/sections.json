@@ -63,6 +63,18 @@
       ]
     },
     {
+      "name": "publish",
+      "default": false,
+      "core": false,
+      "blurb": "getting a public repository safe for strangers and ready to be shared",
+      "skills": [
+        {
+          "name": "public-ready",
+          "description": "Audits and hardens a public GitHub repo for strangers — security settings, risky workflows, release-tag rules, SECURITY and CONTRIBUTING files. Use when the user wants a repo safe or ready to share. Not for description, topics or packaging metadata."
+        }
+      ]
+    },
+    {
       "name": "python",
       "default": false,
       "core": false,

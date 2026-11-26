@@ -53,6 +53,7 @@ SECTION_BLURBS: dict[str, str] = {
     "python": "the Python toolchain — coverage, mutation, dependency and release skills",
     "extract": "structured data out of artifacts you did not produce",
     "android": "diagnosing Android devices from the bugreports they produce",
+    "publish": "getting a public repository safe for strangers and ready to be shared",
 }
 
 

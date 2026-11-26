@@ -168,6 +168,8 @@ CANONICAL_ARGS = {
     # Action gating
     "--list-only",
     "--dry-run",
+    "--fail-on-gaps",
+    "--contributions",
     "--force",
     # Output / verbosity
     "--json",
