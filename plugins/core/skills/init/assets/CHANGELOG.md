@@ -18,6 +18,17 @@ being a changelog nobody reads.
 
 Format: `## [X.Y.Z] - YYYY-MM-DD`, newest first, plain bullets below.
 
+## [5.35.1] - 2026-11-26
+
+- **public-ready:** a workflow that checks out a head ref but gates the job on
+  `head_repository.full_name == github.repository` (or `head.repo.full_name`) is now
+  a `NOTE`, not a `GAP` — it only ever runs the repo's own branches. `fix` no longer
+  adds the default-branch ruleset when classic branch protection already forbids
+  force-push and deletion. `scaffold` treats a `SECURITY.md` or `CONTRIBUTING.md` under
+  `docs/` or `.github/` as present, as GitHub does, instead of adding a second one;
+  `audit` counts YAML issue forms in `.github/ISSUE_TEMPLATE/`, which the community
+  profile does not report.
+
 ## [5.35.0] - 2026-11-26
 
 - **New skill `public-ready`** (new `publish` section, off by default — enable it in
