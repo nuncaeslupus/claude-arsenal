@@ -1,5 +1,13 @@
 # Contributing to claude-arsenal
 
+> **Issues are welcome; pull requests are not accepted for now.** This project is
+> maintained by one person who reviews and writes every change themselves, so
+> outside pull requests are closed without review. If you have a fix, describe it
+> in an [issue](https://github.com/nuncaeslupus/claude-arsenal/issues/new/choose) — a snippet
+> or diff pasted there is fine, and you will be credited if it is used. Security
+> problems: see [SECURITY.md](../SECURITY.md). The rest of this page describes how the
+> project is built, for reference.
+
 This page is for working *on* the marketplace itself — adding plugins,
 extending the rubric, or fixing the shipped skills. If you only want
 to install and use the plugins, see `INSTALL.md`.
