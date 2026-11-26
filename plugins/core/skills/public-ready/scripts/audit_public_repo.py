@@ -451,7 +451,9 @@ def scaffold(slug: str, root: Path, contributions: str) -> list[tuple[str, str]]
     results = []
     for src, dest in targets.items():
         path = root / dest
-        if path.exists() or (dest == "SECURITY.md" and (root / ".github/SECURITY.md").exists()):
+        # GitHub reads SECURITY.md and CONTRIBUTING.md from the root, docs/ or .github/.
+        found = [root / d / dest for d in ("", "docs", ".github")] if "/" not in dest else [path]
+        if any(f.exists() for f in found):
             results.append(("kept", dest))
             continue
         text = (ASSETS / src).read_text(encoding="utf-8").replace("{{repo}}", slug)

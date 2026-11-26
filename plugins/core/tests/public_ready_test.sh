@@ -92,6 +92,9 @@ out=$(python3 "${PR}" scaffold --repo o/r --repo-root "${clone}") || fail "scaff
 grep -q "not accepted for now" "${clone}/CONTRIBUTING.md" || fail "issues policy not written"
 grep -q "github.com/o/r/security/advisories/new" "${clone}/.github/ISSUE_TEMPLATE/config.yml" || fail "repo not substituted"
 grep -q "{{repo}}" -r "${clone}" && fail "placeholder left in output"
+clone2="${tmp}/clone2"; mkdir -p "${clone2}/docs"; echo "dev guide" > "${clone2}/docs/CONTRIBUTING.md"
+python3 "${PR}" scaffold --repo o/r --repo-root "${clone2}" >/dev/null
+[[ -e "${clone2}/CONTRIBUTING.md" ]] && fail "scaffold added a second CONTRIBUTING.md beside docs/"
 
 # --- 6: a same-repo guard downgrades the head checkout; classic protection is kept
 out=$(FAKE_GUARDED=1 python3 "${PR}" audit --repo o/r)
