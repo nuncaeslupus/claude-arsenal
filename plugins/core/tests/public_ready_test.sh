@@ -22,6 +22,7 @@ tmp=$(mktemp -d)
 trap 'rm -rf "${tmp}"' EXIT
 
 wf=$(printf 'on:\n  pull_request_target:\njobs:\n  x:\n    steps:\n      - uses: actions/checkout@v4\n        with:\n          ref: ${{ github.event.pull_request.head.sha }}\n' | base64 | tr -d '\n')
+wf_guarded=$(printf 'on:\n  workflow_run:\njobs:\n  x:\n    if: github.event.workflow_run.head_repository.full_name == github.repository\n    steps:\n      - uses: actions/checkout@v4\n        with:\n          ref: ${{ github.event.workflow_run.head_sha }}\n' | base64 | tr -d '\n')
 
 mkdir -p "${tmp}/bin"
 cat > "${tmp}/bin/gh" <<SH
@@ -36,7 +37,11 @@ case "\$1" in
     repos/o/r) echo '{"private":'"\${FAKE_PRIVATE:-false}"',"default_branch":"main","has_wiki":true,"security_and_analysis":{"secret_scanning":{"status":"disabled"}}}' ;;
     repos/o/r/private-vulnerability-reporting) echo '{"enabled":false}' ;;
     repos/o/r/contents/.github/workflows) echo '[{"name":"ci.yml"}]' ;;
-    repos/o/r/contents/.github/workflows/ci.yml) echo '{"content":"${wf}"}' ;;
+    repos/o/r/contents/.github/workflows/ci.yml)
+        if [[ -n "\${FAKE_GUARDED:-}" ]]; then echo '{"content":"${wf_guarded}"}'; else echo '{"content":"${wf}"}'; fi ;;
+    repos/o/r/branches/main/protection)
+        [[ -n "\${FAKE_PROTECTED:-}" ]] || { echo "gh: Branch not protected (HTTP 404)" >&2; exit 1; }
+        echo '{"allow_force_pushes":{"enabled":false},"allow_deletions":{"enabled":false}}' ;;
     repos/o/r/actions/permissions/workflow) echo '{"default_workflow_permissions":"write","can_approve_pull_request_reviews":true}' ;;
     repos/o/r/rulesets) echo '[]' ;;
     repos/o/r/community/profile) echo '{"files":{"contributing":null}}' ;;
@@ -88,7 +93,15 @@ grep -q "not accepted for now" "${clone}/CONTRIBUTING.md" || fail "issues policy
 grep -q "github.com/o/r/security/advisories/new" "${clone}/.github/ISSUE_TEMPLATE/config.yml" || fail "repo not substituted"
 grep -q "{{repo}}" -r "${clone}" && fail "placeholder left in output"
 
-# --- 6: no gh -----------------------------------------------------------------
+# --- 6: a same-repo guard downgrades the head checkout; classic protection is kept
+out=$(FAKE_GUARDED=1 python3 "${PR}" audit --repo o/r)
+[[ "${out}" == *"NOTE workflow ci.yml: checks out a head ref"* ]] || fail "guarded workflow not a NOTE: ${out}"
+[[ "${out}" == *"GAP  workflow ci.yml"* ]] && fail "guarded workflow still a GAP"
+out=$(FAKE_PROTECTED=1 python3 "${PR}" fix --repo o/r --dry-run)
+[[ "${out}" == *"public-ready: default branch"* ]] && fail "branch ruleset planned despite classic protection: ${out}"
+[[ "${out}" == *"public-ready: release tags"* ]] || fail "tag ruleset dropped: ${out}"
+
+# --- 7: no gh -----------------------------------------------------------------
 # A PATH holding only python3: a runner's real /usr/bin/gh must not leak in.
 mkdir -p "${tmp}/nogh" && ln -s "$(command -v python3)" "${tmp}/nogh/python3"
 PATH="${tmp}/nogh" python3 "${PR}" audit --repo o/r 2>/dev/null; [[ $? == 2 ]] || fail "no gh should exit 2"

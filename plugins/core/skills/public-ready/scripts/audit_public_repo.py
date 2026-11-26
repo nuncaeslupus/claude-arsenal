@@ -56,6 +56,8 @@ _PR_HEAD_REF = re.compile(r"ref:\s*\$\{\{\s*github\.event\.(pull_request\.head|w
 _COMMENT_TRIGGER = re.compile(
     r"^\s*(issue_comment|pull_request_review_comment|discussion_comment):", re.M
 )
+# A job condition that only lets the repo's own branches through, not a fork's.
+_SAME_REPO_GUARD = re.compile(r"head(_repository|\.repo)\.full_name\s*==\s*github\.repository")
 _SECRET_USE = re.compile(r"secrets\.(?!GITHUB_TOKEN\b)[A-Za-z_]+")
 _UNPINNED = re.compile(r"uses:\s*[\w.-]+/[\w./-]+@(?![0-9a-f]{40}\b)\S+")
 _PERMISSIONS = re.compile(r"^\s*permissions:", re.M)
@@ -151,6 +153,16 @@ def _has_rules(rulesets: list[dict[str, Any]], target: str, needed: set[str]) ->
     return False
 
 
+def _classic_ok(slug: str, branch: str) -> bool:
+    """Classic branch protection that already forbids force-push and deletion."""
+    protection = _try(f"repos/{slug}/branches/{branch}/protection") or {}
+    return (
+        bool(protection)
+        and not (protection.get("allow_force_pushes") or {}).get("enabled")
+        and not (protection.get("allow_deletions") or {}).get("enabled")
+    )
+
+
 def audit(slug: str) -> list[tuple[str, str, str]]:
     """(level, check, detail) for every check. Raises GhError if the repo is unreadable."""
     repo = gh(f"repos/{slug}")
@@ -220,14 +232,9 @@ def audit(slug: str) -> list[tuple[str, str, str]]:
         )
 
     rulesets = _rulesets(slug)
-    protection = _try(f"repos/{slug}/branches/{branch}/protection") or {}
-    classic = (
-        bool(protection)
-        and not (protection.get("allow_force_pushes") or {}).get("enabled")
-        and not (protection.get("allow_deletions") or {}).get("enabled")
-    )
     add(
-        classic or _has_rules(rulesets, "branch", {"deletion", "non_fast_forward"}),
+        _classic_ok(slug, branch)
+        or _has_rules(rulesets, "branch", {"deletion", "non_fast_forward"}),
         f"`{branch}` force-push/delete",
         "allowed — history can be rewritten → `fix`",
     )
@@ -241,14 +248,24 @@ def audit(slug: str) -> list[tuple[str, str, str]]:
         if re.search(
             r"^\s*(pull_request_target|workflow_run):", text, re.M
         ) and _PR_HEAD_REF.search(text):
-            findings.append(
-                (
-                    "GAP",
-                    f"workflow {name}",
-                    "checks out a pull request's code on a trigger that holds a write token "
-                    "and secrets; check out the base ref instead",
+            if _SAME_REPO_GUARD.search(text):
+                findings.append(
+                    (
+                        "NOTE",
+                        f"workflow {name}",
+                        "checks out a head ref with a write token, guarded to this repo's "
+                        "own branches; confirm the guard covers every job that checks out",
+                    )
                 )
-            )
+            else:
+                findings.append(
+                    (
+                        "GAP",
+                        f"workflow {name}",
+                        "checks out a pull request's code on a trigger that holds a write "
+                        "token and secrets; check out the base ref instead",
+                    )
+                )
         if (
             _COMMENT_TRIGGER.search(text)
             and _SECRET_USE.search(text)
@@ -373,7 +390,11 @@ def fix(slug: str, dry_run: bool) -> list[tuple[str, str]]:
                 {"default_workflow_permissions": "read", "can_approve_pull_request_reviews": False},
             )
         )
-    if not _has_rules(rulesets, "branch", {"deletion", "non_fast_forward"}):
+    branch = repo.get("default_branch", "main")
+    if not (
+        _classic_ok(slug, branch)
+        or _has_rules(rulesets, "branch", {"deletion", "non_fast_forward"})
+    ):
         plan.append(
             (
                 f"ruleset '{BRANCH_RULESET}'",
