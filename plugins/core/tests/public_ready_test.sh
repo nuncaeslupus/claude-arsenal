@@ -44,6 +44,9 @@ case "\$1" in
         echo '{"allow_force_pushes":{"enabled":false},"allow_deletions":{"enabled":false}}' ;;
     repos/o/r/actions/permissions/workflow) echo '{"default_workflow_permissions":"write","can_approve_pull_request_reviews":true}' ;;
     repos/o/r/rulesets) echo '[]' ;;
+    repos/o/r/contents/.github/ISSUE_TEMPLATE)
+        [[ -n "\${FAKE_FORMS:-}" ]] || { echo "gh: Not Found (HTTP 404)" >&2; exit 1; }
+        echo '[{"name":"bug.yml"}]' ;;
     repos/o/r/community/profile) echo '{"files":{"contributing":null}}' ;;
     graphql) echo '{"data":{"repository":{"usesCustomOpenGraphImage":false}}}' ;;
     *) echo "gh: Not Found (HTTP 404)" >&2; exit 1 ;;
@@ -103,6 +106,10 @@ out=$(FAKE_GUARDED=1 python3 "${PR}" audit --repo o/r)
 out=$(FAKE_PROTECTED=1 python3 "${PR}" fix --repo o/r --dry-run)
 [[ "${out}" == *"public-ready: default branch"* ]] && fail "branch ruleset planned despite classic protection: ${out}"
 [[ "${out}" == *"public-ready: release tags"* ]] || fail "tag ruleset dropped: ${out}"
+
+# YAML issue forms count, though the community profile does not report them
+out=$(FAKE_FORMS=1 python3 "${PR}" audit --repo o/r)
+[[ "${out}" == *"PASS issue templates"* ]] || fail "issue forms not seen: ${out}"
 
 # --- 7: no gh -----------------------------------------------------------------
 # A PATH holding only python3: a runner's real /usr/bin/gh must not leak in.

@@ -310,7 +310,11 @@ def audit(slug: str) -> list[tuple[str, str, str]]:
         "CONTRIBUTING.md",
         "missing — say whether pull requests are welcome → `scaffold`",
     )
-    add(bool(files.get("issue_template")), "issue templates", "missing → `scaffold`")
+    add(
+        bool(files.get("issue_template") or _try(f"repos/{slug}/contents/.github/ISSUE_TEMPLATE")),
+        "issue templates",
+        "missing → `scaffold`",
+    )
 
     try:
         owner, name = slug.split("/", 1)
